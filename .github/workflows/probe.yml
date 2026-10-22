@@ -7,37 +7,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Sonder Hugging Face et les dépôts Maven
+      - name: Sonder les modèles Gemma 4 LiteRT-LM
         run: |
           set +e +o pipefail
           {
-          echo "== modèles litert-community (qwen, gemma, phi, llama) =="
-          for q in qwen gemma phi llama smol; do
-            curl -sS -m 30 "https://huggingface.co/api/models?author=litert-community&search=$q&limit=30" | python3 -c "
-          import sys,json
-          for m in json.load(sys.stdin): print(m['id'], 'gated=',m.get('gated'), 'downloads=',m.get('downloads'))"
-          done
-          echo; echo "== fichiers et tailles =="
-          for r in litert-community/Qwen2.5-1.5B-Instruct litert-community/Qwen2.5-3B-Instruct litert-community/Qwen3-0.6B litert-community/Gemma3-1B-IT litert-community/gemma-3n-E2B-it-litert-lm litert-community/Phi-4-mini-instruct Qwen/Qwen3-4B-GGUF Qwen/Qwen2.5-3B-Instruct-GGUF Qwen/Qwen3-1.7B-GGUF; do
-            echo "-- $r"
-            curl -sS -m 30 "https://huggingface.co/api/models/$r/tree/main" | python3 -c "
-          import sys,json
-          try:
-            d=json.load(sys.stdin)
-            for f in d:
-              if f.get('type')=='file' and f['size']>50_000_000: print('  ',f['path'], round(f['size']/1e9,2),'Go')
-            if not isinstance(d,list): print(d)
-          except Exception as e: print('  erreur',e)"
+          for r in litert-community/gemma-4-E2B-it-litert-lm litert-community/gemma-4-E4B-it-litert-lm; do
+            echo "== $r"
             curl -sS -m 30 "https://huggingface.co/api/models/$r" | python3 -c "
           import sys,json
-          d=json.load(sys.stdin); print('   gated=',d.get('gated'),'licence=',d.get('cardData',{}).get('license') if d.get('cardData') else None)" 2>/dev/null
+          d=json.load(sys.stdin)
+          print('gated=',d.get('gated'),'private=',d.get('private'),'licence=',(d.get('cardData') or {}).get('license'), 'tags=',[t for t in d.get('tags',[]) if t.startswith('license') or t in ('translation','multilingual')])
+          for f in d.get('siblings',[]): print('  ',f['rfilename'])"
+            curl -sS -m 30 "https://huggingface.co/api/models/$r/tree/main" | python3 -c "
+          import sys,json
+          for f in json.load(sys.stdin):
+            if f.get('type')=='file': print('  taille', f['path'], round(f['size']/1e9,3),'Go', 'sha256=',(f.get('lfs') or {}).get('oid'))"
           done
-          echo; echo "== Maven =="
-          for u in com/google/mediapipe/tasks-genai com/google/ai/edge/litertlm; do
-            printf "%s -> " $u; curl -sS -m 20 -o /dev/null -w "%{http_code}\n" https://repo1.maven.org/maven2/$u/maven-metadata.xml
-          done
-          curl -sS -m 20 https://repo1.maven.org/maven2/com/google/mediapipe/tasks-genai/maven-metadata.xml | grep -E "<latest>|<release>"
-          curl -sS -m 20 https://dl.google.com/dl/android/maven2/com/google/ai/edge/litertlm/group-index.xml | head -5
+          echo; echo "== en-tête de la fiche (extrait)"
+          curl -sSL -m 30 "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/raw/main/README.md" | head -60
+          echo; echo "== téléchargement sans compte : octets 0-1023"
+          F=$(curl -sS -m 30 "https://huggingface.co/api/models/litert-community/gemma-4-E2B-it-litert-lm/tree/main" | python3 -c "
+          import sys,json
+          fs=[f['path'] for f in json.load(sys.stdin) if f['path'].endswith('.litertlm')]; print(fs[0] if fs else '')")
+          echo "fichier: $F"
+          curl -sSL -m 60 -r 0-1023 -o /tmp/head.bin -w "HTTP %{http_code} taille %{size_download} url_finale=%{url_effective}\n" "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/$F"
           } > /tmp/probe.txt 2>&1
           git config user.name ci; git config user.email ci@example.invalid
           git checkout --orphan probe-logs; git rm -rf . >/dev/null 2>&1 || true
