@@ -9,6 +9,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Sonder Hugging Face et les dépôts Maven
         run: |
+          set +e +o pipefail
           {
           echo "== modèles litert-community (qwen, gemma, phi, llama) =="
           for q in qwen gemma phi llama smol; do
