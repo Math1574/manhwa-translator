@@ -7,25 +7,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Tailles exactes et interface LiteRT-LM
+      - name: Signatures LiteRT-LM (javap)
         run: |
           set +e +o pipefail
           {
-          for r in litert-community/gemma-4-E2B-it-litert-lm litert-community/gemma-4-E4B-it-litert-lm; do
-            curl -sS -m 30 "https://huggingface.co/api/models/$r/tree/main" | python3 -c "
-          import sys,json
-          for f in json.load(sys.stdin):
-            if f['path'] in ('gemma-4-E2B-it.litertlm','gemma-4-E4B-it.litertlm'): print('EXACT', f['path'], f['size'], (f.get('lfs') or {}).get('oid'))"
-          done
-          echo; echo "== API LiteRT-LM 0.18.1 (sources)"
           B=https://dl.google.com/dl/android/maven2/com/google/ai/edge/litertlm/litertlm-android/0.18.1
-          curl -sS -m 60 -o /tmp/lm-src.jar -w "sources HTTP %{http_code}\n" $B/litertlm-android-0.18.1-sources.jar
-          curl -sS -m 120 -o /tmp/lm.aar -w "aar HTTP %{http_code} %{size_download}\n" $B/litertlm-android-0.18.1.aar
-          mkdir -p /tmp/src && cd /tmp/src && unzip -oq /tmp/lm-src.jar 2>/dev/null; find . -name "*.kt" | head -40
-          for f in Message.kt Contents.kt Engine.kt EngineConfig.kt ConversationConfig.kt SamplerConfig.kt Conversation.kt Backend.kt; do
-            P=$(find . -name "$f" | head -1); [ -n "$P" ] && { echo "---- $P"; grep -vE "^\s*(//|\*|/\*)" "$P" | grep -E "class |fun |val |var |object |interface |constructor" | head -45; }
+          curl -sS -m 120 -o /tmp/lm.aar $B/litertlm-android-0.18.1.aar
+          mkdir -p /tmp/aar && cd /tmp/aar && unzip -oq /tmp/lm.aar
+          unzip -l classes.jar | awk '{print $4}' | grep -E "litertlm/[A-Za-z]+\.class$" | head -80
+          for c in Engine EngineConfig Conversation ConversationConfig SamplerConfig Message Contents Content Backend Backend\$CPU Backend\$GPU; do
+            echo "---- $c"; javap -public -cp classes.jar "com.google.ai.edge.litertlm.$c" 2>&1 | head -40
           done
-          cd /tmp && mkdir -p aar && cd aar && unzip -oq /tmp/lm.aar && ls; cat AndroidManifest.xml | head -30; ls jni 2>/dev/null; du -sh jni 2>/dev/null
           } > /tmp/probe.txt 2>&1
           cd $GITHUB_WORKSPACE
           git config user.name ci; git config user.email ci@example.invalid
