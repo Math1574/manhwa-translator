@@ -18,7 +18,9 @@ interface QueueListener {
  * - une erreur sur une page n'interrompt pas les suivantes ;
  * - annulation d'une page ou de toutes.
  */
-class PageQueue(private val maxPending: Int = 8, private val listener: QueueListener) {
+class PageQueue(maxPending: Int = 8, private val listener: QueueListener) {
+    /** Modifiable à chaud (réglage « pages prétraitées »). */
+    @Volatile var maxPending: Int = maxPending
     private data class Item(val job: PageJob, val seq: Long)
 
     private val lock = Object()

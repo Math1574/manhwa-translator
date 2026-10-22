@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests()
+    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -320,5 +320,34 @@ fun settingsTests() {
         T.eq(AppSettings(), AppSettings.parse(null)); T.eq(AppSettings(), AppSettings.parse("%%%"))
         val s = AppSettings.parse("textScale=99\nmaxPrefetchPages=-4\nsource=KLINGON\ncacheMaxMb=1")
         T.eq(2.0f, s.textScale); T.eq(0, s.maxPrefetchPages); T.eq(SourceLang.AUTO, s.source); T.eq(10, s.cacheMaxMb)
+    }
+}
+
+// ---------- utilitaires ----------
+fun utilTests() {
+    T.test("écriture: japonais, coréen, chinois, anglais") {
+        T.eq("ja", ScriptDetector.detect("これは日本語です")); T.eq("ko", ScriptDetector.detect("안녕하세요"))
+        T.eq("zh", ScriptDetector.detect("你好世界")); T.eq("en", ScriptDetector.detect("Hello"))
+        T.eq("ja", ScriptDetector.detect("田中さん")); T.eq("en", ScriptDetector.detect(""))
+    }
+    T.test("couleurs: médiane, contraste du texte, format CSS") {
+        T.eq(0xFF101010.toInt(), ColorMath.median(intArrayOf(0xFF101010.toInt(), 0xFF101010.toInt(), 0xFFFFFFFF.toInt())))
+        T.eq(0xFFFFFFFF.toInt(), ColorMath.median(IntArray(0)))
+        T.eq(0xFF000000.toInt(), ColorMath.textColorFor(0xFFFFFFFF.toInt())); T.eq(0xFFFFFFFF.toInt(), ColorMath.textColorFor(0xFF202030.toInt()))
+        T.eq("#0a0b0c", ColorMath.css(0xFF0A0B0C.toInt()))
+    }
+    T.test("adresse: domaine, URL complète, recherche, schémas dangereux") {
+        T.eq("https://exemple.com/a", UrlInput.normalize("exemple.com/a")); T.eq("http://x.org", UrlInput.normalize(" http://x.org "))
+        T.eq("", UrlInput.normalize("   "))
+        T.ok(UrlInput.normalize("manhwa solo leveling").startsWith("https://duckduckgo.com/?q=manhwa+solo"), "recherche")
+        T.ok(UrlInput.normalize("javascript:alert(1)").startsWith("https://duckduckgo.com/?q="), "javascript: doit devenir une recherche")
+        T.ok(UrlInput.normalize("file:///etc/passwd").startsWith("https://duckduckgo.com/?q="), "file: doit devenir une recherche")
+    }
+    T.test("file: la limite d'attente peut changer à chaud") {
+        val q = PageQueue(1, object : QueueListener {}); q.maxPending = 3
+        val gate = java.util.concurrent.CountDownLatch(1)
+        q.submit(PageJob("r") { gate.await(); PageOutcome.NoText(1, 1) }); Thread.sleep(50)
+        T.ok(q.submit(PageJob("a") { PageOutcome.NoText(1, 1) }) && q.submit(PageJob("b") { PageOutcome.NoText(1, 1) }), "2 en attente acceptés")
+        gate.countDown(); q.awaitIdle(2000); q.shutdown()
     }
 }
