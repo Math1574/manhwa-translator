@@ -44,6 +44,8 @@ private data class Candidate(val id: String, val src: String, val top: Double, v
 class TranslationController(private val ctx: Context, private val graph: AppGraph) {
     private val main = Handler(Looper.getMainLooper())
     private var webView: WebView? = null
+    /** Lu une fois sur le thread principal : la WebView ne doit pas être appelée depuis les threads de traitement. */
+    @Volatile private var userAgent: String = "Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Chrome/130 Mobile Safari/537.36"
     private val b64Waiters = ConcurrentHashMap<String, CompletableFuture<String>>()
 
     // État observé par l'interface
@@ -70,7 +72,13 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                 when (outcome) {
                     is PageOutcome.Done -> done++
                     is PageOutcome.NoText -> { done++; noText++ }
-                    is PageOutcome.Failed -> { failed++; lastError = "${outcome.stage} : ${outcome.message}" }
+                    is PageOutcome.Failed -> {
+                        failed++; lastError = "${outcome.stage} : ${outcome.message}"
+                        if (outcome.message.contains("Modèle de traduction")) {
+                            // Inutile d'enchaîner des dizaines d'erreurs identiques : on arrête et on l'indique.
+                            stopWork(); total = done + failed
+                        }
+                    }
                 }
             }
             pump()
@@ -84,6 +92,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     fun obtainWebView(c: Context): WebView {
         webView?.let { (it.parent as? ViewGroup)?.removeView(it); return it }
         val wv = WebView(c)
+        userAgent = wv.settings.userAgentString
         wv.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -240,7 +249,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         try {
             conn.connectTimeout = 15_000
             conn.readTimeout = 30_000
-            conn.setRequestProperty("User-Agent", webView?.settings?.userAgentString ?: "Mozilla/5.0")
+            conn.setRequestProperty("User-Agent", userAgent)
             conn.setRequestProperty("Accept", "image/avif,image/webp,image/*,*/*;q=0.8")
             if (pageUrl.isNotEmpty()) conn.setRequestProperty("Referer", pageUrl)
             CookieManager.getInstance().getCookie(c.src)?.let { conn.setRequestProperty("Cookie", it) }
