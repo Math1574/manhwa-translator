@@ -1,6 +1,6 @@
-> Task :app:checkDebugAarMetadata FAILED
-* What went wrong:
-Execution failed for task ':app:checkDebugAarMetadata'.
-org.gradle.api.tasks.TaskExecutionException: Execution failed for task ':app:checkDebugAarMetadata'.
-BUILD FAILED in 40s
-ls: cannot access 'app/build/outputs/apk/debug/': No such file or directory
+BUILD SUCCESSFUL in 3m 5s
+total 115264
+drwxr-xr-x 2 runner runner      4096 Oct 22 15:02 .
+drwxr-xr-x 3 runner runner      4096 Oct 22 15:02 ..
+-rw-r--r-- 1 runner runner 118014174 Oct 22 15:02 app-debug.apk
+-rw-r--r-- 1 runner runner       405 Oct 22 15:02 output-metadata.json
