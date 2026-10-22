@@ -1,7 +1,10 @@
 name: Build
 on:
   push:
+    branches: [main]
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   core-tests:
     runs-on: ubuntu-latest
@@ -20,8 +23,24 @@ jobs:
         with: { distribution: temurin, java-version: 17 }
       - uses: gradle/actions/setup-gradle@v4
         with: { gradle-version: 8.10.2 }
-      - run: gradle :app:assembleDebug --no-daemon
+      - name: Compiler l'APK debug
+        run: |
+          set -o pipefail
+          gradle :app:assembleDebug --no-daemon --stacktrace 2>&1 | tee /tmp/apk.log
       - uses: actions/upload-artifact@v4
         with:
           name: ManhwaTranslator-debug-apk
           path: app/build/outputs/apk/debug/*.apk
+      - name: Publier le journal (branche ci-logs)
+        if: always()
+        run: |
+          cp /tmp/apk.log /tmp/apk-full.log || true
+          grep -E "^e: |^w: .*\.kt|error:|FAILED|What went wrong|Execution failed|Could not|BUILD " /tmp/apk-full.log | head -150 > /tmp/apk-errors.log || true
+          ls -la app/build/outputs/apk/debug/ >> /tmp/apk-errors.log 2>&1 || true
+          git config user.name "ci"; git config user.email "ci@example.invalid"
+          git fetch origin ci-logs:ci-logs 2>/dev/null && git checkout ci-logs || git checkout --orphan ci-logs
+          git rm -rf . >/dev/null 2>&1 || true
+          cp /tmp/apk-errors.log apk-errors.log; tail -200 /tmp/apk-full.log > apk-tail.log
+          git add apk-errors.log apk-tail.log
+          git commit -m "journal ${GITHUB_SHA}" || true
+          git push origin ci-logs --force
