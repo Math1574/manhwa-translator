@@ -31,6 +31,11 @@ jobs:
         with:
           name: ManhwaTranslator-debug-apk
           path: app/build/outputs/apk/debug/*.apk
+      - name: Publier l'APK dans les Releases
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk ManhwaTranslator-debug.apk
+          gh release create "build-${{ github.run_number }}" ManhwaTranslator-debug.apk --title "Build ${{ github.run_number }} (debug)" --notes "APK debug, commit ${GITHUB_SHA}. Voir docs/STATUS.md pour les limites connues."
       - name: Publier le journal (branche ci-logs)
         if: always()
         run: |
@@ -44,3 +49,30 @@ jobs:
           git add apk-errors.log apk-tail.log
           git commit -m "journal ${GITHUB_SHA}" || true
           git push origin ci-logs --force
+  smoke:
+    needs: apk
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: ManhwaTranslator-debug-apk, path: apk }
+      - name: Activer KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: bash ci/smoke.sh
+      - name: Publier le rapport (branche ci-logs)
+        if: always()
+        run: |
+          git config user.name "ci"; git config user.email "ci@example.invalid"
+          mkdir -p /tmp/keep && cp -r /tmp/smoke/. /tmp/keep/ || true
+          git fetch origin ci-logs:ci-logs && git checkout ci-logs
+          rm -rf smoke && mkdir smoke && cp -r /tmp/keep/. smoke/ || true
+          git add smoke && git commit -m "smoke ${GITHUB_SHA}" || true
+          git push origin ci-logs
