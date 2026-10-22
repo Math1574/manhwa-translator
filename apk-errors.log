@@ -1,6 +1,6 @@
-BUILD SUCCESSFUL in 1m 15s
+BUILD SUCCESSFUL in 1m 17s
 total 115264
-drwxr-xr-x 2 runner runner      4096 Oct 22 20:26 .
-drwxr-xr-x 3 runner runner      4096 Oct 22 20:26 ..
--rw-r--r-- 1 runner runner 118014174 Oct 22 20:26 app-debug.apk
--rw-r--r-- 1 runner runner       405 Oct 22 20:26 output-metadata.json
+drwxr-xr-x 2 runner runner      4096 Oct 22 20:41 .
+drwxr-xr-x 3 runner runner      4096 Oct 22 20:41 ..
+-rw-r--r-- 1 runner runner 118014174 Oct 22 20:41 app-debug.apk
+-rw-r--r-- 1 runner runner       405 Oct 22 20:41 output-metadata.json
