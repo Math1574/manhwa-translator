@@ -29,7 +29,7 @@ class PagePipeline(
         val ocrResult = try { ocr.recognize(imageBytes) } catch (e: Exception) {
             return PageOutcome.Failed("ocr", e.message ?: e.javaClass.simpleName)
         }
-        val blocks = grouper.group(ocrResult.lines)
+        val blocks = grouper.group(ocrResult.lines).filter { !TextNormalizer.isNoise(it.text) }
         if (blocks.isEmpty()) return PageOutcome.NoText(ocrResult.imageWidth, ocrResult.imageHeight)
 
         val g = glossary()
@@ -43,7 +43,7 @@ class PagePipeline(
         var errors = 0
         var lastError = ""
         if (pending.isNotEmpty()) {
-            val protectedTexts = pending.map { g.protect(blocks[it].text) }
+            val protectedTexts = pending.map { val p = g.protect(blocks[it].text); p.copy(text = TextNormalizer.fixCase(p.text)) }
             val batch = try { translator.translate(protectedTexts.map { it.text }, source, target) } catch (e: Exception) { null }
             if (batch != null && batch.size == pending.size) {
                 pending.forEachIndexed { k, i -> translated[i] = finish(g, protectedTexts[k], batch[k], blocks[i].text, source, target) }
@@ -60,11 +60,16 @@ class PagePipeline(
         if (translated.all { it == null }) return PageOutcome.Failed("translation", lastError.ifEmpty { "aucune traduction produite" })
 
         val out = blocks.mapIndexedNotNull { i, b ->
-            translated[i]?.let { TranslatedBlock(b.id, b.box, b.text, it, b.vertical) }
+            translated[i]?.let { TranslatedBlock(b.id, b.box, b.text, it, b.vertical, medianLineHeight(b)) }
         }
         val result = PageResult(ocrResult.imageWidth, ocrResult.imageHeight, out)
         if (errors == 0) cache.put(key, result) // une page partielle n'est pas mise en cache
         return PageOutcome.Done(result, fromCache = false)
+    }
+
+    private fun medianLineHeight(b: TextBlock): Float {
+        val hs = b.lines.map { if (b.vertical) it.box.width else it.box.height }.sorted()
+        return if (hs.isEmpty()) 0f else hs[hs.size / 2]
     }
 
     private fun finish(g: Glossary, p: Protected, out: String, original: String, source: String, target: String): String {

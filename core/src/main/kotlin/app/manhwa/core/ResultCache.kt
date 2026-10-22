@@ -59,9 +59,9 @@ class ResultCache(private val dir: File, private val maxEntries: Int = 64, priva
 
     companion object {
         fun encode(r: PageResult): String = buildString {
-            append("V1\t${r.imageWidth}\t${r.imageHeight}\n")
+            append("V2\t${r.imageWidth}\t${r.imageHeight}\n")
             for (b in r.blocks) {
-                append("B\t${b.id}\t${b.box.left}\t${b.box.top}\t${b.box.right}\t${b.box.bottom}\t${if (b.vertical) 1 else 0}\t")
+                append("B\t${b.id}\t${b.box.left}\t${b.box.top}\t${b.box.right}\t${b.box.bottom}\t${if (b.vertical) 1 else 0}\t${b.lineHeight}\t")
                 append(esc(b.source)).append('\t').append(esc(b.translated)).append('\n')
             }
         }
@@ -69,13 +69,13 @@ class ResultCache(private val dir: File, private val maxEntries: Int = 64, priva
         fun decode(s: String): PageResult {
             val lines = s.lines().filter { it.isNotEmpty() }
             val h = lines.first().split('\t')
-            require(h.size == 3 && h[0] == "V1") { "en-tête invalide" }
+            require(h.size == 3 && h[0] == "V2") { "en-tête invalide" }
             val blocks = lines.drop(1).map { l ->
                 val p = l.split('\t')
-                require(p.size == 9 && p[0] == "B") { "ligne invalide" }
+                require(p.size == 10 && p[0] == "B") { "ligne invalide" }
                 TranslatedBlock(
                     p[1].toInt(), RectF(p[2].toFloat(), p[3].toFloat(), p[4].toFloat(), p[5].toFloat()),
-                    unesc(p[7]), unesc(p[8]), p[6] == "1",
+                    unesc(p[8]), unesc(p[9]), p[6] == "1", p[7].toFloat(),
                 )
             }
             return PageResult(h[1].toInt(), h[2].toInt(), blocks)

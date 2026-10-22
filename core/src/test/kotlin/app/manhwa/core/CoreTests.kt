@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests()
+    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -135,7 +135,7 @@ fun glossaryTests() {
 // ---------- cache ----------
 fun cacheTests() {
     val key = CacheKey("abc", "ja", "fr", "eng1")
-    val res = PageResult(100, 200, listOf(TranslatedBlock(0, RectF(1f, 2f, 3f, 4f), "原文\tx", "tra\nduction", true)))
+    val res = PageResult(100, 200, listOf(TranslatedBlock(0, RectF(1f, 2f, 3f, 4f), "原文\tx", "tra\nduction", true, 12.5f)))
     T.test("cache: écriture puis lecture, persistance après redémarrage") {
         val d = tmp(); ResultCache(d).put(key, res)
         T.eq(res, ResultCache(d).get(key))
@@ -349,5 +349,54 @@ fun utilTests() {
         q.submit(PageJob("r") { gate.await(); PageOutcome.NoText(1, 1) }); Thread.sleep(50)
         T.ok(q.submit(PageJob("a") { PageOutcome.NoText(1, 1) }) && q.submit(PageJob("b") { PageOutcome.NoText(1, 1) }), "2 en attente acceptés")
         gate.countDown(); q.awaitIdle(2000); q.shutdown()
+    }
+}
+
+// ---------- normalisation du texte ----------
+fun textTests() {
+    T.test("texte: bruit (onomatopées sans voyelle, débris) filtré, vrai texte conservé") {
+        listOf("HMPH", "SHH", "..", "?!", "a", "#%&*", "TCH").forEach { T.ok(TextNormalizer.isNoise(it), "devrait être du bruit: $it") }
+        listOf("Hello", "PLEASE...", "No way!", "털썩", "こんにちは", "你好", "I see").forEach { T.ok(!TextNormalizer.isNoise(it), "ne devrait pas être du bruit: $it") }
+    }
+    T.test("texte: majuscules ramenées en casse de phrase, texte déjà mixte inchangé") {
+        T.eq("Please... Take me as your disciple...!", TextNormalizer.fixCase("PLEASE... TAKE ME AS YOUR DISCIPLE...!"))
+        T.eq("I think I know. Do you?", TextNormalizer.fixCase("I THINK I KNOW. DO YOU?"))
+        T.eq("Hello there, Kim", TextNormalizer.fixCase("Hello there, Kim")); T.eq("OK", TextNormalizer.fixCase("OK"))
+    }
+    T.test("texte: jetons du glossaire préservés par le changement de casse") {
+        T.eq("Where is ZQ0X going?", TextNormalizer.fixCase("WHERE IS ZQ0X GOING?"))
+    }
+    T.test("texte: découpage en phrases (abréviations et ponctuation seule)") {
+        T.eq(listOf("Hello.", "How are you?", "Mr. Kim is here!"), TextNormalizer.splitSentences("Hello. How are you? Mr. Kim is here!"))
+        T.eq(listOf("... I see."), TextNormalizer.splitSentences("... I see."))
+        T.eq(listOf("こんにちは。", "元気ですか？"), TextNormalizer.splitSentences("こんにちは。元気ですか？"))
+        T.eq(emptyList<String>(), TextNormalizer.splitSentences("   "))
+    }
+    T.test("pipeline: le traducteur reçoit du texte en casse de phrase ; les blocs de bruit sont ignorés") {
+        val seen = ArrayList<String>()
+        val spy = TranslationEngine { t, _, _ -> seen.addAll(t); t }
+        val o = PagePipeline(ResultCache(tmp()), FakeOcr(listOf(line("PLEASE TAKE ME", 100f, 100f, 300f, 130f), line("HMPH", 100f, 600f, 300f, 630f))), spy, "e")
+            .process(byteArrayOf(9), "en", "fr") as PageOutcome.Done
+        T.eq(listOf("Please take me"), seen); T.eq(1, o.result.blocks.size)
+        T.ok(PagePipeline(ResultCache(tmp()), FakeOcr(listOf(line("HMPH", 1f, 1f, 90f, 40f))), spy, "e").process(byteArrayOf(8), "en", "fr") is PageOutcome.NoText, "page de bruit = NoText")
+    }
+}
+
+// ---------- mise en page v2 ----------
+fun layoutV2Tests() {
+    val text = "Aidez-moi s'il vous plaît, monsieur."
+    T.test("layout: aucun mot coupé, police issue de la hauteur de LIGNE (et non du bloc entier)") {
+        val b = TranslatedBlock(0, RectF(250f, 150f, 560f, 330f), "src", text, false, 30f) // bloc de 3 lignes de 30 px
+        val p = OverlayLayout.place(listOf(b), 800, 1200).single()
+        text.split(" ").forEach { w -> T.ok(p.lines.any { it.contains(w) }, "mot coupé: $w dans ${p.lines}") }
+        T.ok(p.fontSizePx <= 30f * 0.9f + 0.5f, "police trop grande: ${p.fontSizePx}")
+        T.ok(p.lines.size * p.fontSizePx * 1.15f <= p.box.height + 1f, "déborde en hauteur")
+        p.lines.forEach { T.ok(EstimatedMeasurer.width(it, p.fontSizePx) <= p.box.width + 1f, "ligne trop large: $it") }
+    }
+    T.test("layout: texte vertical → zone élargie pour une traduction horizontale lisible") {
+        val b = TranslatedBlock(0, RectF(400f, 100f, 440f, 400f), "src", "Je ne te pardonnerai jamais.", true, 40f)
+        val p = OverlayLayout.place(listOf(b), 800, 1200).single()
+        T.ok(p.box.width >= 190f, "zone trop étroite: ${p.box.width}"); T.ok(p.fontSizePx >= 12f, "police illisible: ${p.fontSizePx}")
+        T.ok(p.box.isInside(800f, 1200f), "hors image")
     }
 }

@@ -19,7 +19,15 @@ object EstimatedMeasurer : TextMeasurer {
         }.toFloat() * sizePx
 }
 
-data class TranslatedBlock(val id: Int, val box: RectF, val source: String, val translated: String, val vertical: Boolean = false)
+/** [lineHeight] : hauteur d'une ligne de texte d'origine (largeur si vertical), sert à estimer la taille du texte. 0 = inconnue. */
+data class TranslatedBlock(
+    val id: Int,
+    val box: RectF,
+    val source: String,
+    val translated: String,
+    val vertical: Boolean = false,
+    val lineHeight: Float = 0f,
+)
 
 data class PlacedBlock(
     val id: Int,
@@ -31,9 +39,9 @@ data class PlacedBlock(
 
 data class LayoutConfig(
     val paddingRatio: Float = 0.06f,
-    val minFontPx: Float = 9f,
+    val minFontPx: Float = 8f,
     val lineSpacing: Float = 1.15f,
-    val maxGrowRatio: Float = 1.6f,
+    val maxGrowRatio: Float = 1.3f,
 )
 
 object OverlayLayout {
@@ -80,30 +88,40 @@ object OverlayLayout {
     private fun fit(b: TranslatedBlock, w: Float, h: Float, scale: Float, m: TextMeasurer, cfg: LayoutConfig): PlacedBlock {
         val padX = b.box.width * cfg.paddingRatio
         val padY = b.box.height * cfg.paddingRatio
-        var box = clamp(b.box.inflate(padX, padY), w, h)
-        val avgLine = if (b.vertical) b.box.width else b.box.height
-        val maxFont = max(cfg.minFontPx, min(box.height, avgLine) * 0.9f)
-        val minFont = cfg.minFontPx
-        val target = (maxFont * scale).coerceAtLeast(minFont)
+        var box = b.box.inflate(padX, padY)
+        if (b.vertical) {
+            // texte vertical d'origine : la traduction est horizontale, il lui faut plus de largeur
+            val wantW = max(box.width * 3f, w * 0.25f)
+            box = RectF(box.centerX - wantW / 2f, box.top, box.centerX + wantW / 2f, box.bottom)
+        }
+        box = clamp(box, w, h)
 
-        var size = target
+        val lineH = if (b.lineHeight > 0f) b.lineHeight else if (b.vertical) b.box.width else b.box.height
+        val words = b.translated.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+        fun needed(s: Float, n: Int) = n * s * cfg.lineSpacing
+        fun longestWord(s: Float) = words.maxOfOrNull { m.width(it, s) } ?: 0f
+
+        var size = max(cfg.minFontPx, lineH * 0.9f * scale)
         var lines = wrap(b.translated, box.width, size, m)
-        fun neededH(s: Float, n: Int) = n * s * cfg.lineSpacing
-        val cap = min(box.height * cfg.maxGrowRatio, h)
-        while (size > minFont && neededH(size, lines.size) > cap) {
-            size = max(minFont, size - 1f)
+        // 1) aucun mot ne doit être coupé ; 2) le texte doit tenir dans la bulle (agrandissement limité)
+        val softCap = min(box.height * cfg.maxGrowRatio, h)
+        while (size > cfg.minFontPx && (longestWord(size) > box.width || needed(size, lines.size) > softCap)) {
+            size = max(cfg.minFontPx, size - 0.5f)
             lines = wrap(b.translated, box.width, size, m)
         }
-        val need = neededH(size, lines.size)
-        if (need > box.height) {
-            val grown = min(need, box.height * cfg.maxGrowRatio)
-            val extra = grown - box.height
-            box = clamp(RectF(box.left, box.top - extra / 2f, box.right, box.bottom + extra / 2f), w, h)
-            // si l'image est trop petite pour tout contenir, on réduit encore la police
-            while (size > 4f && neededH(size, lines.size) > box.height) {
+        // dernier recours : texte très long, on laisse la zone grandir davantage puis on réduit encore
+        var need = needed(size, lines.size)
+        if (need > softCap) {
+            val hardCap = min(box.height * 2.5f, h)
+            while (size > 4f && needed(size, lines.size) > hardCap) {
                 size -= 0.5f
                 lines = wrap(b.translated, box.width, size, m)
             }
+            need = needed(size, lines.size)
+        }
+        if (need > box.height) {
+            val extra = need - box.height
+            box = clamp(RectF(box.left, box.top - extra / 2f, box.right, box.bottom + extra / 2f), w, h)
         }
         return PlacedBlock(b.id, b.translated, box, size, lines)
     }

@@ -17,7 +17,7 @@ import org.json.JSONObject
 object OverlayBuilder {
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Typeface.DEFAULT_BOLD }
-    private val measurer = TextMeasurer { text, size -> paint.textSize = size; paint.measureText(text) * 1.05f }
+    private val measurer = TextMeasurer { text, size -> paint.textSize = size; paint.measureText(text) * 1.08f }
 
     fun build(imageBytes: ByteArray, result: PageResult, settings: AppSettings): JSONObject {
         val placed = OverlayLayout.place(result.blocks, result.imageWidth, result.imageHeight, settings.textScale, measurer)
@@ -110,7 +110,7 @@ object PageScript {
     d.style.cssText = 'position:absolute;pointer-events:none;z-index:2147483000;overflow:hidden;margin:0;padding:0;';
     for (var i=0;i<data.blocks.length;i++){
       var b = data.blocks[i], x = document.createElement('div');
-      x.style.cssText = 'position:absolute;box-sizing:border-box;display:flex;align-items:center;justify-content:center;text-align:center;white-space:pre-line;line-height:1.15;overflow:hidden;border-radius:6px;font-family:sans-serif;font-weight:700;padding:1px;';
+      x.style.cssText = 'position:absolute;box-sizing:border-box;display:flex;align-items:center;justify-content:center;text-align:center;white-space:pre;word-break:normal;overflow-wrap:normal;line-height:1.15;overflow:hidden;border-radius:6px;font-family:sans-serif;font-weight:700;padding:1px;';
       x.style.left = (b.x / data.w * 100) + '%'; x.style.top = (b.y / data.h * 100) + '%';
       x.style.width = (b.w / data.w * 100) + '%'; x.style.height = (b.h / data.h * 100) + '%';
       x.style.background = b.bg; x.style.color = b.fg;

@@ -10,6 +10,7 @@ import app.manhwa.core.OcrResult
 import app.manhwa.core.RectF
 import app.manhwa.core.ScriptDetector
 import app.manhwa.core.SourceLang
+import app.manhwa.core.TextNormalizer
 import app.manhwa.core.TranslationEngine
 import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.nl.translate.TranslateLanguage
@@ -126,7 +127,11 @@ class MlKitTranslation(private val models: TranslationModels) : TranslationEngin
             try {
                 // Les modèles requis sont déjà présents : cet appel ne fait que charger le moteur.
                 Tasks.await(translator.downloadModelIfNeeded(), 120, TimeUnit.SECONDS)
-                for (i in idxs) out[i] = Tasks.await(translator.translate(texts[i]), 60, TimeUnit.SECONDS)
+                for (i in idxs) {
+                    // phrase par phrase : meilleure qualité et aucune phrase omise
+                    val parts = TextNormalizer.splitSentences(texts[i]).ifEmpty { listOf(texts[i]) }
+                    out[i] = parts.joinToString(" ") { Tasks.await(translator.translate(it), 60, TimeUnit.SECONDS) }
+                }
             } finally {
                 translator.close()
             }
@@ -135,7 +140,7 @@ class MlKitTranslation(private val models: TranslationModels) : TranslationEngin
     }
 
     companion object {
-        const val ID = "mlkit-ocr16.0.1+mlkit-translate17.0.3"
+        const val ID = "mlkit-ocr16.0.1+mlkit-translate17.0.3+norm2"
         @Suppress("unused") val SUPPORTED = listOf(TranslateLanguage.JAPANESE, TranslateLanguage.KOREAN, TranslateLanguage.CHINESE, TranslateLanguage.ENGLISH)
     }
 }
