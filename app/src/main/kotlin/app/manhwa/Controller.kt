@@ -28,11 +28,13 @@ import app.manhwa.core.PagePipeline
 import app.manhwa.core.PageQueue
 import app.manhwa.core.QueueListener
 import org.json.JSONArray
+import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import kotlin.math.abs
@@ -64,6 +66,11 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     var failed by mutableIntStateOf(0)
     var noText by mutableIntStateOf(0)
     var lastError by mutableStateOf<String?>(null)
+
+    // Tests automatiques (builds debug) : journal détaillé de chaque image traitée
+    @Volatile var testing = false
+    val testLog = ConcurrentLinkedQueue<JSONObject>()
+    fun isReady(): Boolean = webView != null
 
     private val backlog = ArrayList<Candidate>()
     private val submitted = HashSet<String>()
@@ -228,9 +235,14 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
     private fun process(c: Candidate, cancelled: () -> Boolean): PageOutcome {
         val pageUrl = currentUrl
-        val bytes = try { fetch(c, pageUrl) } catch (e: Exception) { return PageOutcome.Failed("image", e.message ?: "téléchargement impossible") }
+        val bytes = try { fetch(c, pageUrl) } catch (e: Exception) {
+            val f = PageOutcome.Failed("image", e.message ?: "téléchargement impossible")
+            if (testing) logForTest(c, f, null, null, 0)
+            return f
+        }
         if (cancelled()) return PageOutcome.Failed("annulé", "")
         val s = graph.settingsStore.settings
+        val t0 = System.currentTimeMillis()
         val spec = LlmModels.specFor(s.engine)
         val translator = if (spec == null) MlKitTranslation(graph.models) else graph.gemma
         val engineId = if (spec == null) MlKitTranslation.ID else GemmaTranslator.engineId(spec)
@@ -238,10 +250,11 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val pipeline = PagePipeline(
             graph.cache, MlKitOcr(s.source), translator, engineId,
             glossary = { graph.glossary.current() },
-            useCache = !s.diagnostic, // en diagnostic on veut voir la détection réelle, pas un résultat en cache
+            useCache = !s.diagnostic && !testing, // en diagnostic on veut voir la détection réelle, pas un résultat en cache
             debugSink = { debug = it },
         )
         val out = pipeline.process(bytes, s.source.code, s.target.code)
+        var overlayForLog: JSONObject? = null
         if (!cancelled()) {
             val json = when {
                 out is PageOutcome.Done -> OverlayBuilder.build(bytes, out.result, s, debug)
@@ -249,8 +262,34 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                 else -> null
             }
             if (json != null) main.post { webView?.evaluateJavascript("window.__mt&&window.__mt.apply('${c.id}', $json)", null) }
+            overlayForLog = json
         }
+        if (testing) logForTest(c, out, debug, overlayForLog, System.currentTimeMillis() - t0)
         return out
+    }
+
+    private fun logForTest(c: Candidate, out: PageOutcome, debug: DebugInfo?, overlay: JSONObject?, ms: Long) {
+        val e = JSONObject().put("id", c.id).put("src", c.src).put("ms", ms)
+        when (out) {
+            is PageOutcome.Done -> {
+                e.put("outcome", if (out.fromCache) "done-cache" else "done").put("w", out.result.imageWidth).put("h", out.result.imageHeight)
+                val bl = JSONArray()
+                out.result.blocks.forEach { b ->
+                    bl.put(JSONObject().put("id", b.id).put("x0", b.box.left.toDouble()).put("y0", b.box.top.toDouble()).put("x1", b.box.right.toDouble()).put("y1", b.box.bottom.toDouble())
+                        .put("src", b.source).put("tr", b.translated).put("vertical", b.vertical).put("lineH", b.lineHeight.toDouble()))
+                }
+                e.put("blocks", bl)
+            }
+            is PageOutcome.NoText -> e.put("outcome", "notext").put("w", out.imageWidth).put("h", out.imageHeight)
+            is PageOutcome.Failed -> e.put("outcome", "failed").put("stage", out.stage).put("message", out.message)
+        }
+        if (overlay != null) e.put("overlay", overlay)
+        if (debug != null) {
+            val ocr = JSONArray()
+            debug.lines.forEach { l -> ocr.put(JSONObject().put("x0", l.box.left.toDouble()).put("y0", l.box.top.toDouble()).put("x1", l.box.right.toDouble()).put("y1", l.box.bottom.toDouble()).put("t", l.text).put("c", l.confidence.toDouble()).put("s", l.status)) }
+            e.put("ocr", ocr).put("w", debug.imageWidth).put("h", debug.imageHeight)
+        }
+        testLog.add(e)
     }
 
     /** Récupère l'image comme le ferait le navigateur (mêmes cookies, même Referer), sans contourner aucune protection. */

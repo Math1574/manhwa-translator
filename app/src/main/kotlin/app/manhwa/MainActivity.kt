@@ -37,9 +37,15 @@ private val ManhwaColors = darkColorScheme(
 )
 
 class MainActivity : ComponentActivity() {
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        TestHooks.maybeRun(applicationContext, (application as App).graph, intent)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val graph = (application as App).graph
+        TestHooks.maybeRun(applicationContext, graph, intent)
         setContent {
             MaterialTheme(colorScheme = ManhwaColors) { Root(graph) }
         }

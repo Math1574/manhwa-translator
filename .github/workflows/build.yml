@@ -3,6 +3,13 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      suite:
+        description: 'quick (ML Kit) ou full (ajoute Gemma)'
+        default: 'quick'
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: write
 jobs:
@@ -49,14 +56,37 @@ jobs:
           git add apk-errors.log apk-tail.log
           git commit -m "journal ${GITHUB_SHA}" || true
           git push origin ci-logs --force
-  smoke:
-    if: github.event_name == 'workflow_dispatch'
+  e2e:
     needs: apk
     runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      SUITE: ${{ github.event.inputs.suite || 'quick' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with: { name: ManhwaTranslator-debug-apk, path: apk }
+      - name: Outils de test (polices, ImageMagick, Pillow)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-cjk fonts-comic-neue imagemagick python3-pil
+      - name: Préparer le faux site de lecture
+        run: |
+          mkdir -p /tmp/site /tmp/e2e
+          bash ci/fixtures/fetch_pc.sh /tmp/site/pc | tail -5
+          python3 ci/fixtures/gen_synthetic.py /tmp/site/synth
+          python3 ci/fixtures/make_site.py /tmp/site
+          mkdir -p /tmp/site/ref && ln -sfn /tmp/site/pc/en /tmp/site/ref/en
+          nohup python3 ci/fixtures/server.py /tmp/site 8000 > /tmp/server.log 2>&1 &
+          sleep 2; curl -sS -o /dev/null -w "site: HTTP %{http_code}\n" http://127.0.0.1:8000/index.html
+      - name: Modèle Gemma (cache)
+        if: env.SUITE == 'full'
+        uses: actions/cache@v4
+        with: { path: /tmp/gemma, key: gemma-e2b-v1 }
+      - name: Télécharger Gemma E2B si absent du cache
+        if: env.SUITE == 'full'
+        run: |
+          mkdir -p /tmp/gemma
+          [ -f /tmp/gemma/gemma-4-E2B-it.litertlm ] || curl -sSfL -o /tmp/gemma/gemma-4-E2B-it.litertlm https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm
+          sha256sum /tmp/gemma/gemma-4-E2B-it.litertlm
       - name: Activer KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -66,14 +96,24 @@ jobs:
           api-level: 34
           arch: x86_64
           target: google_apis
+          profile: pixel_6
+          ram-size: 8192M
+          heap-size: 1024M
+          disk-size: 14G
+          cores: 4
           disable-animations: true
-          script: bash ci/smoke.sh
-      - name: Publier le rapport (branche ci-logs)
+          emulator-boot-timeout: 900
+          script: bash ci/e2e.sh
+      - name: Analyse
+        if: always()
+        run: python3 ci/analyze.py /tmp/e2e /tmp/site/synth || true
+      - name: Publier les résultats (branche e2e-logs)
         if: always()
         run: |
           git config user.name "ci"; git config user.email "ci@example.invalid"
-          mkdir -p /tmp/keep && cp -r /tmp/smoke/. /tmp/keep/ || true
-          git fetch origin ci-logs:ci-logs && git checkout ci-logs
-          rm -rf smoke && mkdir smoke && cp -r /tmp/keep/. smoke/ || true
-          git add smoke && git commit -m "smoke ${GITHUB_SHA}" || true
-          git push origin ci-logs
+          rm -rf /tmp/keep && mkdir -p /tmp/keep && cp -r /tmp/e2e/. /tmp/keep/ || true
+          cp /tmp/server.log /tmp/keep/server.log || true
+          git checkout --orphan e2e-logs; git rm -rf . >/dev/null 2>&1 || true
+          cp -r /tmp/keep/. . ; echo "${GITHUB_SHA} suite=${SUITE}" > COMMIT.txt
+          git add -A; git commit -q -m "e2e ${GITHUB_SHA}" || true
+          git push origin e2e-logs --force
