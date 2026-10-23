@@ -1,0 +1,178 @@
+== index épisode 1
+HTTP 200 67445
+href="ar_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="at_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="bn_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="br_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="ca_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="cn_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="cs_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="da_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="de_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="el_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="en_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="eo_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="es_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="fa_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="fi_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="fr_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="ga_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="gb_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="gd_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="go_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="he_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="hi_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="hr_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="hu_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="id_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="ie_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="io_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="it_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="ja_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="jb_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="jz_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="kh_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="kr_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="kt_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="kw_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="la_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="ld_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="lf_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="ls_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+href="lt_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
+== fichiers par langue (E01P01)
+en HTTP 200 0
+fr HTTP 200 0
+ja HTTP 200 0
+ko HTTP 404 0
+zh HTTP 404 0
+cn HTTP 200 0
+zh-hans HTTP 404 0
+zh-hant HTTP 404 0
+== langues du répertoire
+ar_Pepper-and-Carrot_by-David-Revoy_E01P01
+at_Pepper-and-Carrot_by-David-Revoy_E01P01
+bn_Pepper-and-Carrot_by-David-Revoy_E01P01
+br_Pepper-and-Carrot_by-David-Revoy_E01P01
+ca_Pepper-and-Carrot_by-David-Revoy_E01P01
+cn_Pepper-and-Carrot_by-David-Revoy_E01P01
+cs_Pepper-and-Carrot_by-David-Revoy_E01P01
+da_Pepper-and-Carrot_by-David-Revoy_E01P01
+de_Pepper-and-Carrot_by-David-Revoy_E01P01
+el_Pepper-and-Carrot_by-David-Revoy_E01P01
+en_Pepper-and-Carrot_by-David-Revoy_E01P01
+eo_Pepper-and-Carrot_by-David-Revoy_E01P01
+es_Pepper-and-Carrot_by-David-Revoy_E01P01
+fa_Pepper-and-Carrot_by-David-Revoy_E01P01
+fi_Pepper-and-Carrot_by-David-Revoy_E01P01
+fr_Pepper-and-Carrot_by-David-Revoy_E01P01
+ga_Pepper-and-Carrot_by-David-Revoy_E01P01
+gb_Pepper-and-Carrot_by-David-Revoy_E01P01
+gd_Pepper-and-Carrot_by-David-Revoy_E01P01
+go_Pepper-and-Carrot_by-David-Revoy_E01P01
+he_Pepper-and-Carrot_by-David-Revoy_E01P01
+hi_Pepper-and-Carrot_by-David-Revoy_E01P01
+hr_Pepper-and-Carrot_by-David-Revoy_E01P01
+hu_Pepper-and-Carrot_by-David-Revoy_E01P01
+id_Pepper-and-Carrot_by-David-Revoy_E01P01
+ie_Pepper-and-Carrot_by-David-Revoy_E01P01
+io_Pepper-and-Carrot_by-David-Revoy_E01P01
+it_Pepper-and-Carrot_by-David-Revoy_E01P01
+ja_Pepper-and-Carrot_by-David-Revoy_E01P01
+jb_Pepper-and-Carrot_by-David-Revoy_E01P01
+jz_Pepper-and-Carrot_by-David-Revoy_E01P01
+kh_Pepper-and-Carrot_by-David-Revoy_E01P01
+kr_Pepper-and-Carrot_by-David-Revoy_E01P01
+kt_Pepper-and-Carrot_by-David-Revoy_E01P01
+kw_Pepper-and-Carrot_by-David-Revoy_E01P01
+la_Pepper-and-Carrot_by-David-Revoy_E01P01
+ld_Pepper-and-Carrot_by-David-Revoy_E01P01
+lf_Pepper-and-Carrot_by-David-Revoy_E01P01
+ls_Pepper-and-Carrot_by-David-Revoy_E01P01
+lt_Pepper-and-Carrot_by-David-Revoy_E01P01
+ml_Pepper-and-Carrot_by-David-Revoy_E01P01
+ms_Pepper-and-Carrot_by-David-Revoy_E01P01
+mx_Pepper-and-Carrot_by-David-Revoy_E01P01
+nl_Pepper-and-Carrot_by-David-Revoy_E01P01
+nm_Pepper-and-Carrot_by-David-Revoy_E01P01
+nn_Pepper-and-Carrot_by-David-Revoy_E01P01
+no_Pepper-and-Carrot_by-David-Revoy_E01P01
+ns_Pepper-and-Carrot_by-David-Revoy_E01P01
+oc_Pepper-and-Carrot_by-David-Revoy_E01P01
+ph_Pepper-and-Carrot_by-David-Revoy_E01P01
+pl_Pepper-and-Carrot_by-David-Revoy_E01P01
+pt_Pepper-and-Carrot_by-David-Revoy_E01P01
+rc_Pepper-and-Carrot_by-David-Revoy_E01P01
+ro_Pepper-and-Carrot_by-David-Revoy_E01P01
+ru_Pepper-and-Carrot_by-David-Revoy_E01P01
+sb_Pepper-and-Carrot_by-David-Revoy_E01P01
+si_Pepper-and-Carrot_by-David-Revoy_E01P01
+sk_Pepper-and-Carrot_by-David-Revoy_E01P01
+sl_Pepper-and-Carrot_by-David-Revoy_E01P01
+sp_Pepper-and-Carrot_by-David-Revoy_E01P01
+sr_Pepper-and-Carrot_by-David-Revoy_E01P01
+su_Pepper-and-Carrot_by-David-Revoy_E01P01
+sv_Pepper-and-Carrot_by-David-Revoy_E01P01
+sz_Pepper-and-Carrot_by-David-Revoy_E01P01
+ta_Pepper-and-Carrot_by-David-Revoy_E01P01
+tp_Pepper-and-Carrot_by-David-Revoy_E01P01
+tr_Pepper-and-Carrot_by-David-Revoy_E01P01
+uk_Pepper-and-Carrot_by-David-Revoy_E01P01
+vi_Pepper-and-Carrot_by-David-Revoy_E01P01
+== épisodes
+ep01_Potion-of-Flight
+ep02_Rainbow-potions
+ep03_The-secret-ingr
+ep03_The-secret-ingredients
+ep04_Stroke-of-genius
+ep05_Special-holiday
+ep05_Special-holiday-episode
+ep06_The-Potion-Cont
+ep06_The-Potion-Contest
+ep07_The-Wish
+ep08_Pepper-s-Birthd
+ep08_Pepper-s-Birthday-Party
+ep09_The-Remedy
+ep10_Summer-Special
+ep11_The-Witches-of-
+ep11_The-Witches-of-Chaosah
+ep12_Autumn-Clearout
+ep13_The-Pyjama-Party
+ep14_The-Dragon-s-To
+ep14_The-Dragon-s-Tooth
+ep15_The-Crystal-Ball
+ep16_The-Sage-of-the
+ep16_The-Sage-of-the-Mountain
+ep17_A-Fresh-Start
+ep18_The-Encounter
+ep19_Pollution
+ep20_The-Picnic
+ep21_The-Magic-Contest
+ep22_The-Voting-System
+ep23_Take-a-Chance
+ep24_The-Unity-Tree
+ep25_There-are-no-Sh
+ep25_There-are-no-Shortcuts
+ep26_Books-Are-Great
+ep27_Coriander-s-Inv
+ep27_Coriander-s-Invention
+ep28_The-Festivities
+ep29_Destroyer-of-Wo
+ep29_Destroyer-of-Worlds
+ep30_Need-a-Hug
+ep31_The-Fight
+ep32_The-Battlefield
+ep33_Spell-of-War
+ep34_The-Knighting-o
+ep34_The-Knighting-of-Shichimi
+== licence
+creative commons, patreon, pepper, carrot, pepper&amp;carrot, libre, artist" />
+Creative Commons Attribution 4.0 International license
+Creative Commons Attribution Share-Alike 4.0 International license
+== polices
+fonts-noto-cjk:
+  Candidate: 1:20230817+repack1-3
+fonts-comic-neue:
+  Candidate: 2.51-4
+fonts-noto-color-emoji:
+  Candidate: 2.047-0ubuntu0.24.04.1
