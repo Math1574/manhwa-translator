@@ -24,5 +24,5 @@ e: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kot
 * What went wrong:
 Execution failed for task ':app:compileDebugKotlin'.
 org.gradle.api.tasks.TaskExecutionException: Execution failed for task ':app:compileDebugKotlin'.
-BUILD FAILED in 40s
+BUILD FAILED in 51s
 ls: cannot access 'app/build/outputs/apk/debug/': No such file or directory
