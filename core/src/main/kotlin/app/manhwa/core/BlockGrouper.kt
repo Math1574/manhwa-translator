@@ -47,12 +47,17 @@ class BlockGrouper(private val cfg: GrouperConfig = GrouperConfig()) {
         }
     }
 
-    private fun isUsable(l: OcrLine): Boolean {
+    /** Motif de rejet d'une ligne OCR (null si elle est utilisable) : sert au regroupement et au mode diagnostic. */
+    fun dropReason(l: OcrLine): String? {
         val t = l.text.trim()
-        if (t.isEmpty() || l.confidence < cfg.minConfidence) return false
-        if (l.box.isEmpty || min(l.box.width, l.box.height) < cfg.minSidePx) return false
-        return t.any { it.isLetterOrDigit() || it.isCjk() }
+        if (t.isEmpty()) return "vide"
+        if (l.confidence < cfg.minConfidence) return "confiance"
+        if (l.box.isEmpty || min(l.box.width, l.box.height) < cfg.minSidePx) return "trop petit"
+        if (!t.any { it.isLetterOrDigit() || it.isCjk() }) return "ponctuation"
+        return null
     }
+
+    private fun isUsable(l: OcrLine): Boolean = dropReason(l) == null
 
     private fun dedupe(lines: List<OcrLine>): List<OcrLine> {
         val out = ArrayList<OcrLine>()

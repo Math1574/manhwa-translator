@@ -6,6 +6,7 @@ import android.graphics.Paint
 import android.graphics.Typeface
 import app.manhwa.core.AppSettings
 import app.manhwa.core.ColorMath
+import app.manhwa.core.DebugInfo
 import app.manhwa.core.OverlayLayout
 import app.manhwa.core.PageResult
 import app.manhwa.core.RectF
@@ -19,7 +20,7 @@ object OverlayBuilder {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Typeface.DEFAULT_BOLD }
     private val measurer = TextMeasurer { text, size -> paint.textSize = size; paint.measureText(text) * 1.08f }
 
-    fun build(imageBytes: ByteArray, result: PageResult, settings: AppSettings): JSONObject {
+    fun build(imageBytes: ByteArray, result: PageResult, settings: AppSettings, debug: DebugInfo? = null): JSONObject {
         val placed = OverlayLayout.place(result.blocks, result.imageWidth, result.imageHeight, settings.textScale, measurer)
         val bmp = decodeSampled(imageBytes, result.imageWidth, result.imageHeight)
         val sampleScale = if (bmp == null) 1f else bmp.width.toFloat() / result.imageWidth
@@ -39,7 +40,24 @@ object OverlayBuilder {
         } finally {
             bmp?.recycle()
         }
-        return JSONObject().put("w", result.imageWidth).put("h", result.imageHeight).put("blocks", blocks)
+        val json = JSONObject().put("w", result.imageWidth).put("h", result.imageHeight).put("blocks", blocks)
+        if (debug != null && settings.diagnostic) json.put("dbg", debugJson(debug))
+        return json
+    }
+
+    /** Page sans traduction affichable : on montre quand même ce que l'OCR a détecté. */
+    fun debugOnly(debug: DebugInfo): JSONObject =
+        JSONObject().put("w", debug.imageWidth).put("h", debug.imageHeight).put("blocks", JSONArray()).put("dbg", debugJson(debug))
+
+    private fun debugJson(d: DebugInfo): JSONArray {
+        val arr = JSONArray()
+        for (l in d.lines) arr.put(
+            JSONObject().put("x", l.box.left.toDouble()).put("y", l.box.top.toDouble())
+                .put("w", l.box.width.toDouble()).put("h", l.box.height.toDouble())
+                .put("t", l.text.take(40) + " · " + String.format(java.util.Locale.ROOT, "%.2f", l.confidence) + " · " + l.status)
+                .put("ok", l.status == "gardée"),
+        )
+        return arr
     }
 
     /** Image réduite à environ 4 millions de pixels pour l'échantillonnage des couleurs ; null si la mémoire manque. */
@@ -116,6 +134,19 @@ object PageScript {
       x.style.background = b.bg; x.style.color = b.fg;
       x.setAttribute('data-fs', b.fs); x.textContent = b.t;
       d.appendChild(x);
+    }
+    if (data.dbg) {
+      for (var j=0;j<data.dbg.length;j++){
+        var q = data.dbg[j], bx = document.createElement('div'), lb = document.createElement('div');
+        var col = q.ok ? '#19e36b' : '#ff3b3b';
+        bx.style.cssText = 'position:absolute;box-sizing:border-box;border:2px dashed ' + col + ';';
+        bx.style.left = (q.x / data.w * 100) + '%'; bx.style.top = (q.y / data.h * 100) + '%';
+        bx.style.width = (q.w / data.w * 100) + '%'; bx.style.height = (q.h / data.h * 100) + '%';
+        lb.style.cssText = 'position:absolute;white-space:nowrap;font-family:monospace;background:rgba(0,0,0,0.75);color:' + col + ';padding:0 2px;';
+        lb.style.left = (q.x / data.w * 100) + '%'; lb.style.top = (q.y / data.h * 100) + '%';
+        lb.setAttribute('data-fs', Math.max(12, data.w / 45)); lb.textContent = q.t;
+        d.appendChild(bx); d.appendChild(lb);
+      }
     }
     document.documentElement.appendChild(d);
     var e = {img:im, div:d, w:data.w, h:data.h, key:''}; S.entries[id] = e; place(e); return true;

@@ -14,6 +14,9 @@ data class AppSettings(
     val mode: QualityMode = QualityMode.FAST,
     val maxPrefetchPages: Int = 3,
     val cacheMaxMb: Int = 50,
+    val engine: TranslationEngineChoice = TranslationEngineChoice.MLKIT,
+    val useGpu: Boolean = false,
+    val diagnostic: Boolean = false,
 ) {
     /** Ramène les valeurs dans des bornes valides. */
     fun sanitized() = copy(
@@ -26,6 +29,7 @@ data class AppSettings(
         it["source"] = source.name; it["target"] = target.name; it["textScale"] = textScale.toString()
         it["autoTranslate"] = autoTranslate.toString(); it["mode"] = mode.name
         it["maxPrefetchPages"] = maxPrefetchPages.toString(); it["cacheMaxMb"] = cacheMaxMb.toString()
+        it["engine"] = engine.name; it["useGpu"] = useGpu.toString(); it["diagnostic"] = diagnostic.toString()
     }.let { p -> java.io.StringWriter().also { w -> p.store(w, null) }.toString() }
 
     companion object {
@@ -42,6 +46,9 @@ data class AppSettings(
                 en("mode", QualityMode.values(), d.mode),
                 p.getProperty("maxPrefetchPages")?.toIntOrNull() ?: d.maxPrefetchPages,
                 p.getProperty("cacheMaxMb")?.toIntOrNull() ?: d.cacheMaxMb,
+                en("engine", TranslationEngineChoice.values(), d.engine),
+                p.getProperty("useGpu")?.toBooleanStrictOrNull() ?: d.useGpu,
+                p.getProperty("diagnostic")?.toBooleanStrictOrNull() ?: d.diagnostic,
             ).sanitized()
         }
     }

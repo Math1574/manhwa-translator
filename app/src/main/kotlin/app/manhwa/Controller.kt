@@ -20,6 +20,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import app.manhwa.core.DebugInfo
+import app.manhwa.core.LlmModels
 import app.manhwa.core.PageJob
 import app.manhwa.core.PageOutcome
 import app.manhwa.core.PagePipeline
@@ -188,6 +190,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
     private fun resetSession() {
         stopWork(); resetCounters(); active = false; overlaysVisible = true
+        graph.gemma.resetContext()
     }
 
     private fun resetCounters() { total = 0; done = 0; failed = 0; noText = 0; lastError = null }
@@ -228,14 +231,24 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val bytes = try { fetch(c, pageUrl) } catch (e: Exception) { return PageOutcome.Failed("image", e.message ?: "téléchargement impossible") }
         if (cancelled()) return PageOutcome.Failed("annulé", "")
         val s = graph.settingsStore.settings
+        val spec = LlmModels.specFor(s.engine)
+        val translator = if (spec == null) MlKitTranslation(graph.models) else graph.gemma
+        val engineId = if (spec == null) MlKitTranslation.ID else GemmaTranslator.engineId(spec)
+        var debug: DebugInfo? = null
         val pipeline = PagePipeline(
-            graph.cache, MlKitOcr(s.source), MlKitTranslation(graph.models), MlKitTranslation.ID,
+            graph.cache, MlKitOcr(s.source), translator, engineId,
             glossary = { graph.glossary.current() },
+            useCache = !s.diagnostic, // en diagnostic on veut voir la détection réelle, pas un résultat en cache
+            debugSink = { debug = it },
         )
         val out = pipeline.process(bytes, s.source.code, s.target.code)
-        if (out is PageOutcome.Done && !cancelled()) {
-            val json = OverlayBuilder.build(bytes, out.result, s)
-            main.post { webView?.evaluateJavascript("window.__mt&&window.__mt.apply('${c.id}', $json)", null) }
+        if (!cancelled()) {
+            val json = when {
+                out is PageOutcome.Done -> OverlayBuilder.build(bytes, out.result, s, debug)
+                s.diagnostic && debug != null -> OverlayBuilder.debugOnly(debug!!)
+                else -> null
+            }
+            if (json != null) main.post { webView?.evaluateJavascript("window.__mt&&window.__mt.apply('${c.id}', $json)", null) }
         }
         return out
     }

@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests()
+    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -313,7 +313,7 @@ fun modelTests() {
 // ---------- paramètres ----------
 fun settingsTests() {
     T.test("paramètres: aller-retour complet") {
-        val s = AppSettings(SourceLang.KO, TargetLang.DE, 1.4f, true, QualityMode.ENHANCED, 5, 120)
+        val s = AppSettings(SourceLang.KO, TargetLang.DE, 1.4f, true, QualityMode.ENHANCED, 5, 120, TranslationEngineChoice.GEMMA_E4B, true, true)
         T.eq(s, AppSettings.parse(s.serialize()))
     }
     T.test("paramètres: valeurs absentes/invalides → défauts, bornes appliquées") {
@@ -398,5 +398,54 @@ fun layoutV2Tests() {
         val p = OverlayLayout.place(listOf(b), 800, 1200).single()
         T.ok(p.box.width >= 190f, "zone trop étroite: ${p.box.width}"); T.ok(p.fontSizePx >= 12f, "police illisible: ${p.fontSizePx}")
         T.ok(p.box.isInside(800f, 1200f), "hors image")
+    }
+}
+
+// ---------- modèle de langage local ----------
+fun llmTests() {
+    T.test("llm: prompt contient la numérotation, le contexte et le glossaire") {
+        val u = LlmPrompt.user(listOf("Hello", "How are you?"), listOf("Hi" to "Salut"), listOf(GlossaryEntry("Kim", "Kim Do-jin")))
+        T.ok(u.contains("1| Hello") && u.contains("2| How are you?"), "numérotation"); T.ok(u.contains("- Hi => Salut"), "historique")
+        T.ok(u.contains("Kim = Kim Do-jin"), "glossaire")
+        T.ok(LlmPrompt.system("ko", "fr").contains("Korean") && LlmPrompt.system("ko", "fr").contains("French"), "langues")
+        T.ok(LlmPrompt.system("auto", "fr").contains("detect"), "auto")
+    }
+    T.test("llm: lecture de la réponse (formats variés, guillemets, Markdown, lignes multiples)") {
+        val r = LlmPrompt.parse("1| Salut !\n2: **Comment vas-tu ?**\n3) « Bien. »\n   Et toi ?\n4. \"Merci\"", 4)
+        T.eq(listOf("Salut !", "Comment vas-tu ?", "Bien. Et toi ?", "Merci"), r)
+    }
+    T.test("llm: lignes manquantes → null ; numéros hors plage ignorés ; blocs de réflexion retirés") {
+        T.eq(listOf("A", null, "C"), LlmPrompt.parse("1| A\n3| C\n9| X", 3))
+        T.eq(listOf("Oui"), LlmPrompt.parse("<think>je réfléchis\n1| non</think>\n1| Oui", 1))
+    }
+    T.test("llm: réponse sans numéros mais du bon nombre de lignes → utilisée dans l'ordre") {
+        T.eq(listOf("Un", "Deux"), LlmPrompt.parse("Un\nDeux", 2))
+        T.eq(listOf<String?>(null, null), LlmPrompt.parse("Un\nDeux\nTrois", 2))
+    }
+    T.test("pipeline LLM : pas de jetons, glossaire passé au modèle, texte d'origine conservé, diagnostic produit") {
+        var seenTexts: List<String> = emptyList(); var seenTerms: List<GlossaryEntry> = emptyList()
+        val llm = object : TranslationEngine {
+            override fun usesGlossaryPrompt() = true
+            override fun translate(texts: List<String>, source: String, target: String) = texts
+            override fun translateWithGlossary(texts: List<String>, source: String, target: String, glossary: List<GlossaryEntry>): List<String> {
+                seenTexts = texts; seenTerms = glossary; return texts.map { "FR:$it" }
+            }
+        }
+        var dbg: DebugInfo? = null
+        val g = Glossary(listOf(GlossaryEntry("KIM", "Kim Do-jin"), GlossaryEntry("ZZZ", "inutile")))
+        val o = PagePipeline(ResultCache(tmp()), FakeOcr(listOf(line("KIM IS HERE", 100f, 100f, 300f, 130f), line("HMPH", 100f, 600f, 300f, 630f), line("..", 1f, 1f, 90f, 40f, 0.9f))), llm, "e", { g }, debugSink = { dbg = it })
+            .process(byteArrayOf(5), "en", "fr") as PageOutcome.Done
+        T.eq(listOf("KIM IS HERE"), seenTexts); T.eq(listOf("KIM"), seenTerms.map { it.source }); T.eq("FR:KIM IS HERE", o.result.blocks.single().translated)
+        val st = dbg!!.lines.map { it.status }; T.ok("gardée" in st && "bruit" in st && st.any { it.startsWith("rejetée") }, "statuts diagnostic: $st")
+    }
+    T.test("pipeline : useCache=false recalcule même si la page est en cache") {
+        val c = ResultCache(tmp()); val ocr = FakeOcr(listOf(line("Hello", 100f, 100f, 300f, 130f)))
+        val up = TranslationEngine { t, _, _ -> t.map { it.uppercase() } }
+        PagePipeline(c, ocr, up, "e").process(byteArrayOf(7), "en", "fr"); PagePipeline(c, ocr, up, "e", useCache = false).process(byteArrayOf(7), "en", "fr")
+        T.eq(2, ocr.calls.get())
+    }
+    T.test("modèles Gemma : spécifications cohérentes (taille, somme de contrôle, https)") {
+        listOf(LlmModels.E2B, LlmModels.E4B).forEach { T.ok(it.sizeBytes > 2_000_000_000L && it.sha256.length == 64 && it.url.startsWith("https://"), "spec ${it.id}") }
+        T.eq(null, LlmModels.specFor(TranslationEngineChoice.MLKIT)); T.eq(LlmModels.E4B, LlmModels.specFor(TranslationEngineChoice.GEMMA_E4B))
     }
 }

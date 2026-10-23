@@ -24,6 +24,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -42,6 +43,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,13 +52,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import app.manhwa.core.LlmModels
+import app.manhwa.core.ModelSpec
 import app.manhwa.core.QualityMode
 import app.manhwa.core.SourceLang
 import app.manhwa.core.TargetLang
+import app.manhwa.core.TranslationEngineChoice
 import app.manhwa.core.UrlInput
 import java.util.Locale
 
@@ -126,9 +132,37 @@ fun BrowserScreen(graph: AppGraph) {
 @Composable
 fun ModelsScreen(graph: AppGraph) {
     val m = graph.models
-    LaunchedEffect(Unit) { m.refresh() }
+    LaunchedEffect(Unit) { m.refresh(); graph.llm.refresh() }
+    val llm = graph.llm
+    var confirm by remember { mutableStateOf<ModelSpec?>(null) }
+    val anyDownload = llm.busy.values.any { it }
+    val view = LocalView.current
+    DisposableEffect(anyDownload) { view.keepScreenOn = anyDownload; onDispose { view.keepScreenOn = false } }
+
+    confirm?.let { spec ->
+        AlertDialog(
+            onDismissRequest = { confirm = null },
+            title = { Text("Télécharger ${gemmaName(spec)} ?") },
+            text = {
+                Text(
+                    "Le fichier pèse ${gb(spec.sizeBytes)} Go. Utilisez le Wi-Fi et gardez l'application ouverte pendant le téléchargement ; " +
+                        "il peut être repris s'il est interrompu. Une fois téléchargé, la traduction fonctionne sans connexion.",
+                )
+            },
+            confirmButton = { Button(onClick = { llm.download(spec); confirm = null }) { Text("Télécharger") } },
+            dismissButton = { TextButton(onClick = { confirm = null }) { Text("Annuler") } },
+        )
+    }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Modèles de traduction", style = MaterialTheme.typography.headlineSmall)
+        Text("Traduction de qualité (Gemma 4)", style = MaterialTheme.typography.headlineSmall)
+        Text(
+            "Modèle de langage exécuté sur le téléphone : il traduit toute la page d'un coup, en tenant compte du dialogue précédent et du glossaire. " +
+                "Gratuit, sans compte, licence Apache 2.0. Choisissez-le ensuite dans les réglages.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        llm.specs.forEach { spec -> GemmaCard(spec, llm) { confirm = spec } }
+        HorizontalDivider()
+        Text("Traduction légère (ML Kit)", style = MaterialTheme.typography.headlineSmall)
         Text(
             "Chaque langue se télécharge une seule fois (environ 30 Mo, via les serveurs de Google). Ensuite la traduction fonctionne sans connexion. " +
                 "L'anglais est intégré. Le japonais → français passe par l'anglais.",
@@ -163,6 +197,43 @@ fun ModelsScreen(graph: AppGraph) {
                         else -> Button(onClick = { m.download(code) }) { Text("Télécharger") }
                     }
                 }
+            }
+        }
+    }
+}
+
+private fun gb(bytes: Long) = String.format(Locale.FRANCE, "%.1f", bytes / 1_000_000_000.0)
+private fun gemmaName(spec: ModelSpec) = if (spec == LlmModels.E2B) "Gemma 4 E2B" else "Gemma 4 E4B"
+
+@Composable
+private fun GemmaCard(spec: ModelSpec, llm: LlmModelsManager, onAskDownload: () -> Unit) {
+    val ready = llm.ready[spec.id] == true
+    val busy = llm.busy[spec.id] == true
+    val pct = llm.progress[spec.id] ?: 0f
+    val err = llm.error[spec.id]
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(gemmaName(spec), style = MaterialTheme.typography.titleMedium)
+                Text(
+                    if (spec == LlmModels.E2B) "Rapide, bonne qualité · ${gb(spec.sizeBytes)} Go" else "Meilleure qualité, plus lent · ${gb(spec.sizeBytes)} Go",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
+                )
+                Text(
+                    when {
+                        busy -> "Téléchargement : ${String.format(Locale.FRANCE, "%.1f", pct * 100)} % (${(llm.downloaded[spec.id] ?: 0L) / 1_000_000} Mo)"
+                        ready -> "Prêt"
+                        err != null -> "Erreur : $err"
+                        else -> "Absent"
+                    },
+                    color = if (err != null && !busy) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                )
+                if (busy) LinearProgressIndicator(progress = { pct }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+            }
+            when {
+                busy -> OutlinedButton(onClick = { llm.cancel(spec) }) { Text("Annuler") }
+                ready -> OutlinedButton(onClick = { llm.delete(spec) }) { Text("Supprimer") }
+                else -> Button(onClick = onAskDownload) { Text(if (err != null) "Reprendre" else "Télécharger") }
             }
         }
     }
@@ -232,6 +303,32 @@ fun SettingsScreen(graph: AppGraph) {
         }
 
         HorizontalDivider()
+        Text("Moteur de traduction", style = MaterialTheme.typography.titleMedium)
+        val engineNames = mapOf(
+            TranslationEngineChoice.MLKIT to "ML Kit : léger, bulle par bulle, sans contexte",
+            TranslationEngineChoice.GEMMA_E2B to "Gemma 4 E2B : avec contexte (${gb(LlmModels.E2B.sizeBytes)} Go)",
+            TranslationEngineChoice.GEMMA_E4B to "Gemma 4 E4B : meilleure qualité, plus lent (${gb(LlmModels.E4B.sizeBytes)} Go)",
+        )
+        TranslationEngineChoice.values().forEach { c ->
+            val spec = LlmModels.specFor(c)
+            val available = spec == null || graph.llm.ready[spec.id] == true
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                RadioButton(selected = s.engine == c, onClick = { store.update { it.copy(engine = c) } }, enabled = available)
+                Column {
+                    Text(engineNames.getValue(c), color = if (available) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (!available) Text("À télécharger dans l'onglet Modèles", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Accélération GPU (expérimental)", style = MaterialTheme.typography.titleMedium)
+                Text("Plus rapide pour Gemma, mais peut échouer selon le téléphone (repli automatique sur le processeur).", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            }
+            Switch(checked = s.useGpu, onCheckedChange = { v -> store.update { it.copy(useGpu = v) } })
+        }
+
+        HorizontalDivider()
         Text("Taille du texte : ${String.format(Locale.FRANCE, "%.1f", s.textScale)}×", style = MaterialTheme.typography.titleMedium)
         Slider(value = s.textScale, onValueChange = { v -> store.update { it.copy(textScale = v) } }, valueRange = 0.5f..2f)
         Text("Appuyez sur « Retraduire » pour appliquer à la page ouverte (résultats repris du cache, sans nouveau calcul).", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
@@ -268,6 +365,15 @@ fun SettingsScreen(graph: AppGraph) {
             graph.cache.clear(); graph.controller.clearOverlays(); cacheBytes = graph.cache.diskBytes()
             Toast.makeText(ctx, "Cache vidé", Toast.LENGTH_SHORT).show()
         }) { Text("Vider le cache") }
+        HorizontalDivider()
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Diagnostic de la détection", style = MaterialTheme.typography.titleMedium)
+                Text("Encadre le texte repéré par l'OCR (vert : utilisé, rouge : rejeté, avec la confiance). Désactive le cache. Utile pour signaler un problème.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            }
+            Switch(checked = s.diagnostic, onCheckedChange = { v -> store.update { it.copy(diagnostic = v) } })
+        }
+        Text("Modèles Gemma stockés : ${String.format(Locale.FRANCE, "%.2f", graph.llm.usedBytes() / 1_000_000_000.0)} Go")
         Spacer(Modifier.height(24.dp))
     }
 }

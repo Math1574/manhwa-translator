@@ -30,6 +30,8 @@ class AppGraph(ctx: Context) {
     val cache = ResultCache(File(ctx.filesDir, "cache"), maxEntries = 64, maxDiskBytes = 100L * 1024 * 1024)
     val glossary = GlossaryStore(File(ctx.filesDir, "glossary.tsv"))
     val models = TranslationModels(ctx)
+    val llm = LlmModelsManager(ctx)
+    val gemma = GemmaTranslator(ctx, llm) { settingsStore.settings }
     val controller = TranslationController(ctx, this)
 }
 
