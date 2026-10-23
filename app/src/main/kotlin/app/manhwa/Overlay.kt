@@ -1,55 +1,17 @@
 package app.manhwa
 
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.Paint
-import android.graphics.Typeface
-import app.manhwa.core.AppSettings
-import app.manhwa.core.ColorMath
 import app.manhwa.core.DebugInfo
-import app.manhwa.core.OverlayLayout
-import app.manhwa.core.PageResult
-import app.manhwa.core.RectF
-import app.manhwa.core.TextMeasurer
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** Construit la description JSON de l'overlay (positions, taille de texte, couleurs de bulle) envoyée au script de la page. */
+/** Description JSON du mode diagnostic (cadres des lignes détectées par l'OCR). */
 object OverlayBuilder {
-
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Typeface.DEFAULT_BOLD }
-    private val measurer = TextMeasurer { text, size -> paint.textSize = size; paint.measureText(text) * 1.08f }
-
-    fun build(imageBytes: ByteArray, result: PageResult, settings: AppSettings, debug: DebugInfo? = null): JSONObject {
-        val placed = OverlayLayout.place(result.blocks, result.imageWidth, result.imageHeight, settings.textScale, measurer)
-        val bmp = decodeSampled(imageBytes, result.imageWidth, result.imageHeight)
-        val sampleScale = if (bmp == null) 1f else bmp.width.toFloat() / result.imageWidth
-        val blocks = JSONArray()
-        try {
-            for (p in placed) {
-                val src = result.blocks.firstOrNull { it.id == p.id }?.box ?: p.box
-                val bg = if (bmp != null) bubbleColor(bmp, src, sampleScale) else 0xFFFFFFFF.toInt()
-                blocks.put(
-                    JSONObject()
-                        .put("x", p.box.left.toDouble()).put("y", p.box.top.toDouble())
-                        .put("w", p.box.width.toDouble()).put("h", p.box.height.toDouble())
-                        .put("t", p.lines.joinToString("\n")).put("fs", p.fontSizePx.toDouble())
-                        .put("bg", ColorMath.css(bg)).put("fg", ColorMath.css(ColorMath.textColorFor(bg))),
-                )
-            }
-        } finally {
-            bmp?.recycle()
-        }
-        val json = JSONObject().put("w", result.imageWidth).put("h", result.imageHeight).put("blocks", blocks)
-        if (debug != null && settings.diagnostic) json.put("dbg", debugJson(debug))
-        return json
-    }
 
     /** Page sans traduction affichable : on montre quand même ce que l'OCR a détecté. */
     fun debugOnly(debug: DebugInfo): JSONObject =
         JSONObject().put("w", debug.imageWidth).put("h", debug.imageHeight).put("blocks", JSONArray()).put("dbg", debugJson(debug))
 
-    private fun debugJson(d: DebugInfo): JSONArray {
+    fun debugJson(d: DebugInfo): JSONArray {
         val arr = JSONArray()
         for (l in d.lines) arr.put(
             JSONObject().put("x", l.box.left.toDouble()).put("y", l.box.top.toDouble())
@@ -101,6 +63,7 @@ object PageScript {
     var out = [], l = document.images;
     for (var i=0;i<l.length;i++){
       var im = l[i], r = im.getBoundingClientRect();
+      if (im.getAttribute('data-mt-img')) continue;
       if (!im.complete || im.naturalWidth < MIN || im.naturalHeight < MIN) continue;
       if (r.width < MIN*0.8 || r.height < MIN*0.8) continue;
       var s = srcOf(im); if (!s) continue;
@@ -118,7 +81,7 @@ object PageScript {
     d.style.left = (r.left + window.scrollX) + 'px'; d.style.top = (r.top + window.scrollY) + 'px';
     d.style.width = r.width + 'px'; d.style.height = r.height + 'px';
     var s = r.width / e.w, k = d.children;
-    for (var i=0;i<k.length;i++){ k[i].style.fontSize = (parseFloat(k[i].getAttribute('data-fs')) * s) + 'px'; }
+    for (var i=0;i<k.length;i++){ var f = k[i].getAttribute('data-fs'); if (f) k[i].style.fontSize = (parseFloat(f) * s) + 'px'; }
   }
   function apply(id, data){
     var im = findImg(id); if (!im) return false;
@@ -126,14 +89,14 @@ object PageScript {
     var d = document.createElement('div');
     d.setAttribute('data-mt-overlay', '1');
     d.style.cssText = 'position:absolute;pointer-events:none;z-index:2147483000;overflow:hidden;margin:0;padding:0;';
-    for (var i=0;i<data.blocks.length;i++){
-      var b = data.blocks[i], x = document.createElement('div');
-      x.style.cssText = 'position:absolute;box-sizing:border-box;display:flex;align-items:center;justify-content:center;text-align:center;white-space:pre;word-break:normal;overflow-wrap:normal;line-height:1.15;overflow:hidden;border-radius:6px;font-family:sans-serif;font-weight:700;padding:1px;';
-      x.style.left = (b.x / data.w * 100) + '%'; x.style.top = (b.y / data.h * 100) + '%';
-      x.style.width = (b.w / data.w * 100) + '%'; x.style.height = (b.h / data.h * 100) + '%';
-      x.style.background = b.bg; x.style.color = b.fg;
-      x.setAttribute('data-fs', b.fs); x.textContent = b.t;
-      d.appendChild(x);
+    var ps = data.patches || [];
+    for (var i=0;i<ps.length;i++){
+      var q0 = ps[i], im2 = document.createElement('img');
+      im2.src = q0.png; im2.setAttribute('data-mt-img', '1'); im2.draggable = false;
+      im2.style.cssText = 'position:absolute;margin:0;padding:0;border:0;max-width:none;pointer-events:none;';
+      im2.style.left = (q0.x / data.w * 100) + '%'; im2.style.top = (q0.y / data.h * 100) + '%';
+      im2.style.width = (q0.w / data.w * 100) + '%'; im2.style.height = (q0.h / data.h * 100) + '%';
+      d.appendChild(im2);
     }
     if (data.dbg) {
       for (var j=0;j<data.dbg.length;j++){

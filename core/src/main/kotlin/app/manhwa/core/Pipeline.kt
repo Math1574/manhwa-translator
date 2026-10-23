@@ -85,7 +85,7 @@ class PagePipeline(
         if (failedIds.isNotEmpty()) reportDebug(ocrResult, grouped, blocks, failedIds)
 
         val out = blocks.mapIndexedNotNull { i, b ->
-            translated[i]?.let { TranslatedBlock(b.id, b.box, b.text, it, b.vertical, medianLineHeight(b)) }
+            translated[i]?.let { TranslatedBlock(b.id, b.box, b.text, it, b.vertical, medianLineHeight(b), b.lines.map { l -> l.box }) }
         }
         val result = PageResult(ocrResult.imageWidth, ocrResult.imageHeight, out)
         if (errors == 0) cache.put(key, result) // une page partielle n'est pas mise en cache

@@ -27,6 +27,8 @@ data class TranslatedBlock(
     val translated: String,
     val vertical: Boolean = false,
     val lineHeight: Float = 0f,
+    /** Boîtes des lignes d'origine (pour effacer précisément le texte). */
+    val lineBoxes: List<RectF> = emptyList(),
 )
 
 data class PlacedBlock(
@@ -75,12 +77,13 @@ object OverlayLayout {
         userScale: Float = 1f,
         measurer: TextMeasurer = EstimatedMeasurer,
         cfg: LayoutConfig = LayoutConfig(),
+        measurerFor: ((TranslatedBlock) -> TextMeasurer)? = null,
     ): List<PlacedBlock> {
         val w = imageW.toFloat()
         val h = imageH.toFloat()
         val scale = userScale.coerceIn(0.5f, 2.0f)
 
-        var placed = blocks.filter { it.translated.isNotBlank() }.map { fit(it, w, h, scale, measurer, cfg) }
+        var placed = blocks.filter { it.translated.isNotBlank() }.map { fit(it, w, h, scale, measurerFor?.invoke(it) ?: measurer, cfg) }
         placed = resolveOverlaps(placed, w, h)
         return placed
     }

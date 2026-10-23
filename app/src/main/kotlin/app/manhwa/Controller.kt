@@ -47,6 +47,7 @@ private data class Candidate(val id: String, val src: String, val top: Double, v
 /** Navigateur + orchestration de la traduction (collecte des images, file d'attente, overlay). */
 class TranslationController(private val ctx: Context, private val graph: AppGraph) {
     private val main = Handler(Looper.getMainLooper())
+    private val fonts by lazy { Typefaces(ctx) }
     private var webView: WebView? = null
     /** Lu une fois sur le thread principal : la WebView ne doit pas être appelée depuis les threads de traitement. */
     @Volatile private var userAgent: String = "Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Chrome/130 Mobile Safari/537.36"
@@ -257,7 +258,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         var overlayForLog: JSONObject? = null
         if (!cancelled()) {
             val json = when {
-                out is PageOutcome.Done -> OverlayBuilder.build(bytes, out.result, s, debug)
+                out is PageOutcome.Done -> PageRenderer.render(fonts, bytes, out.result, s, debug)
                 s.diagnostic && debug != null -> OverlayBuilder.debugOnly(debug!!)
                 else -> null
             }

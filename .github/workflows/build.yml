@@ -107,12 +107,12 @@ jobs:
       - name: Analyse
         if: always()
         run: python3 ci/analyze.py /tmp/e2e /tmp/site/synth || true
-      - name: Publier les résultats (branche e2e-logs)
+      - name: Publier les résultats (branche e2e-quick ou e2e-full)
         if: always()
         run: |
           rm -rf /tmp/pub && mkdir -p /tmp/pub && cp -r /tmp/e2e/. /tmp/pub/ || true
           cp /tmp/server.log /tmp/pub/server.log || true
           echo "${GITHUB_SHA} suite=${SUITE}" > /tmp/pub/COMMIT.txt
-          cd /tmp/pub && git init -q -b e2e-logs && git config user.name ci && git config user.email ci@example.invalid
+          cd /tmp/pub && git init -q -b e2e-${SUITE} && git config user.name ci && git config user.email ci@example.invalid
           git add -A && git commit -q -m "e2e ${GITHUB_SHA}"
-          git push --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" e2e-logs
+          git push --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" e2e-${SUITE}

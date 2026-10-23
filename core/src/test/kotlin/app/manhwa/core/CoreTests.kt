@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests()
+    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -135,7 +135,7 @@ fun glossaryTests() {
 // ---------- cache ----------
 fun cacheTests() {
     val key = CacheKey("abc", "ja", "fr", "eng1")
-    val res = PageResult(100, 200, listOf(TranslatedBlock(0, RectF(1f, 2f, 3f, 4f), "原文\tx", "tra\nduction", true, 12.5f)))
+    val res = PageResult(100, 200, listOf(TranslatedBlock(0, RectF(1f, 2f, 3f, 4f), "原文\tx", "tra\nduction", true, 12.5f, listOf(RectF(1f, 2f, 3f, 3f), RectF(1f, 3f, 3f, 4f)))))
     T.test("cache: écriture puis lecture, persistance après redémarrage") {
         val d = tmp(); ResultCache(d).put(key, res)
         T.eq(res, ResultCache(d).get(key))
@@ -447,5 +447,73 @@ fun llmTests() {
     T.test("modèles Gemma : spécifications cohérentes (taille, somme de contrôle, https)") {
         listOf(LlmModels.E2B, LlmModels.E4B).forEach { T.ok(it.sizeBytes > 2_000_000_000L && it.sha256.length == 64 && it.url.startsWith("https://"), "spec ${it.id}") }
         T.eq(null, LlmModels.specFor(TranslationEngineChoice.MLKIT)); T.eq(LlmModels.E4B, LlmModels.specFor(TranslationEngineChoice.GEMMA_E4B))
+    }
+}
+
+// ---------- forme des bulles ----------
+fun maskTests() {
+    val W = 200; val H = 140; val BG = 0xFF3050A0.toInt(); val WHITE = 0xFFFFFFFF.toInt(); val BLACK = 0xFF000000.toInt()
+    // bulle elliptique blanche cernée de noir sur fond bleu, avec un bloc de texte noir au centre
+    fun bubble(open: Boolean): IntArray {
+        val px = IntArray(W * H) { BG }
+        for (y in 0 until H) for (x in 0 until W) {
+            val dx = (x - 100) / 85.0; val dy = (y - 70) / 55.0; val d = dx * dx + dy * dy
+            if (d <= 1.0) px[y * W + x] = WHITE
+            else if (d <= 1.12 && !(open && x > 100 && y < 70)) px[y * W + x] = BLACK
+            else if (open && d <= 1.12) px[y * W + x] = WHITE // trou dans le contour : la bulle « fuit » vers l'extérieur
+        }
+        for (y in 55 until 85) for (x in 65 until 135) px[y * W + x] = BLACK // texte
+        if (open) for (y in 0 until H) for (x in 0 until W) if (px[y * W + x] == BG && x > 100 && y < 70) px[y * W + x] = WHITE
+        return px
+    }
+    T.test("bulle: la forme de l'ellipse est trouvée, pas le fond extérieur") {
+        val m = BubbleMask.compute(bubble(false), W, H, intArrayOf(65, 55, 135, 85), WHITE)!!
+        T.ok(m[70 * W + 100] && m[70 * W + 30] && m[70 * W + 170], "intérieur couvert")
+        T.ok(!m[5 * W + 5] && !m[135 * W + 195] && !m[70 * W + 2], "fond extérieur non couvert")
+        val b = BubbleMask.bounds(m, W, H)!!
+        T.ok(b[0] in 10..20 && b[2] in 180..190 && b[1] in 10..20 && b[3] in 120..130, "boîte englobante ${b.toList()}")
+    }
+    T.test("bulle: contour ouvert (fuite) → null, repli sur un rectangle") {
+        val allWhite = IntArray(W * H) { WHITE }; for (y in 55 until 85) for (x in 65 until 135) allWhite[y * W + x] = BLACK
+        T.eq(null, BubbleMask.compute(allWhite, W, H, intArrayOf(65, 55, 135, 85), WHITE)) // pas de contour : tout se remplit
+    }
+    T.test("bulle: région trop petite ou sans zone uniforme → null") {
+        T.eq(null, BubbleMask.compute(IntArray(16) { BLACK }, 4, 4, intArrayOf(1, 1, 3, 3), WHITE))
+        T.eq(null, BubbleMask.compute(IntArray(W * H) { i -> if (i % 2 == 0) BLACK else 0xFFFF0000.toInt() }, W, H, intArrayOf(65, 55, 135, 85), WHITE))
+    }
+}
+
+// ---------- effacement du texte ----------
+fun eraseTests() {
+    val W = 120; val H = 60
+    fun pageWith(bg: Int, textColor: Int, art: Boolean): IntArray {
+        val px = IntArray(W * H) { i -> if (art) { val x = i % W; val y = i / W; 0xFF000000.toInt() or ((60 + x) shl 16) or ((90 + y) shl 8) or 120 } else bg }
+        for (y in 22 until 38) for (x in 30 until 90) if ((x / 3 + y / 3) % 2 == 0) px[y * W + x] = textColor
+        return px
+    }
+    T.test("effacement: texte noir sur bulle blanche → pixels de texte repérés, aplat blanc, bords intacts") {
+        val px = pageWith(0xFFFFFFFF.toInt(), 0xFF000000.toInt(), false)
+        val a = TextErase.analyze(px, W, H, TextErase.rectMask(W, H, listOf(intArrayOf(30, 22, 90, 38)), 4))
+        T.ok(a.uniformity >= 0.85f, "aplat uniforme ${a.uniformity}"); T.eq(0xFFFFFFFF.toInt(), a.bg)
+        T.ok(a.textColor == 0xFF000000.toInt(), "texte noir"); T.ok(!a.outlined, "pas de contour")
+        T.ok(a.mask[30 * W + 40], "texte masqué"); T.ok(!a.mask[5 * W + 5], "bord non masqué")
+        val out = TextErase.inpaint(px, W, H, a.mask, a.bg)
+        T.ok((0 until W * H).all { out[it] == 0xFFFFFFFF.toInt() }, "tout redevient blanc")
+    }
+    T.test("effacement: texte sur dessin en dégradé → fond reconstruit proche de l'original lisse") {
+        val clean = pageWith(0, 0, true).also { px -> for (y in 22 until 38) for (x in 30 until 90) px[y * W + x] = 0xFF000000.toInt() or ((60 + x) shl 16) or ((90 + y) shl 8) or 120 }
+        val px = pageWith(0, 0xFFFFFFFF.toInt(), true)
+        val a = TextErase.analyze(px, W, H, TextErase.rectMask(W, H, listOf(intArrayOf(30, 22, 90, 38)), 4))
+        T.ok(a.uniformity < 0.9f, "dessin non uniforme ${a.uniformity}")
+        val out = TextErase.inpaint(px, W, H, a.mask)
+        var worst = 0; for (y in 22 until 38) for (x in 30 until 90) { val i = y * W + x; worst = maxOf(worst, kotlin.math.abs(((out[i] shr 16) and 0xFF) - ((clean[i] shr 16) and 0xFF))) }
+        T.ok(worst < 40, "écart maximal de reconstruction $worst")
+    }
+    T.test("effacement: choix de police (parole, cri, narration, CJK)") {
+        T.eq(TextErase.FontStyle.SPEECH, TextErase.chooseFont("I can't believe it.", 30f, 30f, true, false, false))
+        T.eq(TextErase.FontStyle.SHOUT, TextErase.chooseFont("NO CHOICE BUT TO KILL HIM?", 40f, 30f, false, true, false))
+        T.eq(TextErase.FontStyle.SHOUT, TextErase.chooseFont("RUN!", 60f, 30f, true, false, false))
+        T.eq(TextErase.FontStyle.NARRATION, TextErase.chooseFont("Three days later.", 28f, 30f, true, false, true))
+        T.eq(TextErase.FontStyle.SANS, TextErase.chooseFont("제발 도와주세요", 30f, 30f, true, false, false))
     }
 }
