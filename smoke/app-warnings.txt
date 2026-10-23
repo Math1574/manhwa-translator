@@ -1,7 +1,0 @@
-10-23 13:37:29.711  3565  3565 W Monkey  : args: [-p, app.manhwa.translator, -c, android.intent.category.LAUNCHER, 1]
-10-23 13:37:29.711  3565  3565 W Monkey  :  arg: "app.manhwa.translator"
-10-23 13:37:29.712  3565  3565 W Monkey  : data="app.manhwa.translator"
-10-23 13:37:31.061  3654  3654 W ziparchive: Unable to open '/data/app/~~zpH6tceSfvsfccxTFgCpAw==/app.manhwa.translator-smVGZxiGEdIys8R05g4nIQ==/base.dm': No such file or directory
-10-23 13:37:31.061  3654  3654 W ziparchive: Unable to open '/data/app/~~zpH6tceSfvsfccxTFgCpAw==/app.manhwa.translator-smVGZxiGEdIys8R05g4nIQ==/base.dm': No such file or directory
-10-23 13:37:35.402   521   540 W ziparchive: Unable to open '/data/app/~~zpH6tceSfvsfccxTFgCpAw==/app.manhwa.translator-smVGZxiGEdIys8R05g4nIQ==/base.dm': No such file or directory
-10-23 13:37:35.429   521  2585 W InputManager-JNI: Input channel object '1135f19 Splash Screen app.manhwa.translator (client)' was disposed without first being removed with the input manager!
