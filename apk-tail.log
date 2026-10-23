@@ -22,9 +22,9 @@ Solution: Please update the Gradle version to at least Gradle 8.14.4.
 > Task :app:mapDebugSourceSetPaths
 > Task :app:generateDebugResources
 > Task :app:packageDebugResources
+> Task :app:mergeDebugResources
 > Task :app:createDebugCompatibleScreenManifests
 > Task :app:extractDeepLinksDebug
-> Task :app:mergeDebugResources
 > Task :app:parseDebugLocalResources
 > Task :app:processDebugMainManifest
 > Task :app:processDebugManifest
@@ -63,14 +63,14 @@ w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kot
 
 > Task :app:compileDebugJavaWithJavac NO-SOURCE
 > Task :app:dexBuilderDebug
-> Task :app:processDebugJavaRes
 > Task :app:mergeDebugGlobalSynthetics
+> Task :app:processDebugJavaRes
 > Task :app:mergeProjectDexDebug
 > Task :app:mergeDebugJavaResource
 > Task :app:packageDebug
 > Task :app:createDebugApkListingFileRedirect
 > Task :app:assembleDebug
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1792781123083.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1792784940559.json
 
-BUILD SUCCESSFUL in 52s
+BUILD SUCCESSFUL in 34s
 37 actionable tasks: 37 executed
