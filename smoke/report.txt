@@ -1,0 +1,12 @@
+Performing Streamed Install
+Success
+PID après démarrage: '3654'
+écran: 320 x 640
+PID en fin de test: '3654'
+--- plantages détectés :
+10-23 13:37:29.276  3565  3565 D AndroidRuntime: >>>>>> START com.android.internal.os.RuntimeInit uid 2000 <<<<<<
+10-23 13:37:29.303  3565  3565 I AndroidRuntime: Using default boot image
+10-23 13:37:29.304  3565  3565 I AndroidRuntime: Leaving lock profiling enabled
+10-23 13:37:29.708  3565  3565 D AndroidRuntime: Calling main entry com.android.commands.monkey.Monkey
+10-23 13:37:30.445  3565  3565 I AndroidRuntime: VM exiting with result code 0.
+RESULTAT: OK (pas de plantage)
