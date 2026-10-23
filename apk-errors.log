@@ -1,5 +1,4 @@
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/PageQueue.kt:26:24 This class is not recommended for use in Kotlin. Use 'kotlin.Any' instead.
-> Task :app:compileDebugKotlin FAILED
 e: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Overlay.kt:26:66 Unresolved reference 'Bitmap'.
 e: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Overlay.kt:29:9 Unresolved reference 'BitmapFactory'.
 e: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Overlay.kt:29:61 Unresolved reference 'BitmapFactory'.
@@ -21,8 +20,9 @@ e: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kot
 e: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Overlay.kt:46:42 Unresolved reference 'getPixel'.
 e: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Overlay.kt:46:75 Unresolved reference 'getPixel'.
 e: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Overlay.kt:47:16 Unresolved reference 'ColorMath'.
+> Task :app:compileDebugKotlin FAILED
 * What went wrong:
 Execution failed for task ':app:compileDebugKotlin'.
 org.gradle.api.tasks.TaskExecutionException: Execution failed for task ':app:compileDebugKotlin'.
-BUILD FAILED in 55s
+BUILD FAILED in 40s
 ls: cannot access 'app/build/outputs/apk/debug/': No such file or directory
