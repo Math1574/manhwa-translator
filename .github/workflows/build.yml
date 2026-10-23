@@ -110,10 +110,9 @@ jobs:
       - name: Publier les résultats (branche e2e-logs)
         if: always()
         run: |
-          git config user.name "ci"; git config user.email "ci@example.invalid"
-          rm -rf /tmp/keep && mkdir -p /tmp/keep && cp -r /tmp/e2e/. /tmp/keep/ || true
-          cp /tmp/server.log /tmp/keep/server.log || true
-          git checkout --orphan e2e-logs; git rm -rf . >/dev/null 2>&1 || true
-          cp -r /tmp/keep/. . ; echo "${GITHUB_SHA} suite=${SUITE}" > COMMIT.txt
-          git add -A; git commit -q -m "e2e ${GITHUB_SHA}" || true
-          git push origin e2e-logs --force
+          rm -rf /tmp/pub && mkdir -p /tmp/pub && cp -r /tmp/e2e/. /tmp/pub/ || true
+          cp /tmp/server.log /tmp/pub/server.log || true
+          echo "${GITHUB_SHA} suite=${SUITE}" > /tmp/pub/COMMIT.txt
+          cd /tmp/pub && git init -q -b e2e-logs && git config user.name ci && git config user.email ci@example.invalid
+          git add -A && git commit -q -m "e2e ${GITHUB_SHA}"
+          git push --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" e2e-logs
