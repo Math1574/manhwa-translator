@@ -316,6 +316,10 @@ fun settingsTests() {
         val s = AppSettings(SourceLang.KO, TargetLang.DE, 1.4f, true, QualityMode.ENHANCED, 5, 120, TranslationEngineChoice.GEMMA_E4B, true, true)
         T.eq(s, AppSettings.parse(s.serialize()))
     }
+    T.test("paramètres: traduction automatique par défaut, anciens réglages migrés") {
+        T.ok(AppSettings().autoTranslate, "défaut"); T.ok(AppSettings.parse("autoTranslate=false").autoTranslate, "ancien format migré")
+        T.ok(!AppSettings.parse(AppSettings(autoTranslate = false).serialize()).autoTranslate, "choix récent respecté")
+    }
     T.test("paramètres: valeurs absentes/invalides → défauts, bornes appliquées") {
         T.eq(AppSettings(), AppSettings.parse(null)); T.eq(AppSettings(), AppSettings.parse("%%%"))
         val s = AppSettings.parse("textScale=99\nmaxPrefetchPages=-4\nsource=KLINGON\ncacheMaxMb=1")

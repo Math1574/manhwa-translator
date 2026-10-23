@@ -32,6 +32,14 @@ class AppGraph(ctx: Context) {
     val models = TranslationModels(ctx)
     val llm = LlmModelsManager(ctx)
     val gemma = GemmaTranslator(ctx, llm) { settingsStore.settings }
+    init {
+        // dès qu'un modèle Gemma est prêt, on le choisit s'il n'y avait que ML Kit : meilleure traduction sans geste de l'utilisateur
+        llm.onDownloaded = { spec ->
+            settingsStore.update { st ->
+                if (st.engine == app.manhwa.core.TranslationEngineChoice.MLKIT) st.copy(engine = if (spec == app.manhwa.core.LlmModels.E4B) app.manhwa.core.TranslationEngineChoice.GEMMA_E4B else app.manhwa.core.TranslationEngineChoice.GEMMA_E2B) else st
+            }
+        }
+    }
     val controller = TranslationController(ctx, this)
 }
 

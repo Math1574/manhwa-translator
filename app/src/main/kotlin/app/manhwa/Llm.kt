@@ -38,6 +38,8 @@ class LlmModelsManager(ctx: Context) {
     val busy = mutableStateMapOf<String, Boolean>()
     val error = mutableStateMapOf<String, String>()
     private val cancelFlags = ConcurrentHashMap<String, AtomicBoolean>()
+    @Volatile var onDownloaded: ((ModelSpec) -> Unit)? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     init { refresh() }
 
@@ -58,6 +60,7 @@ class LlmModelsManager(ctx: Context) {
                     val pct = (done * 1000 / total).toInt() // pas de 0,1 % pour ne pas saturer l'interface
                     if (pct != lastPct) { lastPct = pct; progress[spec.id] = done.toFloat() / total; downloaded[spec.id] = done }
                 }, isCancelled = { flag.get() })
+                if (store.status(spec) == ModelStatus.Ready) mainHandler.post { onDownloaded?.invoke(spec) }
             } catch (e: InsufficientSpace) {
                 error[spec.id] = "Espace insuffisant : ${e.needed / 1_000_000} Mo nécessaires, ${e.free / 1_000_000} Mo libres"
             } catch (e: ConfirmationRequired) {

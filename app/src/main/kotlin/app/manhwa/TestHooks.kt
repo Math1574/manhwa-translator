@@ -72,6 +72,7 @@ object TestHooks {
                 var waited = 0
                 while (!c.isReady() && waited < 60) { Thread.sleep(500); waited++ }
                 c.testing = true
+                if (s("mt_fullscreen") == "true") main.post { c.enterFullscreen() }
                 val tLoad = System.currentTimeMillis()
                 main.post { c.load(url) }
 

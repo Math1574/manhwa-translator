@@ -10,7 +10,7 @@ data class AppSettings(
     val source: SourceLang = SourceLang.AUTO,
     val target: TargetLang = TargetLang.FR,
     val textScale: Float = 1.0f,
-    val autoTranslate: Boolean = false,
+    val autoTranslate: Boolean = true,
     val mode: QualityMode = QualityMode.FAST,
     val maxPrefetchPages: Int = 3,
     val cacheMaxMb: Int = 50,
@@ -29,7 +29,7 @@ data class AppSettings(
         it["source"] = source.name; it["target"] = target.name; it["textScale"] = textScale.toString()
         it["autoTranslate"] = autoTranslate.toString(); it["mode"] = mode.name
         it["maxPrefetchPages"] = maxPrefetchPages.toString(); it["cacheMaxMb"] = cacheMaxMb.toString()
-        it["engine"] = engine.name; it["useGpu"] = useGpu.toString(); it["diagnostic"] = diagnostic.toString()
+        it["schema"] = "2"; it["engine"] = engine.name; it["useGpu"] = useGpu.toString(); it["diagnostic"] = diagnostic.toString()
     }.let { p -> java.io.StringWriter().also { w -> p.store(w, null) }.toString() }
 
     companion object {
@@ -42,7 +42,7 @@ data class AppSettings(
             return AppSettings(
                 en("source", SourceLang.values(), d.source), en("target", TargetLang.values(), d.target),
                 p.getProperty("textScale")?.toFloatOrNull() ?: d.textScale,
-                p.getProperty("autoTranslate")?.toBooleanStrictOrNull() ?: d.autoTranslate,
+                if (p.getProperty("schema") == "2") (p.getProperty("autoTranslate")?.toBooleanStrictOrNull() ?: d.autoTranslate) else true, // anciens réglages : lecture sans interaction par défaut
                 en("mode", QualityMode.values(), d.mode),
                 p.getProperty("maxPrefetchPages")?.toIntOrNull() ?: d.maxPrefetchPages,
                 p.getProperty("cacheMaxMb")?.toIntOrNull() ?: d.cacheMaxMb,

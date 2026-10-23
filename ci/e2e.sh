@@ -66,6 +66,19 @@ run synth_ja_vert_mlkit  synth_ja_vertical.html MLKIT JA FR "ja,fr" 300
 run synth_zh_mlkit       synth_zh.html       MLKIT ZH_HANS FR "zh,fr" 300
 run pc_ja_mlkit          pc_ja.html          MLKIT JA FR "ja,fr"   300
 
+# --- plein écran : bouton discret masqué, réapparition par triple appui ---
+say "=== plein écran"
+adb shell am force-stop $PKG
+adb shell "run-as $PKG rm -f files/fs.json"
+adb shell am start -n $PKG/app.manhwa.MainActivity --es mt_url "http://10.0.2.2:8000/pc_en.html" --es mt_engine MLKIT --es mt_source EN \
+   --es mt_target FR --es mt_models "fr" --es mt_timeout 200 --es mt_report fs.json --es mt_fullscreen true >/dev/null
+for i in $(seq 1 40); do sleep 6; adb shell "run-as $PKG ls files/fs.json" 2>/dev/null | grep -q fs.json && break; done
+adb exec-out "run-as $PKG cat files/fs.json" > $OUT/reports/fs.json
+sleep 5; shot fullscreen 0
+adb shell "input tap 540 1200; input tap 540 1200; input tap 540 1200"; shot fullscreen 1
+sleep 5; shot fullscreen 2
+adb shell dumpsys window | grep -E "mCurrentFocus|isStatusBarVisible|statusBar.*visible" | head -3 | tee -a $OUT/run.log
+
 # --- suite complète : Gemma 4 E2B ---
 if [ "$SUITE" = full ] && [ -f /tmp/gemma/gemma-4-E2B-it.litertlm ]; then
   push_model /tmp/gemma/gemma-4-E2B-it.litertlm gemma-4-E2B-it.litertlm 181938105e0eefd105961417e8da75903eacda102c4fce9ce90f50b97139a63c

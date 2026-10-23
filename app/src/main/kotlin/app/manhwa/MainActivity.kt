@@ -1,6 +1,14 @@
 package app.manhwa
 
+import android.app.Activity
 import android.os.Bundle
+import android.view.WindowManager
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -59,14 +67,32 @@ private fun Root(graph: AppGraph) {
     val c = graph.controller
 
     // Retour : historique du navigateur, sinon retour à l'onglet navigateur, sinon sortie.
-    BackHandler(enabled = tab != 0 || c.canGoBack) {
-        if (tab != 0) tab = 0 else c.back()
+    BackHandler(enabled = c.fullscreen || tab != 0 || c.canGoBack) {
+        if (c.fullscreen) c.exitFullscreen() else if (tab != 0) tab = 0 else c.back()
+    }
+
+    // Plein écran : barres système masquées (réapparition par balayage depuis le bord), contenu jusque dans l'encoche.
+    val view = LocalView.current
+    val activity = LocalContext.current as? Activity
+    LaunchedEffect(c.fullscreen) {
+        val window = activity?.window ?: return@LaunchedEffect
+        val ctrl = WindowCompat.getInsetsController(window, view)
+        if (c.fullscreen) {
+            tab = 0
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            ctrl.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            ctrl.hide(WindowInsetsCompat.Type.systemBars())
+            window.attributes = window.attributes.also { it.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES }
+        } else {
+            ctrl.show(WindowInsetsCompat.Type.systemBars())
+            WindowCompat.setDecorFitsSystemWindows(window, true)
+        }
     }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+            if (!c.fullscreen) NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                 titles.forEachIndexed { i, t ->
                     NavigationBarItem(selected = tab == i, onClick = { tab = i }, icon = {}, label = { Text(t) }, alwaysShowLabel = true)
                 }

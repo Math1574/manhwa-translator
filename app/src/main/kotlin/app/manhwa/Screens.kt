@@ -4,7 +4,14 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -72,56 +79,88 @@ import java.util.Locale
 fun BrowserScreen(graph: AppGraph) {
     val c = graph.controller
     val ctx = LocalContext.current
+    val auto = graph.settingsStore.settings.autoTranslate
     var address by remember { mutableStateOf(c.currentUrl) }
     LaunchedEffect(c.currentUrl) { address = c.currentUrl }
+    val running = c.active && c.done + c.failed < c.total
 
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { c.back() }, enabled = c.canGoBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Retour") }
-            IconButton(onClick = { c.forward() }, enabled = c.canGoForward) { Icon(Icons.AutoMirrored.Filled.ArrowForward, "Suivant") }
-            IconButton(onClick = { if (c.loading) c.stopLoading() else c.reload() }) { Icon(Icons.Filled.Refresh, "Actualiser") }
-            IconButton(onClick = { c.goHome() }) { Icon(Icons.Filled.Home, "Accueil") }
-            TextButton(onClick = {
-                val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                cm.setPrimaryClip(ClipData.newPlainText("adresse", c.currentUrl))
-                Toast.makeText(ctx, "Adresse copiée", Toast.LENGTH_SHORT).show()
-            }, enabled = c.currentUrl.isNotEmpty()) { Text("Copier") }
-        }
-        OutlinedTextField(
-            value = address, onValueChange = { address = it },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-            singleLine = true, placeholder = { Text("Adresse ou recherche") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Go),
-            keyboardActions = KeyboardActions(onGo = { c.load(UrlInput.normalize(address)) }),
-        )
-        if (c.loading) LinearProgressIndicator(progress = { c.progress / 100f }, modifier = Modifier.fillMaxWidth())
-        c.pageError?.let {
-            Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.weight(1f))
-                TextButton(onClick = { c.reload() }) { Text("Réessayer") }
+        if (!c.fullscreen) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { c.back() }, enabled = c.canGoBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Retour") }
+                IconButton(onClick = { c.forward() }, enabled = c.canGoForward) { Icon(Icons.AutoMirrored.Filled.ArrowForward, "Suivant") }
+                IconButton(onClick = { if (c.loading) c.stopLoading() else c.reload() }) { Icon(Icons.Filled.Refresh, "Actualiser") }
+                IconButton(onClick = { c.goHome() }) { Icon(Icons.Filled.Home, "Accueil") }
+                TextButton(onClick = {
+                    val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    cm.setPrimaryClip(ClipData.newPlainText("adresse", c.currentUrl))
+                    Toast.makeText(ctx, "Adresse copiée", Toast.LENGTH_SHORT).show()
+                }, enabled = c.currentUrl.isNotEmpty()) { Text("Copier") }
+                TextButton(onClick = { c.enterFullscreen() }) { Text("Plein écran") }
             }
-        }
-        if (c.active) {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
-                val running = c.done + c.failed < c.total
-                Text(
-                    "Traduction : ${c.done}/${c.total}" + (if (c.failed > 0) " · ${c.failed} erreur(s)" else "") +
-                        (if (c.noText > 0) " · ${c.noText} sans texte" else "") + (if (running) " …" else ""),
-                    color = MaterialTheme.colorScheme.secondary,
-                )
-                c.lastError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+            OutlinedTextField(
+                value = address, onValueChange = { address = it },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                singleLine = true, placeholder = { Text("Adresse ou recherche") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Go),
+                keyboardActions = KeyboardActions(onGo = { c.load(UrlInput.normalize(address)) }),
+            )
+            if (c.loading) LinearProgressIndicator(progress = { c.progress / 100f }, modifier = Modifier.fillMaxWidth())
+            c.pageError?.let {
+                Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { c.reload() }) { Text("Réessayer") }
+                }
+            }
+            // En lecture automatique, rien n'est affiché tant que tout va bien : seulement une fine barre sur la page.
+            if (c.active && (c.failed > 0 || c.lastError != null || !auto)) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
+                    Text(
+                        "Traduction : ${c.done}/${c.total}" + (if (c.failed > 0) " · ${c.failed} erreur(s)" else "") +
+                            (if (c.noText > 0) " · ${c.noText} sans texte" else "") + (if (running) " …" else ""),
+                        color = MaterialTheme.colorScheme.secondary,
+                    )
+                    c.lastError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                }
             }
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            AndroidView(factory = { c.obtainWebView(it) }, modifier = Modifier.fillMaxSize())
-            Column(Modifier.align(Alignment.BottomEnd).padding(16.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (c.active) {
-                    SmallFloatingActionButton(onClick = { c.toggleOverlays() }) { Text(if (c.overlaysVisible) "Masquer" else "Afficher", Modifier.padding(horizontal = 12.dp)) }
+            AndroidView(
+                factory = { c.obtainWebView(it) },
+                update = { it.keepScreenOn = c.fullscreen || c.active },
+                modifier = Modifier.fillMaxSize(),
+            )
+            if (running && !c.fullscreen && c.total > 0) {
+                LinearProgressIndicator(
+                    progress = { (c.done + c.failed).toFloat() / c.total }, trackColor = Color.Transparent,
+                    modifier = Modifier.fillMaxWidth().height(3.dp).align(Alignment.TopCenter),
+                )
+            }
+            if (!c.fullscreen) {
+                Column(Modifier.align(Alignment.BottomEnd).padding(16.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (c.active) {
+                        SmallFloatingActionButton(
+                            onClick = { c.toggleOverlays() },
+                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = if (auto) 0.6f else 1f),
+                        ) { Text(if (c.overlaysVisible) "Original" else "Traduit", Modifier.padding(horizontal = 12.dp)) }
+                    }
+                    if (!auto) {
+                        ExtendedFloatingActionButton(
+                            onClick = { c.start(force = c.active) },
+                            containerColor = MaterialTheme.colorScheme.secondary,
+                        ) { Text(if (c.active) "Retraduire" else "Traduire") }
+                    }
                 }
-                ExtendedFloatingActionButton(
-                    onClick = { c.start(force = c.active) },
-                    containerColor = MaterialTheme.colorScheme.secondary,
-                ) { Text(if (c.active) "Retraduire" else "Traduire") }
+            }
+            if (c.fullscreen) {
+                // bouton discret : invisible au repos, réapparaît après trois appuis rapides sur l'écran
+                val alpha by animateFloatAsState(if (c.fsButtonVisible) 0.6f else 0f, label = "fs")
+                Box(
+                    Modifier.align(Alignment.TopEnd).padding(14.dp).size(40.dp).alpha(alpha)
+                        .background(Color(0xCC000000), CircleShape)
+                        .clickable(enabled = c.fsButtonVisible) { c.exitFullscreen() },
+                    contentAlignment = Alignment.Center,
+                ) { Text("✕", color = Color.White) }
             }
         }
     }
@@ -335,8 +374,8 @@ fun SettingsScreen(graph: AppGraph) {
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Traduction automatique", style = MaterialTheme.typography.titleMedium)
-                Text("Lance la traduction dès qu'une page est chargée.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                Text("Lecture automatique", style = MaterialTheme.typography.titleMedium)
+                Text("Traduit chaque page dès son ouverture et pendant le défilement, sans appuyer sur rien (recommandé).", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             }
             Switch(checked = s.autoTranslate, onCheckedChange = { v -> store.update { it.copy(autoTranslate = v) } })
         }

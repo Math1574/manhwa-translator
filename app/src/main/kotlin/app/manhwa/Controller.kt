@@ -6,6 +6,8 @@ import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
 import android.util.Base64
+import android.view.MotionEvent
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
@@ -61,6 +63,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     var canGoBack by mutableStateOf(false)
     var canGoForward by mutableStateOf(false)
     var active by mutableStateOf(false)
+    var fullscreen by mutableStateOf(false)
+    var fsButtonVisible by mutableStateOf(false)
     var overlaysVisible by mutableStateOf(true)
     var total by mutableIntStateOf(0)
     var done by mutableIntStateOf(0)
@@ -96,6 +100,36 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         override fun onCancelled(id: String) { main.post { pump() } }
     })
 
+    // ---------- plein écran ----------
+
+    private val hideFsButton = Runnable { fsButtonVisible = false }
+    private val tapTimes = ArrayDeque<Long>()
+    private var downX = 0f
+    private var downY = 0f
+    private var downT = 0L
+
+    fun enterFullscreen() { fullscreen = true; showFsButton() }
+    fun exitFullscreen() { fullscreen = false; fsButtonVisible = false; main.removeCallbacks(hideFsButton) }
+    fun showFsButton() { fsButtonVisible = true; main.removeCallbacks(hideFsButton); main.postDelayed(hideFsButton, 3500) }
+
+    /** Trois appuis brefs en moins de 1,2 s font réapparaître le bouton discret. Le toucher reste transmis à la page. */
+    private fun onTouch(c: Context, ev: MotionEvent) {
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> { downX = ev.x; downY = ev.y; downT = ev.eventTime }
+            MotionEvent.ACTION_UP -> {
+                val slop = ViewConfiguration.get(c).scaledTouchSlop
+                if (kotlin.math.abs(ev.x - downX) < slop && kotlin.math.abs(ev.y - downY) < slop && ev.eventTime - downT < 350) {
+                    tapTimes.addLast(ev.eventTime)
+                    while (tapTimes.size > 3) tapTimes.removeFirst()
+                    if (tapTimes.size == 3 && tapTimes.last() - tapTimes.first() < 1200) {
+                        tapTimes.clear()
+                        if (fullscreen) main.post { showFsButton() }
+                    }
+                }
+            }
+        }
+    }
+
     // ---------- navigateur ----------
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -116,6 +150,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         }
         CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
         wv.addJavascriptInterface(Bridge(), "AndroidMT")
+        @Suppress("ClickableViewAccessibility")
+        wv.setOnTouchListener { _, ev -> onTouch(c, ev); false }
         wv.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val scheme = request.url.scheme?.lowercase()
