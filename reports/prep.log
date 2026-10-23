@@ -1,0 +1,60 @@
+10-23 20:08:31.366  1585  2881 I ModuleSetMgr: Download of container feature tflite_dynamite is disabled.
+10-23 20:08:31.425  1585  2881 I ModuleSetMgr: Download of container feature tflite_delegate_edgetpu is disabled.
+10-23 20:08:31.425  1585  2881 I ModuleSetMgr: Download of container feature tflite_delegate_test is disabled.
+10-23 20:08:31.425  1585  2881 I ModuleSetMgr: Download of container feature tflite_gpu_dynamite is disabled.
+10-23 20:08:32.256  3031  3176 I tflite  : Initialized TensorFlow Lite runtime.
+10-23 20:08:32.258  3031  3176 E tflite  : third_party/tensorflow/lite/core/subgraph.cc:903 tensor.data.raw != nullptr was not true.
+10-23 20:08:33.237  3031  3176 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+10-23 20:08:34.422  4065  4065 D nativeloader:   com_android_adservices: libhpke_jni.so:libtflite_support_classifiers_native.so
+10-23 20:08:34.422  4065  4065 D nativeloader:   com_android_extservices: libtflite_support_classifiers_native.so
+10-23 20:08:44.062  4768  4768 D nativeloader:   com_android_adservices: libhpke_jni.so:libtflite_support_classifiers_native.so
+10-23 20:08:44.062  4768  4768 D nativeloader:   com_android_extservices: libtflite_support_classifiers_native.so
+10-23 20:08:46.154  1585  4524 I GmsDebugLogger: [53] +tflite_dynamite:-1
+10-23 20:08:47.697  1585  4553 I ModuleSetMgr: Download of container feature tflite_dynamite is disabled.
+10-23 20:08:47.780  1585  4553 I ModuleSetMgr: Download of container feature tflite_delegate_edgetpu is disabled.
+10-23 20:08:47.780  1585  4553 I ModuleSetMgr: Download of container feature tflite_delegate_test is disabled.
+10-23 20:08:47.780  1585  4553 I ModuleSetMgr: Download of container feature tflite_gpu_dynamite is disabled.
+10-23 20:08:47.989  1585  3890 I ModuleSetMgr: Download of container feature tflite_dynamite is disabled.
+10-23 20:08:47.990  1585  3890 I ModuleSetMgr: Download of container feature tflite_delegate_edgetpu is disabled.
+10-23 20:08:47.990  1585  3890 I ModuleSetMgr: Download of container feature tflite_delegate_test is disabled.
+10-23 20:08:47.990  1585  3890 I ModuleSetMgr: Download of container feature tflite_gpu_dynamite is disabled.
+10-23 20:08:51.202  1585  3516 I ModuleSetMgr: Download of container feature tflite_dynamite is disabled.
+10-23 20:08:51.203  1585  3516 I ModuleSetMgr: Download of container feature tflite_delegate_edgetpu is disabled.
+10-23 20:08:51.203  1585  3516 I ModuleSetMgr: Download of container feature tflite_delegate_test is disabled.
+10-23 20:08:51.203  1585  3516 I ModuleSetMgr: Download of container feature tflite_gpu_dynamite is disabled.
+10-23 20:08:51.719  1585  3968 I ModuleSetMgr: Download of container feature tflite_dynamite is disabled.
+10-23 20:08:51.915  1585  3968 I ModuleSetMgr: Download of container feature tflite_delegate_edgetpu is disabled.
+10-23 20:08:51.915  1585  3968 I ModuleSetMgr: Download of container feature tflite_delegate_test is disabled.
+10-23 20:08:51.915  1585  3968 I ModuleSetMgr: Download of container feature tflite_gpu_dynamite is disabled.
+10-23 20:08:55.788  1817  5060 I tflite  : Initialized TensorFlow Lite runtime.
+10-23 20:09:17.928   916   986 I tflite  : Initialized TensorFlow Lite runtime.
+10-23 20:09:21.240  1585  3953 I ModuleSetMgr: Download of container feature tflite_dynamite is disabled.
+10-23 20:09:21.241  1585  3953 I ModuleSetMgr: Download of container feature tflite_delegate_edgetpu is disabled.
+10-23 20:09:21.241  1585  3953 I ModuleSetMgr: Download of container feature tflite_delegate_test is disabled.
+10-23 20:09:21.241  1585  3953 I ModuleSetMgr: Download of container feature tflite_gpu_dynamite is disabled.
+10-23 20:09:23.419  5722  5808 I ChimeraConfigurator: Starting update, reason: 4 urgentFeatures: tflite_dynamite:-1, vision.ocr:-1, mlkit.ocr.common:1, maps_core:-1, mlkit.barcode.ui:0
+10-23 20:09:23.621  5722  5808 I ChimeraConfigurator: Detected pending changes for urgent request: [tflite_dynamite, vision.ocr, mlkit.ocr.common, maps_core, mlkit.barcode.ui]. Pending module sets: container:2318189190800+maps_core+mlkit.barcode.ui+mlkit.ocr.common+vision.barcode,tflite_dynamite:2640104055100800+tflite_dynamite,vision_ocr:2316024025100000+vision.ocr
+10-23 20:09:23.796  5722  5808 W ZappDownloader: No successful module downloads for requested features [tflite_dynamite, vision.ocr, mlkit.ocr.common, maps_core, mlkit.barcode.ui].
+10-23 20:09:24.444  5722  5808 I GmsDebugLogger: [83] 1 [maps_core, mlkit.barcode.ui, mlkit.ocr.common, tflite_dynamite, vision.ocr]
+10-23 20:09:24.523  5722  5801 I ChimeraConfigurator: Starting update, reason: 4 urgentFeatures: tflite_dynamite:-1
+10-23 20:09:24.542  5722  5801 I ChimeraConfigurator: Detected pending changes for urgent request: [tflite_dynamite]. Pending module sets: container:2318189190800,tflite_dynamite:2640104055100800+tflite_dynamite
+10-23 20:09:24.553  5722  5801 W ZappDownloader: No successful module downloads for requested features [tflite_dynamite].
+10-23 20:09:24.561  5722  5801 I GmsDebugLogger: [83] 1 [tflite_dynamite]
+10-23 20:09:24.589  5722  5898 I ChimeraConfigurator: Detected pending changes for urgent request: [vision.ocr]. Pending module sets: container:2318189190800+mlkit.ocr.common,tflite_dynamite:2640104055100800+tflite_dynamite,vision_ocr:2316024025100000+vision.ocr
+10-23 20:09:24.697  5722  5808 I ChimeraConfigurator: Detected pending changes for urgent request: [mlkit.barcode.ui]. Pending module sets: container:2318189190800+mlkit.barcode.ui+vision.barcode,tflite_dynamite:2640104055100800+tflite_dynamite
+10-23 20:09:24.726  5722  5808 I ChimeraConfigurator: Starting update, reason: 4 urgentFeatures: tflite_dynamite:-1
+10-23 20:09:24.741  5722  5808 I ChimeraConfigurator: Detected pending changes for urgent request: [tflite_dynamite]. Pending module sets: container:2318189190800,tflite_dynamite:2640104055100800+tflite_dynamite
+10-23 20:09:24.751  5722  5808 W ZappDownloader: No successful module downloads for requested features [tflite_dynamite].
+10-23 20:09:24.755  5722  5808 I GmsDebugLogger: [83] 1 [tflite_dynamite]
+10-23 20:09:24.769  5722  5808 I ChimeraConfigurator: Starting update, reason: 4 urgentFeatures: tflite_dynamite:-1
+10-23 20:09:24.788  5722  5808 I ChimeraConfigurator: Detected pending changes for urgent request: [tflite_dynamite]. Pending module sets: container:2318189190800,tflite_dynamite:2640104055100800+tflite_dynamite
+10-23 20:09:24.796  5722  5808 W ZappDownloader: No successful module downloads for requested features [tflite_dynamite].
+10-23 20:09:24.799  5722  5808 I GmsDebugLogger: [83] 1 [tflite_dynamite]
+10-23 20:09:24.816  5722  5808 I ChimeraConfigurator: Detected pending changes for urgent request: [vision.ocr]. Pending module sets: container:2318189190800+mlkit.ocr.common,tflite_dynamite:2640104055100800+tflite_dynamite,vision_ocr:2316024025100000+vision.ocr
+10-23 20:09:34.892  5722  5805 I ChimeraConfigurator: Detected pending changes for urgent request: [vision.ocr]. Pending module sets: container:2318189190800+mlkit.ocr.common,tflite_dynamite:2640104055100800+tflite_dynamite,vision_ocr:2316024025100000+vision.ocr
+10-23 20:09:35.427  5722  5956 I ChimeraConfigurator: Detected pending changes for urgent request: [mlkit.barcode.ui]. Pending module sets: container:2318189190800+mlkit.barcode.ui+vision.barcode,tflite_dynamite:2640104055100800+tflite_dynamite
+10-23 20:09:35.715  5722  6026 I ChimeraConfigurator: Detected pending changes for urgent request: [vision.ocr]. Pending module sets: container:2318189190800+mlkit.ocr.common,tflite_dynamite:2640104055100800+tflite_dynamite,vision_ocr:2316024025100000+vision.ocr
+10-23 20:09:35.763  5722  5956 I ChimeraConfigurator: Starting update, reason: 4 urgentFeatures: tflite_dynamite:-1
+10-23 20:09:35.782  5722  5956 I ChimeraConfigurator: Detected pending changes for urgent request: [tflite_dynamite]. Pending module sets: container:2318189190800,tflite_dynamite:2640104055100800+tflite_dynamite
+10-23 20:09:35.802  5722  5956 W ZappDownloader: No successful module downloads for requested features [tflite_dynamite].
+10-23 20:09:35.809  5722  5956 I GmsDebugLogger: [83] 1 [tflite_dynamite]

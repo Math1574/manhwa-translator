@@ -1,0 +1,24 @@
+Performing Streamed Install
+Success
+Physical size: 1080x2400
+[e2e 20:08:26] === prep (index.html, MLKIT, EN→FR)
+[e2e 20:10:22] terminé : prep (115 s)
+[e2e 20:10:22] === pc_en_mlkit (pc_en.html, MLKIT, EN→FR)
+[e2e 20:10:55] terminé : pc_en_mlkit (33 s)
+[e2e 20:10:55] === synth_en_caps_mlkit (synth_en_caps.html, MLKIT, EN→FR)
+[e2e 20:11:25] terminé : synth_en_caps_mlkit (30 s)
+[e2e 20:11:25] === synth_en_mixed_mlkit (synth_en_mixed.html, MLKIT, EN→FR)
+[e2e 20:11:55] terminé : synth_en_mixed_mlkit (30 s)
+[e2e 20:11:55] === pc_en_ref_mlkit (pc_en_ref.html, MLKIT, EN→FR)
+[e2e 20:12:34] terminé : pc_en_ref_mlkit (38 s)
+[e2e 20:12:34] === pc_en_lazy_mlkit (pc_en_lazy.html, MLKIT, EN→FR)
+[e2e 20:13:16] terminé : pc_en_lazy_mlkit (41 s)
+[e2e 20:13:16] === synth_ko_mlkit (synth_ko.html, MLKIT, KO→FR)
+[e2e 20:13:46] terminé : synth_ko_mlkit (30 s)
+[e2e 20:13:46] === synth_ja_vert_mlkit (synth_ja_vertical.html, MLKIT, JA→FR)
+[e2e 20:14:16] terminé : synth_ja_vert_mlkit (30 s)
+[e2e 20:14:16] === synth_zh_mlkit (synth_zh.html, MLKIT, ZH_HANS→FR)
+[e2e 20:14:47] terminé : synth_zh_mlkit (30 s)
+[e2e 20:14:47] === pc_ja_mlkit (pc_ja.html, MLKIT, JA→FR)
+[e2e 20:15:26] terminé : pc_ja_mlkit (39 s)
+[e2e 20:15:26] toutes les scènes sont terminées
