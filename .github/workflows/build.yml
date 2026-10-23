@@ -8,7 +8,7 @@ on:
         description: 'quick (ML Kit) ou full (ajoute Gemma)'
         default: 'quick'
 concurrency:
-  group: build-${{ github.ref }}
+  group: build-${{ github.ref }}-${{ github.event.inputs.suite || 'quick' }}
   cancel-in-progress: true
 permissions:
   contents: write

@@ -57,7 +57,7 @@ object TestHooks {
                 for (lang in models) {
                     val t1 = System.currentTimeMillis()
                     main.post { graph.models.download(lang) }
-                    while (System.currentTimeMillis() - t1 < 300_000) {
+                    while (System.currentTimeMillis() - t1 < 600_000) {
                         Thread.sleep(1500)
                         val st = graph.models.status[lang]
                         if (st == "ready") break

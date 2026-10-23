@@ -38,7 +38,8 @@ run() { # nom page moteur source cible modèles timeout [lazy]
   while :; do
     sleep 6
     if adb shell "run-as $PKG ls files/report.json" 2>/dev/null | grep -q report.json; then break; fi
-    if [ $(( $(date +%s) - start )) -gt $((timeout + 180)) ]; then say "délai dépassé sans rapport"; break; fi
+    local extra=180; [ "$name" = prep ] && extra=1500
+    if [ $(( $(date +%s) - start )) -gt $((timeout + extra)) ]; then say "délai dépassé sans rapport"; break; fi
     if [ "$mode" = lazy ]; then adb shell input swipe 540 1900 540 800 500; fi
   done
   adb exec-out "run-as $PKG cat files/report.json" > $OUT/reports/$name.json
@@ -50,6 +51,9 @@ run() { # nom page moteur source cible modèles timeout [lazy]
   for i in 1 2 3; do adb shell input swipe 540 1900 540 700 450; sleep 2; shot $name $i; done
   say "terminé : $name ($(( $(date +%s) - start )) s)"
 }
+
+# --- préparation : téléchargement des modèles de traduction ML Kit (première utilisation lente) ---
+run prep index.html MLKIT EN FR "fr,ja,ko,zh" 30
 
 # --- suite rapide : ML Kit (OCR + traduction légère) ---
 run pc_en_mlkit          pc_en.html          MLKIT EN FR "fr"      300
