@@ -59,7 +59,7 @@ class PagePipeline(
         if (pending.isNotEmpty()) {
             val llm = translator.usesGlossaryPrompt()
             val protectedTexts = pending.map {
-                if (llm) Protected(blocks[it].text, emptyMap())
+                if (llm) Protected(TextNormalizer.fixCase(blocks[it].text), emptyMap())
                 else g.protect(blocks[it].text).let { p -> p.copy(text = TextNormalizer.fixCase(p.text)) }
             }
             val terms = if (llm) g.terms().filter { t -> pending.any { blocks[it].text.contains(t.source) } } else emptyList()
@@ -68,13 +68,13 @@ class PagePipeline(
 
             val batch = try { run(protectedTexts.map { it.text }) } catch (e: Exception) { lastError = e.message ?: e.javaClass.simpleName; null }
             if (batch != null && batch.size == pending.size) {
-                pending.forEachIndexed { k, i -> translated[i] = finish(g, protectedTexts[k], batch[k], blocks[i].text, source, target) }
+                pending.forEachIndexed { k, i -> translated[i] = TextNormalizer.matchCase(blocks[i].text, finish(g, protectedTexts[k], batch[k], blocks[i].text, source, target)) }
             } else {
                 // le lot a échoué : on retente bloc par bloc pour ne perdre que les blocs réellement en erreur
                 pending.forEachIndexed { k, i ->
                     try {
                         val out = run(listOf(protectedTexts[k].text)).single()
-                        translated[i] = finish(g, protectedTexts[k], out, blocks[i].text, source, target)
+                        translated[i] = TextNormalizer.matchCase(blocks[i].text, finish(g, protectedTexts[k], out, blocks[i].text, source, target))
                     } catch (e: Exception) { errors++; lastError = e.message ?: e.javaClass.simpleName }
                 }
             }

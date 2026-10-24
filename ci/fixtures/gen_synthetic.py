@@ -49,13 +49,14 @@ def bubble(img, d, box, text, font, gt, kind="bubble", lang="en", dark=False):
     inner = (x1 - x0) * 0.72
     lines = wrap(d, text, font, inner)
     lh = font.size * 1.2; total = lh * len(lines); y = (y0 + y1) / 2 - total / 2
-    tb = [W, H, 0, 0]
+    tb = [W, H, 0, 0]; lb = []
     for ln in lines:
         w = d.textlength(ln, font=font); x = (x0 + x1) / 2 - w / 2
         d.text((x, y), ln, font=font, fill="white" if dark else "black")
+        bb = d.textbbox((x, y), ln, font=font); lb.append([int(bb[0]), int(bb[1]), int(bb[2]), int(bb[3])])
         tb = [min(tb[0], x), min(tb[1], y), max(tb[2], x + w), max(tb[3], y + lh)]
         y += lh
-    gt.append({"kind": kind, "lang": lang, "text": text, "box": [int(v) for v in tb]})
+    gt.append({"kind": kind, "lang": lang, "text": text, "box": [int(v) for v in tb], "lines": lb})
 
 def vertical_bubble(img, d, box, text, font, gt, lang="ja"):
     x0, y0, x1, y1 = box
@@ -85,7 +86,7 @@ def free_text(img, text, font, xy, gt, lang="en", glow=True):
     ld.text(xy, text, font=font, fill=(255, 255, 255, 255), stroke_width=3, stroke_fill=(90, 0, 0, 255))
     img.paste(layer, (0, 0), layer)
     d = ImageDraw.Draw(img); l, t, r, b = d.textbbox(xy, text, font=font)
-    gt.append({"kind": "free", "lang": lang, "text": text, "box": [int(l), int(t), int(r), int(b)]})
+    gt.append({"kind": "free", "lang": lang, "text": text, "box": [int(l), int(t), int(r), int(b)], "lines": [[int(l), int(t), int(r), int(b)]]})
 
 PAGES = {
   "en_caps": ("en", True, COMIC, 0, [

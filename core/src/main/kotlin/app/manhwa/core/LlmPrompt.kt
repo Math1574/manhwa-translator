@@ -19,6 +19,7 @@ Rules:
 - The lines come from OCR: they may contain recognition mistakes, be in capital letters, or be cut in the middle of a sentence. Use the surrounding lines and the previous dialogue to understand and fix them.
 - Keep the tone, register and personality of each speaker. Keep names and terms consistent. Apply the glossary exactly.
 - For a sound effect, give a short natural equivalent in $tgt, or keep it as is.
+- Write normal sentence case with proper accents and punctuation, even if the source was in capital letters.
 - Never add notes, explanations or quotation marks.
 - Answer with exactly one line per input line, in the format `N| translation`, using the same numbers, and nothing else.
 """.trim()

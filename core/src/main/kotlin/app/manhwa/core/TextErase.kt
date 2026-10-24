@@ -27,6 +27,8 @@ object TextErase {
         val outlined: Boolean,
         /** Part de la zone de texte (hors lettres) qui a exactement la couleur du fond : 1 = vrai aplat. */
         val zoneFlat: Float = 0f,
+        /** Seuil de distance au fond au-delà duquel un pixel est considéré comme du texte. */
+        val threshold: Int = 40,
     )
 
     /** Masque rectangulaire (coordonnées de la région) : x0, y0, x1, y1 exclus ; sert à limiter l'effacement aux lignes de texte. */
@@ -109,7 +111,40 @@ object TextErase {
         var rest = 0; var flat = 0
         for (i in pixels.indices) if (allowed[i] && !mask[i]) { rest++; if (dist(pixels[i], bg) <= 14) flat++ }
         val flatness = if (rest == 0) 1f else flat.toFloat() / rest
-        return Analysis(bg, if (flatness >= 0.92f && uniformity >= 0.85f) 0.9f else min(uniformity, 0.6f), textColor, mask, outlined, flatness)
+        return Analysis(bg, if (flatness >= 0.92f && uniformity >= 0.85f) 0.9f else min(uniformity, 0.6f), textColor, mask, outlined, flatness, thr)
+    }
+
+    /**
+     * Pixels de texte dans une bulle : composantes connexes de pixels éloignés du fond qui ne touchent pas le bord de la région
+     * (le contour de la bulle et le dessin extérieur y sont reliés, pas les lettres) et dont une partie est dans [allowed].
+     * La composante entière est effacée, même si la lettre dépasse un peu de la boîte de l'OCR.
+     */
+    fun textComponents(pixels: IntArray, w: Int, h: Int, bg: Int, thr: Int, allowed: BooleanArray, grow: Int): BooleanArray {
+        val raw = BooleanArray(w * h) { dist(pixels[it], bg) > thr }
+        val seen = BooleanArray(w * h)
+        val keep = BooleanArray(w * h)
+        val queue = IntArray(w * h)
+        val maxArea = w * h / 2
+        for (start in 0 until w * h) {
+            if (!raw[start] || seen[start]) continue
+            var head = 0; var tail = 0
+            queue[tail++] = start; seen[start] = true
+            var touchesBorder = false; var inAllowed = false
+            while (head < tail) {
+                val i = queue[head++]; val x = i % w; val y = i / w
+                if (x == 0 || y == 0 || x == w - 1 || y == h - 1) touchesBorder = true
+                if (allowed[i]) inAllowed = true
+                for (dy in -1..1) for (dx in -1..1) {
+                    if (dx == 0 && dy == 0) continue
+                    val nx = x + dx; val ny = y + dy
+                    if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
+                    val j = ny * w + nx
+                    if (raw[j] && !seen[j]) { seen[j] = true; queue[tail++] = j }
+                }
+            }
+            if (!touchesBorder && inAllowed && tail < maxArea) for (k in 0 until tail) keep[queue[k]] = true
+        }
+        return dilate(keep, w, h, grow)
     }
 
     /** Remplace les pixels masqués par une reconstruction lisse du fond (diffusion multi-échelle depuis les pixels voisins non masqués). */

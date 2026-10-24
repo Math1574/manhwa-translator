@@ -23,6 +23,15 @@ object TextNormalizer {
         return t.none { it in vowels }
     }
 
+    /** Texte en majuscules (cris, lettrage de bulle) : au moins 4 lettres dont plus de 80 % en capitales. */
+    fun isAllCaps(text: String): Boolean {
+        val letters = text.filter { it.isLetter() }
+        return letters.length >= 4 && letters.count { it.isUpperCase() }.toFloat() / letters.length >= 0.8f
+    }
+
+    /** Le lettrage d'origine est en majuscules : on garde cette apparence dans la traduction. */
+    fun matchCase(source: String, translated: String): String = if (isAllCaps(source)) translated.uppercase() else translated
+
     /**
      * Le texte de bulle est souvent en majuscules, ce qui dégrade nettement la traduction automatique.
      * Si plus de 80 % des lettres sont en capitales, on passe en casse de phrase. Les jetons du glossaire sont conservés.

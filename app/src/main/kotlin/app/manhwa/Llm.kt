@@ -121,7 +121,7 @@ class GemmaTranslator(
     private fun ask(eng: Engine, texts: List<String>, source: String, target: String, glossary: List<GlossaryEntry>): MutableList<String?> {
         val config = ConversationConfig(
             systemInstruction = Contents.of(LlmPrompt.system(source, target)),
-            samplerConfig = SamplerConfig(topK = 20, topP = 0.9, temperature = 0.3),
+            samplerConfig = SamplerConfig(topK = 20, topP = 0.9, temperature = 0.15),
         )
         val reply = eng.createConversation(config).use { conv ->
             textOf(conv.sendMessage(LlmPrompt.user(texts, history.toList(), glossary)))

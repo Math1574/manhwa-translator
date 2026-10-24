@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests()
+    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -367,6 +367,10 @@ fun textTests() {
         T.eq("I think I know. Do you?", TextNormalizer.fixCase("I THINK I KNOW. DO YOU?"))
         T.eq("Hello there, Kim", TextNormalizer.fixCase("Hello there, Kim")); T.eq("OK", TextNormalizer.fixCase("OK"))
     }
+    T.test("texte: majuscules d'origine conservées dans la traduction") {
+        T.ok(TextNormalizer.isAllCaps("NO CHOICE BUT TO KILL HIM?") && !TextNormalizer.isAllCaps("Hello there") && !TextNormalizer.isAllCaps("OK"), "détection")
+        T.eq("PAS D'AUTRE CHOIX !", TextNormalizer.matchCase("NO CHOICE!", "Pas d'autre choix !")); T.eq("Salut", TextNormalizer.matchCase("Hello", "Salut"))
+    }
     T.test("texte: jetons du glossaire préservés par le changement de casse") {
         T.eq("Where is ZQ0X going?", TextNormalizer.fixCase("WHERE IS ZQ0X GOING?"))
     }
@@ -439,7 +443,7 @@ fun llmTests() {
         val g = Glossary(listOf(GlossaryEntry("KIM", "Kim Do-jin"), GlossaryEntry("ZZZ", "inutile")))
         val o = PagePipeline(ResultCache(tmp()), FakeOcr(listOf(line("KIM IS HERE", 100f, 100f, 300f, 130f), line("HMPH", 100f, 600f, 300f, 630f), line("..", 1f, 1f, 90f, 40f, 0.9f))), llm, "e", { g }, debugSink = { dbg = it })
             .process(byteArrayOf(5), "en", "fr") as PageOutcome.Done
-        T.eq(listOf("KIM IS HERE"), seenTexts); T.eq(listOf("KIM"), seenTerms.map { it.source }); T.eq("FR:KIM IS HERE", o.result.blocks.single().translated)
+        T.eq(listOf("Kim is here"), seenTexts); T.eq(listOf("KIM"), seenTerms.map { it.source }); T.eq("FR:KIM IS HERE", o.result.blocks.single().translated)
         val st = dbg!!.lines.map { it.status }; T.ok("gardée" in st && "bruit" in st && st.any { it.startsWith("rejetée") }, "statuts diagnostic: $st")
     }
     T.test("pipeline : useCache=false recalcule même si la page est en cache") {
@@ -527,5 +531,44 @@ fun eraseTests() {
         T.eq(TextErase.FontStyle.SHOUT, TextErase.chooseFont("RUN!", 60f, 30f, true, false, false))
         T.eq(TextErase.FontStyle.NARRATION, TextErase.chooseFont("Three days later.", 28f, 30f, true, false, true))
         T.eq(TextErase.FontStyle.SANS, TextErase.chooseFont("제발 도와주세요", 30f, 30f, true, false, false))
+    }
+}
+
+// ---------- plan d'effacement complet ----------
+class ArraySource(override val width: Int, override val height: Int, val px: IntArray) : PixelSource {
+    override fun pixels(x: Int, y: Int, w: Int, h: Int): IntArray = IntArray(w * h) { px[(y + it / w) * width + x + it % w] }
+}
+
+fun erasureTests() {
+    val W = 300; val H = 200; val BG = 0xFF2040A0.toInt(); val WHITE = 0xFFFFFFFF.toInt(); val BLACK = 0xFF000000.toInt()
+    fun bubblePage(): IntArray {
+        val px = IntArray(W * H) { i -> val x = i % W; val y = i / W; 0xFF000000.toInt() or ((20 + x / 3) shl 16) or ((60 + y / 2) shl 8) or 160 } // dessin en dégradé
+        for (y in 0 until H) for (x in 0 until W) {
+            val dx = (x - 150) / 120.0; val dy = (y - 100) / 80.0; val d = dx * dx + dy * dy
+            if (d <= 1.0) px[y * W + x] = WHITE else if (d <= 1.06) px[y * W + x] = BLACK
+        }
+        return px
+    }
+    fun drawText(px: IntArray, x0: Int, y0: Int, x1: Int, y1: Int) { for (y in y0 until y1) for (x in x0 until x1) if ((x / 2 + y / 2) % 3 != 0) px[y * W + x] = BLACK }
+    T.test("plan: texte noir dans une bulle → effacé en aplat blanc, contour et dessin extérieur intacts") {
+        val px = bubblePage(); val orig = px.copyOf()
+        drawText(px, 100, 80, 200, 95); drawText(px, 110, 100, 190, 115) // deux lignes
+        val plan = Erasure.plan(ArraySource(W, H, px), 1f, listOf(RectF(100f, 80f, 200f, 95f), RectF(110f, 100f, 190f, 115f)), 15f, W.toFloat(), H.toFloat())!!
+        T.eq(Erasure.Mode.FLAT, plan.mode); T.eq(WHITE, plan.bg)
+        val out = px.copyOf()
+        for (i in plan.layer.indices) if ((plan.layer[i] ushr 24) != 0) { val x = plan.x0 + i % plan.w; val y = plan.y0 + i / plan.w; out[y * W + x] = plan.layer[i] }
+        for (y in 80 until 115) for (x in 100 until 200) if (orig[y * W + x] == WHITE) T.ok(out[y * W + x] == WHITE, "pixel ($x,$y) devrait être blanc")
+        var changedOutside = 0; for (i in px.indices) { val x = i % W; val y = i / W; if (out[i] != px[i] && (x < 90 || x > 210 || y < 70 || y > 125)) changedOutside++ }
+        T.eq(0, changedOutside, "pixels modifiés hors du texte (contour/dessin)")
+    }
+    T.test("plan: texte sur dessin → zone reconstruite (mode ART), pas d'aplat blanc") {
+        val px = IntArray(W * H) { i -> val x = i % W; val y = i / W; 0xFF000000.toInt() or ((20 + x / 3) shl 16) or ((60 + y / 2) shl 8) or 160 }
+        val clean = px.copyOf()
+        for (y in 90 until 110) for (x in 80 until 220) if ((x / 3 + y / 3) % 2 == 0) px[y * W + x] = 0xFFFFFFFF.toInt()
+        val plan = Erasure.plan(ArraySource(W, H, px), 1f, listOf(RectF(80f, 90f, 220f, 110f)), 20f, W.toFloat(), H.toFloat())!!
+        T.eq(Erasure.Mode.ART, plan.mode)
+        var worst = 0
+        for (y in 92 until 108) for (x in 85 until 215) { val c = plan.layer[(y - plan.y0) * plan.w + (x - plan.x0)]; worst = maxOf(worst, kotlin.math.abs(((c shr 16) and 0xFF) - ((clean[y * W + x] shr 16) and 0xFF))) }
+        T.ok(worst < 40, "reconstruction trop éloignée du fond (écart $worst)")
     }
 }

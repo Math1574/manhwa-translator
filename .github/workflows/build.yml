@@ -80,13 +80,14 @@ jobs:
       - name: Modèle Gemma (cache)
         if: env.SUITE == 'full'
         uses: actions/cache@v4
-        with: { path: /tmp/gemma, key: gemma-e2b-v1 }
+        with: { path: /tmp/gemma, key: gemma-e2b-e4b-v1 }
       - name: Télécharger Gemma E2B si absent du cache
         if: env.SUITE == 'full'
         run: |
           mkdir -p /tmp/gemma
           [ -f /tmp/gemma/gemma-4-E2B-it.litertlm ] || curl -sSfL -o /tmp/gemma/gemma-4-E2B-it.litertlm https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm
-          sha256sum /tmp/gemma/gemma-4-E2B-it.litertlm
+          [ -f /tmp/gemma/gemma-4-E4B-it.litertlm ] || curl -sSfL -o /tmp/gemma/gemma-4-E4B-it.litertlm https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/main/gemma-4-E4B-it.litertlm
+          sha256sum /tmp/gemma/*.litertlm
       - name: Activer KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -112,6 +113,7 @@ jobs:
         run: |
           rm -rf /tmp/pub && mkdir -p /tmp/pub && cp -r /tmp/e2e/. /tmp/pub/ || true
           cp /tmp/server.log /tmp/pub/server.log || true
+          mkdir -p /tmp/pub/synth && cp /tmp/site/synth/* /tmp/pub/synth/ || true
           echo "${GITHUB_SHA} suite=${SUITE}" > /tmp/pub/COMMIT.txt
           cd /tmp/pub && git init -q -b e2e-${SUITE} && git config user.name ci && git config user.email ci@example.invalid
           git add -A && git commit -q -m "e2e ${GITHUB_SHA}"

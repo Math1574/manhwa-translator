@@ -8,7 +8,7 @@ say() { echo "[e2e $(date +%H:%M:%S)] $*" | tee -a $OUT/run.log; }
 
 adb wait-for-device
 adb shell input keyevent KEYCODE_WAKEUP; adb shell wm dismiss-keyguard 2>/dev/null || true
-adb shell settings put global window_animation_scale 0; adb shell settings put global transition_animation_scale 0
+adb shell settings put secure immersive_mode_confirmations confirmed; adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 2>&1; adb shell settings put global window_animation_scale 0; adb shell settings put global transition_animation_scale 0
 adb install -r apk/app-debug.apk 2>&1 | tee -a $OUT/run.log
 adb shell wm size | tee -a $OUT/run.log
 
@@ -32,8 +32,9 @@ run() { # nom page moteur source cible modèles timeout [lazy]
   adb shell am force-stop $PKG
   adb shell "run-as $PKG rm -f files/report.json"
   adb logcat -c
+  local mdl=(); [ -n "$models" ] && mdl=(--es mt_models "$models")
   adb shell am start -n $PKG/app.manhwa.MainActivity --es mt_url "http://10.0.2.2:8000/$page" --es mt_engine $engine \
-     --es mt_source $src --es mt_target $tgt --es mt_models "$models" --es mt_timeout $timeout >/dev/null
+     --es mt_source $src --es mt_target $tgt "${mdl[@]}" --es mt_timeout $timeout >/dev/null
   local start=$(date +%s)
   while :; do
     sleep 6
@@ -86,5 +87,10 @@ if [ "$SUITE" = full ] && [ -f /tmp/gemma/gemma-4-E2B-it.litertlm ]; then
   run synth_en_caps_gemma  synth_en_caps.html  GEMMA_E2B EN FR "" 900
   run synth_ko_gemma       synth_ko.html       GEMMA_E2B KO FR "" 900
   run pc_ja_gemma          pc_ja.html          GEMMA_E2B JA FR "" 1500
+fi
+if [ "$SUITE" = full ] && [ -f /tmp/gemma/gemma-4-E4B-it.litertlm ]; then
+  push_model /tmp/gemma/gemma-4-E4B-it.litertlm gemma-4-E4B-it.litertlm 0b2a8980ce155fd97673d8e820b4d29d9c7d99b8fa6806f425d969b145bd52e0
+  run pc_en_gemma4b          pc_en.html          GEMMA_E4B EN FR "" 1800
+  run synth_en_caps_gemma4b  synth_en_caps.html  GEMMA_E4B EN FR "" 1200
 fi
 say "toutes les scènes sont terminées"
