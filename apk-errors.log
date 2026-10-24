@@ -2,7 +2,7 @@ w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/ko
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:298:80 Unnecessary non-null assertion (!!) on a non-null receiver of type 'DebugInfo'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Engines.kt:50:13 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Render.kt:119:39 Unnecessary safe call on a non-null receiver of type 'Erasure.Plan'.
-BUILD SUCCESSFUL in 1m
+BUILD SUCCESSFUL in 51s
 total 164464
 drwxr-xr-x 2 runner runner      4096 Oct 24 19:23 .
 drwxr-xr-x 3 runner runner      4096 Oct 24 19:23 ..
