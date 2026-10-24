@@ -1,0 +1,31 @@
+Performing Streamed Install
+Success
+Physical size: 1080x2400
+[e2e 19:27:02] === prep (index.html, MLKIT, EN→FR)
+[e2e 19:28:27] terminé : prep (84 s)
+[e2e 19:28:27] aucune image traitée : nouvel essai de prep
+[e2e 19:28:27] === prep (index.html, MLKIT, EN→FR)
+[e2e 19:29:20] terminé : prep (53 s)
+[e2e 19:29:20] === pc_en_mlkit (pc_en.html, MLKIT, EN→FR)
+[e2e 19:29:52] terminé : pc_en_mlkit (31 s)
+[e2e 19:29:52] === synth_en_caps_mlkit (synth_en_caps.html, MLKIT, EN→FR)
+[e2e 19:30:22] terminé : synth_en_caps_mlkit (29 s)
+[e2e 19:30:22] === synth_en_mixed_mlkit (synth_en_mixed.html, MLKIT, EN→FR)
+[e2e 19:30:52] terminé : synth_en_mixed_mlkit (30 s)
+[e2e 19:30:52] === pc_en_ref_mlkit (pc_en_ref.html, MLKIT, EN→FR)
+[e2e 19:31:24] terminé : pc_en_ref_mlkit (32 s)
+[e2e 19:31:24] === pc_en_lazy_mlkit (pc_en_lazy.html, MLKIT, EN→FR)
+[e2e 19:31:57] terminé : pc_en_lazy_mlkit (33 s)
+[e2e 19:31:57] === synth_ko_mlkit (synth_ko.html, MLKIT, KO→FR)
+[e2e 19:32:27] terminé : synth_ko_mlkit (29 s)
+[e2e 19:32:27] === synth_ja_vert_mlkit (synth_ja_vertical.html, MLKIT, JA→FR)
+[e2e 19:32:57] terminé : synth_ja_vert_mlkit (29 s)
+[e2e 19:32:57] === synth_zh_mlkit (synth_zh.html, MLKIT, ZH_HANS→FR)
+[e2e 19:33:27] terminé : synth_zh_mlkit (30 s)
+[e2e 19:33:27] === pc_ja_mlkit (pc_ja.html, MLKIT, JA→FR)
+[e2e 19:33:58] terminé : pc_ja_mlkit (31 s)
+[e2e 19:33:58] === plein écran
+  mCurrentFocus=Window{c394417 u0 app.manhwa.translator/app.manhwa.MainActivity}
+        InsetsSource id=6e700000 type=statusBars frame=[0,0][1080,128] visible=false flags= insetsRoundedCornerFrame=false
+        mSource=InsetsSource id=6e700000 type=statusBars frame=[0,0][1080,128] visible=false flags= insetsRoundedCornerFrame=false
+[e2e 19:34:30] toutes les scènes sont terminées
