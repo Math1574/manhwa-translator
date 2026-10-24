@@ -21,31 +21,6 @@ object OverlayBuilder {
         )
         return arr
     }
-
-    /** Image réduite à environ 4 millions de pixels pour l'échantillonnage des couleurs ; null si la mémoire manque. */
-    private fun decodeSampled(bytes: ByteArray, w: Int, h: Int): Bitmap? = try {
-        var s = 1
-        while ((w.toLong() / s) * (h.toLong() / s) > 4_000_000L) s *= 2
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = s })
-    } catch (e: Throwable) {
-        null
-    }
-
-    /** Couleur médiane d'un anneau autour du bloc de texte d'origine (le fond de la bulle). */
-    private fun bubbleColor(bmp: Bitmap, box: RectF, scale: Float): Int {
-        val m = 4f
-        val l = ((box.left - m) * scale).toInt().coerceIn(0, bmp.width - 1)
-        val r = ((box.right + m) * scale).toInt().coerceIn(0, bmp.width - 1)
-        val t = ((box.top - m) * scale).toInt().coerceIn(0, bmp.height - 1)
-        val b = ((box.bottom + m) * scale).toInt().coerceIn(0, bmp.height - 1)
-        val samples = ArrayList<Int>()
-        val step = maxOf(1, (maxOf(r - l, b - t)) / 40)
-        var x = l
-        while (x <= r) { samples.add(bmp.getPixel(x, t)); samples.add(bmp.getPixel(x, b)); x += step }
-        var y = t
-        while (y <= b) { samples.add(bmp.getPixel(l, y)); samples.add(bmp.getPixel(r, y)); y += step }
-        return ColorMath.median(samples.toIntArray())
-    }
 }
 
 /** Script injecté dans les pages : repère les images, dessine l'overlay dans le document (suit défilement et zoom). */
