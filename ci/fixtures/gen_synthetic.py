@@ -46,7 +46,7 @@ def wrap(d, text, font, maxw):
 def bubble(img, d, box, text, font, gt, kind="bubble", lang="en", dark=False):
     x0, y0, x1, y1 = box
     d.ellipse(box, fill=(20, 20, 30) if dark else "white", outline="black" if not dark else "white", width=4)
-    inner = (x1 - x0) * 0.72
+    inner = (x1 - x0) * 0.64
     lines = wrap(d, text, font, inner)
     lh = font.size * 1.2; total = lh * len(lines); y = (y0 + y1) / 2 - total / 2
     tb = [W, H, 0, 0]; lb = []
@@ -106,7 +106,7 @@ JA_VERT = ["お願いします…弟子にしてください！", "ここまで�
 
 for name, (lang, caps, fpath, idx, texts, free, sfx) in PAGES.items():
     img = background(hash(name) & 0xffff); d = ImageDraw.Draw(img); gt = []
-    font = F(fpath, 34 if lang == "en" else 32, idx)
+    font = F(fpath, 30 if lang == "en" else 28, idx)
     pos = [(70, 60, 470, 250), (330, 300, 740, 500), (60, 560, 460, 760), (360, 800, 750, 990), (80, 1030, 440, 1200)]
     for box, t in zip(pos, texts): bubble(img, d, box, t, font, gt, lang=lang)
     ff = F(fpath, 46, idx); size = 46

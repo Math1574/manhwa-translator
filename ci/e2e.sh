@@ -51,6 +51,7 @@ run() { # nom page moteur source cible modèles timeout [lazy]
   shot $name 0
   for i in 1 2 3; do adb shell input swipe 540 1900 540 700 450; sleep 2; shot $name $i; done
   say "terminé : $name ($(( $(date +%s) - start )) s)"
+  if grep -q '"total":0' $OUT/reports/$name.json 2>/dev/null && [ "$TRIES" != 1 ]; then say "aucune image traitée : nouvel essai de $name"; TRIES=1 run "$@"; fi
 }
 
 # --- préparation : téléchargement des modèles de traduction ML Kit (première utilisation lente) ---

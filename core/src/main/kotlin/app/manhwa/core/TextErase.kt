@@ -29,6 +29,8 @@ object TextErase {
         val zoneFlat: Float = 0f,
         /** Seuil de distance au fond au-delà duquel un pixel est considéré comme du texte. */
         val threshold: Int = 40,
+        /** Part de la zone de texte qui a la couleur du fond : une bulle a surtout du fond, un lettrage épais sur dessin en a peu. */
+        val bgShare: Float = 1f,
     )
 
     /** Masque rectangulaire (coordonnées de la région) : x0, y0, x1, y1 exclus ; sert à limiter l'effacement aux lignes de texte. */
@@ -70,6 +72,8 @@ object TextErase {
         val near = ArrayList<Int>()
         for (i in pixels.indices) if (allowed[i] && dist(pixels[i], approx) <= 24) near.add(pixels[i])
         val bg = if (near.isEmpty()) approx else ColorMath.median(near.toIntArray())
+        val allowedCount = allowed.count { it }.coerceAtLeast(1)
+        val bgShare = near.size.toFloat() / allowedCount
 
         val frame = dilate(allowed, w, h, 6)
         var fc = 0; var fn = 0
@@ -111,7 +115,7 @@ object TextErase {
         var rest = 0; var flat = 0
         for (i in pixels.indices) if (allowed[i] && !mask[i]) { rest++; if (dist(pixels[i], bg) <= 14) flat++ }
         val flatness = if (rest == 0) 1f else flat.toFloat() / rest
-        return Analysis(bg, if (flatness >= 0.92f && uniformity >= 0.85f) 0.9f else min(uniformity, 0.6f), textColor, mask, outlined, flatness, thr)
+        return Analysis(bg, if (flatness >= 0.92f && uniformity >= 0.85f) 0.9f else min(uniformity, 0.6f), textColor, mask, outlined, flatness, thr, bgShare)
     }
 
     /**
@@ -119,7 +123,10 @@ object TextErase {
      * (le contour de la bulle et le dessin extérieur y sont reliés, pas les lettres) et dont une partie est dans [allowed].
      * La composante entière est effacée, même si la lettre dépasse un peu de la boîte de l'OCR.
      */
-    fun textComponents(pixels: IntArray, w: Int, h: Int, bg: Int, thr: Int, allowed: BooleanArray, grow: Int): BooleanArray {
+    fun textComponents(
+        pixels: IntArray, w: Int, h: Int, bg: Int, thr: Int, allowed: BooleanArray, grow: Int,
+        interior: BooleanArray? = null, core: BooleanArray? = null,
+    ): BooleanArray {
         val raw = BooleanArray(w * h) { dist(pixels[it], bg) > thr }
         val seen = BooleanArray(w * h)
         val keep = BooleanArray(w * h)
@@ -129,11 +136,12 @@ object TextErase {
             if (!raw[start] || seen[start]) continue
             var head = 0; var tail = 0
             queue[tail++] = start; seen[start] = true
-            var touchesBorder = false; var inAllowed = false
+            var touchesBorder = false; var inAllowed = false; var inInterior = 0
             while (head < tail) {
                 val i = queue[head++]; val x = i % w; val y = i / w
                 if (x == 0 || y == 0 || x == w - 1 || y == h - 1) touchesBorder = true
                 if (allowed[i]) inAllowed = true
+                if (interior != null && interior[i]) inInterior++
                 for (dy in -1..1) for (dx in -1..1) {
                     if (dx == 0 && dy == 0) continue
                     val nx = x + dx; val ny = y + dy
@@ -142,7 +150,13 @@ object TextErase {
                     if (raw[j] && !seen[j]) { seen[j] = true; queue[tail++] = j }
                 }
             }
-            if (!touchesBorder && inAllowed && tail < maxArea) for (k in 0 until tail) keep[queue[k]] = true
+            val enclosed = !touchesBorder && tail < maxArea
+            when {
+                // lettre isolée : effacée entièrement, même si elle dépasse la boîte de l'OCR (mot omis, lettre débordante)
+                enclosed && (inAllowed || inInterior * 2 >= tail) -> for (k in 0 until tail) keep[queue[k]] = true
+                // composante reliée au bord (contour de la bulle, lettre collée au contour) : seulement le cœur des lignes de texte
+                touchesBorder && inAllowed && core != null -> for (k in 0 until tail) if (core[queue[k]]) keep[queue[k]] = true
+            }
         }
         return dilate(keep, w, h, grow)
     }

@@ -50,11 +50,19 @@ object Erasure {
         var a = TextErase.analyze(px, w, h, TextErase.rectMask(w, h, rects(), max(3, (lh * 0.2f).toInt())), grow = max(2, (lh * 0.06f).toInt()))
         if (a.outlined) a = TextErase.analyze(px, w, h, TextErase.rectMask(w, h, rects(), max(6, (lh * 0.3f).toInt())), grow = max(3, (lh * 0.1f).toInt()))
 
-        val flat = a.uniformity >= 0.85f // surroundings uniform AND zone flat (see TextErase.analyze)
+        // bulle : zone de texte sur fond uni ET (abords unis OU contour fermé : le remplissage depuis le texte reste borné)
+        val bubble = if (a.zoneFlat >= 0.9f && a.bgShare >= 0.45f) bubbleArea(src, s, union, a.bg, imageW, imageH) else null
+        val flat = a.zoneFlat >= 0.9f && a.bgShare >= 0.45f && (a.uniformity >= 0.85f || bubble != null)
         if (flat) {
-            val mask = TextErase.textComponents(px, w, h, a.bg, a.threshold, TextErase.rectMask(w, h, rects(), max(3, (lh * 0.2f).toInt())), max(2, (lh * 0.06f).toInt()))
+            val allowedZone = TextErase.rectMask(w, h, rects(), max(3, (lh * 0.2f).toInt()))
+            // cœur des lignes : boîtes de l'OCR rognées en haut et en bas pour ne pas entamer le contour de la bulle
+            val shrink = max(1, (lh * 0.2f).toInt())
+            val core = TextErase.rectMask(w, h, rects().map { r -> intArrayOf(r[0], r[1] + shrink, r[2], r[3] - shrink) }.filter { r -> r[3] > r[1] }, 0)
+            val textRect = intArrayOf((union.left * s).toInt() - x0, (union.top * s).toInt() - y0, (union.right * s).toInt() - x0, (union.bottom * s).toInt() - y0)
+            val interior = BubbleMask.interior(px, w, h, textRect, a.bg)
+            val mask = TextErase.textComponents(px, w, h, a.bg, a.threshold, allowedZone, max(2, (lh * 0.06f).toInt()), interior, core)
             val layer = IntArray(w * h) { if (mask[it]) (0xFF shl 24) or (a.bg and 0xFFFFFF) else 0 }
-            return Plan(Mode.FLAT, x0, y0, w, h, mask, layer, a.bg, a.textColor, a.outlined, bubbleArea(src, s, union, a.bg, imageW, imageH))
+            return Plan(Mode.FLAT, x0, y0, w, h, mask, layer, a.bg, a.textColor, a.outlined, bubble ?: bubbleArea(src, s, union, a.bg, imageW, imageH))
         }
         val zone = TextErase.rectMask(w, h, rects(), max(4, (lh * 0.25f).toInt()))
         val fill = TextErase.inpaint(px, w, h, zone)
