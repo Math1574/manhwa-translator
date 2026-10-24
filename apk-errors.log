@@ -1,9 +1,9 @@
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/PageQueue.kt:26:24 This class is not recommended for use in Kotlin. Use 'kotlin.Any' instead.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:298:80 Unnecessary non-null assertion (!!) on a non-null receiver of type 'DebugInfo'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Engines.kt:50:13 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
-BUILD SUCCESSFUL in 47s
+BUILD SUCCESSFUL in 59s
 total 164448
-drwxr-xr-x 2 runner runner      4096 Oct 24 09:04 .
-drwxr-xr-x 3 runner runner      4096 Oct 24 09:04 ..
--rw-r--r-- 1 runner runner 168381135 Oct 24 09:04 app-debug.apk
--rw-r--r-- 1 runner runner       405 Oct 24 09:04 output-metadata.json
+drwxr-xr-x 2 runner runner      4096 Oct 24 09:05 .
+drwxr-xr-x 3 runner runner      4096 Oct 24 09:05 ..
+-rw-r--r-- 1 runner runner 168381135 Oct 24 09:05 app-debug.apk
+-rw-r--r-- 1 runner runner       405 Oct 24 09:05 output-metadata.json
