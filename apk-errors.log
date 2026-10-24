@@ -1,28 +1,9 @@
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/PageQueue.kt:26:24 This class is not recommended for use in Kotlin. Use 'kotlin.Any' instead.
-e: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Overlay.kt:26:66 Unresolved reference 'Bitmap'.
-e: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Overlay.kt:29:9 Unresolved reference 'BitmapFactory'.
-e: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Overlay.kt:29:61 Unresolved reference 'BitmapFactory'.
-e: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Overlay.kt:29:85 Cannot infer type for type parameter 'T'. Specify it explicitly.
-e: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Overlay.kt:29:91 Cannot infer type for type parameter 'T'. Specify it explicitly.
-e: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Overlay.kt:29:93 Unresolved reference 'inSampleSize'.
-e: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Overlay.kt:35:34 Unresolved reference 'Bitmap'.
-e: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Overlay.kt:35:47 Unresolved reference 'RectF'.
-e: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Overlay.kt:37:23 Unresolved reference 'left'.
-e: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Overlay.kt:37:66 Unresolved reference 'width'.
-e: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Overlay.kt:38:23 Unresolved reference 'right'.
-e: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Overlay.kt:38:67 Unresolved reference 'width'.
-e: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Overlay.kt:39:23 Unresolved reference 'top'.
-e: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Overlay.kt:39:65 Unresolved reference 'height'.
-e: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Overlay.kt:40:23 Unresolved reference 'bottom'.
-e: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Overlay.kt:40:68 Unresolved reference 'height'.
-e: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Overlay.kt:44:42 Unresolved reference 'getPixel'.
-e: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Overlay.kt:44:75 Unresolved reference 'getPixel'.
-e: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Overlay.kt:46:42 Unresolved reference 'getPixel'.
-e: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Overlay.kt:46:75 Unresolved reference 'getPixel'.
-e: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Overlay.kt:47:16 Unresolved reference 'ColorMath'.
-> Task :app:compileDebugKotlin FAILED
-* What went wrong:
-Execution failed for task ':app:compileDebugKotlin'.
-org.gradle.api.tasks.TaskExecutionException: Execution failed for task ':app:compileDebugKotlin'.
-BUILD FAILED in 51s
-ls: cannot access 'app/build/outputs/apk/debug/': No such file or directory
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:298:80 Unnecessary non-null assertion (!!) on a non-null receiver of type 'DebugInfo'.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Engines.kt:50:13 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
+BUILD SUCCESSFUL in 47s
+total 164448
+drwxr-xr-x 2 runner runner      4096 Oct 24 09:04 .
+drwxr-xr-x 3 runner runner      4096 Oct 24 09:04 ..
+-rw-r--r-- 1 runner runner 168381135 Oct 24 09:04 app-debug.apk
+-rw-r--r-- 1 runner runner       405 Oct 24 09:04 output-metadata.json
