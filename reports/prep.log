@@ -1,0 +1,9 @@
+10-24 19:30:07.137  5683  6456 I ChimeraConfigurator: Detected pending changes for urgent request: [vision.ocr]. Pending module sets: container:2318189190800+mlkit.ocr.common,tflite_dynamite:2627305025100800+tflite_dynamite,vision_ocr:2316024025100000+vision.ocr
+10-24 19:30:07.369  5683  6449 I ChimeraConfigurator: Detected pending changes for urgent request: [mlkit.barcode.ui]. Pending module sets: container:2318189190800+mlkit.barcode.ui+vision.barcode,tflite_dynamite:2627305025100800+tflite_dynamite
+10-24 19:30:07.465  5683  6460 I ChimeraConfigurator: Starting update, reason: 4 urgentFeatures: tflite_dynamite:-1
+10-24 19:30:07.494  5683  6460 I ChimeraConfigurator: Detected pending changes for urgent request: [tflite_dynamite]. Pending module sets: container:2318189190800,tflite_dynamite:2627305025100800+tflite_dynamite
+10-24 19:30:07.510  5683  6460 W ZappDownloader: No successful module downloads for requested features [tflite_dynamite].
+10-24 19:30:07.515  5683  6460 I GmsDebugLogger: [83] 1 [tflite_dynamite]
+10-24 19:30:07.712  5683  5762 I ChimeraConfigurator: Detected pending changes for urgent request: [vision.ocr]. Pending module sets: container:2318189190800+mlkit.ocr.common,tflite_dynamite:2627305025100800+tflite_dynamite,vision_ocr:2316024025100000+vision.ocr
+10-24 19:30:17.776  5683  6502 I ChimeraConfigurator: Detected pending changes for urgent request: [vision.ocr]. Pending module sets: container:2318189190800+mlkit.ocr.common,tflite_dynamite:2627305025100800+tflite_dynamite,vision_ocr:2316024025100000+vision.ocr
+10-24 19:30:34.631  6307  6337 I MTTEST  : REPORT_READY report.json

@@ -1,0 +1,63 @@
+Performing Streamed Install
+Success
+Physical size: 1080x2400
+[e2e 19:27:54] === prep (index.html, MLKIT, EN→FR)
+[e2e 19:29:55] terminé : prep (121 s)
+[e2e 19:29:55] aucune image traitée : nouvel essai de prep
+[e2e 19:29:55] === prep (index.html, MLKIT, EN→FR)
+[e2e 19:30:50] terminé : prep (54 s)
+[e2e 19:30:50] === pc_en_mlkit (pc_en.html, MLKIT, EN→FR)
+[e2e 19:31:30] terminé : pc_en_mlkit (39 s)
+[e2e 19:31:30] === synth_en_caps_mlkit (synth_en_caps.html, MLKIT, EN→FR)
+[e2e 19:32:07] terminé : synth_en_caps_mlkit (36 s)
+[e2e 19:32:07] === synth_en_mixed_mlkit (synth_en_mixed.html, MLKIT, EN→FR)
+[e2e 19:32:44] terminé : synth_en_mixed_mlkit (36 s)
+[e2e 19:32:44] === pc_en_ref_mlkit (pc_en_ref.html, MLKIT, EN→FR)
+[e2e 19:33:24] terminé : pc_en_ref_mlkit (39 s)
+[e2e 19:33:24] === pc_en_lazy_mlkit (pc_en_lazy.html, MLKIT, EN→FR)
+[e2e 19:34:06] terminé : pc_en_lazy_mlkit (42 s)
+[e2e 19:34:06] === synth_ko_mlkit (synth_ko.html, MLKIT, KO→FR)
+[e2e 19:34:43] terminé : synth_ko_mlkit (36 s)
+[e2e 19:34:43] === synth_ja_vert_mlkit (synth_ja_vertical.html, MLKIT, JA→FR)
+[e2e 19:35:21] terminé : synth_ja_vert_mlkit (37 s)
+[e2e 19:35:21] === synth_zh_mlkit (synth_zh.html, MLKIT, ZH_HANS→FR)
+[e2e 19:35:58] terminé : synth_zh_mlkit (37 s)
+[e2e 19:35:58] === pc_ja_mlkit (pc_ja.html, MLKIT, JA→FR)
+[e2e 19:36:37] terminé : pc_ja_mlkit (39 s)
+[e2e 19:36:37] === plein écran
+  mCurrentFocus=Window{41e6d5e u0 app.manhwa.translator/app.manhwa.MainActivity}
+        InsetsSource id=10cb0000 type=statusBars frame=[0,0][1080,128] visible=false flags= insetsRoundedCornerFrame=false
+        mSource=InsetsSource id=10cb0000 type=statusBars frame=[0,0][1080,128] visible=false flags= insetsRoundedCornerFrame=false
+[e2e 19:37:17] envoi du modèle gemma-4-E2B-it.litertlm sur l'émulateur
+total 2527520
+drwx------ 2 u0_a192 u0_a192       4096 2026-10-24 19:37 .
+drwxrwx--x 4 u0_a192 u0_a192       4096 2026-10-24 19:36 ..
+-rw-rw-rw- 1 u0_a192 u0_a192 2588147712 2026-10-24 19:37 gemma-4-E2B-it.litertlm
+-rw-rw-rw- 1 u0_a192 u0_a192         64 2026-10-24 19:37 gemma-4-E2B-it.litertlm.ok
+[e2e 19:37:41] === pc_en_gemma (pc_en.html, GEMMA_E2B, EN→FR)
+[e2e 19:39:03] terminé : pc_en_gemma (82 s)
+[e2e 19:39:03] aucune image traitée : nouvel essai de pc_en_gemma
+[e2e 19:39:03] === pc_en_gemma (pc_en.html, GEMMA_E2B, EN→FR)
+[e2e 19:40:06] terminé : pc_en_gemma (63 s)
+[e2e 19:40:06] === synth_en_caps_gemma (synth_en_caps.html, GEMMA_E2B, EN→FR)
+[e2e 19:40:56] terminé : synth_en_caps_gemma (49 s)
+[e2e 19:40:56] === synth_ko_gemma (synth_ko.html, GEMMA_E2B, KO→FR)
+[e2e 19:42:14] terminé : synth_ko_gemma (78 s)
+[e2e 19:42:14] aucune image traitée : nouvel essai de synth_ko_gemma
+[e2e 19:42:14] === synth_ko_gemma (synth_ko.html, GEMMA_E2B, KO→FR)
+[e2e 19:42:57] terminé : synth_ko_gemma (42 s)
+[e2e 19:42:57] === pc_ja_gemma (pc_ja.html, GEMMA_E2B, JA→FR)
+[e2e 19:43:55] terminé : pc_ja_gemma (57 s)
+[e2e 19:43:55] envoi du modèle gemma-4-E4B-it.litertlm sur l'émulateur
+total 6101296
+drwx------ 2 u0_a192 u0_a192       4096 2026-10-24 19:44 .
+drwxrwx--x 4 u0_a192 u0_a192       4096 2026-10-24 19:43 ..
+-rw-rw-rw- 1 u0_a192 u0_a192 2588147712 2026-10-24 19:37 gemma-4-E2B-it.litertlm
+-rw-rw-rw- 1 u0_a192 u0_a192         64 2026-10-24 19:37 gemma-4-E2B-it.litertlm.ok
+-rw-rw-rw- 1 u0_a192 u0_a192 3659530240 2026-10-24 19:44 gemma-4-E4B-it.litertlm
+-rw-rw-rw- 1 u0_a192 u0_a192         64 2026-10-24 19:44 gemma-4-E4B-it.litertlm.ok
+[e2e 19:44:27] === pc_en_gemma4b (pc_en.html, GEMMA_E4B, EN→FR)
+[e2e 19:46:21] terminé : pc_en_gemma4b (113 s)
+[e2e 19:46:21] === synth_en_caps_gemma4b (synth_en_caps.html, GEMMA_E4B, EN→FR)
+[e2e 19:47:28] terminé : synth_en_caps_gemma4b (67 s)
+[e2e 19:47:28] toutes les scènes sont terminées
