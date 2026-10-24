@@ -477,6 +477,14 @@ fun maskTests() {
         val b = BubbleMask.bounds(m, W, H)!!
         T.ok(b[0] in 10..20 && b[2] in 180..190 && b[1] in 10..20 && b[3] in 120..130, "boîte englobante ${b.toList()}")
     }
+    T.test("bulle: intérieur = remplissage + lettres, sans le contour ni le fond extérieur") {
+        val px = bubble(false)
+        val m = BubbleMask.interior(px, W, H, intArrayOf(65, 55, 135, 85), WHITE)!!
+        T.ok(m[70 * W + 100], "lettres (trous) incluses"); T.ok(m[70 * W + 40], "intérieur blanc inclus")
+        // un pixel du contour noir de l'ellipse (en haut) et le fond extérieur sont exclus
+        val outlineY = (0 until H).first { px[it * W + 100] == BLACK && it < 30 }
+        T.ok(!m[outlineY * W + 100], "contour exclu"); T.ok(!m[2 * W + 2], "fond extérieur exclu")
+    }
     T.test("bulle: contour ouvert (fuite) → null, repli sur un rectangle") {
         val allWhite = IntArray(W * H) { WHITE }; for (y in 55 until 85) for (x in 65 until 135) allWhite[y * W + x] = BLACK
         T.eq(null, BubbleMask.compute(allWhite, W, H, intArrayOf(65, 55, 135, 85), WHITE)) // pas de contour : tout se remplit

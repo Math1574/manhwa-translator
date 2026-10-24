@@ -25,6 +25,8 @@ object TextErase {
         val mask: BooleanArray,
         /** Vrai si le texte d'origine semble cerné d'un contour/lueur de couleur différente. */
         val outlined: Boolean,
+        /** Part de la zone de texte (hors lettres) qui a exactement la couleur du fond : 1 = vrai aplat. */
+        val zoneFlat: Float = 0f,
     )
 
     /** Masque rectangulaire (coordonnées de la région) : x0, y0, x1, y1 exclus ; sert à limiter l'effacement aux lignes de texte. */
@@ -107,7 +109,7 @@ object TextErase {
         var rest = 0; var flat = 0
         for (i in pixels.indices) if (allowed[i] && !mask[i]) { rest++; if (dist(pixels[i], bg) <= 14) flat++ }
         val flatness = if (rest == 0) 1f else flat.toFloat() / rest
-        return Analysis(bg, if (flatness >= 0.92f && uniformity >= 0.85f) 0.9f else min(uniformity, 0.6f), textColor, mask, outlined)
+        return Analysis(bg, if (flatness >= 0.92f && uniformity >= 0.85f) 0.9f else min(uniformity, 0.6f), textColor, mask, outlined, flatness)
     }
 
     /** Remplace les pixels masqués par une reconstruction lisse du fond (diffusion multi-échelle depuis les pixels voisins non masqués). */
@@ -138,6 +140,20 @@ object TextErase {
         }
         for (i in out.indices) if (mask[i]) out[i] = pack(fr[i].toInt(), fg[i].toInt(), fb[i].toInt())
         return out
+    }
+
+    /** Alpha adouci pour les bords d'une zone reconstruite sur un dessin (255 au centre, dégradé sur 3 px). */
+    fun featherAlpha(mask: BooleanArray, w: Int, h: Int): IntArray {
+        fun erode(src: BooleanArray): BooleanArray {
+            val o = BooleanArray(w * h)
+            for (y in 0 until h) for (x in 0 until w) {
+                val i = y * w + x
+                o[i] = src[i] && x > 0 && y > 0 && x < w - 1 && y < h - 1 && src[i - 1] && src[i + 1] && src[i - w] && src[i + w]
+            }
+            return o
+        }
+        val e1 = erode(mask); val e2 = erode(e1); val e3 = erode(e2)
+        return IntArray(w * h) { i -> if (e3[i]) 255 else if (e2[i]) 210 else if (e1[i]) 140 else if (mask[i]) 70 else 0 }
     }
 
     enum class FontStyle { SPEECH, SHOUT, SANS, NARRATION }

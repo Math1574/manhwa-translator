@@ -49,12 +49,16 @@ class Typefaces(ctx: Context) {
 
 object PageRenderer {
 
+    /** BUBBLE : texte dans une bulle fermée (aplat, limité à l'intérieur) ; FLAT : aplat sans contour fermé ; ART : texte sur dessin (zone reconstruite). */
+    private enum class Mode { BUBBLE, FLAT, ART }
+
     private class Prep(
         val block: TranslatedBlock,
         val regionImg: RectF,          // zone d'effacement, en pixels de l'image d'origine
         val pixels: IntArray?,         // pixels de la zone (résolution échantillonnée), null si l'image n'a pas pu être décodée
         val rw: Int, val rh: Int,      // taille de la zone en pixels échantillonnés
         val analysis: TextErase.Analysis?,
+        val mode: Mode,
         val style: FontStyle,
         val area: RectF,               // zone disponible pour la traduction, en pixels de l'image d'origine
         val lineH: Float,
@@ -91,7 +95,7 @@ object PageRenderer {
                 report.put(
                     JSONObject().put("x", pl.box.left.toDouble()).put("y", pl.box.top.toDouble()).put("w", pl.box.width.toDouble()).put("h", pl.box.height.toDouble())
                         .put("t", pl.lines.joinToString("\n")).put("fs", pl.fontSizePx.toDouble()).put("style", p.style.name)
-                        .put("flat", (p.analysis?.uniformity ?: 0f) >= 0.85f).put("outlined", p.analysis?.outlined ?: false),
+                        .put("flat", p.mode != Mode.ART).put("mode", p.mode.name).put("outlined", p.analysis?.outlined ?: false),
                 )
             }
             val json = JSONObject().put("w", result.imageWidth).put("h", result.imageHeight).put("patches", patches).put("blocks", report)
@@ -113,6 +117,7 @@ object PageRenderer {
         val reg = RectF(max(0f, union.left - pad), max(0f, union.top - pad), min(iw, union.right + pad), min(ih, union.bottom + pad))
 
         var pixels: IntArray? = null; var an: TextErase.Analysis? = null; var rw = 0; var rh = 0
+        var mode = Mode.ART
         if (bmp != null) {
             val x0 = (reg.left * s).toInt().coerceIn(0, bmp.width - 1); val y0 = (reg.top * s).toInt().coerceIn(0, bmp.height - 1)
             val x1 = (reg.right * s).toInt().coerceIn(x0 + 1, bmp.width); val y1 = (reg.bottom * s).toInt().coerceIn(y0 + 1, bmp.height)
@@ -120,19 +125,32 @@ object PageRenderer {
             if (rw >= 8 && rh >= 8) {
                 val px = IntArray(rw * rh); bmp.getPixels(px, 0, rw, x0, y0, rw, rh)
                 fun rects() = lineBoxes.map { l -> intArrayOf(((l.left * s).toInt() - x0), ((l.top * s).toInt() - y0), ((l.right * s).toInt() - x0), ((l.bottom * s).toInt() - y0)) }
-                var a = TextErase.analyze(px, rw, rh, TextErase.rectMask(rw, rh, rects(), max(3, (lineH * 0.12f * s).toInt())), grow = max(2, (lineH * 0.06f * s).toInt()))
-                if (a.outlined) a = TextErase.analyze(px, rw, rh, TextErase.rectMask(rw, rh, rects(), max(6, (lineH * 0.3f * s).toInt())), grow = max(3, (lineH * 0.1f * s).toInt()))
-                pixels = px; an = a
+                val a = TextErase.analyze(px, rw, rh, TextErase.rectMask(rw, rh, rects(), max(3, (lineH * 0.12f * s).toInt())), grow = max(2, (lineH * 0.06f * s).toInt()))
+                val zoneFlat = a.zoneFlat >= 0.9f
+                if (zoneFlat) {
+                    val textRect = intArrayOf(((union.left * s).toInt() - x0), ((union.top * s).toInt() - y0), ((union.right * s).toInt() - x0), ((union.bottom * s).toInt() - y0))
+                    val interior = BubbleMask.interior(px, rw, rh, textRect, a.bg)
+                    if (interior != null) {
+                        // l'effacement ne touche jamais le contour ni le dessin autour de la bulle
+                        val m = BooleanArray(a.mask.size) { a.mask[it] && interior[it] }
+                        an = TextErase.Analysis(a.bg, 0.9f, a.textColor, m, a.outlined, a.zoneFlat); mode = Mode.BUBBLE
+                    } else { an = a; mode = Mode.FLAT }
+                } else {
+                    // texte sur dessin : on reconstruit toute la zone du texte (lettres, contour, lueur) à partir de ses abords
+                    val zone = TextErase.rectMask(rw, rh, rects(), max(4, (lineH * 0.25f * s).toInt()))
+                    an = TextErase.Analysis(a.bg, 0.3f, a.textColor, zone, a.outlined, a.zoneFlat); mode = Mode.ART
+                }
+                pixels = px
             }
         }
-        val flat = (an?.uniformity ?: 0f) >= 0.85f
-        val rectangular = flat && lineBoxes.size >= 1 && union.width > 2.2f * union.height && lineBoxes.size <= 2
+        val flat = mode != Mode.ART
+        val rectangular = mode == Mode.FLAT && union.width > 2.2f * union.height && lineBoxes.size <= 2
         val style = TextErase.chooseFont(b.source, lineH, medianLine, flat, an?.outlined ?: false, rectangular)
 
         // zone disponible : intérieur de la bulle si on peut la détecter, sinon la zone d'origine légèrement agrandie
         var area = RectF(max(0f, union.left - union.width * 0.06f), max(0f, union.top - union.height * 0.08f), min(iw, union.right + union.width * 0.06f), min(ih, union.bottom + union.height * 0.08f))
-        if (bmp != null && flat && an != null) bubbleArea(bmp, s, union, an.bg, iw, ih)?.let { inner -> area = area.union(inner) }
-        return Prep(b, reg, pixels, rw, rh, an, style, area, lineH)
+        if (bmp != null && mode == Mode.BUBBLE && an != null) bubbleArea(bmp, s, union, an.bg, iw, ih)?.let { inner -> area = area.union(inner) }
+        return Prep(b, reg, pixels, rw, rh, an, mode, style, area, lineH)
     }
 
     /** Rectangle inscrit dans la bulle (forme obtenue par remplissage de la zone de même couleur), en pixels de l'image. */
@@ -160,9 +178,10 @@ object PageRenderer {
         try {
             // 1) effacement du texte d'origine
             if (an != null && p.pixels != null) {
-                val fill = TextErase.inpaint(p.pixels, p.rw, p.rh, an.mask, if (an.uniformity >= 0.85f) an.bg else null)
+                val fill = TextErase.inpaint(p.pixels, p.rw, p.rh, an.mask, if (p.mode != Mode.ART) an.bg else null)
+                val alpha = if (p.mode == Mode.ART) TextErase.featherAlpha(an.mask, p.rw, p.rh) else null
                 val layer = IntArray(p.rw * p.rh)
-                for (i in layer.indices) if (an.mask[i]) layer[i] = fill[i]
+                for (i in layer.indices) if (an.mask[i]) layer[i] = if (alpha == null) fill[i] else ((alpha[i] shl 24) or (fill[i] and 0xFFFFFF))
                 val ox = ((p.regionImg.left - rect.left) * s).toInt().coerceIn(0, max(0, pw - 1)); val oy = ((p.regionImg.top - rect.top) * s).toInt().coerceIn(0, max(0, ph - 1))
                 val cw = min(p.rw, pw - ox); val chh = min(p.rh, ph - oy)
                 if (cw > 0 && chh > 0) patch.setPixels(layer, 0, p.rw, ox, oy, cw, chh)
@@ -174,7 +193,7 @@ object PageRenderer {
             val bgForText = an?.bg ?: 0xFFFFFFFF.toInt()
             var fg = an?.textColor ?: ColorMath.textColorFor(bgForText)
             if (kotlin.math.abs(ColorMath.luminance(fg) - ColorMath.luminance(bgForText)) < 0.35f) fg = ColorMath.textColorFor(bgForText)
-            val flat = (an?.uniformity ?: 0f) >= 0.85f
+            val flat = p.mode != Mode.ART
             val size = pl.fontSizePx * s
             val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = fonts.of(p.style); textSize = size; textAlign = Paint.Align.CENTER }
             val lineStep = size * 1.15f

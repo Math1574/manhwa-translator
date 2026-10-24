@@ -52,6 +52,55 @@ object BubbleMask {
         return out
     }
 
+    /**
+     * Intérieur de la bulle autour du texte : zone de couleur uniforme atteinte depuis le texte, plus les « trous » enfermés
+     * (les lettres). Le contour et le dessin extérieur ne font pas partie du résultat. Null si le contour n'est pas fermé.
+     */
+    fun interior(pixels: IntArray, w: Int, h: Int, text: IntArray, bg: Int, tol: Int = 42, maxFill: Float = 0.8f): BooleanArray? {
+        if (w < 8 || h < 8) return null
+        val x0 = text[0].coerceIn(0, w - 1); val y0 = text[1].coerceIn(0, h - 1)
+        val x1 = text[2].coerceIn(x0 + 1, w); val y1 = text[3].coerceIn(y0 + 1, h)
+        fun near(c: Int): Boolean =
+            maxOf(abs(((c shr 16) and 0xFF) - ((bg shr 16) and 0xFF)), abs(((c shr 8) and 0xFF) - ((bg shr 8) and 0xFF)), abs((c and 0xFF) - (bg and 0xFF))) <= tol
+        val flood = BooleanArray(w * h)
+        val queue = IntArray(w * h)
+        var head = 0; var tail = 0
+        fun push(x: Int, y: Int) {
+            if (x < 0 || y < 0 || x >= w || y >= h) return
+            val i = y * w + x
+            if (!flood[i] && near(pixels[i])) { flood[i] = true; queue[tail++] = i }
+        }
+        val r = 2
+        for (x in x0 - r until x1 + r) { for (d in 1..r) { push(x, y0 - d); push(x, y1 - 1 + d) } }
+        for (y in y0 - r until y1 + r) { for (d in 1..r) { push(x0 - d, y); push(x1 - 1 + d, y) } }
+        // les pixels de la zone de texte proches du fond servent aussi de graines (centre de la bulle)
+        for (y in y0 until y1) for (x in x0 until x1) push(x, y)
+        if (tail == 0) return null
+        while (head < tail) {
+            val i = queue[head++]; val x = i % w; val y = i / w
+            push(x + 1, y); push(x - 1, y); push(x, y + 1); push(x, y - 1)
+        }
+        if (tail > maxFill * (w * h)) return null
+        // trous : pixels non remplis qui ne communiquent pas avec le bord de la région
+        val outside = BooleanArray(w * h)
+        var oh = 0; var ot = 0
+        fun pushO(x: Int, y: Int) {
+            if (x < 0 || y < 0 || x >= w || y >= h) return
+            val i = y * w + x
+            if (!flood[i] && !outside[i]) { outside[i] = true; queue[ot++] = i }
+        }
+        ot = 0; oh = 0
+        for (x in 0 until w) { pushO(x, 0); pushO(x, h - 1) }
+        for (y in 0 until h) { pushO(0, y); pushO(w - 1, y) }
+        while (oh < ot) {
+            val i = queue[oh++]; val x = i % w; val y = i / w
+            pushO(x + 1, y); pushO(x - 1, y); pushO(x, y + 1); pushO(x, y - 1)
+        }
+        val out = BooleanArray(w * h)
+        for (i in out.indices) out[i] = flood[i] || !outside[i]
+        return out
+    }
+
     /** Boîte englobante du masque : x0, y0, x1, y1 (x1, y1 exclus), ou null si le masque est vide. */
     fun bounds(mask: BooleanArray, w: Int, h: Int): IntArray? {
         var minX = w; var minY = h; var maxX = -1; var maxY = -1
