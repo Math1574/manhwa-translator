@@ -7,20 +7,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Modèles PaddleOCR ONNX (RapidOCR)
+      - name: Récupérer les modèles PaddleOCR ONNX
         run: |
           set +e +o pipefail
-          {
-          echo "== arborescence SWHL/RapidOCR"
-          curl -sS -m 60 "https://huggingface.co/api/models/SWHL/RapidOCR/tree/main?recursive=true" | python3 -c "
-          import sys,json
-          for f in json.load(sys.stdin):
-            if f.get('type')=='file': print(f['path'], round(f['size']/1e6,2),'Mo')"
-          echo; echo "== licence"; curl -sS -m 30 "https://huggingface.co/api/models/SWHL/RapidOCR" | python3 -c "
-          import sys,json
-          d=json.load(sys.stdin); print('gated=',d.get('gated'),'licence=',(d.get('cardData') or {}).get('license'))"
-          } > /tmp/probe.txt 2>&1
+          mkdir -p /tmp/m && cd /tmp/m
+          H=https://huggingface.co/SWHL/RapidOCR/resolve/main
+          for f in PP-OCRv4/ch_PP-OCRv4_det_infer.onnx PP-OCRv3/en_PP-OCRv3_rec_infer.onnx PP-OCRv4/en_PP-OCRv3_det_infer.onnx PP-OCRv1/japan_rec_crnn.onnx PP-OCRv1/korean_mobile_v2.0_rec_infer.onnx PP-OCRv4/ch_PP-OCRv4_rec_infer.onnx PP-OCRv1/ch_ppocr_mobile_v2.0_cls_infer.onnx; do
+            curl -sSfL -m 120 -o $(basename $f) $H/$f -w "$f %{http_code} %{size_download}\n"
+          done > /tmp/probe.txt 2>&1
+          sha256sum *.onnx >> /tmp/probe.txt
           cd $GITHUB_WORKSPACE
           git config user.name ci; git config user.email ci@example.invalid
           git checkout --orphan probe-logs; git rm -rf . >/dev/null 2>&1 || true
-          cp /tmp/probe.txt probe.txt; git add probe.txt; git commit -m probe; git push origin probe-logs --force
+          mkdir models && cp /tmp/m/*.onnx models/; cp /tmp/probe.txt probe.txt
+          git add -A; git commit -q -m probe; git push origin probe-logs --force
