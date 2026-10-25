@@ -7,21 +7,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Sonder Pepper&Carrot
+      - name: Modèles PaddleOCR ONNX (RapidOCR)
         run: |
           set +e +o pipefail
           {
-          B=https://www.peppercarrot.com/0_sources
-          echo "== index épisode 1"; curl -sSL -m 30 -o /tmp/idx.html -w "HTTP %{http_code} %{size_download}\n" "$B/ep01_Potion-of-Flight/low-res/"
-          grep -oE 'href="[^"]*P01[^"]*"' /tmp/idx.html | head -40
-          echo "== fichiers par langue (E01P01)"
-          for l in en fr ja ko zh cn zh-hans zh-hant; do
-            printf "%s " $l; curl -sSIL -m 20 -o /dev/null -w "HTTP %{http_code} %{size_download}\n" "$B/ep01_Potion-of-Flight/low-res/${l}_Pepper-and-Carrot_by-David-Revoy_E01P01.jpg"
-          done
-          echo "== langues du répertoire"; grep -oE '[a-z]{2}(-[a-z]+)?_Pepper-and-Carrot_by-David-Revoy_E01P01' /tmp/idx.html | sort -u | head -80
-          echo "== épisodes"; curl -sSL -m 30 "$B/" | grep -oE 'ep[0-9]+_[A-Za-z-]+' | sort -u | head -45
-          echo "== licence"; curl -sSL -m 30 https://www.peppercarrot.com/en/license/index.html | grep -io "creative commons[^<]*" | head -3
-          echo "== polices"; apt-cache policy fonts-noto-cjk fonts-comic-neue fonts-noto-color-emoji 2>/dev/null | grep -E "^fonts|Candidat|Candidate"
+          echo "== arborescence SWHL/RapidOCR"
+          curl -sS -m 60 "https://huggingface.co/api/models/SWHL/RapidOCR/tree/main?recursive=true" | python3 -c "
+          import sys,json
+          for f in json.load(sys.stdin):
+            if f.get('type')=='file': print(f['path'], round(f['size']/1e6,2),'Mo')"
+          echo; echo "== licence"; curl -sS -m 30 "https://huggingface.co/api/models/SWHL/RapidOCR" | python3 -c "
+          import sys,json
+          d=json.load(sys.stdin); print('gated=',d.get('gated'),'licence=',(d.get('cardData') or {}).get('license'))"
           } > /tmp/probe.txt 2>&1
           cd $GITHUB_WORKSPACE
           git config user.name ci; git config user.email ci@example.invalid
