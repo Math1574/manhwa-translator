@@ -4,7 +4,10 @@ import kotlin.math.max
 import kotlin.math.min
 
 data class GrouperConfig(
-    val minConfidence: Float = 0.35f,
+    /** Confiance minimale pour l'alphabet latin (les débris d'OCR y donnent du charabia). */
+    val minConfidence: Float = 0.4f,
+    /** Confiance minimale pour le CJK : ML Kit y donne naturellement des scores plus bas (onomatopées, lettrages). */
+    val minConfidenceCjk: Float = 0.22f,
     /** Écart max entre deux lignes d'un même bloc, en multiples de la hauteur (ou largeur si vertical). */
     val gapFactor: Float = 0.9f,
     val minOverlap: Float = 0.3f,
@@ -51,7 +54,7 @@ class BlockGrouper(private val cfg: GrouperConfig = GrouperConfig()) {
     fun dropReason(l: OcrLine): String? {
         val t = l.text.trim()
         if (t.isEmpty()) return "vide"
-        if (l.confidence < cfg.minConfidence) return "confiance"
+        if (l.confidence < (if (t.any { it.isCjk() }) cfg.minConfidenceCjk else cfg.minConfidence)) return "confiance"
         if (l.box.isEmpty || min(l.box.width, l.box.height) < cfg.minSidePx) return "trop petit"
         if (!t.any { it.isLetterOrDigit() || it.isCjk() }) return "ponctuation"
         return null

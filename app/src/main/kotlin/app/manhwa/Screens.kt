@@ -173,6 +173,7 @@ fun ModelsScreen(graph: AppGraph) {
     val m = graph.models
     LaunchedEffect(Unit) { m.refresh(); graph.llm.refresh() }
     val llm = graph.llm
+    val ctxForRam = LocalContext.current
     var confirm by remember { mutableStateOf<ModelSpec?>(null) }
     val anyDownload = llm.busy.values.any { it }
     val view = LocalView.current
@@ -198,6 +199,16 @@ fun ModelsScreen(graph: AppGraph) {
             "Modèle de langage exécuté sur le téléphone : il traduit toute la page d'un coup, en tenant compte du dialogue précédent et du glossaire. " +
                 "Gratuit, sans compte, licence Apache 2.0. Choisissez-le ensuite dans les réglages.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        val totalRamGb = remember {
+            val mi = android.app.ActivityManager.MemoryInfo()
+            (ctxForRam.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager).getMemoryInfo(mi)
+            mi.totalMem / 1_073_741_824.0
+        }
+        Text(
+            String.format(Locale.FRANCE, "Mémoire de ce téléphone : %.0f Go. ", totalRamGb) +
+                if (totalRamGb >= 11) "E4B est recommandé (un peu plus précis) ; E2B reste plus rapide." else "E2B est recommandé.",
+            color = MaterialTheme.colorScheme.secondary,
         )
         llm.specs.forEach { spec -> GemmaCard(spec, llm) { confirm = spec } }
         HorizontalDivider()

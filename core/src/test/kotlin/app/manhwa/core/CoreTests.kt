@@ -64,6 +64,10 @@ fun groupingTests() {
         val b = g.group(listOf(line("Same text", 100f, 100f, 300f, 130f, 0.9f), line("Same text", 101f, 101f, 301f, 131f, 0.8f)))
         T.eq(1, b.size); T.eq(1, b[0].lines.size)
     }
+    T.test("groupement: seuil de confiance plus bas pour le CJK que pour le latin") {
+        T.eq(1, g.group(listOf(line("털썩", 100f, 100f, 200f, 140f, c = 0.3f))).size)
+        T.eq(0, g.group(listOf(line("thud", 100f, 100f, 200f, 140f, c = 0.3f))).size)
+    }
     T.test("groupement: aucune ligne → aucun bloc") { T.eq(0, g.group(emptyList()).size) }
 }
 
