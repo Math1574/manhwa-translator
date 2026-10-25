@@ -1,0 +1,57 @@
+Performing Streamed Install
+Success
+Physical size: 1080x2400
+[e2e 09:13:31] === prep (index.html, MLKIT, EN→FR)
+[e2e 09:15:26] terminé : prep (115 s)
+[e2e 09:15:26] aucune image traitée : nouvel essai de prep
+[e2e 09:15:26] === prep (index.html, MLKIT, EN→FR)
+[e2e 09:16:21] terminé : prep (54 s)
+[e2e 09:16:21] === pc_en_mlkit (pc_en.html, MLKIT, EN→FR)
+[e2e 09:16:53] terminé : pc_en_mlkit (32 s)
+[e2e 09:16:53] === synth_en_caps_mlkit (synth_en_caps.html, MLKIT, EN→FR)
+[e2e 09:17:29] terminé : synth_en_caps_mlkit (36 s)
+[e2e 09:17:29] === synth_en_mixed_mlkit (synth_en_mixed.html, MLKIT, EN→FR)
+[e2e 09:17:59] terminé : synth_en_mixed_mlkit (29 s)
+[e2e 09:17:59] === pc_en_ref_mlkit (pc_en_ref.html, MLKIT, EN→FR)
+[e2e 09:18:37] terminé : pc_en_ref_mlkit (37 s)
+[e2e 09:18:37] === pc_en_lazy_mlkit (pc_en_lazy.html, MLKIT, EN→FR)
+[e2e 09:19:10] terminé : pc_en_lazy_mlkit (32 s)
+[e2e 09:19:10] === synth_ko_mlkit (synth_ko.html, MLKIT, KO→FR)
+[e2e 09:19:47] terminé : synth_ko_mlkit (36 s)
+[e2e 09:19:47] === synth_ja_vert_mlkit (synth_ja_vertical.html, MLKIT, JA→FR)
+[e2e 09:20:17] terminé : synth_ja_vert_mlkit (30 s)
+[e2e 09:20:17] === synth_zh_mlkit (synth_zh.html, MLKIT, ZH_HANS→FR)
+[e2e 09:20:53] terminé : synth_zh_mlkit (36 s)
+[e2e 09:20:53] === pc_ja_mlkit (pc_ja.html, MLKIT, JA→FR)
+[e2e 09:21:31] terminé : pc_ja_mlkit (38 s)
+[e2e 09:21:31] === plein écran
+  mCurrentFocus=Window{76b6e61 u0 com.google.android.apps.nexuslauncher/com.google.android.apps.nexuslauncher.NexusLauncherActivity}
+        InsetsSource id=e990000 type=statusBars frame=[0,0][1080,128] visible=true flags= insetsRoundedCornerFrame=false
+        mSource=InsetsSource id=e990000 type=statusBars frame=[0,0][1080,128] visible=true flags= insetsRoundedCornerFrame=false
+[e2e 09:22:05] envoi du modèle gemma-4-E2B-it.litertlm sur l'émulateur
+total 2527520
+drwx------ 2 u0_a192 u0_a192       4096 2026-10-25 09:22 .
+drwxrwx--x 4 u0_a192 u0_a192       4096 2026-10-25 09:21 ..
+-rw-rw-rw- 1 u0_a192 u0_a192 2588147712 2026-10-25 09:22 gemma-4-E2B-it.litertlm
+-rw-rw-rw- 1 u0_a192 u0_a192         64 2026-10-25 09:22 gemma-4-E2B-it.litertlm.ok
+[e2e 09:22:26] === pc_en_gemma (pc_en.html, GEMMA_E2B, EN→FR)
+[e2e 09:23:23] terminé : pc_en_gemma (57 s)
+[e2e 09:23:23] === synth_en_caps_gemma (synth_en_caps.html, GEMMA_E2B, EN→FR)
+[e2e 09:24:06] terminé : synth_en_caps_gemma (42 s)
+[e2e 09:24:06] === synth_ko_gemma (synth_ko.html, GEMMA_E2B, KO→FR)
+[e2e 09:24:48] terminé : synth_ko_gemma (42 s)
+[e2e 09:24:48] === pc_ja_gemma (pc_ja.html, GEMMA_E2B, JA→FR)
+[e2e 09:25:40] terminé : pc_ja_gemma (51 s)
+[e2e 09:25:40] envoi du modèle gemma-4-E4B-it.litertlm sur l'émulateur
+total 6101296
+drwx------ 2 u0_a192 u0_a192       4096 2026-10-25 09:26 .
+drwxrwx--x 4 u0_a192 u0_a192       4096 2026-10-25 09:25 ..
+-rw-rw-rw- 1 u0_a192 u0_a192 2588147712 2026-10-25 09:22 gemma-4-E2B-it.litertlm
+-rw-rw-rw- 1 u0_a192 u0_a192         64 2026-10-25 09:22 gemma-4-E2B-it.litertlm.ok
+-rw-rw-rw- 1 u0_a192 u0_a192 3659530240 2026-10-25 09:26 gemma-4-E4B-it.litertlm
+-rw-rw-rw- 1 u0_a192 u0_a192         64 2026-10-25 09:26 gemma-4-E4B-it.litertlm.ok
+[e2e 09:26:11] === pc_en_gemma4b (pc_en.html, GEMMA_E4B, EN→FR)
+[e2e 09:27:50] terminé : pc_en_gemma4b (99 s)
+[e2e 09:27:50] === synth_en_caps_gemma4b (synth_en_caps.html, GEMMA_E4B, EN→FR)
+[e2e 09:28:51] terminé : synth_en_caps_gemma4b (60 s)
+[e2e 09:28:51] toutes les scènes sont terminées

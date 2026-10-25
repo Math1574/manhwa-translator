@@ -1,0 +1,3 @@
+10-25 09:15:29.691  5733  6456 I ChimeraConfigurator: Detected pending changes for urgent request: [vision.ocr]. Pending module sets: container:2318189190800+mlkit.ocr.common,tflite_dynamite:2627305025100800+tflite_dynamite,vision_ocr:2316024025100000+vision.ocr
+10-25 09:16:04.744  5733  6654 I ChimeraConfigurator: Detected pending changes for urgent request: [vision.ocr]. Pending module sets: container:2318189190800+mlkit.ocr.common,tflite_dynamite:2627305025100800+tflite_dynamite,vision_ocr:2316024025100000+vision.ocr
+10-25 09:16:05.679  6512  6540 I MTTEST  : REPORT_READY report.json
