@@ -30,6 +30,14 @@ jobs:
         with: { distribution: temurin, java-version: 17 }
       - uses: gradle/actions/setup-gradle@v4
         with: { gradle-version: 8.10.2 }
+      - name: Modèles OCR (PaddleOCR, Apache-2.0) dans les assets
+        run: |
+          mkdir -p app/src/main/assets/ocr
+          H=https://huggingface.co/SWHL/RapidOCR/resolve/main
+          for f in PP-OCRv4/ch_PP-OCRv4_det_infer.onnx PP-OCRv3/en_PP-OCRv3_rec_infer.onnx PP-OCRv1/japan_rec_crnn.onnx PP-OCRv1/korean_mobile_v2.0_rec_infer.onnx PP-OCRv4/ch_PP-OCRv4_rec_infer.onnx; do
+            curl -sSfL --retry 3 -o app/src/main/assets/ocr/$(basename $f) $H/$f
+          done
+          ls -la app/src/main/assets/ocr
       - name: Compiler l'APK debug
         run: |
           set -o pipefail
@@ -39,6 +47,7 @@ jobs:
           name: ManhwaTranslator-debug-apk
           path: app/build/outputs/apk/debug/*.apk
       - name: Publier l'APK dans les Releases
+        if: github.event_name == 'push'
         env: { GH_TOKEN: "${{ github.token }}" }
         run: |
           cp app/build/outputs/apk/debug/app-debug.apk ManhwaTranslator-debug.apk

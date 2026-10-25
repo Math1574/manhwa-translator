@@ -24,7 +24,7 @@ if imgs:
     page("pc_en_lazy", "Pepper&Carrot ép.1 (en, chargement progressif)", [f"pc/en/{i}" for i in imgs], lazy=True)
     page("pc_en_ref", "Pepper&Carrot ép.1 (en, Referer + cookie requis)", [f"ref/en/{i}" for i in imgs])
     page("pc_en_ep6", "Pepper&Carrot ép.6 (en)", [f"pc/en/{os.path.basename(p)}" for p in sorted(glob.glob(f"{S}/pc/en/E06P*.jpg"))])
-for n in ("en_caps", "en_mixed", "ko", "zh", "ja_vertical"):
+for n in ("en_caps", "en_mixed", "en_fancy", "ko", "zh", "ja_vertical"):
     if os.path.exists(f"{S}/synth/{n}.png"): page(f"synth_{n}", f"Synthétique {n}", [f"synth/{n}.png"])
 open(f"{S}/index.html", "w").write(HEAD % "Tests" + "".join(f'<p><a style="color:#8af" href="{os.path.basename(p)}">{os.path.basename(p)}</a></p>' for p in sorted(glob.glob(f"{S}/*.html")) if not p.endswith("index.html")) + "</body></html>")
 print(sorted(os.listdir(S)))

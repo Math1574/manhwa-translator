@@ -378,6 +378,18 @@ fun SettingsScreen(graph: AppGraph) {
             Switch(checked = s.useGpu, onCheckedChange = { v -> store.update { it.copy(useGpu = v) } })
         }
 
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Lecture renforcée du texte", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    if (graph.paddleModels.available) "Second moteur (PaddleOCR) : repère les lettrages stylisés et le texte hors des bulles. Un peu plus lent."
+                    else "Indisponible : les modèles ne sont pas inclus dans cette version de l'application.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            Switch(checked = s.enhancedOcr && graph.paddleModels.available, enabled = graph.paddleModels.available, onCheckedChange = { v -> store.update { it.copy(enhancedOcr = v) } })
+        }
+
         HorizontalDivider()
         Text("Taille du texte : ${String.format(Locale.FRANCE, "%.1f", s.textScale)}×", style = MaterialTheme.typography.titleMedium)
         Slider(value = s.textScale, onValueChange = { v -> store.update { it.copy(textScale = v) } }, valueRange = 0.5f..2f)

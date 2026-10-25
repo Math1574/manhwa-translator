@@ -31,6 +31,8 @@ class AppGraph(ctx: Context) {
     val glossary = GlossaryStore(File(ctx.filesDir, "glossary.tsv"))
     val models = TranslationModels(ctx)
     val llm = LlmModelsManager(ctx)
+    val paddleModels = PaddleModels(ctx)
+    val paddle = PaddleOcr(paddleModels)
     val gemma = GemmaTranslator(ctx, llm) { settingsStore.settings }
     init {
         // dès qu'un modèle Gemma est prêt, on le choisit s'il n'y avait que ML Kit : meilleure traduction sans geste de l'utilisateur

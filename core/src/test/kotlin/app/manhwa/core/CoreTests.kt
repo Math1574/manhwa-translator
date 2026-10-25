@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests()
+    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -317,7 +317,7 @@ fun modelTests() {
 // ---------- paramètres ----------
 fun settingsTests() {
     T.test("paramètres: aller-retour complet") {
-        val s = AppSettings(SourceLang.KO, TargetLang.DE, 1.4f, true, QualityMode.ENHANCED, 5, 120, TranslationEngineChoice.GEMMA_E4B, true, true)
+        val s = AppSettings(SourceLang.KO, TargetLang.DE, 1.4f, true, QualityMode.ENHANCED, 5, 120, TranslationEngineChoice.GEMMA_E4B, true, true, false)
         T.eq(s, AppSettings.parse(s.serialize()))
     }
     T.test("paramètres: traduction automatique par défaut, anciens réglages migrés") {
@@ -574,5 +574,43 @@ fun erasureTests() {
         var worst = 0
         for (y in 92 until 108) for (x in 85 until 215) { val c = plan.layer[(y - plan.y0) * plan.w + (x - plan.x0)]; worst = maxOf(worst, kotlin.math.abs(((c shr 16) and 0xFF) - ((clean[y * W + x] shr 16) and 0xFF))) }
         T.ok(worst < 40, "reconstruction trop éloignée du fond (écart $worst)")
+    }
+}
+
+// ---------- PaddleOCR : détection, décodage, fusion ----------
+fun paddleTests() {
+    T.test("DB: deux lignes de texte → deux boîtes agrandies ; bruit et petites taches ignorés") {
+        val W = 120; val H = 80; val p = FloatArray(W * H)
+        fun blob(x0: Int, y0: Int, x1: Int, y1: Int, v: Float) { for (y in y0 until y1) for (x in x0 until x1) p[y * W + x] = v }
+        blob(20, 10, 100, 20, 0.9f); blob(30, 40, 90, 50, 0.85f); blob(5, 70, 7, 72, 0.9f); blob(10, 60, 40, 65, 0.4f)
+        val b = DbPost.boxes(p, W, H)
+        T.eq(2, b.size)
+        T.ok(b[0].x0 < 20f && b[0].x1 > 100f && b[0].y0 < 10f && b[0].y1 > 20f, "boîte agrandie ${b[0]}")
+        T.ok(b[1].y0 > 30f, "ordre de lecture")
+    }
+    T.test("CTC: décodage glouton (répétitions fusionnées, blanc ignoré, espace du dictionnaire, confiance)") {
+        val cs = Ctc.charset(listOf("a", "b", "c"), true) // classes : 0 blanc, 1 a, 2 b, 3 c, 4 espace
+        fun step(vararg v: Float) = v
+        val seq = listOf(step(0.1f, 0.8f, 0.05f, 0.03f, 0.02f), step(0.1f, 0.8f, 0.05f, 0.03f, 0.02f), step(0.9f, 0f, 0f, 0f, 0.1f),
+            step(0.1f, 0.8f, 0.05f, 0.03f, 0.02f), step(0f, 0f, 0f, 0.1f, 0.9f), step(0f, 0.1f, 0f, 0.9f, 0f))
+        val (t, c) = Ctc.decode(seq.flatMap { it.toList() }.toFloatArray(), seq.size, 5, cs)
+        T.eq("aa c", t); T.ok(c > 0.8f, "confiance $c")
+    }
+    T.test("tailles d'entrée : multiples de 32 pour la détection, hauteur fixe pour la lecture") {
+        T.eq(Pair(800, 1312), DbPost.inputSize(800, 1300)); T.eq(Pair(48, 240), Ctc.inputSize(100, 20, 48)); T.eq(Pair(48, 1600), Ctc.inputSize(5000, 20, 48))
+    }
+    fun l(t: String, x0: Float, y0: Float, x1: Float, y1: Float, c: Float) = OcrLine(t, RectF(x0, y0, x1, y1), c)
+    T.test("fusion OCR: texte vu par un seul moteur conservé ; chevauchement → lecture la plus sûre (Paddle pour le latin)") {
+        val ml = listOf(l("DOI A", 100f, 100f, 300f, 140f, 0.55f), l("Hello there", 100f, 400f, 300f, 440f, 0.9f))
+        val pp = listOf(l("NO CHOICE BUT TO", 90f, 95f, 310f, 145f, 0.97f), l("KILL HIM?", 120f, 200f, 280f, 240f, 0.95f), l("Hello there", 100f, 402f, 300f, 442f, 0.88f))
+        val m = OcrMerge.merge(ml, pp, "en")
+        T.eq(listOf("NO CHOICE BUT TO", "KILL HIM?", "Hello there"), m.map { it.text })
+        T.eq("Hello there", OcrMerge.merge(listOf(l("Hello there", 100f, 400f, 300f, 440f, 0.9f)), listOf(l("Hello  there", 100f, 402f, 300f, 442f, 0.92f)), "en").single().text.replace("  ", " "))
+    }
+    T.test("fusion OCR: en CJK, ML Kit est favorisé à confiance proche ; Paddle ajoute le texte manquant") {
+        val ml = listOf(l("그를 죽일 수밖에", 100f, 100f, 300f, 140f, 0.8f))
+        val pp = listOf(l("그를죽일수밖에", 100f, 101f, 300f, 141f, 0.85f), l("털썩", 400f, 500f, 460f, 560f, 0.9f))
+        val m = OcrMerge.merge(ml, pp, "ko")
+        T.eq(listOf("그를 죽일 수밖에", "털썩"), m.map { it.text })
     }
 }

@@ -39,6 +39,7 @@ object TestHooks {
                 engine = TranslationEngineChoice.values().firstOrNull { it.name == s("mt_engine") } ?: st.engine,
                 useGpu = s("mt_gpu") == "true",
                 diagnostic = false,
+                enhancedOcr = s("mt_enhanced") != "false",
                 autoTranslate = true,
                 mode = QualityMode.FAST,
                 textScale = s("mt_scale")?.toFloatOrNull() ?: st.textScale,
@@ -95,7 +96,7 @@ object TestHooks {
             val settings = graph.settingsStore.settings
             val report = JSONObject()
                 .put("url", url).put("elapsedMs", System.currentTimeMillis() - t0).put("timeout", timedOut)
-                .put("settings", JSONObject().put("source", settings.source.name).put("target", settings.target.name).put("engine", settings.engine.name).put("textScale", settings.textScale.toDouble()))
+                .put("settings", JSONObject().put("source", settings.source.name).put("target", settings.target.name).put("engine", settings.engine.name).put("textScale", settings.textScale.toDouble()).put("enhancedOcr", settings.enhancedOcr && graph.paddleModels.available))
                 .put("counters", JSONObject().put("total", c.total).put("done", c.done).put("failed", c.failed).put("noText", c.noText).put("lastError", c.lastError ?: ""))
                 .put("notes", notes)
                 .put("images", JSONArray(c.testLog.toList()))

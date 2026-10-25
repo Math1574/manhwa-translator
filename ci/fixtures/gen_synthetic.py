@@ -122,3 +122,48 @@ for i, t in enumerate(JA_VERT):
     vertical_bubble(img, d, (560 - (i % 2) * 280, 60 + i * 300, 760 - (i % 2) * 280, 330 + i * 300), t, jf, gt)
 img.save(f"{OUT}/ja_vertical.png"); json.dump(gt, open(f"{OUT}/ja_vertical.json", "w"), ensure_ascii=False, indent=1)
 print(sorted(os.listdir(OUT)))
+
+
+# ---------- page « lettrages difficiles » : titre tremblant à lueur, SFX penché, encadré de narration, texte murmuré hors bulle ----------
+def wobbly(img, text, font_path, size, xy, gt, rot=10, glow=(255, 30, 30), fill=(255, 255, 255), stroke=(110, 0, 0), lang="en", kind="free"):
+    r = random.Random(sum(map(ord, text)))
+    x, y = xy
+    layer = Image.new("RGBA", img.size, (0, 0, 0, 0)); d = ImageDraw.Draw(layer)
+    box = [W, H, 0, 0]
+    for ch in text:
+        f = F(font_path, int(size * r.uniform(0.9, 1.15)))
+        w = d.textlength(ch, font=f)
+        tile = Image.new("RGBA", (int(w) + 40, int(size * 1.6)), (0, 0, 0, 0)); td = ImageDraw.Draw(tile)
+        if glow: td.text((20, 10), ch, font=f, fill=glow + (255,), stroke_width=9, stroke_fill=glow + (255,))
+        tile = tile.filter(ImageFilter.GaussianBlur(5)) if glow else tile; td = ImageDraw.Draw(tile)
+        td.text((20, 10), ch, font=f, fill=fill + (255,), stroke_width=3, stroke_fill=stroke + (255,))
+        tile = tile.rotate(r.uniform(-rot, rot), expand=True, resample=Image.BICUBIC)
+        layer.paste(tile, (int(x - 20), int(y + r.randint(-6, 6) - 10)), tile)
+        box = [min(box[0], x), min(box[1], y), max(box[2], x + w), max(box[3], y + size)]
+        x += w * 0.95
+    img.paste(layer, (0, 0), layer)
+    gt.append({"kind": kind, "lang": lang, "text": text, "box": [int(v) for v in box], "lines": [[int(v) for v in box]]})
+
+img = background(21); d = ImageDraw.Draw(img); gt = []
+wobbly(img, "NO CHOICE BUT", COMIC, 66, (60, 90), gt)
+wobbly(img, "TO KILL HIM?", COMIC, 66, (90, 190), gt)
+# SFX penché très stylisé
+sfx = Image.new("RGBA", (420, 200), (0, 0, 0, 0)); sd = ImageDraw.Draw(sfx)
+sd.text((10, 10), "CRACK!", font=F("/usr/share/fonts/truetype/comic-neue/ComicNeue-Bold.ttf", 120), fill=(255, 240, 0, 255), stroke_width=6, stroke_fill=(0, 0, 0, 255))
+sfx = sfx.rotate(18, expand=True, resample=Image.BICUBIC); img.paste(sfx, (400, 330), sfx)
+gt.append({"kind": "sfx", "lang": "en", "text": "CRACK!", "box": [410, 340, 800, 520], "lines": [[410, 340, 800, 520]]})
+# encadré de narration rectangulaire
+d.rectangle((40, 520, 460, 640), fill=(250, 235, 160), outline="black", width=3)
+nf = F(DEJAVU, 26)
+for i, ln in enumerate(["THREE DAYS LATER,", "AT THE MOUNTAIN GATE."]): d.text((60, 545 + i * 36), ln, font=nf, fill="black")
+gt.append({"kind": "narration", "lang": "en", "text": "THREE DAYS LATER, AT THE MOUNTAIN GATE.", "box": [60, 545, 400, 615], "lines": [[60, 545, 330, 575], [60, 581, 400, 611]]})
+# bulle avec police manuscrite
+hand = "/usr/share/fonts/truetype/comic-neue/ComicNeue-Bold.ttf"
+bubble(img, d, (320, 700, 780, 900), "I HEARD MANY PEOPLE WITH SEVERED MERIDIANS WERE GENIUSES.", F(hand, 32), gt)
+# texte murmuré hors bulle, petit, gris clair sur dessin
+wf = F(DEJAVU, 30)
+d.text((70, 980), "...he is still alive.", font=wf, fill=(235, 235, 235), stroke_width=2, stroke_fill=(30, 30, 30))
+gt.append({"kind": "whisper", "lang": "en", "text": "...he is still alive.", "box": [70, 980, 330, 1015], "lines": [[70, 980, 330, 1015]]})
+# titre en lettres blanches à contour épais, au bas
+wobbly(img, "HEAVENLY DEMON", COMIC, 70, (40, 1120), gt, rot=6, glow=None, fill=(255, 255, 255), stroke=(20, 0, 60))
+img.save(f"{OUT}/en_fancy.png"); json.dump(gt, open(f"{OUT}/en_fancy.json", "w"), ensure_ascii=False, indent=1)

@@ -4,6 +4,7 @@
 PKG=app.manhwa.translator
 OUT=/tmp/e2e; mkdir -p $OUT/shots $OUT/reports
 SUITE=${SUITE:-quick}
+EXTRA=()
 say() { echo "[e2e $(date +%H:%M:%S)] $*" | tee -a $OUT/run.log; }
 
 adb wait-for-device
@@ -33,8 +34,9 @@ run() { # nom page moteur source cible modèles timeout [lazy]
   adb shell "run-as $PKG rm -f files/report.json"
   adb logcat -c
   local mdl=(); [ -n "$models" ] && mdl=(--es mt_models "$models")
+  local ext=("${EXTRA[@]}")
   adb shell am start -n $PKG/app.manhwa.MainActivity --es mt_url "http://10.0.2.2:8000/$page" --es mt_engine $engine \
-     --es mt_source $src --es mt_target $tgt "${mdl[@]}" --es mt_timeout $timeout >/dev/null
+     --es mt_source $src --es mt_target $tgt "${mdl[@]}" "${ext[@]}" --es mt_timeout $timeout >/dev/null
   local start=$(date +%s)
   while :; do
     sleep 6
@@ -61,6 +63,10 @@ run prep index.html MLKIT EN FR "fr,ja,ko,zh" 30
 run pc_en_mlkit          pc_en.html          MLKIT EN FR "fr"      300
 run synth_en_caps_mlkit  synth_en_caps.html  MLKIT EN FR "fr"      200
 run synth_en_mixed_mlkit synth_en_mixed.html MLKIT EN FR "fr"      200
+EXTRA=(--es mt_enhanced false)
+run synth_en_fancy_mlkitonly synth_en_fancy.html MLKIT EN FR "fr" 250
+EXTRA=()
+run synth_en_fancy_combined  synth_en_fancy.html MLKIT EN FR "fr" 300
 run pc_en_ref_mlkit      pc_en_ref.html      MLKIT EN FR "fr"      300
 run pc_en_lazy_mlkit     pc_en_lazy.html     MLKIT EN FR "fr"      300 lazy
 run synth_ko_mlkit       synth_ko.html       MLKIT KO FR "ko,fr"   300

@@ -62,7 +62,7 @@ for path in sorted(glob.glob(f"{OUT}/reports/*.json")):
     if outside or overlap: problems.append(f"{name}: mise en page (hors image {outside}, chevauchements {overlap})")
 
     # vérité terrain (pages synthétiques)
-    m = re.match(r"synth_(.+?)_(mlkit|gemma|gemma4b)$", name)
+    m = re.match(r"synth_(.+?)_(mlkitonly|combined|mlkit|gemma4b|gemma)$", name)
     gtname = {"ja_vert": "ja_vertical"}.get(m.group(1), m.group(1)) if m else None
     if gtname and os.path.exists(f"{SYN}/{gtname}.json") and imgs:
         gt = json.load(open(f"{SYN}/{gtname}.json")); im = imgs[0]

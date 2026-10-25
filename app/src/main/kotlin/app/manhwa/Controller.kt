@@ -282,10 +282,12 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val t0 = System.currentTimeMillis()
         val spec = LlmModels.specFor(s.engine)
         val translator = if (spec == null) MlKitTranslation(graph.models) else graph.gemma
-        val engineId = if (spec == null) MlKitTranslation.ID else GemmaTranslator.engineId(spec)
+        val enhanced = s.enhancedOcr && graph.paddleModels.available
+        val ocrEngine = CombinedOcr(s.source, MlKitOcr(s.source), if (enhanced) graph.paddle else null)
+        val engineId = (if (spec == null) MlKitTranslation.ID else GemmaTranslator.engineId(spec)) + (if (enhanced) "+pp1" else "")
         var debug: DebugInfo? = null
         val pipeline = PagePipeline(
-            graph.cache, MlKitOcr(s.source), translator, engineId,
+            graph.cache, ocrEngine, translator, engineId,
             glossary = { graph.glossary.current() },
             useCache = !s.diagnostic && !testing, // en diagnostic on veut voir la détection réelle, pas un résultat en cache
             debugSink = { debug = it },
