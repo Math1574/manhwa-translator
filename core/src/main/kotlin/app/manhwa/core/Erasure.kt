@@ -51,8 +51,9 @@ object Erasure {
         if (a.outlined) a = TextErase.analyze(px, w, h, TextErase.rectMask(w, h, rects(), max(6, (lh * 0.3f).toInt())), grow = max(3, (lh * 0.1f).toInt()))
 
         // bulle : zone de texte sur fond uni ET (abords unis OU contour fermé : le remplissage depuis le texte reste borné)
-        val bubble = if (a.zoneFlat >= 0.9f && a.bgShare >= 0.45f) bubbleArea(src, s, union, a.bg, imageW, imageH) else null
-        val flat = a.zoneFlat >= 0.9f && a.bgShare >= 0.45f && (a.uniformity >= 0.85f || bubble != null)
+        val bubble = if (!a.outlined && a.zoneFlat >= 0.9f && a.bgShare >= 0.45f) bubbleArea(src, s, union, a.bg, imageW, imageH) else null
+        // un lettrage cerné d'un contour ou d'une lueur est traité comme du dessin : l'aplat laisserait des fragments du contour
+        val flat = !a.outlined && a.zoneFlat >= 0.9f && a.bgShare >= 0.45f && (a.uniformity >= 0.85f || bubble != null)
         if (flat) {
             val allowedZone = TextErase.rectMask(w, h, rects(), max(3, (lh * 0.2f).toInt()))
             // cœur des lignes : boîtes de l'OCR rognées en haut et en bas pour ne pas entamer le contour de la bulle
