@@ -437,6 +437,17 @@ fun llmTests() {
         T.ok(r.contains("1| source: Hello") && r.contains("1| draft: Salut") && r.contains("Hi => Salut") && r.contains("Kim = Kim"), "relecture")
         T.ok(LlmPrompt.refineSystem().contains("editor"), "éditeur")
     }
+    T.test("série : titre déduit de l'adresse du chapitre") {
+        T.eq("The Heavenly Demon Wants A Quiet Life", SeriesHint.fromUrl("https://asurascans.com/comics/the-heavenly-demon-wants-a-quiet-life-11fe7da3/chapter/7"))
+        T.eq("Solo Leveling", SeriesHint.fromUrl("https://exemple.com/series/solo-leveling/chapter-12"))
+        T.eq("Tower Of God", SeriesHint.fromUrl("https://www.webtoons.com/en/fantasy/tower-of-god/season-1-ep-1/viewer?title_no=95"))
+        T.eq(null, SeriesHint.fromUrl("https://exemple.com/")); T.eq(null, SeriesHint.fromUrl("https://exemple.com/chapter/7"))
+        T.ok(LlmPrompt.user(listOf("Hi"), emptyList(), emptyList(), "Solo Leveling").contains("Series: Solo Leveling"), "série dans le prompt")
+    }
+    T.test("llm: limite de jetons de sortie proportionnelle à la page et bornée") {
+        T.ok(LlmPrompt.maxOutputTokens(listOf("Hi")) in 96..200, "petite page"); T.eq(1500, LlmPrompt.maxOutputTokens(List(60) { "x".repeat(200) }))
+        T.ok(LlmPrompt.maxOutputTokens(List(8) { "x".repeat(60) }) in 400..800, "page typique : ${LlmPrompt.maxOutputTokens(List(8) { "x".repeat(60) })}")
+    }
     T.test("llm: lecture de la réponse (formats variés, guillemets, Markdown, lignes multiples)") {
         val r = LlmPrompt.parse("1| Salut !\n2: **Comment vas-tu ?**\n3) « Bien. »\n   Et toi ?\n4. \"Merci\"", 4)
         T.eq(listOf("Salut !", "Comment vas-tu ?", "Bien. Et toi ?", "Merci"), r)

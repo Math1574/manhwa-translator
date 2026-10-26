@@ -93,6 +93,8 @@ class GemmaTranslator(
     /** Version du prompt et relecture : réglables par le banc d'essai de traduction. */
     @Volatile var promptVariant: Int = LlmPrompt.CURRENT
     @Volatile var refine: Boolean = false
+    /** Titre de la série (déduit de l'adresse) : aide le modèle à comprendre le genre et les noms. */
+    @Volatile var seriesTitle: String? = null
     private val history = ArrayDeque<Pair<String, String>>()
     private val main = Handler(Looper.getMainLooper())
     private val releaseTask = Runnable { release() }
@@ -128,8 +130,9 @@ class GemmaTranslator(
             val config = ConversationConfig(
                 systemInstruction = Contents.of(LlmPrompt.refineSystem()),
                 samplerConfig = SamplerConfig(topK = 20, topP = 0.9, temperature = 0.15),
+                maxOutputToken = LlmPrompt.maxOutputTokens(texts),
             )
-            val reply = eng.createConversation(config).use { conv -> textOf(conv.sendMessage(LlmPrompt.refineUser(texts, draft, history.toList(), glossary))) }
+            val reply = eng.createConversation(config).use { conv -> withWatchdog(conv) { textOf(conv.sendMessage(LlmPrompt.refineUser(texts, draft, history.toList(), glossary, seriesTitle))) } }
             LlmPrompt.parse(reply, texts.size).mapIndexed { i, t -> t ?: draft[i] }
         } catch (e: Throwable) {
             draft
@@ -140,11 +143,19 @@ class GemmaTranslator(
         val config = ConversationConfig(
             systemInstruction = Contents.of(LlmPrompt.system(source, target, promptVariant)),
             samplerConfig = SamplerConfig(topK = 20, topP = 0.9, temperature = 0.15),
+            maxOutputToken = LlmPrompt.maxOutputTokens(texts),
         )
         val reply = eng.createConversation(config).use { conv ->
-            textOf(conv.sendMessage(LlmPrompt.user(texts, history.toList(), glossary)))
+            withWatchdog(conv) { textOf(conv.sendMessage(LlmPrompt.user(texts, history.toList(), glossary, seriesTitle))) }
         }
         return LlmPrompt.parse(reply, texts.size).toMutableList()
+    }
+
+    /** Interrompt une génération qui dure trop longtemps (sécurité) : la réponse partielle reste exploitable ligne par ligne. */
+    private fun <T> withWatchdog(conv: com.google.ai.edge.litertlm.Conversation, block: () -> T): T {
+        val timer = java.util.Timer("mt-llm-watchdog", true)
+        timer.schedule(object : java.util.TimerTask() { override fun run() { try { conv.cancelProcess() } catch (_: Throwable) {} } }, GENERATION_TIMEOUT_MS)
+        try { return block() } finally { timer.cancel() }
     }
 
     private fun textOf(m: Message): String =
@@ -181,6 +192,7 @@ class GemmaTranslator(
     companion object {
         const val HISTORY_SIZE = 10
         const val IDLE_RELEASE_MS = 3 * 60 * 1000L
+        const val GENERATION_TIMEOUT_MS = 5 * 60 * 1000L
         fun engineId(spec: ModelSpec) = "${spec.id}-ctx1"
     }
 }

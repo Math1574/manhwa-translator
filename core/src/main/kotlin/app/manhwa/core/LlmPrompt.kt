@@ -59,7 +59,8 @@ Rules:
 You are a senior French editor of professionally published manhwa. You receive source lines (from OCR, possibly with small mistakes) and a draft French translation. Improve the draft: fix any mistranslation or misunderstanding, remove literal phrasing and calques, make every line natural idiomatic spoken French with the right register and tone, keep names and terms consistent, keep the length close to the original. French typography: sentence case, a space before ? ! : ;. Answer with exactly one line per input line, in the format `N| final translation`, using the same numbers, and nothing else.
 """.trim()
 
-    fun refineUser(texts: List<String>, draft: List<String>, history: List<Pair<String, String>>, glossary: List<GlossaryEntry>): String = buildString {
+    fun refineUser(texts: List<String>, draft: List<String>, history: List<Pair<String, String>>, glossary: List<GlossaryEntry>, series: String? = null): String = buildString {
+        if (!series.isNullOrBlank()) { appendLine("Series: $series"); appendLine() }
         if (history.isNotEmpty()) {
             appendLine("Previous dialogue (context):")
             history.forEach { (src, tgt) -> appendLine("- ${oneLine(src)} => ${oneLine(tgt)}") }
@@ -70,7 +71,8 @@ You are a senior French editor of professionally published manhwa. You receive s
         texts.forEachIndexed { i, t -> appendLine("${i + 1}| source: ${oneLine(t)}") ; appendLine("${i + 1}| draft: ${oneLine(draft.getOrElse(i) { "" })}") }
     }.trim()
 
-    fun user(texts: List<String>, history: List<Pair<String, String>>, glossary: List<GlossaryEntry>): String = buildString {
+    fun user(texts: List<String>, history: List<Pair<String, String>>, glossary: List<GlossaryEntry>, series: String? = null): String = buildString {
+        if (!series.isNullOrBlank()) { appendLine("Series: $series (use it only to understand the genre, the setting and the names)"); appendLine() }
         if (history.isNotEmpty()) {
             appendLine("Previous dialogue of this chapter (context only, do not translate again):")
             history.forEach { (src, tgt) -> appendLine("- ${oneLine(src)} => ${oneLine(tgt)}") }
@@ -84,6 +86,9 @@ You are a senior French editor of professionally published manhwa. You receive s
         appendLine("Lines to translate:")
         texts.forEachIndexed { i, t -> appendLine("${i + 1}| ${oneLine(t)}") }
     }.trim()
+
+    /** Nombre maximal de jetons de sortie pour une page : ~ (caractères / 3) × 1,6 de marge + 64 ; borné pour éviter toute génération sans fin. */
+    fun maxOutputTokens(texts: List<String>): Int = (((texts.sumOf { it.length } * 1.3 / 3.0) + 12 * texts.size) * 1.6 + 64).toInt().coerceIn(96, 1500)
 
     private fun oneLine(s: String) = s.replace(Regex("\\s+"), " ").trim()
 

@@ -130,15 +130,18 @@ object TestHooks {
                     graph.gemma.promptVariant = if (v.startsWith("v1")) 1 else 2
                     graph.gemma.refine = v.endsWith("r")
                     graph.gemma.resetContext()
+                    graph.gemma.seriesTitle = intent.getStringExtra("mt_series")
                     val out = JSONArray()
                     for (i in 0 until pages.length()) {
-                        val texts = (0 until pages.getJSONArray(i).length()).map { pages.getJSONArray(i).getString(it) }
+                        val raw = (0 until pages.getJSONArray(i).length()).map { pages.getJSONArray(i).getString(it) }
+                        val texts = raw.map { app.manhwa.core.TextNormalizer.fixCase(it) } // comme dans le pipeline réel
                         val t0 = System.currentTimeMillis()
                         val tr = try { graph.gemma.translateWithGlossary(texts, "en", "fr", emptyList()) } catch (e: Throwable) { notes.put("$v page $i : $e"); texts.map { "" } }
-                        out.put(JSONObject().put("page", i).put("ms", System.currentTimeMillis() - t0).put("src", JSONArray(texts)).put("tr", JSONArray(tr)))
+                        out.put(JSONObject().put("page", i).put("ms", System.currentTimeMillis() - t0).put("src", JSONArray(raw)).put("tr", JSONArray(tr.mapIndexed { k, t -> app.manhwa.core.TextNormalizer.matchCase(raw[k], t) })))
                     }
                     variantsJson.put(v, out)
                     notes.put("variante $v terminée")
+                    File(ctx.filesDir, "lab_$name.partial.json").writeText(JSONObject().put("engine", engine.name).put("variants", variantsJson).put("notes", notes).toString())
                 }
             } catch (e: Throwable) {
                 notes.put("exception : $e")

@@ -160,6 +160,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
                 currentUrl = if (url.startsWith("http")) url else ""
+                graph.gemma.seriesTitle = if (url.startsWith("http")) app.manhwa.core.SeriesHint.fromUrl(url) else null
                 loading = true
                 pageError = null
                 resetSession()

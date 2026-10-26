@@ -55,3 +55,24 @@ object UrlInput {
         return if (looksLikeHost) "https://$t" else "https://duckduckgo.com/?q=" + URLEncoder.encode(t, "UTF-8")
     }
 }
+
+/** Déduit le titre de la série d'une adresse de chapitre (ex. /comics/the-heavenly-demon-wants-a-quiet-life-11fe7da3/chapter/7). */
+object SeriesHint {
+    private val keywords = setOf("comics", "comic", "series", "serie", "manga", "manhwa", "manhua", "webtoon", "webtoons", "title", "titles", "read", "novel", "work")
+    private val chapterLike = Regex("(?i)^(chapter|chap|ch|episode|ep|vol|volume|page|viewer)([-_]?\\d+.*)?$|^\\d+$|(^|-)(season|episode|chapter)(-|\\d|$)|-ep-\\d+")
+    private val trailingId = Regex("(?i)[-_](?:[0-9a-f]{6,}|\\d{3,})$")
+
+    fun fromUrl(url: String): String? {
+        val path = url.substringAfter("://", url).substringAfter('/', "").substringBefore('?').substringBefore('#')
+        val segs = path.split('/').filter { it.isNotBlank() }
+        if (segs.isEmpty()) return null
+        var cand: String? = null
+        for (i in segs.indices) if (segs[i].lowercase() in keywords && i + 1 < segs.size && !chapterLike.matches(segs[i + 1])) { cand = segs[i + 1]; break }
+        if (cand == null) cand = segs.filter { it.contains('-') && !chapterLike.matches(it) && it.count { c -> c.isLetter() } >= 6 }.maxByOrNull { it.length }
+        if (cand == null) return null
+        val words = cand.substringBefore('.').replace(trailingId, "").split('-', '_').filter { it.isNotBlank() }
+        if (words.isEmpty()) return null
+        val title = words.joinToString(" ") { w -> w.replaceFirstChar { it.uppercase() } }
+        return title.takeIf { it.length >= 3 }
+    }
+}

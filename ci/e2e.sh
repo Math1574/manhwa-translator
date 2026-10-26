@@ -61,14 +61,19 @@ lab() { # nom moteur variantes
   adb push ci/lab/lab.json /data/local/tmp/lab.json >/dev/null
   adb shell "cat /data/local/tmp/lab.json | run-as $PKG sh -c 'cat > files/lab.json'"
   adb shell am force-stop $PKG; adb shell "run-as $PKG rm -f files/lab_$1.json"
-  adb shell am start -n $PKG/app.manhwa.MainActivity --es mt_lab $1 --es mt_engine $2 --es mt_variants $3 >/dev/null
-  local start=$(date +%s)
+  adb logcat -c
+  adb shell am start -n $PKG/app.manhwa.MainActivity --es mt_lab $1 --es mt_engine $2 --es mt_variants $3 --es mt_series "The Heavenly Demon Wants A Quiet Life" >/dev/null
+  local start=$(date +%s) dead=0
   while :; do
     sleep 10
-    adb shell "run-as $PKG ls files/lab_$1.json" 2>/dev/null | grep -q lab_ && break
+    adb shell "run-as $PKG ls files/lab_$1.json" 2>/dev/null | grep -q "lab_$1.json" && break
+    if [ -z "$(adb shell pidof $PKG | tr -d '\r')" ]; then dead=$((dead+1)); else dead=0; fi
+    [ $dead -ge 3 ] && { say "banc d'essai : l'application s'est arrêtée"; break; }
     [ $(( $(date +%s) - start )) -gt 2400 ] && { say "banc d'essai : délai dépassé"; break; }
   done
-  adb exec-out "run-as $PKG cat files/lab_$1.json" > $OUT/reports/lab_$1.json
+  adb exec-out "run-as $PKG cat files/lab_$1.json" > $OUT/reports/lab_$1.json 2>/dev/null
+  [ -s $OUT/reports/lab_$1.json ] && grep -q '"variants"' $OUT/reports/lab_$1.json || adb exec-out "run-as $PKG cat files/lab_$1.partial.json" > $OUT/reports/lab_$1.json 2>/dev/null
+  adb logcat -d | grep -E "MTTEST|FATAL|AndroidRuntime|litert|LiteRT|OutOfMemory|lowmemorykiller|ANR|F DEBUG" | head -80 > $OUT/reports/lab_$1.log
   say "banc d'essai terminé : $1 ($(( $(date +%s) - start )) s)"
 }
 
@@ -109,7 +114,7 @@ fi # fin des scénarios web (absents de la suite lab)
 # --- suite complète / lab : Gemma 4 E2B ---
 if [ "$SUITE" != quick ] && [ -f /tmp/gemma/gemma-4-E2B-it.litertlm ]; then
   push_model /tmp/gemma/gemma-4-E2B-it.litertlm gemma-4-E2B-it.litertlm 181938105e0eefd105961417e8da75903eacda102c4fce9ce90f50b97139a63c
-  lab e2b GEMMA_E2B v1,v2,v2r
+  lab e2b GEMMA_E2B v2,v2r
   if [ "$SUITE" = full ]; then
   run pc_en_gemma          pc_en.html          GEMMA_E2B EN FR "" 1500
   run synth_en_caps_gemma  synth_en_caps.html  GEMMA_E2B EN FR "" 900
