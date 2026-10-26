@@ -7,17 +7,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Récupérer les modèles PaddleOCR ONNX
+      - name: Signatures LiteRT-LM (annulation, limite de sortie)
         run: |
           set +e +o pipefail
-          mkdir -p /tmp/m && cd /tmp/m
-          H=https://huggingface.co/SWHL/RapidOCR/resolve/main
-          for f in PP-OCRv4/ch_PP-OCRv4_det_infer.onnx PP-OCRv3/en_PP-OCRv3_rec_infer.onnx PP-OCRv4/en_PP-OCRv3_det_infer.onnx PP-OCRv1/japan_rec_crnn.onnx PP-OCRv1/korean_mobile_v2.0_rec_infer.onnx PP-OCRv4/ch_PP-OCRv4_rec_infer.onnx PP-OCRv1/ch_ppocr_mobile_v2.0_cls_infer.onnx; do
-            curl -sSfL -m 120 -o $(basename $f) $H/$f -w "$f %{http_code} %{size_download}\n"
-          done > /tmp/probe.txt 2>&1
-          sha256sum *.onnx >> /tmp/probe.txt
+          {
+          B=https://dl.google.com/dl/android/maven2/com/google/ai/edge/litertlm/litertlm-android/0.18.1
+          curl -sS -m 120 -o /tmp/lm.aar $B/litertlm-android-0.18.1.aar
+          mkdir -p /tmp/aar && cd /tmp/aar && unzip -oq /tmp/lm.aar
+          for c in Conversation ConversationConfig EngineConfig Engine MessageCallback SamplerConfig; do
+            echo "---- $c"; javap -public -cp classes.jar "com.google.ai.edge.litertlm.$c" 2>&1 | grep -vE "copy|component|hashCode|equals|\\\$default" | head -40
+          done
+          } > /tmp/probe.txt 2>&1
           cd $GITHUB_WORKSPACE
           git config user.name ci; git config user.email ci@example.invalid
           git checkout --orphan probe-logs; git rm -rf . >/dev/null 2>&1 || true
-          mkdir models && cp /tmp/m/*.onnx models/; cp /tmp/probe.txt probe.txt
-          git add -A; git commit -q -m probe; git push origin probe-logs --force
+          cp /tmp/probe.txt probe.txt; git add probe.txt; git commit -q -m probe; git push origin probe-logs --force
