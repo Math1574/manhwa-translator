@@ -23,9 +23,9 @@ Solution: Please update the Gradle version to at least Gradle 8.14.4.
 > Task :app:generateDebugResources
 > Task :app:packageDebugResources
 > Task :app:createDebugCompatibleScreenManifests
-> Task :app:mergeDebugResources
 > Task :app:extractDeepLinksDebug
 > Task :app:parseDebugLocalResources
+> Task :app:mergeDebugResources
 > Task :app:processDebugMainManifest
 > Task :app:processDebugManifest
 > Task :app:javaPreCompileDebug
@@ -36,8 +36,8 @@ Solution: Please update the Gradle version to at least Gradle 8.14.4.
 > Task :app:processDebugManifestForPackage
 > Task :app:desugarDebugFileDependencies
 > Task :app:processDebugResources
-> Task :app:checkDebugDuplicateClasses
 > Task :app:mergeDebugJniLibFolders
+> Task :app:checkDebugDuplicateClasses
 > Task :app:compressDebugAssets
 > Task :app:validateSigningDebug
 > Task :app:writeDebugAppMetadata
@@ -51,10 +51,11 @@ w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/ko
 > Task :core:classes UP-TO-DATE
 > Task :core:jar
 > Task :app:mergeDebugNativeLibs
-> Task :app:mergeLibDexDebug
 
 > Task :app:stripDebugDebugSymbols
 Unable to strip the following libraries, packaging them as they are: libandroidx.graphics.path.so, liblitertlm_jni.so, libmlkit_google_ocr_pipeline.so, libonnxruntime.so, libonnxruntime4j_jni.so, libtranslate_jni.so.
+
+> Task :app:mergeLibDexDebug
 
 > Task :app:compileDebugKotlin
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:300:80 Unnecessary non-null assertion (!!) on a non-null receiver of type 'DebugInfo'.
@@ -71,7 +72,7 @@ w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kot
 > Task :app:packageDebug
 > Task :app:createDebugApkListingFileRedirect
 > Task :app:assembleDebug
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_2-1792957398794.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_2-1792981360927.json
 
-BUILD SUCCESSFUL in 1m 7s
+BUILD SUCCESSFUL in 43s
 37 actionable tasks: 37 executed
