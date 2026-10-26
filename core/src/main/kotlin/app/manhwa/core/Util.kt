@@ -67,8 +67,8 @@ object SeriesHint {
         val segs = path.split('/').filter { it.isNotBlank() }
         if (segs.isEmpty()) return null
         var cand: String? = null
-        for (i in segs.indices) if (segs[i].lowercase() in keywords && i + 1 < segs.size && !chapterLike.matches(segs[i + 1])) { cand = segs[i + 1]; break }
-        if (cand == null) cand = segs.filter { it.contains('-') && !chapterLike.matches(it) && it.count { c -> c.isLetter() } >= 6 }.maxByOrNull { it.length }
+        for (i in segs.indices) if (segs[i].lowercase() in keywords && i + 1 < segs.size && !chapterLike.containsMatchIn(segs[i + 1])) { cand = segs[i + 1]; break }
+        if (cand == null) cand = segs.filter { it.contains('-') && !chapterLike.containsMatchIn(it) && it.count { c -> c.isLetter() } >= 6 }.maxByOrNull { it.length }
         if (cand == null) return null
         val words = cand.substringBefore('.').replace(trailingId, "").split('-', '_').filter { it.isNotBlank() }
         if (words.isEmpty()) return null
