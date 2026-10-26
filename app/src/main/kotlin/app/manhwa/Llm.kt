@@ -90,6 +90,9 @@ class GemmaTranslator(
 
     private var engine: Engine? = null
     private var engineKey = ""
+    /** Version du prompt et relecture : réglables par le banc d'essai de traduction. */
+    @Volatile var promptVariant: Int = LlmPrompt.CURRENT
+    @Volatile var refine: Boolean = false
     private val history = ArrayDeque<Pair<String, String>>()
     private val main = Handler(Looper.getMainLooper())
     private val releaseTask = Runnable { release() }
@@ -110,7 +113,8 @@ class GemmaTranslator(
             var out = ask(eng, texts, source, target, glossary)
             // lignes manquantes dans la réponse : une seconde tentative, ligne par ligne
             for (i in out.indices) if (out[i] == null) out[i] = ask(eng, listOf(texts[i]), source, target, glossary).firstOrNull()
-            val final = out.mapIndexed { i, t -> t ?: throw IllegalStateException("Réponse du modèle incomplète (ligne ${i + 1})") }
+            var final = out.mapIndexed { i, t -> t ?: throw IllegalStateException("Réponse du modèle incomplète (ligne ${i + 1})") }
+            if (refine || s.refinePass) final = refineDraft(eng, texts, final, glossary)
             texts.indices.forEach { remember(texts[it], final[it]) }
             return final
         } finally {
@@ -118,9 +122,23 @@ class GemmaTranslator(
         }
     }
 
+    /** Seconde passe : un « éditeur » corrige les contresens et le style littéral du brouillon. En cas de réponse invalide, le brouillon est conservé. */
+    private fun refineDraft(eng: Engine, texts: List<String>, draft: List<String>, glossary: List<GlossaryEntry>): List<String> {
+        return try {
+            val config = ConversationConfig(
+                systemInstruction = Contents.of(LlmPrompt.refineSystem()),
+                samplerConfig = SamplerConfig(topK = 20, topP = 0.9, temperature = 0.15),
+            )
+            val reply = eng.createConversation(config).use { conv -> textOf(conv.sendMessage(LlmPrompt.refineUser(texts, draft, history.toList(), glossary))) }
+            LlmPrompt.parse(reply, texts.size).mapIndexed { i, t -> t ?: draft[i] }
+        } catch (e: Throwable) {
+            draft
+        }
+    }
+
     private fun ask(eng: Engine, texts: List<String>, source: String, target: String, glossary: List<GlossaryEntry>): MutableList<String?> {
         val config = ConversationConfig(
-            systemInstruction = Contents.of(LlmPrompt.system(source, target)),
+            systemInstruction = Contents.of(LlmPrompt.system(source, target, promptVariant)),
             samplerConfig = SamplerConfig(topK = 20, topP = 0.9, temperature = 0.15),
         )
         val reply = eng.createConversation(config).use { conv ->

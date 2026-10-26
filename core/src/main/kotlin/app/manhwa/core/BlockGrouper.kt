@@ -85,12 +85,15 @@ class BlockGrouper(private val cfg: GrouperConfig = GrouperConfig()) {
         val vb = isVertical(b)
         if (va != vb) return false
         return if (va) {
-            val w = (a.box.width + b.box.width) / 2f
+            val w = min(a.box.width, b.box.width)
+            if (max(a.box.width, b.box.width) > 2.2f * w) return false // colonnes de tailles très différentes : éléments distincts
             val gap = max(a.box.left, b.box.left) - min(a.box.right, b.box.right)
             val ov = overlap1d(a.box.top, a.box.bottom, b.box.top, b.box.bottom)
             gap <= cfg.gapFactor * w && ov >= cfg.minOverlap
         } else {
-            val h = (a.box.height + b.box.height) / 2f
+            // lignes de hauteurs très différentes (gros lettrage, onomatopée penchée, petit texte) : éléments distincts
+            val h = min(a.box.height, b.box.height)
+            if (max(a.box.height, b.box.height) > 2.2f * h) return false
             val gapY = max(a.box.top, b.box.top) - min(a.box.bottom, b.box.bottom)
             val ovX = overlap1d(a.box.left, a.box.right, b.box.left, b.box.right)
             val ovY = overlap1d(a.box.top, a.box.bottom, b.box.top, b.box.bottom)

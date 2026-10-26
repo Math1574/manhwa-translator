@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       suite:
-        description: 'quick (ML Kit) ou full (ajoute Gemma)'
+        description: 'quick (ML Kit), full (ajoute Gemma) ou lab (banc d essai de traduction)'
         default: 'quick'
 concurrency:
   group: build-${{ github.ref }}-${{ github.event.inputs.suite || 'quick' }}
@@ -77,6 +77,8 @@ jobs:
         with: { name: ManhwaTranslator-debug-apk, path: apk }
       - name: Outils de test (polices, ImageMagick, Pillow)
         run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-cjk fonts-comic-neue imagemagick python3-pil
+      - name: Corpus du banc d'essai de traduction
+        run: python3 -c "import json;d=json.load(open('ci/lab/corpus.json'));json.dump({'pages':d['pages']},open('ci/lab/lab.json','w'),ensure_ascii=False)"
       - name: Préparer le faux site de lecture
         run: |
           mkdir -p /tmp/site /tmp/e2e
@@ -87,11 +89,11 @@ jobs:
           nohup python3 ci/fixtures/server.py /tmp/site 8000 > /tmp/server.log 2>&1 &
           sleep 2; curl -sS -o /dev/null -w "site: HTTP %{http_code}\n" http://127.0.0.1:8000/index.html
       - name: Modèle Gemma (cache)
-        if: env.SUITE == 'full'
+        if: env.SUITE != 'quick'
         uses: actions/cache@v4
         with: { path: /tmp/gemma, key: gemma-e2b-e4b-v1 }
       - name: Télécharger Gemma E2B si absent du cache
-        if: env.SUITE == 'full'
+        if: env.SUITE != 'quick'
         run: |
           mkdir -p /tmp/gemma
           [ -f /tmp/gemma/gemma-4-E2B-it.litertlm ] || curl -sSfL -o /tmp/gemma/gemma-4-E2B-it.litertlm https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm
@@ -116,7 +118,9 @@ jobs:
           script: bash ci/e2e.sh
       - name: Analyse
         if: always()
-        run: python3 ci/analyze.py /tmp/e2e /tmp/site/synth || true
+        run: |
+          python3 ci/analyze.py /tmp/e2e /tmp/site/synth || true
+          python3 ci/lab/score.py /tmp/e2e ci/lab/corpus.json || true
       - name: Publier les résultats (branche e2e-quick ou e2e-full)
         if: always()
         run: |

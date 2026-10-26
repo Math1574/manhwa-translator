@@ -64,6 +64,13 @@ fun groupingTests() {
         val b = g.group(listOf(line("Same text", 100f, 100f, 300f, 130f, 0.9f), line("Same text", 101f, 101f, 301f, 131f, 0.8f)))
         T.eq(1, b.size); T.eq(1, b[0].lines.size)
     }
+    T.test("groupement: une grande boîte (onomatopée penchée) ne fusionne pas les éléments voisins") {
+        val b = g.group(listOf(
+            line("NO CHOICE BUT", 60f, 94f, 540f, 170f), line("TO KILL HIM?", 83f, 193f, 484f, 269f),   // titre sur deux lignes
+            line("CRACK!", 421f, 300f, 799f, 520f),                                                    // boîte énorme
+            line("THREE DAYS LATER,", 60f, 549f, 349f, 576f), line("AT THE MOUNTAIN GATE.", 59f, 585f, 422f, 611f)))
+        T.eq(listOf("NO CHOICE BUT TO KILL HIM?", "CRACK!", "THREE DAYS LATER, AT THE MOUNTAIN GATE."), b.map { it.text })
+    }
     T.test("groupement: seuil de confiance plus bas pour le CJK que pour le latin") {
         T.eq(1, g.group(listOf(line("털썩", 100f, 100f, 200f, 140f, c = 0.3f))).size)
         T.eq(0, g.group(listOf(line("thud", 100f, 100f, 200f, 140f, c = 0.3f))).size)
@@ -317,7 +324,7 @@ fun modelTests() {
 // ---------- paramètres ----------
 fun settingsTests() {
     T.test("paramètres: aller-retour complet") {
-        val s = AppSettings(SourceLang.KO, TargetLang.DE, 1.4f, true, QualityMode.ENHANCED, 5, 120, TranslationEngineChoice.GEMMA_E4B, true, true, false)
+        val s = AppSettings(SourceLang.KO, TargetLang.DE, 1.4f, true, QualityMode.ENHANCED, 5, 120, TranslationEngineChoice.GEMMA_E4B, true, true, false, true)
         T.eq(s, AppSettings.parse(s.serialize()))
     }
     T.test("paramètres: traduction automatique par défaut, anciens réglages migrés") {
@@ -421,6 +428,14 @@ fun llmTests() {
         T.ok(u.contains("Kim = Kim Do-jin"), "glossaire")
         T.ok(LlmPrompt.system("ko", "fr").contains("Korean") && LlmPrompt.system("ko", "fr").contains("French"), "langues")
         T.ok(LlmPrompt.system("auto", "fr").contains("detect"), "auto")
+    }
+    T.test("llm: prompt v2 (traduction naturelle) et seconde passe de relecture") {
+        val v2 = LlmPrompt.system("en", "fr")
+        T.ok(v2.contains("idiomatic") && v2.contains("Démon Céleste") && v2.contains("tu\" or \"vous") && v2.contains("N| translation"), "règles v2")
+        T.ok(LlmPrompt.system("en", "fr", variant = 1) != v2, "v1 conservée pour comparaison"); T.ok(LlmPrompt.system("en", "de").contains("German"), "autres langues : prompt générique")
+        val r = LlmPrompt.refineUser(listOf("Hello"), listOf("Salut"), listOf("Hi" to "Salut"), listOf(GlossaryEntry("Kim", "Kim")))
+        T.ok(r.contains("1| source: Hello") && r.contains("1| draft: Salut") && r.contains("Hi => Salut") && r.contains("Kim = Kim"), "relecture")
+        T.ok(LlmPrompt.refineSystem().contains("editor"), "éditeur")
     }
     T.test("llm: lecture de la réponse (formats variés, guillemets, Markdown, lignes multiples)") {
         val r = LlmPrompt.parse("1| Salut !\n2: **Comment vas-tu ?**\n3) « Bien. »\n   Et toi ?\n4. \"Merci\"", 4)

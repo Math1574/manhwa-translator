@@ -6,6 +6,7 @@ import android.content.pm.ApplicationInfo
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import app.manhwa.core.LlmPrompt
 import app.manhwa.core.QualityMode
 import app.manhwa.core.SourceLang
 import app.manhwa.core.TargetLang
@@ -25,6 +26,7 @@ object TestHooks {
 
     fun maybeRun(ctx: Context, graph: AppGraph, intent: Intent) {
         val debuggable = (ctx.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        if (debuggable && intent.getStringExtra("mt_lab") != null && !running) { runLab(ctx, graph, intent); return }
         val url = intent.getStringExtra("mt_url")
         if (!debuggable || url == null || running) return
         running = true
@@ -105,6 +107,46 @@ object TestHooks {
             tmp.renameTo(File(ctx.filesDir, reportName))
             Log.i(TAG, "REPORT_READY $reportName")
             c.testing = false
+            running = false
+        }
+    }
+
+    /**
+     * Banc d'essai de traduction : lit files/lab.json (pages de répliques), traduit chaque page avec chaque variante
+     * (v1, v2, v2r = v2 + relecture) et écrit files/lab_<nom>.json. Le contexte de chapitre est conservé d'une page à l'autre.
+     */
+    private fun runLab(ctx: Context, graph: AppGraph, intent: Intent) {
+        running = true
+        val name = intent.getStringExtra("mt_lab") ?: "lab"
+        val variants = (intent.getStringExtra("mt_variants") ?: "v2").split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        val engine = TranslationEngineChoice.values().firstOrNull { it.name == intent.getStringExtra("mt_engine") } ?: TranslationEngineChoice.GEMMA_E2B
+        graph.settingsStore.update { it.copy(engine = engine, useGpu = false, source = SourceLang.EN, target = TargetLang.FR) }
+        thread(name = "mt-lab") {
+            val result = JSONObject(); val variantsJson = JSONObject(); val notes = JSONArray()
+            try {
+                graph.llm.refresh()
+                val pages = JSONObject(File(ctx.filesDir, "lab.json").readText()).getJSONArray("pages")
+                for (v in variants) {
+                    graph.gemma.promptVariant = if (v.startsWith("v1")) 1 else 2
+                    graph.gemma.refine = v.endsWith("r")
+                    graph.gemma.resetContext()
+                    val out = JSONArray()
+                    for (i in 0 until pages.length()) {
+                        val texts = (0 until pages.getJSONArray(i).length()).map { pages.getJSONArray(i).getString(it) }
+                        val t0 = System.currentTimeMillis()
+                        val tr = try { graph.gemma.translateWithGlossary(texts, "en", "fr", emptyList()) } catch (e: Throwable) { notes.put("$v page $i : $e"); texts.map { "" } }
+                        out.put(JSONObject().put("page", i).put("ms", System.currentTimeMillis() - t0).put("src", JSONArray(texts)).put("tr", JSONArray(tr)))
+                    }
+                    variantsJson.put(v, out)
+                    notes.put("variante $v terminée")
+                }
+            } catch (e: Throwable) {
+                notes.put("exception : $e")
+            }
+            graph.gemma.promptVariant = LlmPrompt.CURRENT; graph.gemma.refine = false
+            result.put("engine", engine.name).put("variants", variantsJson).put("notes", notes)
+            val tmp = File(ctx.filesDir, "lab_$name.json.tmp"); tmp.writeText(result.toString()); tmp.renameTo(File(ctx.filesDir, "lab_$name.json"))
+            Log.i(TAG, "REPORT_READY lab_$name.json")
             running = false
         }
     }

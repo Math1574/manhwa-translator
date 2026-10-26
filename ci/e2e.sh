@@ -56,6 +56,23 @@ run() { # nom page moteur source cible modèles timeout [lazy]
   if grep -q '"total":0' $OUT/reports/$name.json 2>/dev/null && [ "$TRIES" != 1 ]; then say "aucune image traitée : nouvel essai de $name"; TRIES=1 run "$@"; fi
 }
 
+lab() { # nom moteur variantes
+  say "=== banc d'essai de traduction : $1 ($2, variantes $3)"
+  adb push ci/lab/lab.json /data/local/tmp/lab.json >/dev/null
+  adb shell "cat /data/local/tmp/lab.json | run-as $PKG sh -c 'cat > files/lab.json'"
+  adb shell am force-stop $PKG; adb shell "run-as $PKG rm -f files/lab_$1.json"
+  adb shell am start -n $PKG/app.manhwa.MainActivity --es mt_lab $1 --es mt_engine $2 --es mt_variants $3 >/dev/null
+  local start=$(date +%s)
+  while :; do
+    sleep 10
+    adb shell "run-as $PKG ls files/lab_$1.json" 2>/dev/null | grep -q lab_ && break
+    [ $(( $(date +%s) - start )) -gt 2400 ] && { say "banc d'essai : délai dépassé"; break; }
+  done
+  adb exec-out "run-as $PKG cat files/lab_$1.json" > $OUT/reports/lab_$1.json
+  say "banc d'essai terminé : $1 ($(( $(date +%s) - start )) s)"
+}
+
+if [ "$SUITE" != lab ]; then
 # --- préparation : téléchargement des modèles de traduction ML Kit (première utilisation lente) ---
 run prep index.html MLKIT EN FR "fr,ja,ko,zh" 30
 
@@ -87,17 +104,25 @@ adb shell "input tap 540 1200; input tap 540 1200; input tap 540 1200"; shot ful
 sleep 5; shot fullscreen 2
 adb shell dumpsys window | grep -E "mCurrentFocus|isStatusBarVisible|statusBar.*visible" | head -3 | tee -a $OUT/run.log
 
-# --- suite complète : Gemma 4 E2B ---
-if [ "$SUITE" = full ] && [ -f /tmp/gemma/gemma-4-E2B-it.litertlm ]; then
+fi # fin des scénarios web (absents de la suite lab)
+
+# --- suite complète / lab : Gemma 4 E2B ---
+if [ "$SUITE" != quick ] && [ -f /tmp/gemma/gemma-4-E2B-it.litertlm ]; then
   push_model /tmp/gemma/gemma-4-E2B-it.litertlm gemma-4-E2B-it.litertlm 181938105e0eefd105961417e8da75903eacda102c4fce9ce90f50b97139a63c
+  lab e2b GEMMA_E2B v1,v2,v2r
+  if [ "$SUITE" = full ]; then
   run pc_en_gemma          pc_en.html          GEMMA_E2B EN FR "" 1500
   run synth_en_caps_gemma  synth_en_caps.html  GEMMA_E2B EN FR "" 900
   run synth_ko_gemma       synth_ko.html       GEMMA_E2B KO FR "" 900
   run pc_ja_gemma          pc_ja.html          GEMMA_E2B JA FR "" 1500
+  fi
 fi
-if [ "$SUITE" = full ] && [ -f /tmp/gemma/gemma-4-E4B-it.litertlm ]; then
+if [ "$SUITE" != quick ] && [ -f /tmp/gemma/gemma-4-E4B-it.litertlm ]; then
   push_model /tmp/gemma/gemma-4-E4B-it.litertlm gemma-4-E4B-it.litertlm 0b2a8980ce155fd97673d8e820b4d29d9c7d99b8fa6806f425d969b145bd52e0
+  lab e4b GEMMA_E4B v2,v2r
+  if [ "$SUITE" = full ]; then
   run pc_en_gemma4b          pc_en.html          GEMMA_E4B EN FR "" 1800
   run synth_en_caps_gemma4b  synth_en_caps.html  GEMMA_E4B EN FR "" 1200
+  fi
 fi
 say "toutes les scènes sont terminées"

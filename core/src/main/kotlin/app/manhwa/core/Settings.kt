@@ -19,6 +19,8 @@ data class AppSettings(
     val diagnostic: Boolean = false,
     /** Second moteur de lecture (PaddleOCR) : repère le texte stylisé ou hors bulles que ML Kit rate. */
     val enhancedOcr: Boolean = true,
+    /** Relecture par le modèle (qualité maximale, environ deux fois plus lent). */
+    val refinePass: Boolean = false,
 ) {
     /** Ramène les valeurs dans des bornes valides. */
     fun sanitized() = copy(
@@ -31,7 +33,7 @@ data class AppSettings(
         it["source"] = source.name; it["target"] = target.name; it["textScale"] = textScale.toString()
         it["autoTranslate"] = autoTranslate.toString(); it["mode"] = mode.name
         it["maxPrefetchPages"] = maxPrefetchPages.toString(); it["cacheMaxMb"] = cacheMaxMb.toString()
-        it["schema"] = "2"; it["engine"] = engine.name; it["useGpu"] = useGpu.toString(); it["diagnostic"] = diagnostic.toString(); it["enhancedOcr"] = enhancedOcr.toString()
+        it["schema"] = "2"; it["engine"] = engine.name; it["useGpu"] = useGpu.toString(); it["diagnostic"] = diagnostic.toString(); it["enhancedOcr"] = enhancedOcr.toString(); it["refinePass"] = refinePass.toString()
     }.let { p -> java.io.StringWriter().also { w -> p.store(w, null) }.toString() }
 
     companion object {
@@ -52,6 +54,7 @@ data class AppSettings(
                 p.getProperty("useGpu")?.toBooleanStrictOrNull() ?: d.useGpu,
                 p.getProperty("diagnostic")?.toBooleanStrictOrNull() ?: d.diagnostic,
                 p.getProperty("enhancedOcr")?.toBooleanStrictOrNull() ?: d.enhancedOcr,
+                p.getProperty("refinePass")?.toBooleanStrictOrNull() ?: d.refinePass,
             ).sanitized()
         }
     }
