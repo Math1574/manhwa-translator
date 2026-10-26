@@ -22,23 +22,23 @@ Solution: Please update the Gradle version to at least Gradle 8.14.4.
 > Task :app:mapDebugSourceSetPaths
 > Task :app:generateDebugResources
 > Task :app:packageDebugResources
+> Task :app:parseDebugLocalResources
 > Task :app:createDebugCompatibleScreenManifests
 > Task :app:extractDeepLinksDebug
-> Task :app:parseDebugLocalResources
 > Task :app:mergeDebugResources
 > Task :app:processDebugMainManifest
 > Task :app:processDebugManifest
+> Task :app:processDebugManifestForPackage
 > Task :app:javaPreCompileDebug
 > Task :app:mergeDebugShaders
 > Task :app:compileDebugShaders NO-SOURCE
 > Task :app:generateDebugAssets UP-TO-DATE
 > Task :app:mergeDebugAssets
-> Task :app:processDebugManifestForPackage
 > Task :app:desugarDebugFileDependencies
 > Task :app:processDebugResources
+> Task :app:compressDebugAssets
 > Task :app:mergeDebugJniLibFolders
 > Task :app:checkDebugDuplicateClasses
-> Task :app:compressDebugAssets
 > Task :app:validateSigningDebug
 > Task :app:writeDebugAppMetadata
 > Task :app:writeDebugSigningConfigVersions
@@ -72,7 +72,7 @@ w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kot
 > Task :app:packageDebug
 > Task :app:createDebugApkListingFileRedirect
 > Task :app:assembleDebug
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_2-1792981353931.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_2-1793003979003.json
 
-BUILD SUCCESSFUL in 59s
+BUILD SUCCESSFUL in 39s
 37 actionable tasks: 37 executed
