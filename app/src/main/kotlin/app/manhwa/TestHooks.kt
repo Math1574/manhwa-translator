@@ -127,7 +127,7 @@ object TestHooks {
                 graph.llm.refresh()
                 val pages = JSONObject(File(ctx.filesDir, "lab.json").readText()).getJSONArray("pages")
                 for (v in variants) {
-                    graph.gemma.promptVariant = if (v.startsWith("v1")) 1 else 2
+                    graph.gemma.promptVariant = when { v.startsWith("v1") -> 1; v.startsWith("v3") -> 3; else -> 2 }
                     graph.gemma.refine = v.endsWith("r")
                     graph.gemma.resetContext()
                     graph.gemma.seriesTitle = intent.getStringExtra("mt_series")

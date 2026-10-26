@@ -24,7 +24,7 @@ for path in sorted(glob.glob(f"{OUT}/reports/lab_*.json")):
     d = json.load(open(path)); tag = os.path.basename(path)[4:-5]
     for var, pages in d.get("variants", {}).items():
         hyp = [t for p in pages for t in p["tr"]]
-        sc = [chrf(h, r) for h, r in zip(hyp, refs)]
+        sc = [chrf(h.casefold(), r.casefold()) for h, r in zip(hyp, refs)]
         ms = sum(p["ms"] for p in pages) / max(1, len(pages))
         res[(tag, var)] = (hyp, sum(sc) / max(1, len(sc)), ms)
 lines.append("| modèle / variante | chrF moyen | s / page |\n|---|---|---|")

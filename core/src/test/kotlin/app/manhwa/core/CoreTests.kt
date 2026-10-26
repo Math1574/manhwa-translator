@@ -432,7 +432,7 @@ fun llmTests() {
     T.test("llm: prompt v2 (traduction naturelle) et seconde passe de relecture") {
         val v2 = LlmPrompt.system("en", "fr")
         T.ok(v2.contains("idiomatic") && v2.contains("Démon Céleste") && v2.contains("tu\" or \"vous") && v2.contains("N| translation"), "règles v2")
-        T.ok(LlmPrompt.system("en", "fr", variant = 1) != v2, "v1 conservée pour comparaison"); T.ok(LlmPrompt.system("en", "de").contains("German"), "autres langues : prompt générique")
+        T.ok(LlmPrompt.system("en", "fr", variant = 1) != v2, "v1 conservée pour comparaison"); T.ok(LlmPrompt.system("en", "fr", variant = 3).contains("entrepôt") && !LlmPrompt.system("en", "fr", variant = 2).contains("entrepôt"), "v3 étend la v2"); T.ok(LlmPrompt.system("en", "de").contains("German"), "autres langues : prompt générique")
         val r = LlmPrompt.refineUser(listOf("Hello"), listOf("Salut"), listOf("Hi" to "Salut"), listOf(GlossaryEntry("Kim", "Kim")))
         T.ok(r.contains("1| source: Hello") && r.contains("1| draft: Salut") && r.contains("Hi => Salut") && r.contains("Kim = Kim"), "relecture")
         T.ok(LlmPrompt.refineSystem().contains("editor"), "éditeur")

@@ -114,7 +114,7 @@ fi # fin des scénarios web (absents de la suite lab)
 # --- suite complète / lab : Gemma 4 E2B ---
 if [ "$SUITE" != quick ] && [ -f /tmp/gemma/gemma-4-E2B-it.litertlm ]; then
   push_model /tmp/gemma/gemma-4-E2B-it.litertlm gemma-4-E2B-it.litertlm 181938105e0eefd105961417e8da75903eacda102c4fce9ce90f50b97139a63c
-  lab e2b GEMMA_E2B v2,v2r
+  lab e2b GEMMA_E2B v2,v3
   if [ "$SUITE" = full ]; then
   run pc_en_gemma          pc_en.html          GEMMA_E2B EN FR "" 1500
   run synth_en_caps_gemma  synth_en_caps.html  GEMMA_E2B EN FR "" 900
@@ -124,7 +124,7 @@ if [ "$SUITE" != quick ] && [ -f /tmp/gemma/gemma-4-E2B-it.litertlm ]; then
 fi
 if [ "$SUITE" != quick ] && [ -f /tmp/gemma/gemma-4-E4B-it.litertlm ]; then
   push_model /tmp/gemma/gemma-4-E4B-it.litertlm gemma-4-E4B-it.litertlm 0b2a8980ce155fd97673d8e820b4d29d9c7d99b8fa6806f425d969b145bd52e0
-  lab e4b GEMMA_E4B v2,v2r
+  lab e4b GEMMA_E4B v2,v3
   if [ "$SUITE" = full ]; then
   run pc_en_gemma4b          pc_en.html          GEMMA_E4B EN FR "" 1800
   run synth_en_caps_gemma4b  synth_en_caps.html  GEMMA_E4B EN FR "" 1200

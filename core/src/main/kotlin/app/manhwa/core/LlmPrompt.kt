@@ -10,10 +10,10 @@ object LlmPrompt {
     }
 
     /** Version courante du prompt (le banc d'essai de traduction compare plusieurs versions). */
-    const val CURRENT = 2
+    const val CURRENT = 3
 
     fun system(source: String, target: String, variant: Int = CURRENT): String =
-        if (variant == 1 || target != "fr") systemV1(source, target) else systemV2(source)
+        if (variant == 1 || target != "fr") systemV1(source, target) else systemV2(source, extended = variant >= 3)
 
     private fun systemV1(source: String, target: String): String {
         val src = if (source == "auto") "the source language (Korean, Japanese, Chinese or English; detect it)" else languageName(source)
@@ -31,7 +31,7 @@ Rules:
 """.trim()
     }
 
-    private fun systemV2(source: String): String {
+    private fun systemV2(source: String, extended: Boolean = false): String {
         val src = if (source == "auto") "Korean, Japanese, Chinese or English (detect it)" else languageName(source)
         return """
 You are a professional French translator of manhwa, manga, manhua and webtoons, working for a high-quality scanlation team. You translate the dialogue of one page (given in reading order) from $src into French, as published professionally.
@@ -51,7 +51,14 @@ Rules:
 7. French typography: normal sentence case with correct accents, a space before ? ! : ; and « » for quotations. Do not write in capital letters even if the source is in capitals.
 8. Never add notes, explanations or quotation marks around lines.
 9. Answer with exactly one line per input line, in the format `N| translation`, using the same numbers, and nothing else.
-""".trim()
+""".trim() + (if (extended) """
+
+Additional rules:
+10. Never leave English words in the French text, except proper names and set martial-arts terms. Translate every title and rank: elder -> ancien (or doyen), young master -> jeune maître, sect leader -> chef de secte, patriarch -> patriarche, grandmaster -> grand maître, senior / junior (martial) -> aîné / cadet, brother / sister (martial) -> frère / sœur d'armes, Alliance -> Alliance, general -> général, majesty -> majesté.
+11. Pick the meaning that fits the setting, not the commonest everyday one: storage / storehouse -> entrepôt or réserve; a drunk -> un ivrogne; nerve / guts -> culot; "to handle" -> s'occuper de; "to teach someone a lesson" -> donner une leçon à quelqu'un; "I wouldn't bet my life on it" -> "je n'en mettrais pas ma main au feu"; "play dumb" -> faire l'innocent; "through hell and back" -> revenir de l'enfer.
+12. Prefer the shortest natural wording; use contractions and everyday vocabulary in casual speech, and a more formal register only for formal characters. Avoid stiff phrases such as "Voulez-vous que nous..." when "On lui..." sounds more natural between fighters.
+12bis. Translate a sentence cut across two bubbles as one coherent sentence, but keep one output line per input line.
+""".trimEnd() else "")
     }
 
     /** Seconde passe optionnelle : relecture du brouillon (variante « r »). */
