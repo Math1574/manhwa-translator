@@ -3,7 +3,7 @@ w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kot
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Engines.kt:50:13 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/PaddleOcr.kt:75:94 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Render.kt:119:39 Unnecessary safe call on a non-null receiver of type 'Erasure.Plan'.
-BUILD SUCCESSFUL in 52s
+BUILD SUCCESSFUL in 40s
 total 264632
 drwxr-xr-x 2 runner runner      4096 Oct 26 18:38 .
 drwxr-xr-x 3 runner runner      4096 Oct 26 18:38 ..
