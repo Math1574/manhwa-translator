@@ -44,7 +44,7 @@ object TextErase {
         return m
     }
 
-    private fun dilate(src: BooleanArray, w: Int, h: Int, times: Int, limit: BooleanArray? = null): BooleanArray {
+    fun dilate(src: BooleanArray, w: Int, h: Int, times: Int, limit: BooleanArray? = null): BooleanArray {
         var cur = src
         repeat(times) {
             val nx = cur.copyOf()
@@ -159,6 +159,54 @@ object TextErase {
             }
         }
         return dilate(keep, w, h, grow)
+    }
+
+    /** Épaisseur moyenne du trait (pixels) d'un masque de texte : 2 × aire / périmètre (exact pour un trait fin de longueur ≫ épaisseur). */
+    fun strokeWidth(mask: BooleanArray, w: Int, h: Int): Float {
+        var area = 0; var perim = 0
+        for (y in 0 until h) for (x in 0 until w) {
+            if (!mask[y * w + x]) continue
+            area++
+            if (x == 0 || !mask[y * w + x - 1]) perim++
+            if (x == w - 1 || !mask[y * w + x + 1]) perim++
+            if (y == 0 || !mask[(y - 1) * w + x]) perim++
+            if (y == h - 1 || !mask[(y + 1) * w + x]) perim++
+        }
+        return if (perim == 0) 0f else 2f * area / perim
+    }
+
+    private fun lum(c: Int) = (0.299f * r(c) + 0.587f * g(c) + 0.114f * b(c)) / 255f
+
+    /**
+     * Couleur du remplissage des lettres sur un dessin : l'extrême de luminance (très clair ou très foncé) le plus éloigné de la médiane
+     * de la zone. Le lettrage est presque toujours l'extrême : lettres blanches à contour sombre, ou noires sur fond clair.
+     */
+    fun extremeTextColor(pixels: IntArray, allowed: BooleanArray): Int {
+        val idx = pixels.indices.filter { allowed[it] }
+        if (idx.isEmpty()) return 0xFF000000.toInt()
+        val sorted = idx.sortedBy { lum(pixels[it]) }
+        val n = max(1, sorted.size / 10)
+        val dark = sorted.take(n).map { pixels[it] }; val bright = sorted.takeLast(n).map { pixels[it] }
+        val med = lum(pixels[sorted[sorted.size / 2]])
+        val dd = med - dark.map { lum(it) }.average().toFloat(); val db = bright.map { lum(it) }.average().toFloat() - med
+        val pick = if (db >= dd) bright else dark
+        return pack(pick.sumOf { r(it) } / pick.size, pick.sumOf { g(it) } / pick.size, pick.sumOf { b(it) } / pick.size)
+    }
+
+    /**
+     * Pixels de texte sur un dessin : remplissage des lettres (couleur proche de [textColor]) et leur contour (couleur dominante des
+     * pixels voisins du remplissage), légèrement dilatés. Contrairement à un rectangle, on n'efface que les lettres : le dessin
+     * autour est conservé, et une éventuelle lueur diffuse reste (la traduction est redessinée par-dessus avec son propre contour).
+     */
+    fun artMask(pixels: IntArray, w: Int, h: Int, allowed: BooleanArray, textColor: Int, grow: Int): BooleanArray {
+        val fill = BooleanArray(w * h) { allowed[it] && dist(pixels[it], textColor) <= 70 }
+        val near = dilate(fill, w, h, 4)
+        val ring = ArrayList<Int>()
+        for (i in pixels.indices) if (near[i] && !fill[i] && allowed[i]) ring.add(pixels[i])
+        val stroke = if (ring.isEmpty()) textColor else ColorMath.median(ring.toIntArray())
+        val strokeSame = dist(stroke, textColor) < 50
+        val mask = BooleanArray(w * h) { fill[it] || (!strokeSame && near[it] && allowed[it] && dist(pixels[it], stroke) <= 45) }
+        return dilate(mask, w, h, grow, allowed)
     }
 
     /** Remplace les pixels masqués par une reconstruction lisse du fond (diffusion multi-échelle depuis les pixels voisins non masqués). */

@@ -32,6 +32,10 @@ object Erasure {
         val outlined: Boolean,
         /** Rectangle inscrit dans la bulle (pixels de l'image d'origine), si la forme a pu être détectée. */
         val bubbleArea: RectF?,
+        /** Forme libre de l'intérieur de la bulle (pixels de l'image d'origine), pour la mise en page de la traduction. */
+        val shape: RowShape? = null,
+        /** Épaisseur du trait des lettres d'origine, en pixels échantillonnés (0 si inconnue). */
+        val strokePx: Float = 0f,
     )
 
     fun plan(src: PixelSource, s: Float, lineBoxes: List<RectF>, lineH: Float, imageW: Float, imageH: Float): Plan? {
@@ -61,15 +65,38 @@ object Erasure {
             val core = TextErase.rectMask(w, h, rects().map { r -> intArrayOf(r[0], r[1] + shrink, r[2], r[3] - shrink) }.filter { r -> r[3] > r[1] }, 0)
             val textRect = intArrayOf((union.left * s).toInt() - x0, (union.top * s).toInt() - y0, (union.right * s).toInt() - x0, (union.bottom * s).toInt() - y0)
             val interior = BubbleMask.interior(px, w, h, textRect, a.bg)
-            val mask = TextErase.textComponents(px, w, h, a.bg, a.threshold, allowedZone, max(2, (lh * 0.06f).toInt()), interior, core)
+            val raw = TextErase.textComponents(px, w, h, a.bg, a.threshold, allowedZone, 0, interior, core)
+            val stroke = TextErase.strokeWidth(raw, w, h)
+            val mask = TextErase.dilate(raw, w, h, max(2, (lh * 0.06f).toInt()))
             val layer = IntArray(w * h) { if (mask[it]) (0xFF shl 24) or (a.bg and 0xFFFFFF) else 0 }
-            return Plan(Mode.FLAT, x0, y0, w, h, mask, layer, a.bg, a.textColor, a.outlined, bubble ?: bubbleArea(src, s, union, a.bg, imageW, imageH))
+            val shape = bubbleShape(src, s, union, a.bg, imageW, imageH)
+            return Plan(Mode.FLAT, x0, y0, w, h, mask, layer, a.bg, a.textColor, a.outlined, bubble, shape, stroke)
         }
-        val zone = TextErase.rectMask(w, h, rects(), max(4, (lh * 0.25f).toInt()))
-        val fill = TextErase.inpaint(px, w, h, zone)
-        val alpha = TextErase.featherAlpha(zone, w, h)
-        val layer = IntArray(w * h) { if (zone[it]) (alpha[it] shl 24) or (fill[it] and 0xFFFFFF) else 0 }
-        return Plan(Mode.ART, x0, y0, w, h, zone, layer, a.bg, a.textColor, a.outlined, null)
+        // texte sur dessin : seules les lettres (remplissage + contour) sont effacées et reconstruites, pas un rectangle entier
+        val zone = TextErase.rectMask(w, h, rects(), max(4, (lh * (if (a.outlined) 0.35f else 0.25f)).toInt()))
+        val fillColor = TextErase.extremeTextColor(px, zone)
+        val mask = TextErase.artMask(px, w, h, zone, fillColor, max(2, (lh * (if (a.outlined) 0.12f else 0.07f)).toInt()))
+        val fill = TextErase.inpaint(px, w, h, mask)
+        val alpha = TextErase.featherAlpha(mask, w, h)
+        val layer = IntArray(w * h) { if (mask[it]) (alpha[it] shl 24) or (fill[it] and 0xFFFFFF) else 0 }
+        return Plan(Mode.ART, x0, y0, w, h, mask, layer, a.bg, fillColor, a.outlined, null, null, TextErase.strokeWidth(mask, w, h))
+    }
+
+    /**
+     * Forme libre de l'intérieur de la bulle autour du texte (remplissage borné par le contour, lettres comprises), en pixels de l'image.
+     * Région d'analyse plus large que pour le rectangle inscrit : la bulle entière doit y tenir.
+     */
+    private fun bubbleShape(src: PixelSource, s: Float, union: RectF, bg: Int, imageW: Float, imageH: Float): RowShape? {
+        val gx = union.width * 1.1f + 20f; val gy = union.height * 1.1f + 20f
+        val x0 = (max(0f, union.left - gx) * s).toInt().coerceIn(0, src.width - 1); val y0 = (max(0f, union.top - gy) * s).toInt().coerceIn(0, src.height - 1)
+        val x1 = (min(imageW, union.right + gx) * s).toInt().coerceIn(x0 + 1, src.width); val y1 = (min(imageH, union.bottom + gy) * s).toInt().coerceIn(y0 + 1, src.height)
+        val w = x1 - x0; val h = y1 - y0
+        if (w < 16 || h < 16 || w.toLong() * h > 2_000_000L) return null
+        val px = src.pixels(x0, y0, w, h)
+        val text = intArrayOf((union.left * s).toInt() - x0, (union.top * s).toInt() - y0, (union.right * s).toInt() - x0, (union.bottom * s).toInt() - y0)
+        val mask = BubbleMask.interior(px, w, h, text, bg, tol = 42, maxFill = 0.97f) ?: return null
+        val seedX = (text[0] + text[2]) / 2; val seedY = (text[1] + text[3]) / 2
+        return RowShape.fromMask(mask, w, h, seedX, seedY, s, x0, y0)
     }
 
     /** Rectangle inscrit dans la bulle (forme obtenue par remplissage de la zone de même couleur), en pixels de l'image. */

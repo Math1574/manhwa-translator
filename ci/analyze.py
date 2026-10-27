@@ -58,6 +58,10 @@ for path in sorted(glob.glob(f"{OUT}/reports/*.json")):
                 ix = max(0, min(a[2], b2[2]) - max(a[0], b2[0])); iy = max(0, min(a[3], b2[3]) - max(a[1], b2[1]))
                 small = min((a[2]-a[0])*(a[3]-a[1]), (b2[2]-b2[0])*(b2[3]-b2[1]))
                 if small > 0 and ix * iy / small > 0.1: overlap += 1
+    nofit = sum(1 for im in imgs for b in (im.get('overlay') or {}).get('blocks', []) if b.get('fits') is False)
+    shaped = sum(1 for im in imgs for b in (im.get('overlay') or {}).get('blocks', []) if b.get('shape'))
+    if nblocks: P(f"- rendu : {shaped}/{nblocks} bulles à forme détectée · texte ne tenant pas dans sa zone : {nofit}")
+    if nofit: problems.append(f"{name}: texte ne tient pas dans sa zone ({nofit})")
     P(f"- OCR : {tot_ocr} lignes ({kept} utilisées, {rej} écartées) · bulles affichées {nblocks} · hors image {outside} · chevauchements {overlap} · texte < 10px {tiny}")
     if outside or overlap: problems.append(f"{name}: mise en page (hors image {outside}, chevauchements {overlap})")
 

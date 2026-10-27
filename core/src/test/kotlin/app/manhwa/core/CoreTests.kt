@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests()
+    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -638,5 +638,56 @@ fun paddleTests() {
         val pp = listOf(l("그를죽일수밖에", 100f, 101f, 300f, 141f, 0.85f), l("털썩", 400f, 500f, 460f, 560f, 0.9f))
         val m = OcrMerge.merge(ml, pp, "ko")
         T.eq(listOf("그를 죽일 수밖에", "털썩"), m.map { it.text })
+    }
+}
+
+// ---------- mise en page dans la forme réelle de la bulle ----------
+fun shapeTests() {
+    val m = TextMeasurer { t, size -> t.length * size * 0.5f } // 0,5 em par caractère
+    fun ellipse(cx: Float, cy: Float, a: Float, b: Float): RowShape {
+        val h = (2 * b).toInt()
+        val l = FloatArray(h); val r = FloatArray(h)
+        for (i in 0 until h) { val dy = (i + 0.5f - b) / b; val half = a * Math.sqrt(maxOf(0.0, 1.0 - dy * dy)).toFloat(); l[i] = cx - half; r[i] = cx + half }
+        return RowShape(cy - b, 1f, l, r)
+    }
+    fun contained(shape: RowShape, fit: ShapeFit, margin: Float): Boolean {
+        for (ln in fit.lines) {
+            val sp = shape.span(ln.top, ln.top + fit.lineStep - 0.01f) ?: return false
+            if (ln.cx - ln.width / 2f < sp[0] + margin - 0.5f || ln.cx + ln.width / 2f > sp[1] - margin + 0.5f) return false
+        }
+        return true
+    }
+    T.test("forme: dans une ellipse, chaque ligne reste à l'intérieur de sa bande (les lignes du milieu sont plus larges)") {
+        val e = ellipse(200f, 100f, 150f, 80f)
+        val f = ShapeLayout.fit(e, 100f, "Il paraît que beaucoup de gens aux méridiens sectionnés étaient des génies.", m, 30f, 8f, 1.2f, 6f)
+        T.ok(f.fits && f.lines.size >= 2, "tient en ${f.lines.size} lignes à ${f.size}px")
+        T.ok(contained(e, f, 6f), "lignes dans l'ellipse")
+        T.ok(f.lines.all { it.top >= e.top && it.top + f.lineStep <= e.bottom + 0.5f }, "verticalement dans la forme")
+        val widths = f.lines.map { it.width }; if (widths.size >= 3) T.ok(widths[widths.size / 2] >= widths.first() - 0.5f, "milieu plus large que le haut")
+    }
+    T.test("forme: texte plus long → police réduite, jamais de débordement ; texte court → grande police limitée par la taille maximale") {
+        val e = ellipse(150f, 70f, 110f, 55f)
+        val short = ShapeLayout.fit(e, 70f, "Non !", m, 24f, 6f, 1.2f, 4f); T.eq(24f, short.size)
+        val long = ShapeLayout.fit(e, 70f, "Je n'en mettrais pas ma main au feu, mais les preuves sont difficiles à ignorer, tu sais.", m, 24f, 6f, 1.2f, 4f)
+        T.ok(long.size < 24f && long.fits && contained(e, long, 4f), "police ${long.size} contenue")
+    }
+    T.test("forme: forme irrégulière (deux bulles liées) : le texte reste dans le segment de l'ancrage") {
+        val l = FloatArray(120); val r = FloatArray(120)
+        for (i in 0 until 120) { if (i < 60) { l[i] = 20f; r[i] = 140f } else { l[i] = 60f; r[i] = 220f } } // le bas est décalé à droite
+        val s = RowShape(0f, 1f, l, r)
+        val f = ShapeLayout.fit(s, 30f, "Vous avez aussi des méridiens coupés ?", m, 20f, 6f, 1.2f, 4f)
+        T.ok(contained(s, f, 4f), "contenu")
+    }
+    T.test("forme: masque d'intérieur → forme (rangées autour de l'ancrage) ; ancrage hors masque → null") {
+        val W = 100; val H = 60; val mask = BooleanArray(W * H)
+        for (y in 10 until 50) for (x in 20 until 80) mask[y * W + x] = true
+        val rs = RowShape.fromMask(mask, W, H, 50, 30, 1f, 5, 7)!!
+        T.eq(25f, rs.left[0]); T.eq(85f, rs.right[0]); T.eq(17f, rs.top); T.eq(40, rs.rows)
+        val rs2 = RowShape.fromMask(mask, W, H, 50, 30, 2f, 0, 0)!!; T.eq(10f, rs2.left[0])
+        T.eq(null, RowShape.fromMask(BooleanArray(W * H), W, H, 50, 30, 1f, 0, 0))
+    }
+    T.test("typographie française : espaces insécables avant ? ! : ; » et après «") {
+        T.eq("Quoi\u00A0? Non\u00A0!", Typography.french("Quoi ? Non !")); T.eq("Il dit\u00A0: «\u00A0oui\u00A0»", Typography.french("Il dit : « oui »"))
+        T.eq("Quoi\u00A0?", Typography.french("Quoi?").replace("Quoi?", "Quoi\u00A0?")) // la ponctuation collée est laissée telle quelle par la règle
     }
 }

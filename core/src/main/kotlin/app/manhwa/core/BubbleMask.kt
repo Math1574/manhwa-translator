@@ -81,6 +81,11 @@ object BubbleMask {
             push(x + 1, y); push(x - 1, y); push(x, y + 1); push(x, y - 1)
         }
         if (tail > maxFill * (w * h)) return null
+        // fuite : le remplissage touche le bord de la région sur une grande partie de son pourtour (contour ouvert ou bulle plus grande que la région)
+        var edge = 0
+        for (x in 0 until w) { if (flood[x]) edge++; if (flood[(h - 1) * w + x]) edge++ }
+        for (y in 0 until h) { if (flood[y * w]) edge++; if (flood[y * w + w - 1]) edge++ }
+        if (edge > 0.55f * (2 * (w + h))) return null
         // trous : pixels non remplis qui ne communiquent pas avec le bord de la région
         val outside = BooleanArray(w * h)
         var oh = 0; var ot = 0
