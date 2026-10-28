@@ -156,7 +156,7 @@ object PageRenderer {
         // corps cible : même hauteur de capitales (ou même emprise) que le texte d'origine
         val em = (if (allCaps) lineH / CAP_RATIO else lineH / 0.95f) * userScale.coerceIn(0.5f, 2f)
         val font = matchFont(fonts, p, s, em, lineH)
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT or Paint.LINEAR_TEXT_FLAG).apply { typeface = font.typeface; letterSpacing = font.letterSpacing }
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG or Paint.LINEAR_TEXT_FLAG).apply { typeface = font.typeface; letterSpacing = font.letterSpacing }
         val measurer = TextMeasurer { text, size -> paint.textSize = size; paint.measureText(text) * 1.02f }
 
         // interligne d'origine : pas entre deux lignes / corps
