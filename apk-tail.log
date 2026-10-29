@@ -17,19 +17,19 @@ Solution: Please update the Gradle version to at least Gradle 8.14.4.
 > Task :core:checkKotlinGradlePluginConfigurationErrors SKIPPED
 > Task :core:processResources NO-SOURCE
 > Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
-> Task :app:generateDebugResValues
 > Task :app:checkDebugAarMetadata
+> Task :app:generateDebugResValues
 > Task :app:mapDebugSourceSetPaths
 > Task :app:generateDebugResources
 > Task :app:packageDebugResources
 > Task :app:createDebugCompatibleScreenManifests
-> Task :app:mergeDebugResources
 > Task :app:extractDeepLinksDebug
 > Task :app:parseDebugLocalResources
+> Task :app:mergeDebugResources
 > Task :app:processDebugMainManifest
 > Task :app:processDebugManifest
-> Task :app:processDebugManifestForPackage
 > Task :app:javaPreCompileDebug
+> Task :app:processDebugManifestForPackage
 > Task :app:mergeDebugShaders
 > Task :app:compileDebugShaders NO-SOURCE
 > Task :app:generateDebugAssets UP-TO-DATE
@@ -61,7 +61,7 @@ Unable to strip the following libraries, packaging them as they are: libandroidx
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:301:80 Unnecessary non-null assertion (!!) on a non-null receiver of type 'DebugInfo'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Engines.kt:50:13 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/PaddleOcr.kt:75:94 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
-w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Render.kt:116:39 Unnecessary safe call on a non-null receiver of type 'Erasure.Plan'.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Render.kt:118:39 Unnecessary safe call on a non-null receiver of type 'Erasure.Plan'.
 
 > Task :app:compileDebugJavaWithJavac NO-SOURCE
 > Task :app:dexBuilderDebug
@@ -72,7 +72,7 @@ w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kot
 > Task :app:packageDebug
 > Task :app:createDebugApkListingFileRedirect
 > Task :app:assembleDebug
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_2-1793150060045.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_2-1793232287927.json
 
-BUILD SUCCESSFUL in 1m 1s
+BUILD SUCCESSFUL in 52s
 37 actionable tasks: 37 executed
