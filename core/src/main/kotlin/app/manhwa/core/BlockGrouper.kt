@@ -39,7 +39,7 @@ class BlockGrouper(private val cfg: GrouperConfig = GrouperConfig()) {
             val sorted = if (vertical) {
                 ls.sortedWith(compareByDescending<OcrLine> { it.box.centerX }.thenBy { it.box.top })
             } else {
-                ls.sortedWith(compareBy<OcrLine> { it.box.centerY }.thenBy { it.box.left })
+                readingOrder(ls)
             }
             val box = sorted.map { it.box }.reduce { a, b -> a.union(b) }
             Triple(sorted, box, vertical)
@@ -58,6 +58,20 @@ class BlockGrouper(private val cfg: GrouperConfig = GrouperConfig()) {
         if (l.box.isEmpty || min(l.box.width, l.box.height) < cfg.minSidePx) return "trop petit"
         if (!t.any { it.isLetterOrDigit() || it.isCjk() }) return "ponctuation"
         return null
+    }
+
+    /** Ordre de lecture horizontal : les lignes se chevauchant verticalement forment une rangée, lue de gauche à droite ; rangées de haut en bas. */
+    private fun readingOrder(ls: List<OcrLine>): List<OcrLine> {
+        val rows = ArrayList<MutableList<OcrLine>>()
+        for (l in ls.sortedBy { it.box.top }) {
+            val row = rows.firstOrNull { r ->
+                val ref = r.first().box
+                val inter = min(ref.bottom, l.box.bottom) - max(ref.top, l.box.top)
+                inter >= 0.5f * min(ref.height, l.box.height)
+            }
+            if (row != null) row.add(l) else rows.add(mutableListOf(l))
+        }
+        return rows.sortedBy { r -> r.map { it.box.centerY }.average() }.flatMap { r -> r.sortedBy { it.box.left } }
     }
 
     private fun isUsable(l: OcrLine): Boolean = dropReason(l) == null

@@ -159,7 +159,7 @@ for i, ln in enumerate(["THREE DAYS LATER,", "AT THE MOUNTAIN GATE."]): d.text((
 gt.append({"kind": "narration", "lang": "en", "text": "THREE DAYS LATER, AT THE MOUNTAIN GATE.", "box": [60, 545, 400, 615], "lines": [[60, 545, 330, 575], [60, 581, 400, 611]]})
 # bulle avec police manuscrite
 hand = "/usr/share/fonts/truetype/comic-neue/ComicNeue-Bold.ttf"
-bubble(img, d, (320, 700, 780, 900), "I HEARD MANY PEOPLE WITH SEVERED MERIDIANS WERE GENIUSES.", F(hand, 32), gt)
+bubble(img, d, (300, 690, 790, 940), "I HEARD MANY PEOPLE WITH SEVERED MERIDIANS WERE GENIUSES.", F(hand, 28), gt)
 # texte murmuré hors bulle, petit, gris clair sur dessin
 wf = F(DEJAVU, 30)
 d.text((70, 980), "...he is still alive.", font=wf, fill=(235, 235, 235), stroke_width=2, stroke_fill=(30, 30, 30))

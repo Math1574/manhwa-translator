@@ -38,7 +38,20 @@ object Erasure {
         val strokePx: Float = 0f,
     )
 
-    fun plan(src: PixelSource, s: Float, lineBoxes: List<RectF>, lineH: Float, imageW: Float, imageH: Float): Plan? {
+    /** @param exclude lignes de texte des AUTRES blocs (pixels de l'image) : un bloc n'efface jamais ce qui appartient à un voisin. */
+    fun plan(src: PixelSource, s: Float, lineBoxes: List<RectF>, lineH: Float, imageW: Float, imageH: Float, exclude: List<RectF> = emptyList()): Plan? {
+        val p = planUnclipped(src, s, lineBoxes, lineH, imageW, imageH) ?: return null
+        if (exclude.isEmpty()) return p
+        var changed = false
+        for (ex in exclude) {
+            val ex0 = ((ex.left * s).toInt() - p.x0 + 1).coerceIn(0, p.w); val ey0 = ((ex.top * s).toInt() - p.y0 + 1).coerceIn(0, p.h)
+            val ex1 = ((ex.right * s).toInt() - p.x0 - 1).coerceIn(0, p.w); val ey1 = ((ex.bottom * s).toInt() - p.y0 - 1).coerceIn(0, p.h)
+            for (y in ey0 until ey1) for (x in ex0 until ex1) { val i = y * p.w + x; if (p.layer[i] != 0 || p.mask[i]) { p.layer[i] = 0; p.mask[i] = false; changed = true } }
+        }
+        return p
+    }
+
+    private fun planUnclipped(src: PixelSource, s: Float, lineBoxes: List<RectF>, lineH: Float, imageW: Float, imageH: Float): Plan? {
         val union = lineBoxes.reduce { a, c -> a.union(c) }
         val pad = max(10f, lineH * 0.7f)
         val x0 = (max(0f, union.left - pad) * s).toInt().coerceIn(0, src.width - 1)
@@ -73,9 +86,10 @@ object Erasure {
             return Plan(Mode.FLAT, x0, y0, w, h, mask, layer, a.bg, a.textColor, a.outlined, bubble, shape, stroke)
         }
         // texte sur dessin : seules les lettres (remplissage + contour) sont effacées et reconstruites, pas un rectangle entier
-        val zone = TextErase.rectMask(w, h, rects(), max(4, (lh * (if (a.outlined) 0.35f else 0.25f)).toInt()))
+        val zone = TextErase.rectMask(w, h, rects(), min(if (a.outlined) 30 else 18, max(4, (lh * (if (a.outlined) 0.45f else 0.25f)).toInt())))
         val fillColor = TextErase.extremeTextColor(px, zone)
-        val mask = TextErase.artMask(px, w, h, zone, fillColor, max(2, (lh * (if (a.outlined) 0.12f else 0.07f)).toInt()))
+        // lettrage à lueur : on élargit le masque pour effacer aussi la lueur, de sorte que la reconstruction vienne des abords du halo
+        val mask = TextErase.artMask(px, w, h, zone, fillColor, max(2, (lh * (if (a.outlined) 0.28f else 0.07f)).toInt()))
         val fill = TextErase.inpaint(px, w, h, mask)
         val alpha = TextErase.featherAlpha(mask, w, h)
         val layer = IntArray(w * h) { if (mask[it]) (alpha[it] shl 24) or (fill[it] and 0xFFFFFF) else 0 }

@@ -44,6 +44,28 @@ object TextErase {
         return m
     }
 
+    /** Pixels des composantes connexes (8 voisins) qui ne touchent pas le bord de la région et n'en occupent pas plus de la moitié. */
+    fun enclosedOnly(src: BooleanArray, w: Int, h: Int): BooleanArray {
+        val seen = BooleanArray(w * h); val out = BooleanArray(w * h); val queue = IntArray(w * h)
+        for (start in 0 until w * h) {
+            if (!src[start] || seen[start]) continue
+            var head = 0; var tail = 0; queue[tail++] = start; seen[start] = true; var border = false
+            while (head < tail) {
+                val i = queue[head++]; val x = i % w; val y = i / w
+                if (x == 0 || y == 0 || x == w - 1 || y == h - 1) border = true
+                for (dy in -1..1) for (dx in -1..1) {
+                    if (dx == 0 && dy == 0) continue
+                    val nx = x + dx; val ny = y + dy
+                    if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
+                    val j = ny * w + nx
+                    if (src[j] && !seen[j]) { seen[j] = true; queue[tail++] = j }
+                }
+            }
+            if (!border && tail < w * h / 2) for (k in 0 until tail) out[queue[k]] = true
+        }
+        return out
+    }
+
     fun dilate(src: BooleanArray, w: Int, h: Int, times: Int, limit: BooleanArray? = null): BooleanArray {
         var cur = src
         repeat(times) {
@@ -99,15 +121,18 @@ object TextErase {
         val raw = BooleanArray(w * h)
         for (i in pixels.indices) if (allowed[i] && dist(pixels[i], bg) > thr) raw[i] = true
 
+        // les lettres sont des composantes isolées ; contour de bulle et dessin extérieur touchent le bord de la région : on les ignore
+        val enclosed = enclosedOnly(raw, w, h)
+        val rawE = if (enclosed.any { it }) enclosed else raw
         val far = ArrayList<Int>()
-        for (i in raw.indices) if (raw[i]) far.add(pixels[i])
+        for (i in rawE.indices) if (rawE[i]) far.add(pixels[i])
         far.sortByDescending { dist(it, bg) }
         val top = far.take(max(1, far.size / 4))
         val textColor = if (top.isEmpty()) ColorMath.textColorFor(bg) else pack(top.sumOf { r(it) } / top.size, top.sumOf { g(it) } / top.size, top.sumOf { b(it) } / top.size)
 
-        val rawCount = raw.count { it }
+        val rawCount = rawE.count { it }
         var other = 0
-        for (i in raw.indices) if (raw[i] && dist(pixels[i], textColor) > 90) other++
+        for (i in rawE.indices) if (rawE[i] && dist(pixels[i], textColor) > 90) other++
         val outlined = rawCount > 0 && other.toFloat() / rawCount > 0.25f
 
         val mask = dilate(raw, w, h, if (outlined) grow + max(3, grow) else grow, allowed)

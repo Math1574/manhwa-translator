@@ -71,6 +71,10 @@ fun groupingTests() {
             line("THREE DAYS LATER,", 60f, 549f, 349f, 576f), line("AT THE MOUNTAIN GATE.", 59f, 585f, 422f, 611f)))
         T.eq(listOf("NO CHOICE BUT TO KILL HIM?", "CRACK!", "THREE DAYS LATER, AT THE MOUNTAIN GATE."), b.map { it.text })
     }
+    T.test("groupement: ordre de lecture par rangées (« NO CHOICE » avant « BUT » même si le centre de « BUT » est un peu plus haut)") {
+        val b = g.group(listOf(line("BUT", 472f, 98f, 632f, 164f), line("NO CHOICE", 65f, 95f, 480f, 174f), line("Him?", 370f, 198f, 551f, 267f), line("To KILL", 81f, 192f, 367f, 273f)))
+        T.eq("NO CHOICE BUT To KILL Him?", b.single().text)
+    }
     T.test("groupement: seuil de confiance plus bas pour le CJK que pour le latin") {
         T.eq(1, g.group(listOf(line("털썩", 100f, 100f, 200f, 140f, c = 0.3f))).size)
         T.eq(0, g.group(listOf(line("thud", 100f, 100f, 200f, 140f, c = 0.3f))).size)

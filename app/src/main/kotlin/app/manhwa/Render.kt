@@ -91,8 +91,10 @@ object PageRenderer {
         val patches = JSONArray(); val report = JSONArray()
         try {
             val src = bmp?.let { BitmapSource(it) }
-            for (b in blocks) {
-                val prep = prepare(b, src, s, iw, ih, medianLine, settings.target.code)
+            for ((bi, b) in blocks.withIndex()) {
+                // lignes des autres blocs : ce bloc ne doit pas les effacer
+                val others = blocks.withIndex().filter { it.index != bi }.flatMap { it.value.lineBoxes.ifEmpty { listOf(it.value.box) } }
+                val prep = prepare(b, src, s, iw, ih, medianLine, settings.target.code, others)
                 val rendered = try { drawBlock(fonts, s, prep, iw, ih, settings.textScale) } catch (e: Throwable) { null } ?: continue
                 patches.put(rendered.first); report.put(rendered.second)
             }
@@ -107,11 +109,11 @@ object PageRenderer {
     private fun lineHeightOf(b: TranslatedBlock): Float =
         if (b.lineHeight > 0f) b.lineHeight else if (b.vertical) b.box.width else b.box.height
 
-    private fun prepare(b: TranslatedBlock, src: PixelSource?, s: Float, iw: Float, ih: Float, medianLine: Float, target: String): Prep {
+    private fun prepare(b: TranslatedBlock, src: PixelSource?, s: Float, iw: Float, ih: Float, medianLine: Float, target: String, others: List<RectF>): Prep {
         val lineBoxes = b.lineBoxes.ifEmpty { listOf(b.box) }
         val union = lineBoxes.reduce { a, c -> a.union(c) }
         val lineH = lineHeightOf(b)
-        val plan = if (src != null) try { Erasure.plan(src, s, lineBoxes, lineH, iw, ih) } catch (e: Throwable) { null } else null
+        val plan = if (src != null) try { Erasure.plan(src, s, lineBoxes, lineH, iw, ih, others) } catch (e: Throwable) { null } else null
         val flat = plan?.mode == Erasure.Mode.FLAT
         val rectangular = flat && plan?.shape == null && union.width > 2.2f * union.height && lineBoxes.size <= 2
         val style = TextErase.chooseFont(b.source, lineH, medianLine, flat, plan?.outlined ?: false, rectangular)
