@@ -19,11 +19,12 @@ Application Android : navigateur intégré qui traduit automatiquement les manga
 - Un petit bouton ✕ discret s'efface seul ; **trois appuis rapides sur l'écran** le font réapparaître pour quitter le plein écran. Le bouton Retour d'Android quitte aussi.
 
 ## Ce que fait l'application
-- **OCR** local (ML Kit) : japonais, coréen, chinois, anglais.
+- **OCR** local, deux moteurs fusionnés : ML Kit et **PaddleOCR** (modèles ONNX, Apache-2.0) pour repérer le texte stylisé, hors des bulles ou en lettrage spécial. Japonais, coréen, chinois, anglais.
 - **Traduction** locale avec contexte : Gemma 4 traduit toute la page d'un coup, avec les derniers dialogues du chapitre, le glossaire et des consignes de traducteur de bande dessinée.
   ML Kit reste disponible comme option légère (traduction bulle par bulle, qualité inférieure).
-- **Rendu** : le texte d'origine est effacé (aplat dans les bulles, reconstruction du fond sur les dessins) puis la traduction est dessinée avec une police proche du lettrage
-  (parole, cri, narration). Polices libres (licence OFL) : Comic Neue, Bangers, Patrick Hand.
+- **Rendu** : le texte d'origine est effacé (aplat dans les bulles, reconstruction du fond sur les dessins) puis la traduction est mise en page **dans la forme réelle de la bulle**
+  (retours à la ligne équilibrés, jamais de débordement), avec une police dont l'épaisseur et la largeur sont **calibrées sur le lettrage d'origine** (Noto Sans variable ; Bangers pour les cris),
+  l'interligne d'origine, une double résolution pour la netteté et la typographie française. Polices libres (SIL OFL).
 - **Glossaire** local (noms de personnages), cache des pages traduites, traitement page par page en file d'attente.
 
 ## Limites connues

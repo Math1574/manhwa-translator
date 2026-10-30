@@ -51,9 +51,9 @@ object Erasure {
         return p
     }
 
-    private fun planUnclipped(src: PixelSource, s: Float, lineBoxes: List<RectF>, lineH: Float, imageW: Float, imageH: Float): Plan? {
+    private fun planUnclipped(src: PixelSource, s: Float, lineBoxes: List<RectF>, lineH: Float, imageW: Float, imageH: Float, padOverride: Float = 0f): Plan? {
         val union = lineBoxes.reduce { a, c -> a.union(c) }
-        val pad = max(10f, lineH * 0.7f)
+        val pad = max(max(10f, lineH * 0.7f), padOverride)
         val x0 = (max(0f, union.left - pad) * s).toInt().coerceIn(0, src.width - 1)
         val y0 = (max(0f, union.top - pad) * s).toInt().coerceIn(0, src.height - 1)
         val x1 = (min(imageW, union.right + pad) * s).toInt().coerceIn(x0 + 1, src.width)
@@ -86,11 +86,14 @@ object Erasure {
             return Plan(Mode.FLAT, x0, y0, w, h, mask, layer, a.bg, a.textColor, a.outlined, bubble, shape, stroke)
         }
         // texte sur dessin : seules les lettres (remplissage + contour) sont effacées et reconstruites, pas un rectangle entier
-        val zone = TextErase.rectMask(w, h, rects(), min(if (a.outlined) 30 else 18, max(4, (lh * (if (a.outlined) 0.45f else 0.25f)).toInt())))
+        val zone = TextErase.rectMask(w, h, rects(), min(if (a.outlined) 30 else 18, max(4, (lh * (if (a.outlined) 0.35f else 0.25f)).toInt())))
         val fillColor = TextErase.extremeTextColor(px, zone)
         // lettrage à lueur : on élargit le masque pour effacer aussi la lueur, de sorte que la reconstruction vienne des abords du halo
-        val mask = TextErase.artMask(px, w, h, zone, fillColor, max(2, (lh * (if (a.outlined) 0.28f else 0.07f)).toInt()))
-        val fill = TextErase.inpaint(px, w, h, mask)
+        val mask = TextErase.artMask(px, w, h, zone, fillColor, max(2, (lh * (if (a.outlined) 0.14f else 0.07f)).toInt()))
+        // texte sur dessin : région élargie pour trouver de la vraie texture à copier à côté du trou (second passage)
+        if (padOverride == 0f) planUnclipped(src, s, lineBoxes, lineH, imageW, imageH, max(40f, lineH * 1.6f))?.let { if (it.mode == Mode.ART) return it }
+        val diffused = TextErase.inpaint(px, w, h, mask)
+        val fill = TextErase.inpaintClone(px, w, h, mask, diffused)
         val alpha = TextErase.featherAlpha(mask, w, h)
         val layer = IntArray(w * h) { if (mask[it]) (alpha[it] shl 24) or (fill[it] and 0xFFFFFF) else 0 }
         return Plan(Mode.ART, x0, y0, w, h, mask, layer, a.bg, fillColor, a.outlined, null, null, TextErase.strokeWidth(mask, w, h))

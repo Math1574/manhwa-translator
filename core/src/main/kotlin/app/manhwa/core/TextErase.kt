@@ -224,7 +224,8 @@ object TextErase {
      * autour est conservé, et une éventuelle lueur diffuse reste (la traduction est redessinée par-dessus avec son propre contour).
      */
     fun artMask(pixels: IntArray, w: Int, h: Int, allowed: BooleanArray, textColor: Int, grow: Int): BooleanArray {
-        val fill = BooleanArray(w * h) { allowed[it] && dist(pixels[it], textColor) <= 70 }
+        // lettres = composantes isolées : une grande surface de couleur proche (fond d'un encadré voisin) touche le bord et est ignorée
+        val fill = enclosedOnly(BooleanArray(w * h) { allowed[it] && dist(pixels[it], textColor) <= 70 }, w, h)
         val near = dilate(fill, w, h, 4)
         val ring = ArrayList<Int>()
         for (i in pixels.indices) if (near[i] && !fill[i] && allowed[i]) ring.add(pixels[i])
@@ -276,6 +277,74 @@ object TextErase {
         }
         val e1 = erode(mask); val e2 = erode(e1); val e3 = erode(e2)
         return IntArray(w * h) { i -> if (e3[i]) 255 else if (e2[i]) 210 else if (e1[i]) 140 else if (mask[i]) 70 else 0 }
+    }
+
+    /** Groupes de rangées contiguës contenant des pixels masqués : (première rangée, dernière rangée). */
+    private fun rowGroups(mask: BooleanArray, w: Int, h: Int): List<IntArray> {
+        val out = ArrayList<IntArray>(); var start = -1; var gap = 0
+        for (y in 0 until h) {
+            val has = (0 until w).any { mask[y * w + it] }
+            if (has) { if (start < 0) start = y; gap = 0 } else if (start >= 0) { gap++; if (gap >= 3) { out.add(intArrayOf(start, y - gap)); start = -1; gap = 0 } }
+        }
+        if (start >= 0) out.add(intArrayOf(start, h - 1 - gap.coerceAtLeast(0)))
+        return out
+    }
+
+    /**
+     * Reconstruction « tampon de duplication » : chaque groupe de lignes effacé est rempli par de la vraie texture copiée d'à côté
+     * (au-dessus, au-dessous, à gauche ou à droite), en choisissant le décalage dont les abords ressemblent le plus à ceux du trou,
+     * avec raccord de luminosité. Retombe sur la diffusion [diffused] si aucun décalage ne convient.
+     */
+    fun inpaintClone(pixels: IntArray, w: Int, h: Int, mask: BooleanArray, diffused: IntArray): IntArray {
+        val out = diffused.copyOf()
+        val remaining = mask.copyOf()
+        val cur = pixels.copyOf() // pixels courants : les groupes déjà remplis servent de source aux suivants
+        fun ch(c: Int, sh: Int) = (c shr sh) and 0xFF
+        for (g in rowGroups(mask, w, h)) {
+            val gm = BooleanArray(w * h)
+            var minX = w; var maxX = -1
+            for (y in g[0]..g[1]) for (x in 0 until w) if (mask[y * w + x]) { gm[y * w + x] = true; if (x < minX) minX = x; if (x > maxX) maxX = x }
+            if (maxX < 0) continue
+            val gw = maxX - minX + 1; val gh = g[1] - g[0] + 1
+            val m = max(4, gh / 10)
+            val band = dilate(gm, w, h, 3)
+            for (i in band.indices) if (gm[i] || remaining[i]) band[i] = false
+            val bandIdx = band.indices.filter { band[it] }
+            if (bandIdx.size < 20) { for (i in gm.indices) if (gm[i]) remaining[i] = false; continue }
+            var bestCost = Double.MAX_VALUE; var bdx = 0; var bdy = 0
+            for ((dx, dy) in listOf(0 to -(gh + m), 0 to (gh + m), -(gw + m) to 0, (gw + m) to 0)) {
+                var cost = 0L; var cnt = 0
+                for (q in bandIdx) {
+                    val sx = q % w + dx; val sy = q / w + dy
+                    if (sx < 0 || sy < 0 || sx >= w || sy >= h || remaining[sy * w + sx] || gm[sy * w + sx]) continue
+                    val a = cur[q]; val b2 = cur[sy * w + sx]
+                    cost += abs(ch(a, 16) - ch(b2, 16)) + abs(ch(a, 8) - ch(b2, 8)) + abs(ch(a, 0) - ch(b2, 0)); cnt++
+                }
+                if (cnt < bandIdx.size * 0.4) continue
+                val avg = cost.toDouble() / (cnt * 3)
+                if (avg < bestCost) { bestCost = avg; bdx = dx; bdy = dy }
+            }
+            if (bestCost <= 38.0) {
+                // raccord de luminosité : écart moyen entre l'anneau du trou et l'anneau correspondant de la source
+                var sr = 0L; var sg = 0L; var sb = 0L; var n = 0
+                for (q in bandIdx) {
+                    val sx = q % w + bdx; val sy = q / w + bdy
+                    if (sx < 0 || sy < 0 || sx >= w || sy >= h || remaining[sy * w + sx] || gm[sy * w + sx]) continue
+                    val a = cur[q]; val b2 = cur[sy * w + sx]
+                    sr += ch(a, 16) - ch(b2, 16); sg += ch(a, 8) - ch(b2, 8); sb += ch(a, 0) - ch(b2, 0); n++
+                }
+                val orr = if (n > 0) (sr / n).toInt() else 0; val og = if (n > 0) (sg / n).toInt() else 0; val ob = if (n > 0) (sb / n).toInt() else 0
+                for (i in gm.indices) {
+                    if (!gm[i]) continue
+                    val sx = i % w + bdx; val sy = i / w + bdy
+                    if (sx < 0 || sy < 0 || sx >= w || sy >= h || remaining[sy * w + sx] || gm[sy * w + sx]) continue
+                    val c = cur[sy * w + sx]
+                    out[i] = pack(ch(c, 16) + orr, ch(c, 8) + og, ch(c, 0) + ob)
+                }
+            }
+            for (i in gm.indices) if (gm[i]) { remaining[i] = false; cur[i] = out[i] }
+        }
+        return out
     }
 
     enum class FontStyle { SPEECH, SHOUT, SANS, NARRATION }

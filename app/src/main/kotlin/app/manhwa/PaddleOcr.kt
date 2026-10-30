@@ -81,7 +81,12 @@ class PaddleOcr(private val models: PaddleModels) {
                 val end = min(imageH, y + TILE_H)
                 val opts = BitmapFactory.Options().apply { inSampleSize = sample; inPreferredConfig = Bitmap.Config.ARGB_8888 }
                 val tile = decoder.decodeRegion(Rect(0, y, imageW, end), opts) ?: throw IOException("tuile illisible")
-                try { out.addAll(recognizeTile(tile, lang, sample, y)) } finally { tile.recycle() }
+                try {
+                    // zone de la tuile qui lui appartient : on écarte le recouvrement avec ses voisines pour ne pas détecter deux fois une même ligne
+                    val keepTop = if (y == 0) -1f else y + TILE_OVERLAP / 2f
+                    val keepBottom = if (end >= imageH) Float.MAX_VALUE else end - TILE_OVERLAP / 2f
+                    out.addAll(recognizeTile(tile, lang, sample, y).filter { val cy = (it.box.top + it.box.bottom) / 2f; cy >= keepTop && cy < keepBottom })
+                } finally { tile.recycle() }
                 if (end >= imageH) break
                 y = end - TILE_OVERLAP
             }

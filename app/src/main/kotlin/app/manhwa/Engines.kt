@@ -85,8 +85,12 @@ class MlKitOcr(private val source: SourceLang) : OcrEngine {
             val bmp = d.decodeRegion(Rect(0, y, w, end), opts) ?: throw IOException("Découpe de l'image impossible")
             try {
                 val text = Tasks.await(rec.process(InputImage.fromBitmap(bmp, 0)), 60, TimeUnit.SECONDS)
+                val keepTop = if (y == 0) -1f else y + TILE_OVERLAP / 2f
+                val keepBottom = if (end >= h) Float.MAX_VALUE else end - TILE_OVERLAP / 2f
                 for (block in text.textBlocks) for (line in block.lines) {
                     val b = line.boundingBox ?: continue
+                    val cy = (b.top + b.bottom) / 2f * sample + y
+                    if (cy < keepTop || cy >= keepBottom) continue // ligne attribuée à la tuile voisine
                     out.add(
                         OcrLine(
                             line.text,
