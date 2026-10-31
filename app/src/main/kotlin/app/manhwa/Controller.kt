@@ -301,11 +301,31 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                 s.diagnostic && debug != null -> OverlayBuilder.debugOnly(debug!!)
                 else -> null
             }
-            if (json != null) main.post { webView?.evaluateJavascript("window.__mt&&window.__mt.apply('${c.id}', $json)", null) }
+            if (json != null) sendOverlay(c.id, json)
             overlayForLog = json
         }
         if (testing) logForTest(c, out, debug, overlayForLog, System.currentTimeMillis() - t0)
         return out
+    }
+
+    /** Envoie l'overlay à la page par morceaux d'environ 1,2 Mo : évite une énorme chaîne JavaScript d'un seul bloc. */
+    private fun sendOverlay(id: String, json: JSONObject) {
+        val patches = json.optJSONArray("patches") ?: JSONArray()
+        val chunks = ArrayList<JSONObject>()
+        var cur = JSONArray(); var size = 0
+        for (i in 0 until patches.length()) {
+            val p = patches.getJSONObject(i)
+            val len = p.optString("png").length
+            if (size > 0 && size + len > 1_200_000) { chunks.add(JSONObject().put("w", json.get("w")).put("h", json.get("h")).put("patches", cur)); cur = JSONArray(); size = 0 }
+            cur.put(p); size += len
+        }
+        val first = JSONObject().put("w", json.get("w")).put("h", json.get("h")).put("patches", cur)
+        json.optJSONArray("dbg")?.let { first.put("dbg", it) }
+        chunks.add(first)
+        chunks.forEachIndexed { i, ch ->
+            if (i > 0) ch.put("append", true)
+            main.post { webView?.evaluateJavascript("window.__mt&&window.__mt.apply('$id', $ch)", null) }
+        }
     }
 
     private fun logForTest(c: Candidate, out: PageOutcome, debug: DebugInfo?, overlay: JSONObject?, ms: Long) {

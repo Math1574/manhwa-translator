@@ -60,10 +60,16 @@ object PageScript {
   }
   function apply(id, data){
     var im = findImg(id); if (!im) return false;
-    var old = S.entries[id]; if (old && old.div) old.div.remove();
-    var d = document.createElement('div');
-    d.setAttribute('data-mt-overlay', '1');
-    d.style.cssText = 'position:absolute;pointer-events:none;z-index:2147483000;overflow:hidden;margin:0;padding:0;';
+    var old = S.entries[id];
+    if (data.append && old && old.div) {
+      var d = old.div;
+    } else {
+      if (old && old.div) old.div.remove();
+      var d = document.createElement('div');
+      d.setAttribute('data-mt-overlay', '1');
+      d.style.cssText = 'position:absolute;pointer-events:none;z-index:2147483000;overflow:hidden;margin:0;padding:0;';
+      document.documentElement.appendChild(d);
+    }
     var ps = data.patches || [];
     for (var i=0;i<ps.length;i++){
       var q0 = ps[i], im2 = document.createElement('img');
@@ -86,8 +92,7 @@ object PageScript {
         d.appendChild(bx); d.appendChild(lb);
       }
     }
-    document.documentElement.appendChild(d);
-    var e = {img:im, div:d, w:data.w, h:data.h, key:''}; S.entries[id] = e; place(e); return true;
+    var e = (data.append && old) ? old : {img:im, div:d, w:data.w, h:data.h, key:''}; e.key = ''; S.entries[id] = e; place(e); return true;
   }
   function setVisible(v){ S.visible = v; for (var id in S.entries){ S.entries[id].key = ''; place(S.entries[id]); } }
   function clear(){ for (var id in S.entries){ if (S.entries[id].div) S.entries[id].div.remove(); } S.entries = {}; S.seen = {}; }

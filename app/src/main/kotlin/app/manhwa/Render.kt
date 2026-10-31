@@ -180,7 +180,9 @@ object PageRenderer {
         var rect = RectF(l - fit.size * 0.3f, t - fit.size * 0.3f, r + fit.size * 0.3f, bt + fit.size * 0.3f)
         if (plan != null) rect = rect.union(RectF(plan.x0 / s, plan.y0 / s, (plan.x0 + plan.w) / s, (plan.y0 + plan.h) / s))
         rect = RectF(max(0f, rect.left), max(0f, rect.top), min(iw, rect.right), min(ih, rect.bottom))
-        val ss = SUPERSAMPLE * s
+        // double résolution pour les patches de taille normale ; réduite pour les très grands blocs afin de limiter mémoire et poids de l'envoi
+        val areaImg = (rect.right - rect.left) * (rect.bottom - rect.top)
+        val ss = min(SUPERSAMPLE * s, max(s, kotlin.math.sqrt(1_600_000f / max(1f, areaImg))))
         val pw = max(1, ((rect.right - rect.left) * ss).toInt()); val ph = max(1, ((rect.bottom - rect.top) * ss).toInt())
         if (pw.toLong() * ph > 12_000_000L) return null
         val patch = Bitmap.createBitmap(pw, ph, Bitmap.Config.ARGB_8888)
