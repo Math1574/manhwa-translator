@@ -1,0 +1,35 @@
+Performing Streamed Install
+Success
+Physical size: 1080x2400
+[e2e 10:36:05] === prep (index.html, MLKIT, EN→FR)
+[e2e 10:37:24] terminé : prep (78 s)
+[e2e 10:37:24] aucune image traitée : nouvel essai de prep
+[e2e 10:37:24] === prep (index.html, MLKIT, EN→FR)
+[e2e 10:38:17] terminé : prep (53 s)
+[e2e 10:38:17] === pc_en_mlkit (pc_en.html, MLKIT, EN→FR)
+[e2e 10:39:07] terminé : pc_en_mlkit (49 s)
+[e2e 10:39:07] === synth_en_caps_mlkit (synth_en_caps.html, MLKIT, EN→FR)
+[e2e 10:39:43] terminé : synth_en_caps_mlkit (35 s)
+[e2e 10:39:43] === synth_en_mixed_mlkit (synth_en_mixed.html, MLKIT, EN→FR)
+[e2e 10:40:19] terminé : synth_en_mixed_mlkit (36 s)
+[e2e 10:40:19] === synth_en_fancy_mlkitonly (synth_en_fancy.html, MLKIT, EN→FR)
+[e2e 10:40:54] terminé : synth_en_fancy_mlkitonly (35 s)
+[e2e 10:40:54] === synth_en_fancy_combined (synth_en_fancy.html, MLKIT, EN→FR)
+[e2e 10:41:36] terminé : synth_en_fancy_combined (41 s)
+[e2e 10:41:36] === pc_en_ref_mlkit (pc_en_ref.html, MLKIT, EN→FR)
+[e2e 10:42:26] terminé : pc_en_ref_mlkit (50 s)
+[e2e 10:42:26] === pc_en_lazy_mlkit (pc_en_lazy.html, MLKIT, EN→FR)
+[e2e 10:43:19] terminé : pc_en_lazy_mlkit (53 s)
+[e2e 10:43:19] === synth_ko_mlkit (synth_ko.html, MLKIT, KO→FR)
+[e2e 10:43:55] terminé : synth_ko_mlkit (36 s)
+[e2e 10:43:55] === synth_ja_vert_mlkit (synth_ja_vertical.html, MLKIT, JA→FR)
+[e2e 10:44:30] terminé : synth_ja_vert_mlkit (35 s)
+[e2e 10:44:30] === synth_zh_mlkit (synth_zh.html, MLKIT, ZH_HANS→FR)
+[e2e 10:45:06] terminé : synth_zh_mlkit (35 s)
+[e2e 10:45:06] === pc_ja_mlkit (pc_ja.html, MLKIT, JA→FR)
+[e2e 10:45:56] terminé : pc_ja_mlkit (50 s)
+[e2e 10:45:56] === plein écran
+  mCurrentFocus=Window{d56ca3d u0 app.manhwa.translator/app.manhwa.MainActivity}
+        InsetsSource id=77450000 type=statusBars frame=[0,0][1080,128] visible=false flags= insetsRoundedCornerFrame=false
+        mSource=InsetsSource id=77450000 type=statusBars frame=[0,0][1080,128] visible=false flags= insetsRoundedCornerFrame=false
+[e2e 10:46:46] toutes les scènes sont terminées

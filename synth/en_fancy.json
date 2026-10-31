@@ -1,0 +1,165 @@
+[
+ {
+  "kind": "free",
+  "lang": "en",
+  "text": "NO CHOICE BUT",
+  "box": [
+   60,
+   90,
+   624,
+   156
+  ],
+  "lines": [
+   [
+    60,
+    90,
+    624,
+    156
+   ]
+  ]
+ },
+ {
+  "kind": "free",
+  "lang": "en",
+  "text": "TO KILL HIM?",
+  "box": [
+   90,
+   190,
+   546,
+   256
+  ],
+  "lines": [
+   [
+    90,
+    190,
+    546,
+    256
+   ]
+  ]
+ },
+ {
+  "kind": "sfx",
+  "lang": "en",
+  "text": "CRACK!",
+  "box": [
+   410,
+   340,
+   800,
+   520
+  ],
+  "lines": [
+   [
+    410,
+    340,
+    800,
+    520
+   ]
+  ]
+ },
+ {
+  "kind": "narration",
+  "lang": "en",
+  "text": "THREE DAYS LATER, AT THE MOUNTAIN GATE.",
+  "box": [
+   60,
+   545,
+   400,
+   615
+  ],
+  "lines": [
+   [
+    60,
+    545,
+    330,
+    575
+   ],
+   [
+    60,
+    581,
+    400,
+    611
+   ]
+  ]
+ },
+ {
+  "kind": "bubble",
+  "lang": "en",
+  "text": "I HEARD MANY PEOPLE WITH SEVERED MERIDIANS WERE GENIUSES.",
+  "box": [
+   405,
+   731,
+   684,
+   899
+  ],
+  "lines": [
+   [
+    428,
+    737,
+    661,
+    757
+   ],
+   [
+    437,
+    770,
+    652,
+    790
+   ],
+   [
+    472,
+    804,
+    616,
+    824
+   ],
+   [
+    405,
+    837,
+    683,
+    857
+   ],
+   [
+    460,
+    871,
+    629,
+    891
+   ]
+  ]
+ },
+ {
+  "kind": "whisper",
+  "lang": "en",
+  "text": "...he is still alive.",
+  "box": [
+   70,
+   980,
+   330,
+   1015
+  ],
+  "lines": [
+   [
+    70,
+    980,
+    330,
+    1015
+   ]
+  ]
+ },
+ {
+  "kind": "free",
+  "lang": "en",
+  "text": "HEAVENLY DEMON",
+  "box": [
+   40,
+   1120,
+   742,
+   1190
+  ],
+  "lines": [
+   [
+    40,
+    1120,
+    742,
+    1190
+   ]
+  ]
+ }
+]
