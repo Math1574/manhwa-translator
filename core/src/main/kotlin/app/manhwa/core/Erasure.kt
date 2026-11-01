@@ -38,7 +38,16 @@ object Erasure {
         val strokePx: Float = 0f,
         /** Encre d'origine (pixels de texte non dilatés, w*h) : sert à choisir une police qui ressemble au lettrage. */
         val ink: BooleanArray? = null,
+        /** Couleur moyenne réellement obtenue après effacement (pixels remplacés), RGB opaque ; 0 si rien n'est remplacé. */
+        val fillMean: Int = 0,
     )
+
+    /** Couleur moyenne (RGB opaque) des pixels effectivement remplacés ; 0 s'il n'y en a pas. */
+    private fun meanFill(layer: IntArray): Int {
+        var r = 0L; var g = 0L; var b = 0L; var n = 0L
+        for (c in layer) if ((c ushr 24) >= 128) { r += (c shr 16) and 0xFF; g += (c shr 8) and 0xFF; b += c and 0xFF; n++ }
+        return if (n == 0L) 0 else (0xFF shl 24) or ((r / n).toInt() shl 16) or ((g / n).toInt() shl 8) or (b / n).toInt()
+    }
 
     /** @param exclude lignes de texte des AUTRES blocs (pixels de l'image) : un bloc n'efface jamais ce qui appartient à un voisin. */
     fun plan(src: PixelSource, s: Float, lineBoxes: List<RectF>, lineH: Float, imageW: Float, imageH: Float, exclude: List<RectF> = emptyList()): Plan? {
@@ -93,7 +102,7 @@ object Erasure {
             val mask = BooleanArray(w * h) { clean[it] || grown[it] }
             val layer = IntArray(w * h) { if (mask[it]) (0xFF shl 24) or (a.bg and 0xFFFFFF) else 0 }
             val shape = bubbleShape(src, s, union, a.bg, imageW, imageH)
-            return Plan(Mode.FLAT, x0, y0, w, h, mask, layer, a.bg, a.textColor, a.outlined, bubble, shape, stroke, raw)
+            return Plan(Mode.FLAT, x0, y0, w, h, mask, layer, a.bg, a.textColor, a.outlined, bubble, shape, stroke, raw, meanFill(layer))
         }
         // bulle au fond non uni (dégradé, ombre, lueur sombre) : on remplace toute la zone du texte à l'intérieur de la bulle par un fond lissé
         run {
@@ -101,14 +110,17 @@ object Erasure {
             val shape = bubbleShape(src, s, union, a.bg, imageW, imageH, smooth = true)
             if (shape != null) {
                 val farS = TextErase.localFarMask(px, w, h, max(5, (lh * 0.6f).toInt()), 40); val encS = TextErase.enclosedOnly(farS, w, h) // lettres isolées
-                val mask = BooleanArray(w * h) { i -> zone[i] && (shape.contains((x0 + i % w + 0.5f) / s, (y0 + i / w + 0.5f) / s) || encS[i]) }
+                val encG = TextErase.dilate(encS, w, h, max(2, (lh * 0.06f).toInt()))   // bords des lettres compris : ils ne doivent pas servir de référence au remplissage
+                val mask = BooleanArray(w * h) { i -> zone[i] && (shape.contains((x0 + i % w + 0.5f) / s, (y0 + i / w + 0.5f) / s) || encG[i]) }
                 if (mask.count { it } > 0) {
-                    val fill = TextErase.inpaint(px, w, h, mask)
+                    // références du remplissage : seulement l'intérieur de la bulle (ni la page blanche autour, ni le contour)
+                    val outside = BooleanArray(w * h) { i -> !shape.contains((x0 + i % w + 0.5f) / s, (y0 + i / w + 0.5f) / s) }
+                    val fill = TextErase.inpaint(px, w, h, BooleanArray(w * h) { mask[it] || outside[it] })
                     val alpha = TextErase.featherAlpha(mask, w, h)
                     val layer = IntArray(w * h) { if (mask[it]) (alpha[it] shl 24) or (fill[it] and 0xFFFFFF) else 0 }
                     val fc = TextErase.extremeTextColor(px, zone)
                     val ink = TextErase.artMask(px, w, h, zone, fc, 0)
-                    return Plan(Mode.SMOOTH, x0, y0, w, h, mask, layer, a.bg, fc, false, null, shape, TextErase.strokeWidth(ink, w, h), ink)
+                    return Plan(Mode.SMOOTH, x0, y0, w, h, mask, layer, a.bg, fc, false, null, shape, TextErase.strokeWidth(ink, w, h), ink, meanFill(layer))
                 }
             }
         }
@@ -124,7 +136,7 @@ object Erasure {
         val alpha = TextErase.featherAlpha(mask, w, h)
         val layer = IntArray(w * h) { if (mask[it]) (alpha[it] shl 24) or (fill[it] and 0xFFFFFF) else 0 }
         val inkArt = TextErase.artMask(px, w, h, zoneArt, fillColor, 0)
-        return Plan(Mode.ART, x0, y0, w, h, mask, layer, a.bg, fillColor, a.outlined, null, null, TextErase.strokeWidth(inkArt, w, h), inkArt)
+        return Plan(Mode.ART, x0, y0, w, h, mask, layer, a.bg, fillColor, a.outlined, null, null, TextErase.strokeWidth(inkArt, w, h), inkArt, meanFill(layer))
     }
 
     /**

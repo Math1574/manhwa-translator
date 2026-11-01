@@ -34,7 +34,7 @@ class PagePipeline(
     private val useCache: Boolean = true,
     private val debugSink: ((DebugInfo) -> Unit)? = null,
     /** Vrai pour une ligne à ignorer (filigrane, logo, débris de lecture sur le dessin). */
-    private val junk: (String) -> Boolean = { false },
+    private val junk: (text: String, relativeHeight: Float) -> Boolean = { _, _ -> false },
     /** Répare les erreurs de lecture avant traduction (mots collés, chiffres ou minuscules parasites). */
     private val repair: (String) -> String = { it },
 ) {
@@ -46,7 +46,10 @@ class PagePipeline(
             return PageOutcome.Failed("ocr", e.message ?: e.javaClass.simpleName)
         }
         val grouped = grouper.group(ocrResult.lines)
-        val blocks = grouped.filter { !TextNormalizer.isNoise(it.text) && !junk(it.text) }
+        // hauteur de ligne relative à la médiane de la page : un gros lettrage (onomatopée, titre) n'est jamais un débris
+        val heights = grouped.map { medianLineHeight(it) }.filter { it > 0f }.sorted()
+        val medianH = if (heights.isEmpty()) 0f else heights[heights.size / 2]
+        val blocks = grouped.filter { !TextNormalizer.isNoise(it.text) && !junk(it.text, if (medianH > 0f) medianLineHeight(it) / medianH else 1f) }
         val clean = blocks.map { repair(it.text) }
         reportDebug(ocrResult, grouped, blocks, emptySet())
         if (blocks.isEmpty()) return PageOutcome.NoText(ocrResult.imageWidth, ocrResult.imageHeight)

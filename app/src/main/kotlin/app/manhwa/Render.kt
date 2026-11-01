@@ -263,9 +263,10 @@ object PageRenderer {
                 canvas.drawColor(0xE6FFFFFF.toInt()) // image non décodée : aplat clair derrière le texte (repli)
             }
             // 2) texte traduit
-            val bgForText = plan?.bg ?: 0xFFFFFFFF.toInt()
+            // fond réellement obtenu après effacement (et non une estimation) : le texte doit toujours y être lisible
+            val bgForText = plan?.let { if (it.fillMean != 0) it.fillMean else it.bg } ?: 0xFFFFFFFF.toInt()
             var fg = plan?.textColor ?: ColorMath.textColorFor(bgForText)
-            if (plan?.mode != Erasure.Mode.ART && kotlin.math.abs(ColorMath.luminance(fg) - ColorMath.luminance(bgForText)) < 0.35f) fg = ColorMath.textColorFor(bgForText)
+            if (plan?.mode != Erasure.Mode.ART && kotlin.math.abs(ColorMath.luminance(fg) - ColorMath.luminance(bgForText)) < 0.45f) fg = ColorMath.textColorFor(bgForText)
             val art = plan?.mode == Erasure.Mode.ART
             val px = fit.size * ss
             paint.textSize = px
@@ -293,6 +294,7 @@ object PageRenderer {
                 .put("png", "data:image/png;base64," + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP))
             val rep = JSONObject().put("x", l.toDouble()).put("y", t.toDouble()).put("w", (r - l).toDouble()).put("h", (bt - t).toDouble())
                 .put("t", fit.lines.joinToString("\n") { it.text }).put("fs", fit.size.toDouble()).put("style", p.style.name)
+                .put("fg", "#%06x".format(fg and 0xFFFFFF)).put("fillMean", "#%06x".format((plan?.fillMean ?: 0) and 0xFFFFFF)).put("planBg", "#%06x".format((plan?.bg ?: 0) and 0xFFFFFF))
                 .put("mode", plan?.mode?.name ?: "NONE").put("outlined", plan?.outlined ?: false)
                 .put("fits", fit.fits).put("lines", fit.lines.size).put("shape", plan?.shape != null)
                 .put("family", font.family).put("skew", font.skew.toDouble()).put("embolden", font.embolden.toDouble()).put("scaleX", font.scaleX.toDouble()).put("wght", font.wght).put("wdth", font.wdth.toDouble()).put("em", em.toDouble()).put("stepRatio", stepRatio.toDouble())
