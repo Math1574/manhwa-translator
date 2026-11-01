@@ -26,7 +26,7 @@ jobs:
           B=https://dl.google.com/dl/android/maven2/com/google/ai/edge/litertlm/litertlm-android/0.18.1
           curl -sS -m 120 -o /tmp/lm.aar $B/litertlm-android-0.18.1.aar
           mkdir -p /tmp/aar && cd /tmp/aar && unzip -oq /tmp/lm.aar
-          for c in Conversation ConversationConfig EngineConfig Engine MessageCallback SamplerConfig; do
+          for c in Conversation ConversationConfig EngineConfig Engine MessageCallback SamplerConfig ExperimentalFlags ExperimentalApi Backend 'Backend$GPU' 'Backend$CPU'; do
             echo "---- $c"; javap -public -cp classes.jar "com.google.ai.edge.litertlm.$c" 2>&1 | grep -vE "copy|component|hashCode|equals|\\\$default" | head -40
           done
           } > /tmp/probe.txt 2>&1
