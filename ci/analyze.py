@@ -62,6 +62,11 @@ for path in sorted(glob.glob(f"{OUT}/reports/*.json")):
     shaped = sum(1 for im in imgs for b in (im.get('overlay') or {}).get('blocks', []) if b.get('shape'))
     if nblocks: P(f"- rendu : {shaped}/{nblocks} bulles à forme détectée · texte ne tenant pas dans sa zone : {nofit}")
     if nofit: problems.append(f"{name}: texte ne tient pas dans sa zone ({nofit})")
+    if name.startswith("adblock"):
+        blocked = r.get("blocked", 0); final = r.get("finalUrl", "")
+        P(f"- blocage des publicités : {blocked} requêtes ou redirections bloquées · adresse finale {final}")
+        if blocked < 3: problems.append(f"{name}: blocage insuffisant ({blocked})")
+        if "evil-redirect" in final: problems.append(f"{name}: la redirection automatique a abouti")
     P(f"- OCR : {tot_ocr} lignes ({kept} utilisées, {rej} écartées) · bulles affichées {nblocks} · hors image {outside} · chevauchements {overlap} · texte < 10px {tiny}")
     if outside or overlap: problems.append(f"{name}: mise en page (hors image {outside}, chevauchements {overlap})")
 

@@ -37,6 +37,10 @@ jobs:
           for f in PP-OCRv4/ch_PP-OCRv4_det_infer.onnx PP-OCRv3/en_PP-OCRv3_rec_infer.onnx PP-OCRv1/japan_rec_crnn.onnx PP-OCRv1/korean_mobile_v2.0_rec_infer.onnx PP-OCRv4/ch_PP-OCRv4_rec_infer.onnx; do
             curl -sSfL --retry 3 -o app/src/main/assets/ocr/$(basename $f) $H/$f
           done
+          # second lecteur anglais (PP-OCRv5, Apache-2.0) : concurrent du v3, on garde la lecture la plus sûre
+          V5=https://huggingface.co/monkt/paddleocr-onnx/resolve/main/languages/english
+          curl -sSfL --retry 3 -o app/src/main/assets/ocr/en_PP-OCRv5_rec_infer.onnx $V5/rec.onnx
+          curl -sSfL --retry 3 -o app/src/main/assets/ocr/en_v5_dict.txt $V5/dict.txt
           ls -la app/src/main/assets/ocr
       - name: Compiler l'APK debug
         run: |

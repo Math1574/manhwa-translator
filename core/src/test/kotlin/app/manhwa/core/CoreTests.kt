@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests()
+    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -802,5 +802,25 @@ fun repairTests() {
         listOf("Asd.", "Py", "yut", "Toro5", "UL", "2Anw").forEach { T.ok(JunkFilter.isDebris(it, lex), "débris : $it") }
         listOf("AAAAGH...!", "GAGH!!", "HUH?!", "WHAT?", "OK", "I see.", "Haha.", "STOP!!", "YOU KNOW?", "Hmph.").forEach { T.ok(!JunkFilter.isDebris(it, lex), "à garder : $it") }
         T.ok(!JunkFilter.isDebris("제발...", lex), "texte non anglais jamais débris")
+    }
+}
+
+// ---------- blocage des publicités ----------
+fun adBlockTests() {
+    val ab = AdBlocker(listOf("doubleclick.net", "ads.example.org", "exoclick.com"))
+    T.test("pub : domaine et sous-domaines bloqués, autres sites épargnés") {
+        T.ok(ab.isBlocked("doubleclick.net") && ab.isBlocked("stats.g.doubleclick.net") && ab.isBlocked("syndication.exoclick.com"), "bloqués")
+        T.ok(!ab.isBlocked("example.org") && !ab.isBlocked("cdn.manga-site.com") && !ab.isBlocked("com"), "épargnés")
+        T.ok(ab.isBlocked("ads.example.org") && !ab.isBlocked("img.example.org"), "sous-domaine précis")
+    }
+    T.test("pub : jamais de blocage sur le site visité lui-même") {
+        T.ok(!ab.isBlocked("ads.example.org", pageHost = "www.example.org"), "même site")
+        T.ok(ab.isBlocked("doubleclick.net", pageHost = "manga-site.com"), "autre site")
+    }
+    T.test("pub : redirection sans geste vers un autre site bloquée ; clic de l'utilisateur et même site autorisés") {
+        T.ok(ab.isSuspiciousRedirect("evil.xyz", "manga-site.com", hasGesture = false, isRedirect = true), "sans geste")
+        T.ok(!ab.isSuspiciousRedirect("evil.xyz", "manga-site.com", hasGesture = true, isRedirect = false), "clic")
+        T.ok(!ab.isSuspiciousRedirect("cdn.manga-site.com", "www.manga-site.com", hasGesture = false, isRedirect = true), "même site")
+        T.ok(!ab.isSuspiciousRedirect("bbc.co.uk", "news.bbc.co.uk", hasGesture = false, isRedirect = true), "suffixe co.uk")
     }
 }

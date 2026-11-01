@@ -43,6 +43,7 @@ class AppGraph(ctx: Context) {
             }
         }
     }
+    val gpuTest = GpuTester(ctx, this)
     val controller = TranslationController(ctx, this)
 }
 

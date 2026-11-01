@@ -86,6 +86,7 @@ run pc_en_mlkit          pc_en.html          MLKIT EN FR "fr"      300
 run synth_en_caps_mlkit  synth_en_caps.html  MLKIT EN FR "fr"      200
 run synth_en_mixed_mlkit synth_en_mixed.html MLKIT EN FR "fr"      200
 run synth_en_variety_combined synth_en_variety.html MLKIT EN FR "fr" 300
+run adblock_mlkit adtest.html MLKIT EN FR "fr" 200
 EXTRA=(--es mt_enhanced false)
 run synth_en_fancy_mlkitonly synth_en_fancy.html MLKIT EN FR "fr" 250
 EXTRA=()

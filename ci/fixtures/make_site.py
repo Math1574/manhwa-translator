@@ -15,6 +15,13 @@ def page(name, title, imgs, lazy=False, prefix=""):
         js = """<script>var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){var im=e.target;im.src=im.dataset.src;io.unobserve(im);im.style.minHeight=0;}})},{rootMargin:'200px'});document.querySelectorAll('img[data-src]').forEach(function(i){io.observe(i)});</script>"""
     open(f"{S}/{name}.html", "w").write(HEAD % title + f"<h3 style='padding:8px'>{title}</h3>" + body + js + "</body></html>")
 
+# page piégée : régies publicitaires + redirection automatique vers un autre site (sans geste de l'utilisateur)
+if os.path.exists(f"{S}/synth/en_caps.png"):
+    open(f"{S}/adtest.html", "w").write(HEAD % "Pubs" + "<h3 style='padding:8px'>Test du blocage des publicités</h3>"
+        + '<img src="https://pagead2.googlesyndication.com/pagead/test.png" width="1" height="1">'
+        + '<script src="https://exoclick.com/ad.js"></script><iframe src="https://googleads.g.doubleclick.net/x" width="1" height="1"></iframe>'
+        + '<img src="synth/en_caps.png" style="display:block;width:100%;margin:0">'
+        + "<script>setTimeout(function(){location.href='http://evil-redirect.example.net/landing'},2500)</script></body></html>")
 for lang in ("en", "fr", "ja", "kr", "cn"):
     imgs = sorted(os.path.basename(p) for p in glob.glob(f"{S}/pc/{lang}/E01P*.jpg"))
     if imgs:

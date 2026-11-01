@@ -22,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import app.manhwa.core.AdBlocker
 import app.manhwa.core.CacheKey
 import app.manhwa.core.DebugInfo
 import app.manhwa.core.JunkFilter
@@ -83,6 +84,14 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     var editTarget by mutableStateOf<EditTarget?>(null)
     private val candidatesById = ConcurrentHashMap<String, Candidate>()
     private val keysById = ConcurrentHashMap<String, CacheKey>()
+
+    // ---------- blocage des publicités ----------
+    private val adBlocker: AdBlocker by lazy {
+        AdBlocker(try { ctx.assets.open("adblock/domains.txt").bufferedReader().use { it.readLines() } } catch (e: Throwable) { emptyList() })
+    }
+    @Volatile private var pageHost: String? = null
+    /** Nombre de requêtes publicitaires et de redirections bloquées depuis le démarrage (affiché dans le journal de test). */
+    val blockedCount = java.util.concurrent.atomic.AtomicInteger(0)
     /** Texte normalisé → images (par contenu) où il est apparu : un texte qui revient sur au moins 4 images différentes est un filigrane. */
     private val seenTexts = ConcurrentHashMap<String, MutableSet<String>>()
 
@@ -177,11 +186,23 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         wv.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val scheme = request.url.scheme?.lowercase()
-                return scheme != "http" && scheme != "https" // intent:, market:, etc. : ignorés
+                if (scheme != "http" && scheme != "https") return true // intent:, market:, etc. : ignorés
+                // redirection vers un autre site sans geste de l'utilisateur (publicité) : refusée
+                if (graph.settingsStore.settings.blockAds && request.isForMainFrame &&
+                    adBlocker.isSuspiciousRedirect(request.url.host, pageHost, request.hasGesture(), request.isRedirect)) { blockedCount.incrementAndGet(); return true }
+                return false
+            }
+
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                if (!graph.settingsStore.settings.blockAds || request.isForMainFrame) return null
+                if (!adBlocker.isBlocked(request.url.host, pageHost)) return null
+                blockedCount.incrementAndGet()
+                return WebResourceResponse("text/plain", "utf-8", 200, "OK", emptyMap(), java.io.ByteArrayInputStream(ByteArray(0)))
             }
 
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
                 currentUrl = if (url.startsWith("http")) url else ""
+                pageHost = try { android.net.Uri.parse(url).host } catch (e: Throwable) { null }
                 graph.gemma.seriesTitle = if (url.startsWith("http")) app.manhwa.core.SeriesHint.fromUrl(url) else null
                 loading = true
                 pageError = null
@@ -192,6 +213,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             override fun onPageFinished(view: WebView, url: String) {
                 loading = false
                 view.evaluateJavascript(PageScript.INJECT, null)
+                if (graph.settingsStore.settings.blockAds) view.evaluateJavascript("(function(){var s=document.createElement('style');s.textContent='ins.adsbygoogle,[id^=\"google_ads_iframe\"],iframe[src*=\"doubleclick.net\"],iframe[src*=\"googlesyndication.com\"]{display:none!important}';(document.head||document.documentElement).appendChild(s)})()", null)
                 if (graph.settingsStore.settings.autoTranslate && url.startsWith("http")) start(false)
             }
 

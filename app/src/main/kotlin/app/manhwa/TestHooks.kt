@@ -100,6 +100,7 @@ object TestHooks {
                 .put("url", url).put("elapsedMs", System.currentTimeMillis() - t0).put("timeout", timedOut)
                 .put("settings", JSONObject().put("source", settings.source.name).put("target", settings.target.name).put("engine", settings.engine.name).put("textScale", settings.textScale.toDouble()).put("enhancedOcr", settings.enhancedOcr && graph.paddleModels.available))
                 .put("counters", JSONObject().put("total", c.total).put("done", c.done).put("failed", c.failed).put("noText", c.noText).put("lastError", c.lastError ?: ""))
+                .put("blocked", c.blockedCount.get()).put("finalUrl", c.currentUrl).put("backend", graph.gemma.backendLabel)
                 .put("notes", notes)
                 .put("images", JSONArray(c.testLog.toList()))
             val tmp = File(ctx.filesDir, "$reportName.tmp")

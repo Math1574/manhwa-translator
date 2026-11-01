@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
@@ -399,6 +400,18 @@ fun SettingsScreen(graph: AppGraph) {
                 Text("Plus rapide pour Gemma, mais peut échouer selon le téléphone (repli automatique sur le processeur).", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             }
             Switch(checked = s.useGpu, onCheckedChange = { v -> store.update { it.copy(useGpu = v) } })
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedButton(onClick = { graph.gpuTest.run() }, enabled = !graph.gpuTest.running) { Text("Tester CPU / GPU") }
+            if (graph.gpuTest.running) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+        }
+        if (graph.gpuTest.summary.isNotEmpty()) Text(graph.gpuTest.summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Bloquer les publicités", style = MaterialTheme.typography.titleMedium)
+                Text("Filtre les régies publicitaires connues, les fenêtres intempestives et les redirections vers d'autres sites. Désactivez-le si un site de lecture ne s'affiche plus correctement.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            }
+            Switch(checked = s.blockAds, onCheckedChange = { v -> store.update { it.copy(blockAds = v) } })
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {

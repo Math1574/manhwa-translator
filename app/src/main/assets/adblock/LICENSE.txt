@@ -1,0 +1,1 @@
+Liste de domaines publicitaires issue de la « AdAway default blocklist » (https://github.com/AdAway/adaway.github.io), licence CC Attribution 3.0 (http://creativecommons.org/licenses/by/3.0/). Auteurs : Kicelo, Dominik Schuermann et contributeurs. Domaines supplémentaires ajoutés par ce projet.

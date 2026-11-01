@@ -1,0 +1,47 @@
+name: MT eval
+on:
+  workflow_dispatch:
+    inputs:
+      models: { description: "1.8b | 7b | both", default: "1.8b" }
+permissions:
+  contents: write
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: llama.cpp (binaire officiel, CPU)
+        run: |
+          set -e
+          URL=$(curl -sS https://api.github.com/repos/ggml-org/llama.cpp/releases/latest | python3 -c "
+          import sys,json
+          a=json.load(sys.stdin)['assets']
+          c=[x['browser_download_url'] for x in a if 'ubuntu-x64' in x['name'] and not any(k in x['name'] for k in ('vulkan','rocm','openvino','sycl','cuda','hip'))]
+          print(c[0])")
+          echo "binaire : $URL"
+          curl -sSL -o /tmp/llama.pkg "$URL"
+          mkdir -p /tmp/llama && cd /tmp/llama
+          case "$URL" in *.zip) unzip -oq /tmp/llama.pkg;; *) tar xzf /tmp/llama.pkg;; esac
+          find /tmp/llama -name "llama-server" -type f | head -1 > /tmp/server_path
+          cat /tmp/server_path
+      - name: Évaluation Hy-MT2-1.8B (Q4_K_M)
+        if: inputs.models != '7b'
+        run: |
+          curl -sSfL -o /tmp/m18.gguf https://huggingface.co/tencent/Hy-MT2-1.8B-GGUF/resolve/main/Hy-MT2-1.8B-Q4_K_M.gguf
+          S=$(cat /tmp/server_path); export LD_LIBRARY_PATH=$(dirname $S):$LD_LIBRARY_PATH
+          python3 ci/mteval.py /tmp/m18.gguf $S hy-mt2-1.8b-q4km /tmp/mt18.json upper,sentence,context
+      - name: Évaluation Hy-MT2-7B (Q4_K_M)
+        if: inputs.models != '1.8b'
+        run: |
+          curl -sSfL -o /tmp/m7.gguf https://huggingface.co/tencent/Hy-MT2-7B-GGUF/resolve/main/Hy-MT2-7B-Q4_K_M.gguf
+          S=$(cat /tmp/server_path); export LD_LIBRARY_PATH=$(dirname $S):$LD_LIBRARY_PATH
+          python3 ci/mteval.py /tmp/m7.gguf $S hy-mt2-7b-q4km /tmp/mt7.json sentence,context
+      - name: Publier les résultats (branche mteval-results)
+        if: always()
+        run: |
+          mkdir -p /tmp/res; cp /tmp/mt*.json /tmp/res/ 2>/dev/null || true; cp /tmp/srv.log /tmp/res/ 2>/dev/null || true
+          git config user.name ci; git config user.email ci@example.invalid
+          git checkout --orphan mteval-results; git rm -rf . >/dev/null 2>&1 || true
+          cp /tmp/res/* . 2>/dev/null || echo "aucun résultat" > vide.txt
+          git add -A; git commit -q -m "mteval"; git push origin mteval-results --force

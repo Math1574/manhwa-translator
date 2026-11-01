@@ -22,6 +22,8 @@ import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
+import com.google.ai.edge.litertlm.ExperimentalApi
+import com.google.ai.edge.litertlm.ExperimentalFlags
 import com.google.ai.edge.litertlm.Message
 import com.google.ai.edge.litertlm.SamplerConfig
 import java.io.File
@@ -209,19 +211,70 @@ class GemmaTranslator(
     private fun textOf(m: Message): String =
         m.contents.contents.filterIsInstance<Content.Text>().joinToString("") { it.text }.ifEmpty { m.toString() }
 
+    /** Description du moteur actif (« GPU + décodage spéculatif », « CPU »…), pour les réglages et le journal. */
+    @Volatile var backendLabel: String = ""
+        private set
+
+    /**
+     * Crée et initialise un moteur. Le décodage spéculatif (prédiction de plusieurs jetons) accélère la génération sur CPU comme sur GPU ;
+     * il suppose un modèle récent (fichier publié après mai 2026) : en cas d'échec on réessaie sans.
+     */
+    @OptIn(ExperimentalApi::class)
+    private fun createEngine(path: String, backend: Backend, speculative: Boolean): Engine {
+        ExperimentalFlags.enableSpeculativeDecoding = speculative
+        return Engine(EngineConfig(modelPath = path, backend = backend, maxNumTokens = 4096, cacheDir = ctx.cacheDir.path)).also { it.initialize() }
+    }
+
     private fun ensureEngine(spec: ModelSpec, gpu: Boolean): Engine {
         val key = spec.id + if (gpu) ":gpu" else ":cpu"
         engine?.let { if (engineKey == key) return it }
         release()
         val path = models.fileOf(spec).absolutePath
-        fun create(backend: Backend): Engine = Engine(
-            EngineConfig(modelPath = path, backend = backend, maxNumTokens = 4096, cacheDir = ctx.cacheDir.path),
-        ).also { it.initialize() }
-        val e = if (gpu) {
-            try { create(Backend.GPU()) } catch (t: Throwable) { create(Backend.CPU()) } // repli CPU si le GPU est indisponible
-        } else create(Backend.CPU())
-        engine = e; engineKey = key
-        return e
+        // ordre d'essai : GPU + spéculatif, GPU, CPU + spéculatif, CPU (repli automatique si une option n'est pas disponible)
+        val attempts = (if (gpu) listOf(true to true, true to false) else emptyList()) + listOf(false to true, false to false)
+        var last: Throwable? = null
+        for ((useGpu, spec2) in attempts) {
+            try {
+                val e = createEngine(path, if (useGpu) Backend.GPU() else Backend.CPU(), spec2)
+                engine = e; engineKey = key
+                backendLabel = (if (useGpu) "GPU" else "CPU") + (if (spec2) " + décodage spéculatif" else "")
+                return e
+            } catch (t: Throwable) { last = t }
+        }
+        throw last ?: IllegalStateException("moteur indisponible")
+    }
+
+    class BenchResult(val label: String, val ok: Boolean, val initMs: Long, val translateMs: Long, val error: String?)
+
+    /** Mesure de vitesse : charge le modèle avec le backend demandé, traduit six répliques types et rapporte les temps. */
+    @Synchronized fun benchmark(spec: ModelSpec, gpu: Boolean): BenchResult {
+        release()
+        val label = if (gpu) "GPU" else "CPU"
+        val path = models.fileOf(spec).absolutePath
+        val t0 = System.currentTimeMillis()
+        val eng = try { createEngine(path, if (gpu) Backend.GPU() else Backend.CPU(), true) } catch (t: Throwable) {
+            return try { createEngine(path, if (gpu) Backend.GPU() else Backend.CPU(), false).let { e2 -> benchWith(e2, label, t0) } } catch (t2: Throwable) { BenchResult(label, false, 0, 0, t2.message ?: t2.javaClass.simpleName) }
+        }
+        return benchWith(eng, "$label + décodage spéculatif", t0)
+    }
+
+    private fun benchWith(eng: Engine, label: String, t0: Long): BenchResult {
+        val initMs = System.currentTimeMillis() - t0
+        return try {
+            val lines = listOf("I never thought I would see you again.", "Don't underestimate me!", "Master, the elders are waiting in the main hall.", "...Who are you? What do you want from me?", "HAHAHA! So the rumors were true after all!", "We have no choice but to fight.")
+            val config = ConversationConfig(
+                systemInstruction = Contents.of(LlmPrompt.system("en", "fr", promptVariant)),
+                samplerConfig = SamplerConfig(topK = 20, topP = 0.9, temperature = 0.1),
+                maxOutputToken = LlmPrompt.maxOutputTokens(lines),
+            )
+            val t1 = System.currentTimeMillis()
+            val reply = eng.createConversation(config).use { conv -> textOf(conv.sendMessage(LlmPrompt.user(lines, emptyList(), emptyList()))) }
+            val ms = System.currentTimeMillis() - t1
+            val parsed = LlmPrompt.parse(reply, lines.size)
+            BenchResult(label, parsed.count { !it.isNullOrBlank() } == lines.size, initMs, ms, null)
+        } catch (t: Throwable) {
+            BenchResult(label, false, initMs, 0, t.message ?: t.javaClass.simpleName)
+        } finally { try { eng.close() } catch (_: Throwable) {} }
     }
 
     private fun remember(src: String, tgt: String) {
