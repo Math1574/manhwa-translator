@@ -1,0 +1,22 @@
+Performing Streamed Install
+Success
+Physical size: 1080x2400
+[e2e 14:42:12] envoi du modèle gemma-4-E2B-it.litertlm sur l'émulateur
+total 2527520
+drwxrwxrwx 2 u0_a192 u0_a192       4096 2026-11-01 14:42 .
+drwxrwxrwx 3 u0_a192 u0_a192       4096 2026-11-01 14:42 ..
+-rw-rw-rw- 1 u0_a192 u0_a192 2588147712 2026-11-01 14:42 gemma-4-E2B-it.litertlm
+-rw-rw-rw- 1 u0_a192 u0_a192         64 2026-11-01 14:42 gemma-4-E2B-it.litertlm.ok
+[e2e 14:42:42] === banc d'essai de traduction : e2b (GEMMA_E2B, variantes v2,v3)
+[e2e 14:49:56] banc d'essai terminé : e2b (434 s)
+[e2e 14:49:56] envoi du modèle gemma-4-E4B-it.litertlm sur l'émulateur
+total 6101296
+drwxrwxrwx 2 u0_a192 u0_a192       4096 2026-11-01 14:50 .
+drwxrwxrwx 4 u0_a192 u0_a192       4096 2026-11-01 14:49 ..
+-rw-rw-rw- 1 u0_a192 u0_a192 2588147712 2026-11-01 14:42 gemma-4-E2B-it.litertlm
+-rw-rw-rw- 1 u0_a192 u0_a192         64 2026-11-01 14:42 gemma-4-E2B-it.litertlm.ok
+-rw-rw-rw- 1 u0_a192 u0_a192 3659530240 2026-11-01 14:50 gemma-4-E4B-it.litertlm
+-rw-rw-rw- 1 u0_a192 u0_a192         64 2026-11-01 14:50 gemma-4-E4B-it.litertlm.ok
+[e2e 14:50:43] === banc d'essai de traduction : e4b (GEMMA_E4B, variantes v2,v3)
+[e2e 15:10:13] banc d'essai terminé : e4b (1169 s)
+[e2e 15:10:13] toutes les scènes sont terminées
