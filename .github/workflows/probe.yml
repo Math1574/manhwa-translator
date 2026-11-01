@@ -15,7 +15,7 @@ jobs:
           H=https://huggingface.co
           for f in monkt/paddleocr-onnx/languages/english/rec.onnx monkt/paddleocr-onnx/languages/english/dict.txt monkt/paddleocr-onnx/languages/english/config.json \
                    monkt/paddleocr-onnx/languages/korean/rec.onnx monkt/paddleocr-onnx/languages/korean/dict.txt monkt/paddleocr-onnx/languages/latin/rec.onnx monkt/paddleocr-onnx/languages/latin/dict.txt \
-                   monkt/paddleocr-onnx/detection/v3/det.onnx edgetools/migan/migan_pipeline_v2.onnx; do
+                   monkt/paddleocr-onnx/languages/chinese/rec.onnx monkt/paddleocr-onnx/languages/chinese/dict.txt monkt/paddleocr-onnx/languages/korean/config.json; do
             n=$(echo $f | sed 's#/#__#g'); curl -sSfL -m 300 -o "$n" "$H/${f%%/*}/$(echo $f | cut -d/ -f2)/resolve/main/$(echo $f | cut -d/ -f3-)" || echo "ECHEC $f"
           done
           ls -la /tmp/models

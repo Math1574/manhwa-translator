@@ -26,6 +26,11 @@ for repo in REPOS:
         if len(files) > 400: out.append(f"  ... {len(files)} fichiers au total")
     except Exception as e:
         out.append(f"  ERREUR {e}")
+out.append("===== recherche PP-OCRv5 / RapidOCR")
+for q in ("PP-OCRv5 onnx", "RapidOCR", "ppocrv5", "PP-OCRv5_mobile_rec"):
+    try:
+        for m in json.loads(get("https://huggingface.co/api/models?search=" + urllib.parse.quote(q) + "&limit=25")): out.append(f"  [{q}] {m['id']}")
+    except Exception as e: out.append(f"  ERREUR {q} {e}")
 out.append("===== recherche Hy-MT2")
 try:
     for m in json.loads(get("https://huggingface.co/api/models?search=Hy-MT2&limit=20")): out.append("  " + m["id"])
