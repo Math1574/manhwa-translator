@@ -40,6 +40,11 @@ class ResultCache(private val dir: File, private val maxEntries: Int = 64, priva
         evictDisk()
     }
 
+    @Synchronized fun remove(key: CacheKey) {
+        memory.remove(key.id)
+        File(dir, key.id + ".page").delete()
+    }
+
     @Synchronized fun diskBytes(): Long = dir.listFiles { f -> f.name.endsWith(".page") }?.sumOf { it.length() } ?: 0L
 
     @Synchronized fun clear() {
@@ -59,9 +64,9 @@ class ResultCache(private val dir: File, private val maxEntries: Int = 64, priva
 
     companion object {
         fun encode(r: PageResult): String = buildString {
-            append("V3\t${r.imageWidth}\t${r.imageHeight}\n")
+            append("V4\t${r.imageWidth}\t${r.imageHeight}\n")
             for (b in r.blocks) {
-                append("B\t${b.id}\t${b.box.left}\t${b.box.top}\t${b.box.right}\t${b.box.bottom}\t${if (b.vertical) 1 else 0}\t${b.lineHeight}\t${b.lineBoxes.joinToString(";") { "${it.left},${it.top},${it.right},${it.bottom}" }}\t")
+                append("B\t${b.id}\t${b.box.left}\t${b.box.top}\t${b.box.right}\t${b.box.bottom}\t${if (b.vertical) 1 else 0}\t${b.lineHeight}\t${b.lineBoxes.joinToString(";") { "${it.left},${it.top},${it.right},${it.bottom}" }}\t${b.lineTexts.joinToString("\u001F") { esc(it) }}\t")
                 append(esc(b.source)).append('\t').append(esc(b.translated)).append('\n')
             }
         }
@@ -69,14 +74,15 @@ class ResultCache(private val dir: File, private val maxEntries: Int = 64, priva
         fun decode(s: String): PageResult {
             val lines = s.lines().filter { it.isNotEmpty() }
             val h = lines.first().split('\t')
-            require(h.size == 3 && h[0] == "V3") { "en-tête invalide" }
+            require(h.size == 3 && h[0] == "V4") { "en-tête invalide" }
             val blocks = lines.drop(1).map { l ->
                 val p = l.split('\t')
-                require(p.size == 11 && p[0] == "B") { "ligne invalide" }
+                require(p.size == 12 && p[0] == "B") { "ligne invalide" }
                 TranslatedBlock(
                     p[1].toInt(), RectF(p[2].toFloat(), p[3].toFloat(), p[4].toFloat(), p[5].toFloat()),
-                    unesc(p[9]), unesc(p[10]), p[6] == "1", p[7].toFloat(),
+                    unesc(p[10]), unesc(p[11]), p[6] == "1", p[7].toFloat(),
                     if (p[8].isEmpty()) emptyList() else p[8].split(";").map { q -> q.split(",").map(String::toFloat).let { v -> RectF(v[0], v[1], v[2], v[3]) } },
+                    if (p[9].isEmpty()) emptyList() else p[9].split("\u001F").map { unesc(it) },
                 )
             }
             return PageResult(h[1].toInt(), h[2].toInt(), blocks)

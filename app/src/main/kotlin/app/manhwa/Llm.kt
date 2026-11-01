@@ -8,7 +8,9 @@ import app.manhwa.core.AppSettings
 import app.manhwa.core.ConfirmationRequired
 import app.manhwa.core.GlossaryEntry
 import app.manhwa.core.InsufficientSpace
+import app.manhwa.core.ChapterMemory
 import app.manhwa.core.LlmModels
+import app.manhwa.core.TranslationChecks
 import app.manhwa.core.LlmPrompt
 import app.manhwa.core.ModelSpec
 import app.manhwa.core.ModelStatus
@@ -82,6 +84,9 @@ class LlmModelsManager(ctx: Context) {
  * Traduction par modèle de langage local (Gemma 4 via LiteRT-LM) : toute la page est traduite en une requête,
  * avec le dialogue précédent du chapitre et le glossaire comme contexte. Aucune donnée ne quitte le téléphone.
  */
+/** Résultat des contrôles d'une ligne traduite (pour le journal). */
+class LineReport(val src: String, val tr: String, val problems: List<String>, val retried: Boolean, val fixed: Boolean)
+
 class GemmaTranslator(
     private val ctx: Context,
     private val models: LlmModelsManager,
@@ -95,6 +100,9 @@ class GemmaTranslator(
     @Volatile var refine: Boolean = false
     /** Titre de la série (déduit de l'adresse) : aide le modèle à comprendre le genre et les noms. */
     @Volatile var seriesTitle: String? = null
+    /** Noms et termes du chapitre en cours (mémoire) et rapport des contrôles de la dernière page. */
+    private val memory = ChapterMemory()
+    @Volatile var lastReport: List<LineReport> = emptyList()
     private val history = ArrayDeque<Pair<String, String>>()
     private val main = Handler(Looper.getMainLooper())
     private val releaseTask = Runnable { release() }
@@ -117,7 +125,8 @@ class GemmaTranslator(
             for (i in out.indices) if (out[i] == null) out[i] = ask(eng, listOf(texts[i]), source, target, glossary).firstOrNull()
             var final = out.mapIndexed { i, t -> t ?: throw IllegalStateException("Réponse du modèle incomplète (ligne ${i + 1})") }
             if (refine || s.refinePass) final = refineDraft(eng, texts, final, glossary)
-            texts.indices.forEach { remember(texts[it], final[it]) }
+            final = checkAndFix(eng, texts, final, target, source, glossary)
+            texts.indices.forEach { remember(texts[it], final[it]); memory.observe(texts[it], final[it]) }
             return final
         } finally {
             main.postDelayed(releaseTask, IDLE_RELEASE_MS) // libère la mémoire (plusieurs Go) quand on ne traduit plus
@@ -139,14 +148,50 @@ class GemmaTranslator(
         }
     }
 
-    private fun ask(eng: Engine, texts: List<String>, source: String, target: String, glossary: List<GlossaryEntry>): MutableList<String?> {
+    /**
+     * Contrôle chaque ligne (mots anglais restants, contenu perdu, nom modifié, chiffres, répétition…) et refait seule toute ligne qui échoue,
+     * une fois, avec le détail des problèmes. La nouvelle version n'est retenue que si elle a moins de problèmes.
+     */
+    private fun checkAndFix(eng: Engine, texts: List<String>, draft: List<String>, target: String, source: String, glossary: List<GlossaryEntry>): List<String> {
+        val names = memory.namesToKeep()
+        val out = draft.toMutableList(); val reports = ArrayList<LineReport>()
+        for (i in out.indices) {
+            var probs = TranslationChecks.problems(texts[i], out[i], target, names)
+            var retried = false; var fixed = false
+            if (probs.isNotEmpty()) {
+                retried = true
+                val again = try { askFix(eng, texts[i], out[i], probs.map { "${it.code}: ${it.detail}" }, source, target, glossary, names) } catch (e: Throwable) { null }
+                if (again != null) {
+                    val p2 = TranslationChecks.problems(texts[i], again, target, names)
+                    if (p2.size < probs.size) { out[i] = again; fixed = p2.isEmpty(); probs = p2 }
+                }
+            }
+            reports.add(LineReport(texts[i], out[i], probs.map { it.code }, retried, fixed))
+        }
+        lastReport = reports
+        return out
+    }
+
+    private fun askFix(eng: Engine, text: String, previous: String, problems: List<String>, source: String, target: String, glossary: List<GlossaryEntry>, names: List<String>): String? {
+        val config = ConversationConfig(
+            systemInstruction = Contents.of(LlmPrompt.system(source, target, promptVariant)),
+            samplerConfig = SamplerConfig(topK = 20, topP = 0.9, temperature = 0.1),
+            maxOutputToken = LlmPrompt.maxOutputTokens(listOf(text)),
+        )
+        val reply = eng.createConversation(config).use { conv ->
+            withWatchdog(conv) { textOf(conv.sendMessage(LlmPrompt.fixUser(text, previous, problems, history.toList(), glossary, names))) }
+        }
+        return LlmPrompt.parse(reply, 1).firstOrNull()
+    }
+
+    private fun ask(eng: Engine, texts: List<String>, source: String, target: String, glossary: List<GlossaryEntry>, series: String? = seriesTitle): MutableList<String?> {
         val config = ConversationConfig(
             systemInstruction = Contents.of(LlmPrompt.system(source, target, promptVariant)),
             samplerConfig = SamplerConfig(topK = 20, topP = 0.9, temperature = 0.15),
             maxOutputToken = LlmPrompt.maxOutputTokens(texts),
         )
         val reply = eng.createConversation(config).use { conv ->
-            withWatchdog(conv) { textOf(conv.sendMessage(LlmPrompt.user(texts, history.toList(), glossary, seriesTitle))) }
+            withWatchdog(conv) { textOf(conv.sendMessage(LlmPrompt.user(texts, history.toList(), glossary, series, memory.namesToKeep()))) }
         }
         return LlmPrompt.parse(reply, texts.size).toMutableList()
     }
@@ -182,7 +227,7 @@ class GemmaTranslator(
     }
 
     /** Nouveau chapitre ou nouvelle page web : on oublie le dialogue précédent. */
-    @Synchronized fun resetContext() { history.clear() }
+    @Synchronized fun resetContext() { history.clear(); memory.reset() }
 
     @Synchronized fun release() {
         try { engine?.close() } catch (_: Throwable) {}

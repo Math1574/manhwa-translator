@@ -62,6 +62,19 @@ Additional rules:
     }
 
     /** Seconde passe optionnelle : relecture du brouillon (variante « r »). */
+    /** Demande de correction d'une seule ligne dont la première traduction a échoué aux contrôles automatiques. */
+    fun fixUser(text: String, previous: String, problems: List<String>, history: List<Pair<String, String>>, glossary: List<GlossaryEntry>, names: List<String>): String = buildString {
+        if (names.isNotEmpty()) { appendLine("Names and terms to keep exactly as written: ${names.joinToString(", ")}"); appendLine() }
+        if (history.isNotEmpty()) { appendLine("Previous dialogue (context only):"); history.takeLast(6).forEach { (a, b) -> appendLine("- ${oneLine(a)} => ${oneLine(b)}") }; appendLine() }
+        if (glossary.isNotEmpty()) { appendLine("Glossary (use exactly):"); glossary.forEach { appendLine("${it.source} = ${it.target}") }; appendLine() }
+        appendLine("Your previous translation of the line below was rejected by an automatic check.")
+        appendLine("Problems: ${problems.joinToString("; ")}")
+        appendLine("Previous attempt: ${oneLine(previous)}")
+        appendLine()
+        appendLine("Translate this line again, completely and faithfully, in natural French (every word translated except names and set terms):")
+        appendLine("1| ${oneLine(text)}")
+    }.trim()
+
     fun refineSystem(): String = """
 You are a senior French editor of professionally published manhwa. You receive source lines (from OCR, possibly with small mistakes) and a draft French translation. Improve the draft: fix any mistranslation or misunderstanding, remove literal phrasing and calques, make every line natural idiomatic spoken French with the right register and tone, keep names and terms consistent, keep the length close to the original. French typography: sentence case, a space before ? ! : ;. Answer with exactly one line per input line, in the format `N| final translation`, using the same numbers, and nothing else.
 """.trim()
@@ -78,8 +91,9 @@ You are a senior French editor of professionally published manhwa. You receive s
         texts.forEachIndexed { i, t -> appendLine("${i + 1}| source: ${oneLine(t)}") ; appendLine("${i + 1}| draft: ${oneLine(draft.getOrElse(i) { "" })}") }
     }.trim()
 
-    fun user(texts: List<String>, history: List<Pair<String, String>>, glossary: List<GlossaryEntry>, series: String? = null): String = buildString {
-        if (!series.isNullOrBlank()) { appendLine("Series: $series (use it only to understand the genre, the setting and the names)"); appendLine() }
+    fun user(texts: List<String>, history: List<Pair<String, String>>, glossary: List<GlossaryEntry>, series: String? = null, names: List<String> = emptyList()): String = buildString {
+        if (names.isNotEmpty()) { appendLine("Names and terms of this chapter to keep exactly as written (never translate them): ${names.joinToString(", ")}"); appendLine() }
+        if (!series.isNullOrBlank()) { appendLine("Series: $series (background only: never put the series title or its words in a translation unless the source line itself contains them)"); appendLine() }
         if (history.isNotEmpty()) {
             appendLine("Previous dialogue of this chapter (context only, do not translate again):")
             history.forEach { (src, tgt) -> appendLine("- ${oneLine(src)} => ${oneLine(tgt)}") }
@@ -96,6 +110,19 @@ You are a senior French editor of professionally published manhwa. You receive s
 
     /** Nombre maximal de jetons de sortie pour une page : ~ (caractères / 3) × 1,6 de marge + 64 ; borné pour éviter toute génération sans fin. */
     fun maxOutputTokens(texts: List<String>): Int = (((texts.sumOf { it.length } * 1.3 / 3.0) + 12 * texts.size) * 1.6 + 64).toInt().coerceIn(96, 1500)
+
+    /**
+     * Traduction suspecte : contenu supprimé (beaucoup plus courte que l'original) ou terme de glossaire/série injecté alors que la
+     * ligne d'origine n'en parle pas (ex. « Démon Céleste » pour « Anyway, I heard that... »).
+     */
+    fun suspicious(src: String, tr: String): Boolean {
+        val srcLetters = src.count { it.isLetter() }
+        if (srcLetters >= 12 && tr.count { it.isLetter() } < 0.35f * srcLetters) return true
+        val s = src.lowercase(); val t = tr.lowercase()
+        val injected = listOf("démon céleste" to listOf("demon", "heavenly"), "méridien" to listOf("meridian"), "murim" to listOf("murim"))
+        for ((fr, en) in injected) if (t.contains(fr) && en.none { s.contains(it) } && !s.contains("meridian")) return true
+        return false
+    }
 
     private fun oneLine(s: String) = s.replace(Regex("\\s+"), " ").trim()
 

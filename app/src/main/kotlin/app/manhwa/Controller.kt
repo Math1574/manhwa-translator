@@ -22,7 +22,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import app.manhwa.core.CacheKey
 import app.manhwa.core.DebugInfo
+import app.manhwa.core.TranslationChecks
+import app.manhwa.core.sha256Hex
 import app.manhwa.core.LlmModels
 import app.manhwa.core.PageJob
 import app.manhwa.core.PageOutcome
@@ -45,6 +48,9 @@ private data class Candidate(val id: String, val src: String, val top: Double, v
     val priority: Int
         get() = if (top >= scrollY) (top - scrollY).toInt() else 1_000_000 + abs(scrollY - top).toInt()
 }
+
+/** Bulle sélectionnée par appui long pour une correction manuelle. */
+data class EditTarget(val imageId: String, val bid: Int, val src: String, val tr: String)
 
 /** Navigateur + orchestration de la traduction (collecte des images, file d'attente, overlay). */
 class TranslationController(private val ctx: Context, private val graph: AppGraph) {
@@ -71,6 +77,10 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     var failed by mutableIntStateOf(0)
     var noText by mutableIntStateOf(0)
     var lastError by mutableStateOf<String?>(null)
+
+    var editTarget by mutableStateOf<EditTarget?>(null)
+    private val candidatesById = ConcurrentHashMap<String, Candidate>()
+    private val keysById = ConcurrentHashMap<String, CacheKey>()
 
     // Tests automatiques (builds debug) : journal détaillé de chaque image traitée
     @Volatile var testing = false
@@ -287,6 +297,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val ocrEngine = CombinedOcr(s.source, MlKitOcr(s.source), if (enhanced) graph.paddle else null)
         val engineId = (if (spec == null) MlKitTranslation.ID else GemmaTranslator.engineId(spec)) + (if (enhanced) "+pp1" else "")
         var debug: DebugInfo? = null
+        candidatesById[c.id] = c
+        keysById[c.id] = CacheKey(sha256Hex(bytes), s.source.code, s.target.code, engineId)
         val pipeline = PagePipeline(
             graph.cache, ocrEngine, translator, engineId,
             glossary = { graph.glossary.current() },
@@ -295,6 +307,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         )
         val out = pipeline.process(bytes, s.source.code, s.target.code)
         var overlayForLog: JSONObject? = null
+        if (out is PageOutcome.Done && !out.fromCache) journalPage(c, pageUrl, engineId, s.target.code, out, System.currentTimeMillis() - t0)
         if (!cancelled()) {
             val json = when {
                 out is PageOutcome.Done -> PageRenderer.render(fonts, bytes, out.result, s, debug)
@@ -307,6 +320,36 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         if (testing) logForTest(c, out, debug, overlayForLog, System.currentTimeMillis() - t0)
         return out
     }
+
+    /** Ajoute la page au journal de traduction : texte lu, traduction et problèmes détectés par les contrôles automatiques. */
+    private fun journalPage(c: Candidate, pageUrl: String, engineId: String, target: String, out: PageOutcome.Done, ms: Long) {
+        val blocks = JSONArray()
+        out.result.blocks.forEach { b ->
+            blocks.put(
+                JSONObject().put("src", b.source).put("tr", b.translated)
+                    .put("p", JSONArray(TranslationChecks.problems(b.source, b.translated, target).map { it.code })),
+            )
+        }
+        graph.journal.add(
+            JSONObject().put("t", System.currentTimeMillis()).put("type", "page").put("url", pageUrl).put("series", graph.gemma.seriesTitle ?: "")
+                .put("engine", engineId).put("img", c.id).put("w", out.result.imageWidth).put("h", out.result.imageHeight).put("ms", ms).put("blocks", blocks),
+        )
+    }
+
+    /** Enregistre la correction manuelle (mémorisée dans le glossaire), la consigne au journal et retraduit la page concernée. */
+    fun saveCorrection(newText: String) {
+        val t = editTarget ?: return
+        editTarget = null
+        val clean = newText.trim()
+        if (clean.isEmpty() || clean == t.tr) return
+        graph.glossary.addCorrection(t.src, clean)
+        graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "correction").put("url", currentUrl).put("src", t.src).put("before", t.tr).put("after", clean))
+        val cand = candidatesById[t.imageId] ?: return
+        keysById[t.imageId]?.let { graph.cache.remove(it) }
+        queue.submit(PageJob(cand.id + "#fix" + System.nanoTime(), 0) { cancelled -> process(cand, cancelled) })
+    }
+
+    fun dismissEdit() { editTarget = null }
 
     /** Envoie l'overlay à la page par morceaux d'environ 1,2 Mo : évite une énorme chaîne JavaScript d'un seul bloc. */
     private fun sendOverlay(id: String, json: JSONObject) {
@@ -399,6 +442,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     private inner class Bridge {
         @JavascriptInterface fun onImagesChanged() { main.post { if (active) start(false) } }
         @JavascriptInterface fun onB64(id: String, data: String) { b64Waiters[id]?.complete(data) }
+        @JavascriptInterface fun onEdit(id: String, bid: String, src: String, tr: String) { main.post { editTarget = EditTarget(id, bid.toIntOrNull() ?: -1, src, tr) } }
     }
 
     companion object { const val MAX_IMAGE_BYTES = 30 * 1024 * 1024 }

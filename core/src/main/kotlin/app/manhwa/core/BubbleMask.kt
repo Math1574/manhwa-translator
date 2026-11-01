@@ -112,4 +112,45 @@ object BubbleMask {
         for (y in 0 until h) for (x in 0 until w) if (mask[y * w + x]) { minX = minOf(minX, x); maxX = max(maxX, x); minY = minOf(minY, y); maxY = max(maxY, y) }
         return if (maxX < 0) null else intArrayOf(minX, minY, maxX + 1, maxY + 1)
     }
+
+    /**
+     * Intérieur d'une bulle à fond non uni (dégradé, ombre, lueur sombre) : remplissage par proximité locale. Un pixel rejoint la zone s'il
+     * ressemble au pixel voisin déjà retenu (écart ≤ [step]) : les dégradés lents sont suivis, les contours et les lettres (sauts francs) arrêtent
+     * le remplissage ; les lettres entourées deviennent des « trous » ajoutés à l'intérieur. Null si le remplissage s'échappe de la région.
+     */
+    fun interiorSmooth(pixels: IntArray, w: Int, h: Int, text: IntArray, step: Int = 14, maxFill: Float = 0.85f): BooleanArray? {
+        if (w < 8 || h < 8) return null
+        val x0 = text[0].coerceIn(0, w - 1); val y0 = text[1].coerceIn(0, h - 1); val x1 = text[2].coerceIn(x0 + 1, w); val y1 = text[3].coerceIn(y0 + 1, h)
+        fun ch(c: Int, sh: Int) = (c shr sh) and 0xFF
+        fun close(a: Int, b: Int) = maxOf(abs(ch(a, 16) - ch(b, 16)), abs(ch(a, 8) - ch(b, 8)), abs(ch(a, 0) - ch(b, 0))) <= step
+        val flood = BooleanArray(w * h); val queue = IntArray(w * h); var head = 0; var tail = 0
+        // graines : anneau de 3 px autour du texte
+        fun seed(x: Int, y: Int) { if (x in 0 until w && y in 0 until h && !flood[y * w + x]) { flood[y * w + x] = true; queue[tail++] = y * w + x } }
+        for (x in x0 - 3 until x1 + 3) { for (d in 1..3) { seed(x, y0 - d); seed(x, y1 - 1 + d) } }
+        for (y in y0 - 3 until y1 + 3) { for (d in 1..3) { seed(x0 - d, y); seed(x1 - 1 + d, y) } }
+        if (tail == 0) return null
+        // les graines doivent être cohérentes entre elles (même teinte générale) : on retire celles qui sont des lettres
+        val med = ColorMath.median(IntArray(tail) { pixels[queue[it]] })
+        var kept = 0
+        for (k in 0 until tail) { val i = queue[k]; if (maxOf(abs(ch(pixels[i], 16) - ch(med, 16)), abs(ch(pixels[i], 8) - ch(med, 8)), abs(ch(pixels[i], 0) - ch(med, 0))) <= 60) queue[kept++] = i else flood[i] = false }
+        tail = kept; if (tail == 0) return null
+        while (head < tail) {
+            val i = queue[head++]; val x = i % w; val y = i / w
+            for (d in 0..3) {
+                val nx = x + (if (d == 0) 1 else if (d == 1) -1 else 0); val ny = y + (if (d == 2) 1 else if (d == 3) -1 else 0)
+                if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
+                val j = ny * w + nx
+                if (!flood[j] && close(pixels[i], pixels[j]) && maxOf(abs(ch(pixels[j], 16) - ch(med, 16)), abs(ch(pixels[j], 8) - ch(med, 8)), abs(ch(pixels[j], 0) - ch(med, 0))) <= 140) { flood[j] = true; queue[tail++] = j }
+            }
+        }
+        if (tail > maxFill * w * h) return null
+        var edge = 0
+        for (x in 0 until w) { if (flood[x]) edge++; if (flood[(h - 1) * w + x]) edge++ }
+        for (y in 0 until h) { if (flood[y * w]) edge++; if (flood[y * w + w - 1]) edge++ }
+        if (edge > 0.55f * (2 * (w + h))) return null
+        // trous : zones non retenues qui ne touchent pas le bord (lettres et leurs halos)
+        val notFlood = BooleanArray(w * h) { !flood[it] }
+        val holes = TextErase.enclosedOnly(notFlood, w, h)
+        return BooleanArray(w * h) { flood[it] || holes[it] }
+    }
 }

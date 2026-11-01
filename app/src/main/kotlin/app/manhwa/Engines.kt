@@ -67,7 +67,7 @@ class MlKitOcr(private val source: SourceLang) : OcrEngine {
         val first = run(d, w, h, Recognizers.japanese)
         val text = first.joinToString("") { it.text }
         if (text.isBlank()) return first
-        return when (ScriptDetector.detect(text)) {
+        return when (ScriptDetector.dominant(text)) {
             "ko" -> run(d, w, h, Recognizers.korean)
             "zh" -> run(d, w, h, Recognizers.chinese)
             "en" -> if (ScriptDetector.hasCjk(text)) first else run(d, w, h, Recognizers.latin)

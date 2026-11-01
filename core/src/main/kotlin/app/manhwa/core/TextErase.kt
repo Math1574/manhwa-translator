@@ -66,6 +66,33 @@ object TextErase {
         return out
     }
 
+    /** Pixels dont la couleur s'écarte de plus de [thr] du fond [bg]. */
+    fun farMask(pixels: IntArray, bg: Int, thr: Int): BooleanArray = BooleanArray(pixels.size) { dist(pixels[it], bg) > thr }
+
+    /**
+     * Pixels qui s'écartent nettement de leur voisinage (moyenne locale sur un carré de côté 2·[radius]+1) : lettres et traits fins,
+     * mais pas un dégradé lent. Sert quand le fond n'est pas uni.
+     */
+    fun localFarMask(pixels: IntArray, w: Int, h: Int, radius: Int, thr: Int): BooleanArray {
+        val integ = Array(3) { LongArray((w + 1) * (h + 1)) }
+        for (c in 0..2) {
+            val sh = 16 - 8 * c
+            for (y in 0 until h) { var row = 0L; for (x in 0 until w) { row += (pixels[y * w + x] shr sh) and 0xFF; integ[c][(y + 1) * (w + 1) + x + 1] = integ[c][y * (w + 1) + x + 1] + row } }
+        }
+        return BooleanArray(w * h) { i ->
+            val x = i % w; val y = i / w
+            val x0 = max(0, x - radius); val y0 = max(0, y - radius); val x1 = min(w, x + radius + 1); val y1 = min(h, y + radius + 1)
+            val n = (x1 - x0) * (y1 - y0)
+            var far = false
+            for (c in 0..2) {
+                val sum = integ[c][y1 * (w + 1) + x1] - integ[c][y0 * (w + 1) + x1] - integ[c][y1 * (w + 1) + x0] + integ[c][y0 * (w + 1) + x0]
+                val v = (pixels[i] shr (16 - 8 * c)) and 0xFF
+                if (abs(v - (sum / n).toInt()) > thr) far = true
+            }
+            far
+        }
+    }
+
     fun dilate(src: BooleanArray, w: Int, h: Int, times: Int, limit: BooleanArray? = null): BooleanArray {
         var cur = src
         repeat(times) {

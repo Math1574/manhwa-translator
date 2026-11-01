@@ -23,6 +23,16 @@ object ScriptDetector {
     }
 
     fun hasCjk(text: String) = text.any { it.isCjk() }
+
+    /**
+     * Écriture dominante d'un texte : un caractère CJK isolé (erreur de lecture sur du latin) ne change pas la langue.
+     * Latin si les lettres latines sont au moins trois fois plus nombreuses que les caractères CJK.
+     */
+    fun dominant(text: String): String {
+        val latin = text.count { it.isLetter() && it.code < 0x250 }
+        val cjk = text.count { val x = it.code; x in 0x3040..0x30FF || x in 0xAC00..0xD7AF || x in 0x1100..0x11FF || x in 0x4E00..0x9FFF || x in 0x3400..0x4DBF }
+        return if (cjk == 0 || latin >= 3 * cjk) "en" else detect(text)
+    }
 }
 
 object ColorMath {

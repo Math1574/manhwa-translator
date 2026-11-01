@@ -11,6 +11,13 @@ class RowShape(val top: Float, val rowH: Float, val left: FloatArray, val right:
     val rows: Int get() = left.size
     val bottom: Float get() = top + rowH * rows
 
+    /** Vrai si le point (x, y) en pixels de l'image est dans la forme. */
+    fun contains(x: Float, y: Float): Boolean {
+        if (y < top || y >= bottom) return false
+        val r = ((y - top) / rowH).toInt().coerceIn(0, rows - 1)
+        return left[r] <= right[r] && x >= left[r] && x <= right[r]
+    }
+
     /** Intersection horizontale libre sur la bande verticale [y0, y1] ; null si une rangée est invalide ou si la bande sort de la forme. */
     fun span(y0: Float, y1: Float): FloatArray? {
         if (y0 < top - 0.001f || y1 > bottom + 0.001f) return null

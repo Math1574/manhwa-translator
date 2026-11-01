@@ -17,7 +17,7 @@ interface PixelSource {
  * - ART : texte sur dessin → la zone du texte est reconstruite à partir de ses abords (bords adoucis).
  */
 object Erasure {
-    enum class Mode { FLAT, ART }
+    enum class Mode { FLAT, SMOOTH, ART }
 
     class Plan(
         val mode: Mode,
@@ -36,6 +36,8 @@ object Erasure {
         val shape: RowShape? = null,
         /** Épaisseur du trait des lettres d'origine, en pixels échantillonnés (0 si inconnue). */
         val strokePx: Float = 0f,
+        /** Encre d'origine (pixels de texte non dilatés, w*h) : sert à choisir une police qui ressemble au lettrage. */
+        val ink: BooleanArray? = null,
     )
 
     /** @param exclude lignes de texte des AUTRES blocs (pixels de l'image) : un bloc n'efface jamais ce qui appartient à un voisin. */
@@ -71,39 +73,65 @@ object Erasure {
         val bubble = if (!a.outlined && a.zoneFlat >= 0.9f && a.bgShare >= 0.45f) bubbleArea(src, s, union, a.bg, imageW, imageH) else null
         // un lettrage cerné d'un contour ou d'une lueur est traité comme du dessin : l'aplat laisserait des fragments du contour
         val flat = !a.outlined && a.zoneFlat >= 0.9f && a.bgShare >= 0.45f && (a.uniformity >= 0.85f || bubble != null)
+        val textRect = intArrayOf((union.left * s).toInt() - x0, (union.top * s).toInt() - y0, (union.right * s).toInt() - x0, (union.bottom * s).toInt() - y0)
+        val zone = TextErase.rectMask(w, h, rects(), max(4, (lh * 0.35f).toInt()))   // toute la zone du texte, ponctuation et halo compris
         if (flat) {
             val allowedZone = TextErase.rectMask(w, h, rects(), max(3, (lh * 0.2f).toInt()))
-            // cœur des lignes : boîtes de l'OCR rognées en haut et en bas pour ne pas entamer le contour de la bulle
             val shrink = max(1, (lh * 0.2f).toInt())
             val core = TextErase.rectMask(w, h, rects().map { r -> intArrayOf(r[0], r[1] + shrink, r[2], r[3] - shrink) }.filter { r -> r[3] > r[1] }, 0)
-            val textRect = intArrayOf((union.left * s).toInt() - x0, (union.top * s).toInt() - y0, (union.right * s).toInt() - x0, (union.bottom * s).toInt() - y0)
             val interior = BubbleMask.interior(px, w, h, textRect, a.bg)
             val raw = TextErase.textComponents(px, w, h, a.bg, a.threshold, allowedZone, 0, interior, core)
             val stroke = TextErase.strokeWidth(raw, w, h)
-            val mask = TextErase.dilate(raw, w, h, max(2, (lh * 0.06f).toInt()))
+            // nettoyage de toute la zone : plus de « fantômes » (bruit de compression JPEG autour des lettres, points et ponctuation hors boîte OCR)
+            val clean = BooleanArray(w * h)
+            if (interior != null) { for (i in clean.indices) clean[i] = zone[i] && interior[i] }
+            else {
+                val far = TextErase.farMask(px, a.bg, a.threshold); val enc = TextErase.enclosedOnly(far, w, h)
+                for (i in clean.indices) clean[i] = zone[i] && (!far[i] || enc[i]) // le contour et le dessin (reliés au bord) sont protégés
+            }
+            val grown = TextErase.dilate(raw, w, h, max(2, (lh * 0.06f).toInt()))
+            val mask = BooleanArray(w * h) { clean[it] || grown[it] }
             val layer = IntArray(w * h) { if (mask[it]) (0xFF shl 24) or (a.bg and 0xFFFFFF) else 0 }
             val shape = bubbleShape(src, s, union, a.bg, imageW, imageH)
-            return Plan(Mode.FLAT, x0, y0, w, h, mask, layer, a.bg, a.textColor, a.outlined, bubble, shape, stroke)
+            return Plan(Mode.FLAT, x0, y0, w, h, mask, layer, a.bg, a.textColor, a.outlined, bubble, shape, stroke, raw)
+        }
+        // bulle au fond non uni (dégradé, ombre, lueur sombre) : on remplace toute la zone du texte à l'intérieur de la bulle par un fond lissé
+        run {
+            // la forme de la bulle est calculée sur une région plus large que la zone du texte (la bulle entière doit y tenir)
+            val shape = bubbleShape(src, s, union, a.bg, imageW, imageH, smooth = true)
+            if (shape != null) {
+                val farS = TextErase.localFarMask(px, w, h, max(5, (lh * 0.6f).toInt()), 40); val encS = TextErase.enclosedOnly(farS, w, h) // lettres isolées
+                val mask = BooleanArray(w * h) { i -> zone[i] && (shape.contains((x0 + i % w + 0.5f) / s, (y0 + i / w + 0.5f) / s) || encS[i]) }
+                if (mask.count { it } > 0) {
+                    val fill = TextErase.inpaint(px, w, h, mask)
+                    val alpha = TextErase.featherAlpha(mask, w, h)
+                    val layer = IntArray(w * h) { if (mask[it]) (alpha[it] shl 24) or (fill[it] and 0xFFFFFF) else 0 }
+                    val fc = TextErase.extremeTextColor(px, zone)
+                    val ink = TextErase.artMask(px, w, h, zone, fc, 0)
+                    return Plan(Mode.SMOOTH, x0, y0, w, h, mask, layer, a.bg, fc, false, null, shape, TextErase.strokeWidth(ink, w, h), ink)
+                }
+            }
         }
         // texte sur dessin : seules les lettres (remplissage + contour) sont effacées et reconstruites, pas un rectangle entier
-        val zone = TextErase.rectMask(w, h, rects(), min(if (a.outlined) 30 else 18, max(4, (lh * (if (a.outlined) 0.35f else 0.25f)).toInt())))
-        val fillColor = TextErase.extremeTextColor(px, zone)
+        val zoneArt = TextErase.rectMask(w, h, rects(), min(if (a.outlined) 30 else 18, max(4, (lh * (if (a.outlined) 0.35f else 0.25f)).toInt())))
+        val fillColor = TextErase.extremeTextColor(px, zoneArt)
         // lettrage à lueur : on élargit le masque pour effacer aussi la lueur, de sorte que la reconstruction vienne des abords du halo
-        val mask = TextErase.artMask(px, w, h, zone, fillColor, max(2, (lh * (if (a.outlined) 0.14f else 0.07f)).toInt()))
+        val mask = TextErase.artMask(px, w, h, zoneArt, fillColor, max(2, (lh * (if (a.outlined) 0.14f else 0.07f)).toInt()))
         // texte sur dessin : région élargie pour trouver de la vraie texture à copier à côté du trou (second passage)
         if (padOverride == 0f) planUnclipped(src, s, lineBoxes, lineH, imageW, imageH, max(40f, lineH * 1.6f))?.let { if (it.mode == Mode.ART) return it }
         val diffused = TextErase.inpaint(px, w, h, mask)
         val fill = TextErase.inpaintClone(px, w, h, mask, diffused)
         val alpha = TextErase.featherAlpha(mask, w, h)
         val layer = IntArray(w * h) { if (mask[it]) (alpha[it] shl 24) or (fill[it] and 0xFFFFFF) else 0 }
-        return Plan(Mode.ART, x0, y0, w, h, mask, layer, a.bg, fillColor, a.outlined, null, null, TextErase.strokeWidth(mask, w, h))
+        val inkArt = TextErase.artMask(px, w, h, zoneArt, fillColor, 0)
+        return Plan(Mode.ART, x0, y0, w, h, mask, layer, a.bg, fillColor, a.outlined, null, null, TextErase.strokeWidth(inkArt, w, h), inkArt)
     }
 
     /**
      * Forme libre de l'intérieur de la bulle autour du texte (remplissage borné par le contour, lettres comprises), en pixels de l'image.
      * Région d'analyse plus large que pour le rectangle inscrit : la bulle entière doit y tenir.
      */
-    private fun bubbleShape(src: PixelSource, s: Float, union: RectF, bg: Int, imageW: Float, imageH: Float): RowShape? {
+    private fun bubbleShape(src: PixelSource, s: Float, union: RectF, bg: Int, imageW: Float, imageH: Float, tol: Int = 42, smooth: Boolean = false): RowShape? {
         val gx = union.width * 1.1f + 20f; val gy = union.height * 1.1f + 20f
         val x0 = (max(0f, union.left - gx) * s).toInt().coerceIn(0, src.width - 1); val y0 = (max(0f, union.top - gy) * s).toInt().coerceIn(0, src.height - 1)
         val x1 = (min(imageW, union.right + gx) * s).toInt().coerceIn(x0 + 1, src.width); val y1 = (min(imageH, union.bottom + gy) * s).toInt().coerceIn(y0 + 1, src.height)
@@ -111,7 +139,7 @@ object Erasure {
         if (w < 16 || h < 16 || w.toLong() * h > 2_000_000L) return null
         val px = src.pixels(x0, y0, w, h)
         val text = intArrayOf((union.left * s).toInt() - x0, (union.top * s).toInt() - y0, (union.right * s).toInt() - x0, (union.bottom * s).toInt() - y0)
-        val mask = BubbleMask.interior(px, w, h, text, bg, tol = 42, maxFill = 0.97f) ?: return null
+        val mask = (if (smooth) BubbleMask.interiorSmooth(px, w, h, text, maxFill = 0.97f) else BubbleMask.interior(px, w, h, text, bg, tol = tol, maxFill = 0.97f)) ?: return null
         val seedX = (text[0] + text[2]) / 2; val seedY = (text[1] + text[3]) / 2
         return RowShape.fromMask(mask, w, h, seedX, seedY, s, x0, y0)
     }

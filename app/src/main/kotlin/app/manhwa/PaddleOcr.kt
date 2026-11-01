@@ -218,6 +218,6 @@ class CombinedOcr(
         SourceLang.KO -> "ko"
         SourceLang.ZH_HANS, SourceLang.ZH_HANT -> "zh"
         SourceLang.EN -> "en"
-        SourceLang.AUTO -> mlLines.filter { it.confidence >= 0.5f }.joinToString("") { it.text }.let { if (it.isBlank()) "en" else ScriptDetector.detect(it) }
+        SourceLang.AUTO -> mlLines.filter { it.confidence >= 0.5f }.joinToString("") { it.text }.let { if (it.isBlank()) "en" else ScriptDetector.dominant(it) }
     }
 }

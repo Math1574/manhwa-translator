@@ -13,6 +13,9 @@ import app.manhwa.core.Erasure
 import app.manhwa.core.PixelSource
 import app.manhwa.core.ColorMath
 import app.manhwa.core.DebugInfo
+import app.manhwa.core.FontMatcher
+import app.manhwa.core.GlyphRender
+import app.manhwa.core.GlyphRenderer
 import app.manhwa.core.PageResult
 import app.manhwa.core.RectF
 import app.manhwa.core.RowShape
@@ -37,16 +40,38 @@ import kotlin.math.min
  */
 class Typefaces(private val ctx: Context) {
     private val cache = HashMap<String, Typeface>()
-    private val shoutFace: Typeface = load("fonts/Bangers-Regular.ttf", Typeface.DEFAULT_BOLD)
 
-    fun shout(): Typeface = shoutFace
+    /** Familles candidates pour la correspondance avec le lettrage d'origine (polices libres SIL OFL). */
+    val comicFamilies = listOf(
+        "comicneue", "comicneue-italic", "patrickhandsc", "kalam", "londrina", "lilita", "caveat", "anton",
+        "noto-500-100", "noto-700-100", "noto-800-100", "noto-700-80", "noto-800-70", // sans-serif propre : lettrage numérique ou texte libre
+    )
 
-    /** Noto Sans variable : épaisseur (wght 100-900) et largeur (wdth 62,5-100) réglées pour imiter le lettrage d'origine. */
+    fun family(id: String): Typeface {
+        if (id.startsWith("noto-")) { val p = id.split('-'); return noto(p[1].toInt(), p[2].toFloat()) }
+        return familyStatic(id)
+    }
+
+    private fun familyStatic(id: String): Typeface = synchronized(cache) {
+        cache.getOrPut(id) {
+            val file = when (id) {
+                "comicneue" -> "ComicNeue-Bold.ttf"; "comicneue-italic" -> "ComicNeue-BoldItalic.ttf"; "patrickhandsc" -> "PatrickHandSC-Regular.ttf"
+                "kalam" -> "Kalam-Bold.ttf"; "bangers" -> "Bangers-Regular.ttf"; "londrina" -> "LondrinaSolid-Black.ttf"
+                "lilita" -> "LilitaOne-Regular.ttf"; "caveat" -> "CaveatBrush-Regular.ttf"; "anton" -> "Anton-Regular.ttf"
+                else -> "ComicNeue-Bold.ttf"
+            }
+            try { Typeface.createFromAsset(ctx.assets, "fonts/$file") } catch (e: Throwable) { Typeface.DEFAULT_BOLD }
+        }
+    }
+
+    fun shout(): Typeface = family("bangers")
+
+    /** Noto Sans variable : épaisseur (wght 100-900) et largeur (wdth 62,5-100) ; pour les sources CJK, sans lettrage latin à imiter. */
     fun noto(wght: Int, wdth: Float): Typeface {
         val w = ((wght + 25) / 50) * 50
         val d = (kotlin.math.round(wdth / 2.5f) * 2.5f).coerceIn(62.5f, 100f)
         return synchronized(cache) {
-            cache.getOrPut("$w/$d") {
+            cache.getOrPut("noto/$w/$d") {
                 try {
                     Typeface.Builder(ctx.assets, "fonts/NotoSans-Variable.ttf")
                         .setFontVariationSettings("'wght' $w, 'wdth' $d").build() ?: Typeface.DEFAULT_BOLD
@@ -54,9 +79,30 @@ class Typefaces(private val ctx: Context) {
             }
         }
     }
+}
 
-    private fun load(path: String, fallback: Typeface): Typeface =
-        try { Typeface.createFromAsset(ctx.assets, path) } catch (e: Throwable) { fallback }
+/** Dessine un texte avec une famille candidate, mis à l'échelle pour remplir w × h : sert à comparer à l'encre d'origine. */
+private class AndroidGlyphRenderer(private val fonts: Typefaces) : GlyphRenderer {
+    override fun render(text: String, family: String, embolden: Float, skew: Float, w: Int, h: Int): GlyphRender? {
+        val size = 120f
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = fonts.family(family); textSize = size; textSkewX = skew
+            if (embolden > 0f) { style = Paint.Style.FILL_AND_STROKE; strokeWidth = embolden * size; strokeJoin = Paint.Join.ROUND }
+        }
+        val path = android.graphics.Path(); paint.getTextPath(text, 0, text.length, 0f, 0f, path)
+        val b = android.graphics.RectF(); path.computeBounds(b, true)
+        val stroke = embolden * size
+        val bw = b.width() + stroke; val bh = b.height() + stroke
+        if (bw < 2f || bh < 2f || w < 4 || h < 4) return null
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        try {
+            val c = Canvas(bmp)
+            c.scale(w / bw, h / bh); c.translate(-b.left + stroke / 2f, -b.top + stroke / 2f)
+            paint.color = 0xFFFFFFFF.toInt(); c.drawText(text, 0f, 0f, paint)
+            val px = IntArray(w * h); bmp.getPixels(px, 0, w, 0, 0, w, h)
+            return GlyphRender(BooleanArray(w * h) { (px[it] ushr 24) > 127 }, (w / bw) / (h / bh))
+        } finally { bmp.recycle() }
+    }
 }
 
 /** Adaptateur Bitmap → accès aux pixels pour le moteur d'effacement du cœur. */
@@ -67,7 +113,10 @@ private class BitmapSource(private val bmp: Bitmap) : PixelSource {
 }
 
 /** Police retenue pour un bloc : famille, réglages variables et espacement des lettres. */
-private class FontChoice(val typeface: Typeface, val letterSpacing: Float, val wght: Int, val wdth: Float)
+private class FontChoice(
+    val typeface: Typeface, val letterSpacing: Float, val wght: Int, val wdth: Float,
+    val scaleX: Float = 1f, val skew: Float = 0f, val embolden: Float = 0f, val family: String = "noto",
+)
 
 object PageRenderer {
     /** Double résolution pour un texte net quand la page est agrandie à l'écran. */
@@ -121,31 +170,40 @@ object PageRenderer {
         return Prep(b, plan, style, text)
     }
 
-    /** Choisit et règle la police pour approcher le lettrage d'origine : épaisseur du trait, largeur des lettres, espacement. */
-    private fun matchFont(fonts: Typefaces, p: Prep, s: Float, em: Float, lineH: Float): FontChoice {
-        if (p.style == FontStyle.SHOUT) return FontChoice(fonts.shout(), 0f, 400, 100f)
+    /** Hauteur des capitales / corps de police, mesurée sur la police réelle. */
+    private fun capRatio(tf: Typeface): Float {
+        val p = Paint().apply { typeface = tf; textSize = 100f }
+        val r = Rect(); p.getTextBounds("H", 0, 1, r)
+        return (r.height() / 100f).coerceIn(0.4f, 0.95f)
+    }
+
+    /** Encre de chaque ligne d'origine (recadrée au plus juste) à partir du plan d'effacement. */
+    private fun lineInks(p: Prep, s: Float): List<app.manhwa.core.LineInk> {
+        val plan = p.plan ?: return emptyList(); val ink = plan.ink ?: return emptyList()
+        val boxes = p.block.lineBoxes; val texts = p.block.lineTexts
+        if (boxes.isEmpty() || texts.size != boxes.size) return emptyList()
+        return boxes.indices.mapNotNull { i ->
+            val b = boxes[i]
+            FontMatcher.lineInk(ink, plan.w, plan.h, (b.left * s).toInt() - plan.x0, (b.top * s).toInt() - plan.y0, (b.right * s).toInt() - plan.x0, (b.bottom * s).toInt() - plan.y0, texts[i])
+        }
+    }
+
+    /**
+     * Choisit la police qui ressemble le plus au lettrage d'origine : on dessine le texte d'origine avec chaque famille candidate
+     * (épaississement, inclinaison réglés ensuite) et on garde la forme qui recouvre le mieux l'encre. Sources CJK : Noto Sans calibrée.
+     */
+    private fun matchFont(fonts: Typefaces, p: Prep, s: Float, inks: List<app.manhwa.core.LineInk>): FontChoice {
+        if (p.style == FontStyle.SHOUT) return FontChoice(fonts.shout(), 0f, 400, 100f, family = "bangers")
         val src = p.block.source
-        val cjk = ScriptDetector.detect(src) != "en"
+        val cjk = ScriptDetector.dominant(src) != "en"
         val outlined = p.plan?.outlined ?: false
-        var wght = if (outlined) 800 else 600
-        if (!cjk && p.plan != null && p.plan.mode == Erasure.Mode.FLAT && p.plan.strokePx > 0f) {
-            val capH = lineH * (if (TextNormalizer.isAllCaps(src)) 1f else 0.78f)
-            val r = p.plan.strokePx / (capH * s).coerceAtLeast(1f)
-            wght = (400 + (r - 0.125f) / (0.20f - 0.125f) * 300f).toInt().coerceIn(300, 900)
+        if (cjk) {
+            val wght = if (outlined) 800 else 650
+            return FontChoice(fonts.noto(wght, 100f), 0f, wght, 100f)
         }
-        if (cjk) return FontChoice(fonts.noto(wght, 100f), 0f, wght, 100f)
-        // largeur : on compare la largeur réelle du texte d'origine à celle de la même chaîne en Noto Sans (normal et condensé)
-        val origWidth = p.block.lineBoxes.ifEmpty { listOf(p.block.box) }.sumOf { it.width.toDouble() }.toFloat()
-        val oneLine = src.replace(Regex("\\s+"), " ").trim()
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = em }
-        paint.typeface = fonts.noto(wght, 100f); val w100 = paint.measureText(oneLine)
-        paint.typeface = fonts.noto(wght, 62.5f); val w62 = paint.measureText(oneLine)
-        var wdth = 100f; var spacing = 0f
-        if (w100 > 0f && w100 > w62 + 1f) {
-            if (origWidth <= w100) wdth = (62.5f + 37.5f * (origWidth - w62) / (w100 - w62)).coerceIn(62.5f, 100f)
-            else spacing = ((origWidth - w100) / (oneLine.length.coerceAtLeast(1) * em)).coerceIn(0f, 0.12f)
-        }
-        return FontChoice(fonts.noto(wght, wdth), spacing, wght, wdth)
+        val m = if (inks.isNotEmpty()) FontMatcher.best(inks, fonts.comicFamilies, AndroidGlyphRenderer(fonts)) else null
+        if (m == null) return FontChoice(fonts.family("comicneue"), 0f, 700, 100f, family = "comicneue")
+        return FontChoice(fonts.family(m.family), 0f, 700, 100f, scaleX = m.stretch.coerceIn(0.72f, 1.25f), skew = m.skew, embolden = m.embolden, family = m.family)
     }
 
     private fun drawBlock(fonts: Typefaces, s: Float, p: Prep, iw: Float, ih: Float, userScale: Float): Pair<JSONObject, JSONObject>? {
@@ -155,16 +213,22 @@ object PageRenderer {
         val lineH = lineHeightOf(b)
         val allCaps = TextNormalizer.isAllCaps(b.source)
 
-        // corps cible : même hauteur de capitales (ou même emprise) que le texte d'origine
-        val em = (if (allCaps) lineH / CAP_RATIO else lineH / 0.95f) * userScale.coerceIn(0.5f, 2f)
-        val font = matchFont(fonts, p, s, em, lineH)
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG or Paint.LINEAR_TEXT_FLAG).apply { typeface = font.typeface; letterSpacing = font.letterSpacing }
+        // police assortie au lettrage d'origine ; corps cible : même hauteur de capitales que l'encre d'origine
+        val inks = lineInks(p, s)
+        val font = matchFont(fonts, p, s, inks)
+        val inkH = if (inks.isEmpty()) 0f else inks.map { it.h }.sorted().let { it[it.size / 2] } / s       // pixels de l'image d'origine
+        val cap = capRatio(font.typeface)
+        val baseH = if (inkH > 0f) inkH else lineH * 0.8f
+        val em = (if (allCaps) baseH / cap else baseH / 0.85f) * userScale.coerceIn(0.5f, 2f)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG or Paint.LINEAR_TEXT_FLAG).apply {
+            typeface = font.typeface; letterSpacing = font.letterSpacing; textScaleX = font.scaleX; textSkewX = font.skew
+        }
         val measurer = TextMeasurer { text, size -> paint.textSize = size; paint.measureText(text) * 1.02f }
 
         // interligne d'origine : pas entre deux lignes / corps
         val tops = lineBoxes.map { it.top }.sorted()
         val pitch = if (tops.size >= 2) tops.zipWithNext { a, c -> c - a }.sorted().let { it[it.size / 2] } else 0f
-        val stepRatio = if (pitch > 0f) (pitch / (if (allCaps) lineH / CAP_RATIO else lineH / 0.95f)).coerceIn(1.0f, 1.5f) else 1.18f
+        val stepRatio = if (pitch > 0f) (pitch / (if (allCaps) baseH / cap else baseH / 0.85f)).coerceIn(1.0f, 1.6f) else 1.18f
 
         // forme disponible : intérieur de la bulle si détecté ; sinon l'emprise d'origine légèrement élargie
         val grow = if (plan?.mode == Erasure.Mode.ART) 0.12f else 0.06f
@@ -217,18 +281,21 @@ object PageRenderer {
                     paint.color = if (ColorMath.luminance(fg) > 0.5f) 0xFF000000.toInt() else 0xFFFFFFFF.toInt()
                     canvas.drawText(ln.text, cx, base, paint)
                 }
-                paint.style = Paint.Style.FILL; paint.strokeWidth = 0f; paint.color = fg
+                if (font.embolden > 0f) { paint.style = Paint.Style.FILL_AND_STROKE; paint.strokeWidth = font.embolden * px; paint.strokeJoin = Paint.Join.ROUND }
+                else { paint.style = Paint.Style.FILL; paint.strokeWidth = 0f }
+                paint.color = fg
                 canvas.drawText(ln.text, cx, base, paint)
             }
             val out = ByteArrayOutputStream()
             patch.compress(Bitmap.CompressFormat.PNG, 100, out)
             val patchJson = JSONObject().put("x", rect.left.toDouble()).put("y", rect.top.toDouble()).put("w", (rect.right - rect.left).toDouble()).put("h", (rect.bottom - rect.top).toDouble())
+                .put("bid", b.id).put("src", b.source).put("tr", b.translated)
                 .put("png", "data:image/png;base64," + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP))
             val rep = JSONObject().put("x", l.toDouble()).put("y", t.toDouble()).put("w", (r - l).toDouble()).put("h", (bt - t).toDouble())
                 .put("t", fit.lines.joinToString("\n") { it.text }).put("fs", fit.size.toDouble()).put("style", p.style.name)
                 .put("mode", plan?.mode?.name ?: "NONE").put("outlined", plan?.outlined ?: false)
                 .put("fits", fit.fits).put("lines", fit.lines.size).put("shape", plan?.shape != null)
-                .put("wght", font.wght).put("wdth", font.wdth.toDouble()).put("em", em.toDouble()).put("stepRatio", stepRatio.toDouble())
+                .put("family", font.family).put("skew", font.skew.toDouble()).put("embolden", font.embolden.toDouble()).put("scaleX", font.scaleX.toDouble()).put("wght", font.wght).put("wdth", font.wdth.toDouble()).put("em", em.toDouble()).put("stepRatio", stepRatio.toDouble())
             return patchJson to rep
         } finally {
             patch.recycle()

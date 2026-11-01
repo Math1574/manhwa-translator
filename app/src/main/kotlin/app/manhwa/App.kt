@@ -30,6 +30,7 @@ class AppGraph(ctx: Context) {
     val cache = ResultCache(File(ctx.filesDir, "cache"), maxEntries = 64, maxDiskBytes = 100L * 1024 * 1024)
     val glossary = GlossaryStore(File(ctx.filesDir, "glossary.tsv"))
     val models = TranslationModels(ctx)
+    val journal = TranslationJournal(File(ctx.filesDir, "journal.jsonl"))
     val llm = LlmModelsManager(ctx)
     val paddleModels = PaddleModels(ctx)
     val paddle = PaddleOcr(paddleModels)
@@ -66,6 +67,9 @@ class GlossaryStore(private val file: File) {
 
     fun add(source: String, target: String) { glossary.addTerm(source, target); commit() }
     fun remove(source: String) { glossary.removeTerm(source); commit() }
+
+    /** Correction manuelle d'une bulle : cette traduction sera reprise telle quelle chaque fois que ce texte apparaît. */
+    fun addCorrection(sourceBlock: String, translation: String) { glossary.addCorrection(sourceBlock, translation); commit() }
 
     private fun commit() {
         val data = glossary.serialize()

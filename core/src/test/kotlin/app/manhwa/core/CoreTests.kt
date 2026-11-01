@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests()
+    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -150,7 +150,7 @@ fun glossaryTests() {
 // ---------- cache ----------
 fun cacheTests() {
     val key = CacheKey("abc", "ja", "fr", "eng1")
-    val res = PageResult(100, 200, listOf(TranslatedBlock(0, RectF(1f, 2f, 3f, 4f), "原文\tx", "tra\nduction", true, 12.5f, listOf(RectF(1f, 2f, 3f, 3f), RectF(1f, 3f, 3f, 4f)))))
+    val res = PageResult(100, 200, listOf(TranslatedBlock(0, RectF(1f, 2f, 3f, 4f), "原文\tx", "tra\nduction", true, 12.5f, listOf(RectF(1f, 2f, 3f, 3f), RectF(1f, 3f, 3f, 4f)), listOf("ligne\t1", "ligne 2"))))
     T.test("cache: écriture puis lecture, persistance après redémarrage") {
         val d = tmp(); ResultCache(d).put(key, res)
         T.eq(res, ResultCache(d).get(key))
@@ -452,6 +452,12 @@ fun llmTests() {
         T.ok(LlmPrompt.maxOutputTokens(listOf("Hi")) in 96..200, "petite page"); T.eq(1500, LlmPrompt.maxOutputTokens(List(60) { "x".repeat(200) }))
         T.ok(LlmPrompt.maxOutputTokens(List(8) { "x".repeat(60) }) in 400..800, "page typique : ${LlmPrompt.maxOutputTokens(List(8) { "x".repeat(60) })}")
     }
+    T.test("llm: traduction suspecte (contenu supprimé, terme de la série injecté)") {
+        T.ok(LlmPrompt.suspicious("ANYWAY, I HEARD THAT...", "Quoi qu'il en soit, le Démon Céleste"), "terme injecté")
+        T.ok(!LlmPrompt.suspicious("The Heavenly Demon is here.", "Le Démon Céleste est là."), "terme légitime")
+        T.ok(LlmPrompt.suspicious("I heard that many people with severed meridians were geniuses.", "Génies."), "contenu supprimé")
+        T.ok(!LlmPrompt.suspicious("Hello", "Salut"), "court et correct")
+    }
     T.test("llm: lecture de la réponse (formats variés, guillemets, Markdown, lignes multiples)") {
         val r = LlmPrompt.parse("1| Salut !\n2: **Comment vas-tu ?**\n3) « Bien. »\n   Et toi ?\n4. \"Merci\"", 4)
         T.eq(listOf("Salut !", "Comment vas-tu ?", "Bien. Et toi ?", "Merci"), r)
@@ -600,9 +606,15 @@ fun erasureTests() {
         val clean = px.copyOf()
         for (y in 90 until 110) for (x in 80 until 220) if ((x / 3 + y / 3) % 2 == 0) px[y * W + x] = 0xFFFFFFFF.toInt()
         val plan = Erasure.plan(ArraySource(W, H, px), 1f, listOf(RectF(80f, 90f, 220f, 110f)), 20f, W.toFloat(), H.toFloat())!!
-        T.eq(Erasure.Mode.ART, plan.mode)
-        var worst = 0
-        for (y in 92 until 108) for (x in 85 until 215) { val c = plan.layer[(y - plan.y0) * plan.w + (x - plan.x0)]; worst = maxOf(worst, kotlin.math.abs(((c shr 16) and 0xFF) - ((clean[y * W + x] shr 16) and 0xFF))) }
+        T.ok(plan.mode != Erasure.Mode.FLAT, "pas d'aplat sur un dégradé : ${plan.mode}")
+        var worst = 0; var textMissed = 0
+        for (y in 92 until 108) for (x in 85 until 215) {
+            val c = plan.layer[(y - plan.y0) * plan.w + (x - plan.x0)]
+            val isText = (x / 3 + y / 3) % 2 == 0
+            if (isText && (c ushr 24) == 0) textMissed++                     // chaque pixel de texte doit être remplacé
+            if (c != 0) worst = maxOf(worst, kotlin.math.abs(((c shr 16) and 0xFF) - ((clean[y * W + x] shr 16) and 0xFF)))
+        }
+        T.eq(0, textMissed, "pixels de texte non remplacés")
         T.ok(worst < 40, "reconstruction trop éloignée du fond (écart $worst)")
     }
 }
@@ -693,5 +705,67 @@ fun shapeTests() {
     T.test("typographie française : espaces insécables avant ? ! : ; » et après «") {
         T.eq("Quoi\u00A0? Non\u00A0!", Typography.french("Quoi ? Non !")); T.eq("Il dit\u00A0: «\u00A0oui\u00A0»", Typography.french("Il dit : « oui »"))
         T.eq("Quoi\u00A0?", Typography.french("Quoi?").replace("Quoi?", "Quoi\u00A0?")) // la ponctuation collée est laissée telle quelle par la règle
+    }
+}
+
+// ---------- correspondance de police ----------
+fun fontMatchTests() {
+    fun bars(w: Int, h: Int, thick: Int): BooleanArray = BooleanArray(w * h) { (it % w) % (thick * 3) < thick }
+    val fake = GlyphRenderer { _, family, emb, _, w, h ->
+        val thick = when (family) { "fine" -> 1; "medium" -> 3; else -> 6 } + (emb * 100).toInt() / 2
+        GlyphRender(bars(w, h, thick), if (family == "wide") 1.4f else 1f)
+    }
+    T.test("police: la famille dont le trait ressemble à l'encre d'origine est retenue") {
+        val ink = LineInk("TEXT", bars(120, 30, 3), 120, 30)
+        T.eq("medium", FontMatcher.best(listOf(ink), listOf("fine", "medium", "bold"), fake)!!.family)
+    }
+    T.test("police: étirement excessif pénalisé ; réglage d'épaisseur choisi quand il rapproche du trait d'origine") {
+        val ink = LineInk("TEXT", bars(120, 30, 4), 120, 30)
+        val m = FontMatcher.best(listOf(ink), listOf("wide", "medium"), fake)!!
+        T.eq("medium", m.family); T.ok(m.embolden > 0f, "épaississement ${m.embolden}")
+    }
+    T.test("police: encre trop pauvre → pas de ligne exploitable ; recadrage de l'encre") {
+        T.eq(null, FontMatcher.best(emptyList(), listOf("medium"), fake))
+        val big = BooleanArray(100 * 50); for (y in 10 until 20) for (x in 20 until 80) big[y * 100 + x] = true
+        val li = FontMatcher.lineInk(big, 100, 50, 15, 5, 85, 25, "ABC")!!
+        T.eq(60, li.w); T.eq(10, li.h); T.eq(null, FontMatcher.lineInk(BooleanArray(100 * 50), 100, 50, 0, 0, 100, 50, "x"))
+    }
+    T.test("écriture dominante : un caractère CJK isolé dans du latin ne change pas la langue") {
+        T.eq("en", ScriptDetector.dominant("AT ALL! 日")); T.eq("ko", ScriptDetector.dominant("제발 도와주세요")); T.eq("ja", ScriptDetector.dominant("これは日本語です")); T.eq("en", ScriptDetector.dominant("Hello"))
+    }
+}
+
+// ---------- contrôles de traduction et mémoire du chapitre ----------
+fun checkTests() {
+    fun codes(src: String, tr: String, names: List<String> = emptyList()) = TranslationChecks.problems(src, tr, "fr", names).map { it.code }
+    T.test("contrôles : bonne traduction acceptée") {
+        T.eq(emptyList<String>(), codes("I'm just passing through. I don't want any trouble.", "Je ne fais que passer. Je ne veux pas d'ennuis."))
+        T.eq(emptyList<String>(), codes("Hello", "Salut"))
+    }
+    T.test("contrôles : mots anglais restants, ligne identique, ligne vide") {
+        T.ok("non-traduit" in codes("I think that you are right.", "Je pense that you are right."), "anglais restant")
+        T.ok("non-traduit" in codes("Watch over the storage.", "Watch over the storage."), "identique")
+        T.ok("vide" in codes("Hello", "  "), "vide")
+        T.ok("non-traduit" !in codes("I am Hwang.", "Je suis Hwang."), "nom propre non signalé")
+    }
+    T.test("contrôles : chiffres perdus, nom modifié, répétition, verbosité, format") {
+        T.ok("chiffres" in codes("I waited ten years, 10 years.", "J'ai attendu longtemps."), "chiffres")
+        T.ok("nom" in codes("Hwang is here.", "Le doyen est là.", listOf("Hwang")), "nom")
+        T.ok("répétition" in codes("Please help me now.", "S'il vous plaît de de de aidez-moi."), "répétition")
+        T.ok("long" in codes("Run away now please.", "Il faut absolument que tu t'enfuies maintenant très vite, sans attendre une seconde de plus, je t'en supplie, vraiment, maintenant."), "long")
+        T.ok("format" in codes("Hello there friend.", "1| Salut mon ami."), "format")
+    }
+    T.test("mémoire du chapitre : un nom vu deux fois, identique dans la traduction, est conservé") {
+        val m = ChapterMemory()
+        m.observe("Cheon Mu-gang is coming.", "Cheon Mu-gang arrive.")
+        T.eq(emptyList<String>(), m.namesToKeep())
+        m.observe("Where is Cheon Mu-gang?", "Où est Cheon Mu-gang ?")
+        T.ok("Cheon" in m.namesToKeep() && "Mu-gang" in m.namesToKeep(), "noms ${m.namesToKeep()}")
+        m.reset(); T.eq(emptyList<String>(), m.namesToKeep())
+    }
+    T.test("llm: prompt de correction et noms à conserver") {
+        val f = LlmPrompt.fixUser("Hello you", "Hello you", listOf("non-traduit : mots anglais : hello"), emptyList(), emptyList(), listOf("Hwang"))
+        T.ok(f.contains("rejected") && f.contains("Previous attempt: Hello you") && f.contains("Hwang") && f.contains("1| Hello you"), "fix")
+        T.ok(LlmPrompt.user(listOf("Hi"), emptyList(), emptyList(), null, listOf("Hwang")).contains("keep exactly as written"), "noms")
     }
 }

@@ -29,6 +29,8 @@ data class TranslatedBlock(
     val lineHeight: Float = 0f,
     /** Boîtes des lignes d'origine (pour effacer précisément le texte). */
     val lineBoxes: List<RectF> = emptyList(),
+    /** Texte OCR de chaque ligne d'origine (même ordre que [lineBoxes]) : sert à choisir une police ressemblant au lettrage. */
+    val lineTexts: List<String> = emptyList(),
 )
 
 data class PlacedBlock(

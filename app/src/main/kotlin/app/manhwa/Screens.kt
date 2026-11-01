@@ -84,6 +84,23 @@ fun BrowserScreen(graph: AppGraph) {
     LaunchedEffect(c.currentUrl) { address = c.currentUrl }
     val running = c.active && c.done + c.failed < c.total
 
+    c.editTarget?.let { et ->
+        var text by remember(et) { mutableStateOf(et.tr) }
+        AlertDialog(
+            onDismissRequest = { c.dismissEdit() },
+            title = { Text("Corriger la traduction") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Original : ${et.src}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    OutlinedTextField(text, { text = it }, Modifier.fillMaxWidth())
+                    Text("Votre version sera reprise chaque fois que ce texte apparaît, et enregistrée dans le journal.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            },
+            confirmButton = { Button(onClick = { c.saveCorrection(text) }) { Text("Enregistrer") } },
+            dismissButton = { TextButton(onClick = { c.dismissEdit() }) { Text("Annuler") } },
+        )
+    }
+
     Column(Modifier.fillMaxSize()) {
         if (!c.fullscreen) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -434,6 +451,19 @@ fun SettingsScreen(graph: AppGraph) {
                 Text("Encadre le texte repéré par l'OCR (vert : utilisé, rouge : rejeté, avec la confiance). Désactive le cache. Utile pour signaler un problème.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             }
             Switch(checked = s.diagnostic, onCheckedChange = { v -> store.update { it.copy(diagnostic = v) } })
+        }
+        HorizontalDivider()
+        var journalTick by remember { mutableStateOf(0) }
+        val entries = remember(journalTick) { graph.journal.entries() }; val kb = remember(journalTick) { graph.journal.sizeBytes() / 1024 }
+        Text("Journal de traduction", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "$entries entrée(s), $kb Ko. Pour chaque page : texte lu, traduction et problèmes détectés automatiquement. Il reste sur le téléphone. " +
+                "Exportez-le pour signaler des erreurs. Astuce : un appui long sur une traduction permet de la corriger.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { graph.journal.share(ctx) }, enabled = entries > 0) { Text("Exporter") }
+            OutlinedButton(onClick = { graph.journal.clear(); journalTick++ }, enabled = entries > 0) { Text("Effacer") }
         }
         Text("Modèles Gemma stockés : ${String.format(Locale.FRANCE, "%.2f", graph.llm.usedBytes() / 1_000_000_000.0)} Go")
         Spacer(Modifier.height(24.dp))

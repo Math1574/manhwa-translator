@@ -167,3 +167,37 @@ gt.append({"kind": "whisper", "lang": "en", "text": "...he is still alive.", "bo
 # titre en lettres blanches à contour épais, au bas
 wobbly(img, "HEAVENLY DEMON", COMIC, 70, (40, 1120), gt, rot=6, glow=None, fill=(255, 255, 255), stroke=(20, 0, 60))
 img.save(f"{OUT}/en_fancy.png"); json.dump(gt, open(f"{OUT}/en_fancy.json", "w"), ensure_ascii=False, indent=1)
+
+
+# ---------- page « variété » (JPEG compressé) : bulle blanche, bulle noire à lueur, bulle grise en dégradé, italique, texte libre sur fond blanc ----------
+import math
+CN_BI = "/usr/share/fonts/truetype/comic-neue/ComicNeue-BoldItalic.ttf"
+COND = "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf"
+img = Image.new("RGB", (W, 1500), "white"); d = ImageDraw.Draw(img); gt = []
+# 1) bulle blanche classique
+bubble(img, d, (90, 50, 560, 260), "I HEARD THAT MANY PEOPLE WITH SEVERED MERIDIANS WERE GENIUSES.", F(COMIC, 26), gt)
+# 2) bulle noire avec lueur violette derrière le texte
+cx, cy = 400, 480
+d.ellipse((120, 340, 700, 640), fill=(0, 0, 0))
+glow = Image.new("RGB", img.size, (0, 0, 0)); gd = ImageDraw.Draw(glow); gd.ellipse((260, 420, 560, 560), fill=(70, 30, 120)); glow = glow.filter(ImageFilter.GaussianBlur(28))
+mask = Image.new("L", img.size, 0); ImageDraw.Draw(mask).ellipse((124, 344, 696, 636), fill=255); img.paste(glow, (0, 0), mask); d = ImageDraw.Draw(img)
+wf = F(COMIC, 30); lines = ["THERE ARE COUNTLESS PEOPLE", "WHO DESTROYED THEIR", "OWN SECTS."]; lb = []
+y = 440
+for ln in lines:
+    wd = d.textlength(ln, font=wf); d.text((cx - wd / 2, y), ln, font=wf, fill="white"); bb = d.textbbox((cx - wd / 2, y), ln, font=wf); lb.append([int(v) for v in bb]); y += 40
+gt.append({"kind": "dark", "lang": "en", "text": " ".join(lines), "box": [min(b[0] for b in lb), lb[0][1], max(b[2] for b in lb), lb[-1][3]], "lines": lb})
+# 3) bulle grise en dégradé avec ombre et texte italique
+sh = Image.new("RGBA", img.size, (0, 0, 0, 0)); ImageDraw.Draw(sh).ellipse((190, 750, 640, 960), fill=(0, 0, 0, 90)); sh = sh.filter(ImageFilter.GaussianBlur(8)); img.paste(sh, (10, 14), sh)
+grad = Image.new("RGB", img.size, (255, 255, 255)); gdd = ImageDraw.Draw(grad)
+for yy in range(740, 960): t = (yy - 740) / 220; gdd.line([(0, yy), (W, yy)], fill=(int(250 - 40 * t),) * 3)
+m2 = Image.new("L", img.size, 0); ImageDraw.Draw(m2).ellipse((180, 740, 630, 950), fill=255); img.paste(grad, (0, 0), m2); d = ImageDraw.Draw(img); d.ellipse((180, 740, 630, 950), outline="black", width=3)
+bubble_text = ["ALL I DID WAS", "WATCH OVER THE", "STORAGE."]; itf = F(CN_BI, 30); lb = []; y = 805
+for ln in bubble_text:
+    wd = d.textlength(ln, font=itf); d.text((405 - wd / 2, y), ln, font=itf, fill=(15, 15, 15)); bb = d.textbbox((405 - wd / 2, y), ln, font=itf); lb.append([int(v) for v in bb]); y += 38
+gt.append({"kind": "gradient", "lang": "en", "text": " ".join(bubble_text), "box": [min(b[0] for b in lb), lb[0][1], max(b[2] for b in lb), lb[-1][3]], "lines": lb})
+# 4) texte libre condensé sur fond blanc (sans bulle) + points de suspension
+cf = F(COND, 40); lines = ["HE THINKS I AM JUST A MARTIAL", "ARTIST HIDING MY ABILITIES...", "IS THAT SO?"]; lb = []; y = 1060
+for ln in lines:
+    wd = d.textlength(ln, font=cf); d.text((W / 2 - wd / 2, y), ln, font=cf, fill="black"); bb = d.textbbox((W / 2 - wd / 2, y), ln, font=cf); lb.append([int(v) for v in bb]); y += 54
+gt.append({"kind": "free-white", "lang": "en", "text": " ".join(lines), "box": [min(b[0] for b in lb), lb[0][1], max(b[2] for b in lb), lb[-1][3]], "lines": lb})
+img.save(f"{OUT}/en_variety.jpg", quality=55, subsampling=2); json.dump(gt, open(f"{OUT}/en_variety.json", "w"), ensure_ascii=False, indent=1)

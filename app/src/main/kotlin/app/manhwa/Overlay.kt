@@ -74,6 +74,7 @@ object PageScript {
     for (var i=0;i<ps.length;i++){
       var q0 = ps[i], im2 = document.createElement('img');
       im2.src = q0.png; im2.setAttribute('data-mt-img', '1'); im2.draggable = false;
+      if (q0.bid !== undefined) { im2.setAttribute('data-bid', q0.bid); im2.setAttribute('data-src', q0.src || ''); im2.setAttribute('data-tr', q0.tr || ''); }
       im2.style.cssText = 'position:absolute;margin:0;padding:0;border:0;max-width:none;pointer-events:none;';
       im2.style.left = (q0.x / data.w * 100) + '%'; im2.style.top = (q0.y / data.h * 100) + '%';
       im2.style.width = (q0.w / data.w * 100) + '%'; im2.style.height = (q0.h / data.h * 100) + '%';
@@ -114,6 +115,30 @@ object PageScript {
   try { new MutationObserver(notify).observe(document.documentElement, {childList:true, subtree:true, attributes:true, attributeFilter:['src','srcset','data-src']}); } catch(e) {}
   setInterval(function(){ for (var id in S.entries){ place(S.entries[id]); } }, 300);
   window.addEventListener('resize', function(){ for (var id in S.entries){ S.entries[id].key = ''; place(S.entries[id]); } });
+  // appui long sur une traduction : ouvre l'édition (correction manuelle)
+  var LP = {x:0, y:0, timer:null};
+  function hit(x, y){
+    var best = null, bestArea = 1e18, bestId = null;
+    for (var id in S.entries){
+      var kids = S.entries[id].div.children;
+      for (var i=0;i<kids.length;i++){
+        var k = kids[i]; if (!k.getAttribute || !k.getAttribute('data-bid')) continue;
+        var r = k.getBoundingClientRect();
+        if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom && r.width * r.height < bestArea) { best = k; bestArea = r.width * r.height; bestId = id; }
+      }
+    }
+    if (best) { try { AndroidMT.onEdit(bestId, best.getAttribute('data-bid'), best.getAttribute('data-src'), best.getAttribute('data-tr')); } catch(e) {} }
+  }
+  document.addEventListener('touchstart', function(e){
+    if (e.touches.length !== 1) { clearTimeout(LP.timer); return; }
+    LP.x = e.touches[0].clientX; LP.y = e.touches[0].clientY; clearTimeout(LP.timer);
+    LP.timer = setTimeout(function(){ hit(LP.x, LP.y); }, 700);
+  }, {passive:true, capture:true});
+  document.addEventListener('touchmove', function(e){
+    if (!e.touches.length) return;
+    if (Math.abs(e.touches[0].clientX - LP.x) > 12 || Math.abs(e.touches[0].clientY - LP.y) > 12) clearTimeout(LP.timer);
+  }, {passive:true, capture:true});
+  ['touchend','touchcancel'].forEach(function(n){ document.addEventListener(n, function(){ clearTimeout(LP.timer); }, {passive:true, capture:true}); });
   window.__mt = {collect:collect, apply:apply, setVisible:setVisible, clear:clear, getB64:getB64};
 })();
 """

@@ -43,6 +43,48 @@
    "GET UP. I DON'T NEED A DISCIPLE WHO KNEELS TO EVERYONE.",
    "...THEN I'LL STAND AND FIGHT BESIDE YOU.",
    "HMPH. SUIT YOURSELF."
+  ],
+  [
+   "I... I MADE THIS FOR YOU. IT'S NOT MUCH, BUT...",
+   "YOU DIDN'T HAVE TO GO TO ALL THAT TROUBLE!",
+   "IT WASN'T TROUBLE. I WANTED TO.",
+   "W-WHAT ARE YOU LOOKING AT?! STOP STARING!",
+   "...YOU'RE BLUSHING."
+  ],
+  [
+   "OH NO, I'M LATE AGAIN! THE TEACHER IS GOING TO KILL ME!",
+   "HEY, DID YOU DO THE HOMEWORK?",
+   "WHAT HOMEWORK?",
+   "YOU'RE SO DEAD.",
+   "DON'T TELL ME YOU FORGOT AGAIN."
+  ],
+  [
+   "[LEVEL UP!] YOU HAVE REACHED LEVEL 15.",
+   "NEW SKILL ACQUIRED: SHADOW STEP.",
+   "THE DUNGEON GATE WILL CLOSE IN TEN MINUTES.",
+   "DON'T LET YOUR GUARD DOWN. THERE ARE MORE OF THEM!",
+   "IT'S A BOSS-CLASS MONSTER... AND IT'S AWAKE."
+  ],
+  [
+   "I KNOW WHAT YOU DID LAST SUMMER.",
+   "THAT'S IMPOSSIBLE. NO ONE WAS THERE.",
+   "ARE YOU SURE ABOUT THAT?",
+   "WHO ARE YOU WORKING FOR? ANSWER ME!",
+   "IT'S TOO LATE FOR REGRETS NOW."
+  ],
+  [
+   "CHEON MU-GANG, YOU HAVE SOME NERVE SHOWING YOUR FACE HERE.",
+   "GRANDMASTER, THE PATRIARCH REQUESTS YOUR PRESENCE.",
+   "HAHAHA! SO THE RUMORS WERE TRUE AFTER ALL!",
+   "ARGH! MY ARM! MY ARM IS...!",
+   "THE FIRST FORM OF THE HEAVENLY DEMON ART: SHATTERING SKY."
+  ],
+  [
+   "THAT'S WHY I SAID...",
+   "...WE SHOULD HAVE LEFT EARLIER.",
+   "WELL, THAT'S ONE WAY TO LOOK AT IT.",
+   "HUH? WHAT DO YOU MEAN?",
+   "LET'S GO. WE DON'T HAVE MUCH TIME."
   ]
  ],
  "refs": [
@@ -89,6 +131,48 @@
    "Lève-toi. Je n'ai pas besoin d'un disciple qui s'agenouille devant tout le monde.",
    "...Alors je me tiendrai debout et me battrai à vos côtés.",
    "Hmpf. Comme tu voudras."
+  ],
+  [
+   "Je... je l'ai fait pour toi. Ce n'est pas grand-chose, mais...",
+   "Tu n'aurais pas dû te donner tout ce mal !",
+   "Ce n'était pas une peine. J'en avais envie.",
+   "Q-qu'est-ce que tu regardes comme ça ?! Arrête de me fixer !",
+   "...Tu rougis."
+  ],
+  [
+   "Oh non, je suis encore en retard ! Le prof va me tuer !",
+   "Eh, tu as fait les devoirs ?",
+   "Quels devoirs ?",
+   "T'es mort.",
+   "Dis-moi pas que t'as encore oublié."
+  ],
+  [
+   "[NIVEAU SUPÉRIEUR !] Vous avez atteint le niveau 15.",
+   "Nouvelle compétence acquise : Pas de l'ombre.",
+   "La porte du donjon se refermera dans dix minutes.",
+   "Ne baissez pas votre garde. Il y en a d'autres !",
+   "C'est un monstre de classe boss... et il est réveillé."
+  ],
+  [
+   "Je sais ce que tu as fait l'été dernier.",
+   "C'est impossible. Personne n'était là.",
+   "Tu en es sûr ?",
+   "Pour qui tu travailles ? Réponds-moi !",
+   "Il est trop tard pour les regrets maintenant."
+  ],
+  [
+   "Cheon Mu-gang, tu as du culot de montrer ton visage ici.",
+   "Grand maître, le patriarche demande votre présence.",
+   "Hahaha ! Alors les rumeurs étaient vraies, finalement !",
+   "Argh ! Mon bras ! Mon bras est...!",
+   "La première forme de l'art du Démon Céleste : Ciel brisé."
+  ],
+  [
+   "C'est pour ça que j'ai dit...",
+   "...nous aurions dû partir plus tôt.",
+   "Eh bien, c'est une façon de voir les choses.",
+   "Hein ? Qu'est-ce que tu veux dire ?",
+   "Allons-y. Nous n'avons pas beaucoup de temps."
   ]
  ]
 }
