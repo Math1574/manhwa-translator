@@ -31,3 +31,20 @@ try:
     for m in json.loads(get("https://huggingface.co/api/models?search=Hy-MT2&limit=20")): out.append("  " + m["id"])
 except Exception as e: out.append(f"  ERREUR {e}")
 open(sys.argv[1], "w", encoding="utf8").write("\n".join(out))
+
+# ---- fiches techniques (début des README et configs utiles) ----
+docs = [
+    ("monkt/paddleocr-onnx", "README.md", 5000), ("monkt/paddleocr-onnx", "languages/english/config.json", 1500), ("monkt/paddleocr-onnx", "languages/korean/config.json", 1500),
+    ("monkt/paddleocr-onnx", "languages/latin/config.json", 1500), ("monkt/paddleocr-onnx", "detection/v3/config.json", 1500), ("monkt/paddleocr-onnx", "detection/v5/config.json", 1500),
+    ("edgetools/migan", "README.md", 6000), ("CardAnvilModels/MI-GAN-ONNX", "README.md", 6000),
+    ("litert-community/gemma-4-E4B-it-litert-lm", "README.md", 9000),
+    ("tencent/Hy-MT2-1.8B-GGUF", "README.md", 9000),
+    ("onnx-community/manga-ocr-base-ONNX", "README.md", 4000),
+    ("mayocream/lama-manga-onnx", "README.md", 3000),
+]
+more = []
+for repo, path, n in docs:
+    more.append(f"\n===== DOC {repo}/{path}")
+    try: more.append(get(f"https://huggingface.co/{repo}/resolve/main/{path}").decode("utf8", "replace")[:n])
+    except Exception as e: more.append(f"  ERREUR {e}")
+open(sys.argv[1], "a", encoding="utf8").write("\n".join(more))
