@@ -83,7 +83,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     var editTarget by mutableStateOf<EditTarget?>(null)
     private val candidatesById = ConcurrentHashMap<String, Candidate>()
     private val keysById = ConcurrentHashMap<String, CacheKey>()
-    /** Texte normalisé → images où il est apparu : un texte qui revient sur au moins 4 images est un filigrane. */
+    /** Texte normalisé → images (par contenu) où il est apparu : un texte qui revient sur au moins 4 images différentes est un filigrane. */
     private val seenTexts = ConcurrentHashMap<String, MutableSet<String>>()
 
     private fun repeatedAcrossPages(text: String, imageId: String): Boolean {
@@ -318,7 +318,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             useCache = !s.diagnostic && !testing, // en diagnostic on veut voir la détection réelle, pas un résultat en cache
             debugSink = { debug = it },
             // l'anglais est lu par OCR avec beaucoup de bruit : on écarte filigranes et débris, puis on répare mots collés et chiffres parasites
-            junk = { t, rel -> s.source.code != "ja" && s.source.code != "ko" && s.source.code != "zh" && (JunkFilter.isWatermark(t) || (rel < 1.6f && JunkFilter.isDebris(t, lexicon)) || repeatedAcrossPages(t, c.id)) },
+            junk = { t, rel -> s.source.code != "ja" && s.source.code != "ko" && s.source.code != "zh" && (JunkFilter.isWatermark(t) || (rel < 1.6f && JunkFilter.isDebris(t, lexicon)) || repeatedAcrossPages(t, keysById[c.id]?.imageHash ?: c.id)) },
             repair = { t -> try { OcrRepair.repair(t, lexicon, graph.gemma.chapterNames()) } catch (e: Throwable) { t } },
         )
         val out = pipeline.process(bytes, s.source.code, s.target.code)
