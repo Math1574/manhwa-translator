@@ -7,6 +7,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Sondage Hugging Face (fichiers et tailles)
+        run: python3 ci/probe_hf.py /tmp/hf.txt || true
       - name: Signatures LiteRT-LM (annulation, limite de sortie)
         run: |
           set +e +o pipefail
@@ -21,4 +23,4 @@ jobs:
           cd $GITHUB_WORKSPACE
           git config user.name ci; git config user.email ci@example.invalid
           git checkout --orphan probe-logs; git rm -rf . >/dev/null 2>&1 || true
-          cp /tmp/probe.txt probe.txt; git add probe.txt; git commit -q -m probe; git push origin probe-logs --force
+          cp /tmp/probe.txt probe.txt; cp /tmp/hf.txt hf.txt 2>/dev/null; git add probe.txt hf.txt; git commit -q -m probe; git push origin probe-logs --force
