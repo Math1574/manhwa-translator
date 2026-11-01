@@ -33,6 +33,10 @@ class PagePipeline(
     private val grouper: BlockGrouper = BlockGrouper(),
     private val useCache: Boolean = true,
     private val debugSink: ((DebugInfo) -> Unit)? = null,
+    /** Vrai pour une ligne à ignorer (filigrane, logo, débris de lecture sur le dessin). */
+    private val junk: (String) -> Boolean = { false },
+    /** Répare les erreurs de lecture avant traduction (mots collés, chiffres ou minuscules parasites). */
+    private val repair: (String) -> String = { it },
 ) {
     fun process(imageBytes: ByteArray, source: String, target: String): PageOutcome {
         val key = CacheKey(sha256Hex(imageBytes), source, target, engineId)
@@ -42,7 +46,8 @@ class PagePipeline(
             return PageOutcome.Failed("ocr", e.message ?: e.javaClass.simpleName)
         }
         val grouped = grouper.group(ocrResult.lines)
-        val blocks = grouped.filter { !TextNormalizer.isNoise(it.text) }
+        val blocks = grouped.filter { !TextNormalizer.isNoise(it.text) && !junk(it.text) }
+        val clean = blocks.map { repair(it.text) }
         reportDebug(ocrResult, grouped, blocks, emptySet())
         if (blocks.isEmpty()) return PageOutcome.NoText(ocrResult.imageWidth, ocrResult.imageHeight)
 
@@ -59,22 +64,22 @@ class PagePipeline(
         if (pending.isNotEmpty()) {
             val llm = translator.usesGlossaryPrompt()
             val protectedTexts = pending.map {
-                if (llm) Protected(TextNormalizer.fixCase(blocks[it].text), emptyMap())
-                else g.protect(blocks[it].text).let { p -> p.copy(text = TextNormalizer.fixCase(p.text)) }
+                if (llm) Protected(TextNormalizer.fixCase(clean[it]), emptyMap())
+                else g.protect(clean[it]).let { p -> p.copy(text = TextNormalizer.fixCase(p.text)) }
             }
-            val terms = if (llm) g.terms().filter { t -> pending.any { blocks[it].text.contains(t.source) } } else emptyList()
+            val terms = if (llm) g.terms().filter { t -> pending.any { clean[it].contains(t.source, ignoreCase = true) } } else emptyList()
             fun run(texts: List<String>): List<String> =
                 if (llm) translator.translateWithGlossary(texts, source, target, terms) else translator.translate(texts, source, target)
 
             val batch = try { run(protectedTexts.map { it.text }) } catch (e: Exception) { lastError = e.message ?: e.javaClass.simpleName; null }
             if (batch != null && batch.size == pending.size) {
-                pending.forEachIndexed { k, i -> translated[i] = TextNormalizer.matchCase(blocks[i].text, finish(g, protectedTexts[k], batch[k], blocks[i].text, source, target)) }
+                pending.forEachIndexed { k, i -> translated[i] = TextNormalizer.matchCase(clean[i], finish(g, protectedTexts[k], batch[k], clean[i], source, target)) }
             } else {
                 // le lot a échoué : on retente bloc par bloc pour ne perdre que les blocs réellement en erreur
                 pending.forEachIndexed { k, i ->
                     try {
                         val out = run(listOf(protectedTexts[k].text)).single()
-                        translated[i] = TextNormalizer.matchCase(blocks[i].text, finish(g, protectedTexts[k], out, blocks[i].text, source, target))
+                        translated[i] = TextNormalizer.matchCase(clean[i], finish(g, protectedTexts[k], out, clean[i], source, target))
                     } catch (e: Exception) { errors++; lastError = e.message ?: e.javaClass.simpleName }
                 }
             }
@@ -85,7 +90,7 @@ class PagePipeline(
         if (failedIds.isNotEmpty()) reportDebug(ocrResult, grouped, blocks, failedIds)
 
         val out = blocks.mapIndexedNotNull { i, b ->
-            translated[i]?.let { TranslatedBlock(b.id, b.box, b.text, it, b.vertical, medianLineHeight(b), b.lines.map { l -> l.box }, b.lines.map { l -> l.text }) }
+            translated[i]?.let { TranslatedBlock(b.id, b.box, b.text, it, b.vertical, medianLineHeight(b), b.lines.map { l -> l.box }, b.lines.map { l -> l.text }, if (clean[i] != b.text) clean[i] else "") }
         }
         val result = PageResult(ocrResult.imageWidth, ocrResult.imageHeight, out)
         if (errors == 0) cache.put(key, result) // une page partielle n'est pas mise en cache

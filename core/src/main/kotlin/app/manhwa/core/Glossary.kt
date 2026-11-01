@@ -35,10 +35,10 @@ class Glossary(entries: List<GlossaryEntry> = emptyList(), corrections: Map<Stri
         val tokens = LinkedHashMap<String, String>()
         var i = 0
         for ((src, tgt) in terms.entries.sortedByDescending { it.key.length }) {
-            if (out.contains(src)) {
+            if (out.contains(src, ignoreCase = true)) {
                 val token = "ZQ${i}X"
                 i++
-                out = out.replace(src, token)
+                out = out.replace(src, token, ignoreCase = true)
                 tokens[token] = tgt
             }
         }

@@ -33,7 +33,7 @@ object TranslationChecks {
             if (sLetters >= 3 && normalize(src) == normalize(t) && toks.size >= 2 && toks.any { it.lowercase() in englishOnly || it.length > 3 }) out.add(Problem("non-traduit", "identique à l'original"))
         }
         // chiffres : ceux de l'original doivent se retrouver
-        val digits = Regex("\\d+").findAll(src).map { it.value }.toList()
+        val digits = Regex("(?<![A-Za-z0-9])\\d+(?![A-Za-z0-9])").findAll(src).map { it.value }.toList()   // nombres isolés ; « INJURIE3 » est une erreur de lecture
         if (digits.any { it !in t }) out.add(Problem("chiffres", "chiffre(s) perdu(s) : " + digits.filter { it !in t }.joinToString(", ")))
         // noms à conserver
         val lower = src.lowercase(); val tl = t.lowercase()

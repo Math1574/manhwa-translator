@@ -31,6 +31,8 @@ data class TranslatedBlock(
     val lineBoxes: List<RectF> = emptyList(),
     /** Texte OCR de chaque ligne d'origine (même ordre que [lineBoxes]) : sert à choisir une police ressemblant au lettrage. */
     val lineTexts: List<String> = emptyList(),
+    /** Texte après réparation des erreurs de lecture (mots collés, chiffres parasites) : ce que le traducteur a reçu. Vide si identique. */
+    val repaired: String = "",
 )
 
 data class PlacedBlock(

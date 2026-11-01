@@ -24,6 +24,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import app.manhwa.core.CacheKey
 import app.manhwa.core.DebugInfo
+import app.manhwa.core.JunkFilter
+import app.manhwa.core.OcrRepair
 import app.manhwa.core.TranslationChecks
 import app.manhwa.core.sha256Hex
 import app.manhwa.core.LlmModels
@@ -81,6 +83,16 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     var editTarget by mutableStateOf<EditTarget?>(null)
     private val candidatesById = ConcurrentHashMap<String, Candidate>()
     private val keysById = ConcurrentHashMap<String, CacheKey>()
+    /** Texte normalisé → images où il est apparu : un texte qui revient sur au moins 4 images est un filigrane. */
+    private val seenTexts = ConcurrentHashMap<String, MutableSet<String>>()
+
+    private fun repeatedAcrossPages(text: String, imageId: String): Boolean {
+        val key = text.lowercase().filter { it.isLetterOrDigit() }
+        if (key.length < 8) return false
+        val set = seenTexts.getOrPut(key) { java.util.Collections.newSetFromMap(ConcurrentHashMap()) }
+        set.add(imageId)
+        return set.size >= 4
+    }
 
     // Tests automatiques (builds debug) : journal détaillé de chaque image traitée
     @Volatile var testing = false
@@ -297,6 +309,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val ocrEngine = CombinedOcr(s.source, MlKitOcr(s.source), if (enhanced) graph.paddle else null)
         val engineId = (if (spec == null) MlKitTranslation.ID else GemmaTranslator.engineId(spec)) + (if (enhanced) "+pp1" else "")
         var debug: DebugInfo? = null
+        val lexicon = Lexicon.get(ctx)
         candidatesById[c.id] = c
         keysById[c.id] = CacheKey(sha256Hex(bytes), s.source.code, s.target.code, engineId)
         val pipeline = PagePipeline(
@@ -304,6 +317,9 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             glossary = { graph.glossary.current() },
             useCache = !s.diagnostic && !testing, // en diagnostic on veut voir la détection réelle, pas un résultat en cache
             debugSink = { debug = it },
+            // l'anglais est lu par OCR avec beaucoup de bruit : on écarte filigranes et débris, puis on répare mots collés et chiffres parasites
+            junk = { t -> s.source.code != "ja" && s.source.code != "ko" && s.source.code != "zh" && (JunkFilter.isWatermark(t) || JunkFilter.isDebris(t, lexicon) || repeatedAcrossPages(t, c.id)) },
+            repair = { t -> try { OcrRepair.repair(t, lexicon, graph.gemma.chapterNames()) } catch (e: Throwable) { t } },
         )
         val out = pipeline.process(bytes, s.source.code, s.target.code)
         var overlayForLog: JSONObject? = null
@@ -326,7 +342,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val blocks = JSONArray()
         out.result.blocks.forEach { b ->
             blocks.put(
-                JSONObject().put("src", b.source).put("tr", b.translated)
+                JSONObject().put("src", b.source).put("rep", b.repaired).put("tr", b.translated)
                     .put("p", JSONArray(TranslationChecks.problems(b.source, b.translated, target).map { it.code })),
             )
         }
@@ -337,13 +353,20 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     }
 
     /** Enregistre la correction manuelle (mémorisée dans le glossaire), la consigne au journal et retraduit la page concernée. */
-    fun saveCorrection(newText: String) {
+    fun saveCorrection(newText: String, termSource: String = "", termTarget: String = "") {
         val t = editTarget ?: return
         editTarget = null
         val clean = newText.trim()
-        if (clean.isEmpty() || clean == t.tr) return
-        graph.glossary.addCorrection(t.src, clean)
-        graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "correction").put("url", currentUrl).put("src", t.src).put("before", t.tr).put("after", clean))
+        val ts = termSource.trim(); val tt = termTarget.trim()
+        val textChanged = clean.isNotEmpty() && clean != t.tr
+        val termAdded = ts.isNotEmpty() && tt.isNotEmpty()
+        if (!textChanged && !termAdded) return
+        if (textChanged) graph.glossary.addCorrection(t.src, clean)
+        if (termAdded) graph.glossary.add(ts, tt)
+        graph.journal.add(
+            JSONObject().put("t", System.currentTimeMillis()).put("type", "correction").put("url", currentUrl).put("src", t.src).put("before", t.tr).put("after", if (textChanged) clean else "")
+                .put("term", if (termAdded) "$ts = $tt" else ""),
+        )
         val cand = candidatesById[t.imageId] ?: return
         keysById[t.imageId]?.let { graph.cache.remove(it) }
         queue.submit(PageJob(cand.id + "#fix" + System.nanoTime(), 0) { cancelled -> process(cand, cancelled) })

@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests()
+    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -150,7 +150,7 @@ fun glossaryTests() {
 // ---------- cache ----------
 fun cacheTests() {
     val key = CacheKey("abc", "ja", "fr", "eng1")
-    val res = PageResult(100, 200, listOf(TranslatedBlock(0, RectF(1f, 2f, 3f, 4f), "原文\tx", "tra\nduction", true, 12.5f, listOf(RectF(1f, 2f, 3f, 3f), RectF(1f, 3f, 3f, 4f)), listOf("ligne\t1", "ligne 2"))))
+    val res = PageResult(100, 200, listOf(TranslatedBlock(0, RectF(1f, 2f, 3f, 4f), "原文\tx", "tra\nduction", true, 12.5f, listOf(RectF(1f, 2f, 3f, 3f), RectF(1f, 3f, 3f, 4f)), listOf("ligne\t1", "ligne 2"), "répa\tré")))
     T.test("cache: écriture puis lecture, persistance après redémarrage") {
         val d = tmp(); ResultCache(d).put(key, res)
         T.eq(res, ResultCache(d).get(key))
@@ -749,7 +749,7 @@ fun checkTests() {
         T.ok("non-traduit" !in codes("I am Hwang.", "Je suis Hwang."), "nom propre non signalé")
     }
     T.test("contrôles : chiffres perdus, nom modifié, répétition, verbosité, format") {
-        T.ok("chiffres" in codes("I waited ten years, 10 years.", "J'ai attendu longtemps."), "chiffres")
+        T.ok("chiffres" in codes("I waited ten years, 10 years.", "J'ai attendu longtemps."), "chiffres"); T.ok("chiffres" !in codes("YOU HAVE INJURIE3 ALL OVER.", "TU AS DES BLESSURES PARTOUT."), "chiffre dans un mot = erreur de lecture")
         T.ok("nom" in codes("Hwang is here.", "Le doyen est là.", listOf("Hwang")), "nom")
         T.ok("répétition" in codes("Please help me now.", "S'il vous plaît de de de aidez-moi."), "répétition")
         T.ok("long" in codes("Run away now please.", "Il faut absolument que tu t'enfuies maintenant très vite, sans attendre une seconde de plus, je t'en supplie, vraiment, maintenant."), "long")
@@ -767,5 +767,40 @@ fun checkTests() {
         val f = LlmPrompt.fixUser("Hello you", "Hello you", listOf("non-traduit : mots anglais : hello"), emptyList(), emptyList(), listOf("Hwang"))
         T.ok(f.contains("rejected") && f.contains("Previous attempt: Hello you") && f.contains("Hwang") && f.contains("1| Hello you"), "fix")
         T.ok(LlmPrompt.user(listOf("Hi"), emptyList(), emptyList(), null, listOf("Hwang")).contains("keep exactly as written"), "noms")
+    }
+}
+
+// ---------- réparation du texte lu et filtre des débris ----------
+fun repairTests() {
+    val lex = EnglishLexicon(
+        "days waited stop chief i just want to live a quiet life you know injuries all over it is it's lots of that really effective go check our souls everyone if bargain with demon chief technique spends hours using so badly come here heavenly wants the more today mouth hurt little but apply watch over storage".split(" "),
+        "chief stop the of and to a in is it you that he was for on are with as i his they be at one have this from or had by hot but some what there we can out other were all your when up use word how said an each she which do their time if will way about many then them would write like so these her long make thing see him two has look more day could go come did number sound no most people my over know water than call first who may down side been now find any new work part take get place made live where after back little only round man year came show every good me give our under name very through just form much great think say help low line before turn cause same mean differ move right boy old too does tell sentence set three want air well also play small end put home read hand port large spell add even land here must big high such follow act why ask men change went light kind off need house picture try us again animal point mother world near build self earth father".split(" "),
+    )
+    fun r(s: String, protect: Set<String> = emptySet()) = OcrRepair.repair(s, lex, protect)
+    T.test("réparation : chiffres pris pour des lettres") {
+        T.eq("THAT'S NOT TRUE. YOU HAVE INJURIES ALL OVER.", r("THAT'S NOT TRUE. YOU HAVE INJURIE3 ALL OVeR."))
+        T.eq("I'LL APPLY LOTS OF IT-", r("I'LL APPLY LOT3 OF IT-"))
+        T.eq("IT STINGS SO BADLY", r("IT STINGS 50 BADLY")); T.eq("I WAITED 4 DAYS HERE", r("I WAITED 4 DAYS HERE"))
+        T.eq("I JUST WANT TO LIVE A QUTET UIFE. YOU KNOW?", r("I JUST wA4NT TO LIVE 4 QUTET UIFE. You Know?"))
+    }
+    T.test("réparation : mots collés et ponctuation collée") {
+        T.eq("LET'S GO CHECK", r("LET'S GOCHECK"))
+        T.eq("OUR SOULS", r("OURSOULS"))
+        T.eq("GET A GRIP EVERYONE! IF YOU BARGAIN WITH A DEMON", r("GET A GRIP EVERYONE!IF YOU BARGAIN WITH A DEMON"))
+    }
+    T.test("réparation : faute d'une lettre sur un mot courant, noms protégés, texte non anglais intact") {
+        T.eq("WHERE IS THE CHIEF", r("WHERE IS THE CHIEFZ"))
+        T.eq("DUBHE", r("DUBHE")); T.eq("HWANGZ", r("HWANGZ", setOf("hwangz"))); T.eq("MASTER TAESAN", r("MASTER TAESAN")); T.eq("PLEASE JUST RASTA", r("PLEASE JUST RASTA"))
+        T.eq("제발 도와주세요", r("제발 도와주세요"))
+    }
+    T.test("réparation : casse mixte dans un texte en majuscules harmonisée") {
+        T.eq("TODAY MORE", r("toDay MoRE").uppercase())
+        T.ok(TextNormalizer.isAllCaps(r("THe MoRE HeAVeELY")), "devient tout en majuscules")
+    }
+    T.test("filtre : filigranes, débris de lecture, mais pas les interjections ni le vrai dialogue") {
+        T.ok(JunkFilter.isWatermark("ASURASCANS.COM") && JunkFilter.isWatermark("read at asuracomic.net") && !JunkFilter.isWatermark("I want to go home."), "filigrane")
+        listOf("Asd.", "Py", "yut", "Toro5", "UL", "2Anw").forEach { T.ok(JunkFilter.isDebris(it, lex), "débris : $it") }
+        listOf("AAAAGH...!", "GAGH!!", "HUH?!", "WHAT?", "OK", "I see.", "Haha.", "STOP!!", "YOU KNOW?", "Hmph.").forEach { T.ok(!JunkFilter.isDebris(it, lex), "à garder : $it") }
+        T.ok(!JunkFilter.isDebris("제발...", lex), "texte non anglais jamais débris")
     }
 }

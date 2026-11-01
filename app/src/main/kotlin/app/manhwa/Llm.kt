@@ -103,6 +103,9 @@ class GemmaTranslator(
     /** Noms et termes du chapitre en cours (mémoire) et rapport des contrôles de la dernière page. */
     private val memory = ChapterMemory()
     @Volatile var lastReport: List<LineReport> = emptyList()
+
+    /** Noms propres repérés dans le chapitre (minuscules) : le réparateur de texte lu ne doit pas les « corriger ». */
+    fun chapterNames(): Set<String> = memory.namesToKeep().map { it.lowercase() }.toSet()
     private val history = ArrayDeque<Pair<String, String>>()
     private val main = Handler(Looper.getMainLooper())
     private val releaseTask = Runnable { release() }
