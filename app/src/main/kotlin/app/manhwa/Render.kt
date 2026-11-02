@@ -162,7 +162,7 @@ object PageRenderer {
         val lineBoxes = b.lineBoxes.ifEmpty { listOf(b.box) }
         val union = lineBoxes.reduce { a, c -> a.union(c) }
         val lineH = lineHeightOf(b)
-        val plan = if (src != null) try { Erasure.plan(src, s, lineBoxes, lineH, iw, ih, others) } catch (e: Throwable) { null } else null
+        val plan = if (src != null) try { Erasure.plan(src, s, lineBoxes, lineH, iw, ih, others, b.bubble) } catch (e: Throwable) { null } else null
         val flat = plan?.mode == Erasure.Mode.FLAT
         val rectangular = flat && plan?.shape == null && union.width > 2.2f * union.height && lineBoxes.size <= 2
         val style = TextErase.chooseFont(b.source, lineH, medianLine, flat, plan?.outlined ?: false, rectangular)
@@ -234,7 +234,12 @@ object PageRenderer {
         // forme disponible : intérieur de la bulle si détecté ; sinon l'emprise d'origine légèrement élargie
         val grow = if (plan?.mode == Erasure.Mode.ART) 0.12f else 0.06f
         val rectArea = RectF(max(0f, union.left - union.width * grow), max(0f, union.top - union.height * grow), min(iw, union.right + union.width * grow), min(ih, union.bottom + union.height * grow))
-        val shape = plan?.shape ?: RowShape.rect(rectArea.left, rectArea.top, rectArea.right, rectArea.bottom)
+        // forme : intérieur relevé sur l'image ; sinon ellipse inscrite dans la bulle détectée (jamais plus petite que le texte d'origine) ; sinon rectangle autour du texte
+        val bubbleShape = b.bubble?.let { c ->
+            val inset = RectF(c.left + c.width * 0.06f, c.top + c.height * 0.06f, c.right - c.width * 0.06f, c.bottom - c.height * 0.06f)
+            if (inset.width >= union.width * 0.9f && inset.height >= union.height * 0.9f) RowShape.ellipse(inset.left, inset.top, inset.right, inset.bottom) else null
+        }
+        val shape = plan?.shape ?: bubbleShape ?: RowShape.rect(rectArea.left, rectArea.top, rectArea.right, rectArea.bottom)
         val margin = max(3f, em * 0.12f)
         val fit = ShapeLayout.fit(shape, (union.top + union.bottom) / 2f, p.text, measurer, em, max(5f, em * 0.4f), stepRatio, margin)
         if (fit.lines.isEmpty()) return null

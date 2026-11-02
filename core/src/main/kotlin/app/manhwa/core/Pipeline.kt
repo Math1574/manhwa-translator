@@ -45,7 +45,7 @@ class PagePipeline(
         val ocrResult = try { ocr.recognize(imageBytes) } catch (e: Exception) {
             return PageOutcome.Failed("ocr", e.message ?: e.javaClass.simpleName)
         }
-        val grouped = grouper.group(ocrResult.lines)
+        val grouped = grouper.group(ocrResult.lines, ocrResult.detections)
         // hauteur de ligne relative à la médiane de la page : un gros lettrage (onomatopée, titre) n'est jamais un débris
         val heights = grouped.map { medianLineHeight(it) }.filter { it > 0f }.sorted()
         val medianH = if (heights.isEmpty()) 0f else heights[heights.size / 2]
@@ -93,7 +93,7 @@ class PagePipeline(
         if (failedIds.isNotEmpty()) reportDebug(ocrResult, grouped, blocks, failedIds)
 
         val out = blocks.mapIndexedNotNull { i, b ->
-            translated[i]?.let { TranslatedBlock(b.id, b.box, b.text, it, b.vertical, medianLineHeight(b), b.lines.map { l -> l.box }, b.lines.map { l -> l.text }, if (clean[i] != b.text) clean[i] else "") }
+            translated[i]?.let { TranslatedBlock(b.id, b.box, b.text, it, b.vertical, medianLineHeight(b), b.lines.map { l -> l.box }, b.lines.map { l -> l.text }, if (clean[i] != b.text) clean[i] else "", b.kind.name.takeIf { b.kind != BlockKind.UNKNOWN } ?: "", b.container) }
         }
         val result = PageResult(ocrResult.imageWidth, ocrResult.imageHeight, out)
         if (errors == 0) cache.put(key, result) // une page partielle n'est pas mise en cache

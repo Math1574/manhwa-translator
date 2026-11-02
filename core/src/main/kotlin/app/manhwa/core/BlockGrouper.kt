@@ -50,12 +50,66 @@ class BlockGrouper(private val cfg: GrouperConfig = GrouperConfig()) {
         }
     }
 
+    /**
+     * Regroupement par zones détectées : chaque ligne va à la zone de texte (texte dans une bulle ou hors bulle) qui la contient, au lieu d'être
+     * rapprochée de ses voisines. Deux bulles qui se touchent, un cartouche de narration collé à une bulle ou un texte libre proche d'un dialogue
+     * ne sont plus fusionnés. Les lignes sans zone retombent sur le regroupement géométrique. Sans détection : regroupement géométrique.
+     */
+    fun group(lines: List<OcrLine>, detections: List<Detection>): List<TextBlock> {
+        val anchors = mergeAnchors(detections.filter { it.cls != RegionClass.BUBBLE })
+        if (anchors.isEmpty()) return group(lines)
+        val bubbles = detections.filter { it.cls == RegionClass.BUBBLE }
+        // une ligne à l'intérieur d'une zone détectée est confirmée : on tolère une confiance de lecture plus basse (onomatopées, lettrages)
+        fun anchorOf(l: OcrLine): Int {
+            var best = -1; var bestRatio = 0.5f
+            for ((i, a) in anchors.withIndex()) {
+                val inter = l.box.intersection(a.box)?.area ?: 0f
+                val ratio = if (l.box.area <= 0f) 0f else inter / l.box.area
+                if (ratio > bestRatio + 1e-4f || (best >= 0 && ratio >= bestRatio - 1e-4f && ratio >= 0.5f && a.box.area < anchors[best].box.area)) { best = i; bestRatio = max(bestRatio, ratio) }
+            }
+            return best
+        }
+        val usable = lines.filter { l -> dropReason(l) == null || (anchorOf(l) >= 0 && dropReason(l, relaxed = true) == null) }
+        val kept = dedupe(usable)
+        if (kept.isEmpty()) return emptyList()
+        val byAnchor = HashMap<Int, MutableList<OcrLine>>(); val loose = ArrayList<OcrLine>()
+        for (l in kept) { val a = anchorOf(l); if (a >= 0) byAnchor.getOrPut(a) { ArrayList() }.add(l) else loose.add(l) }
+        val blocks = ArrayList<Triple<List<OcrLine>, BlockKind, RectF?>>()
+        for ((i, ls) in byAnchor) {
+            val vertical = ls.count { isVertical(it) } * 2 > ls.size
+            val sorted = if (vertical) ls.sortedWith(compareByDescending<OcrLine> { it.box.centerX }.thenBy { it.box.top }) else readingOrder(ls)
+            val box = sorted.map { it.box }.reduce { a, b -> a.union(b) }
+            val container = bubbles.filter { b -> (box.intersection(b.box)?.area ?: 0f) >= 0.8f * box.area }.minByOrNull { it.box.area }?.box
+            val kind = if (anchors[i].cls == RegionClass.TEXT_BUBBLE || container != null) BlockKind.IN_BUBBLE else BlockKind.FREE
+            blocks.add(Triple(sorted, kind, container))
+        }
+        for (b in group(loose)) blocks.add(Triple(b.lines, BlockKind.FREE, null))
+        val ordered = blocks.map { (ls, kind, c) -> Triple(ls, ls.map { it.box }.reduce { a, b -> a.union(b) }, Pair(kind, c)) }.sortedWith(compareBy({ it.second.top }, { it.second.left }))
+        return ordered.mapIndexed { i, (ls, box, kc) ->
+            val vertical = ls.count { isVertical(it) } * 2 > ls.size
+            TextBlock(i, ls, box, joinText(ls.map { it.text }), vertical, kc.first, kc.second)
+        }
+    }
+
+    /** Zones de texte sans doublons : deux zones qui se recouvrent à plus de 50 % (même classe ou non) sont une seule zone, la plus sûre l'emporte. */
+    private fun mergeAnchors(ds: List<Detection>): List<Detection> {
+        val out = ArrayList<Detection>()
+        for (d in ds.sortedByDescending { it.score }) {
+            val inter = { k: Detection -> d.box.intersection(k.box)?.area ?: 0f }
+            val dup = out.any { k -> val i = inter(k); i / max(1f, d.box.area + k.box.area - i) > 0.5f || i >= 0.85f * min(d.box.area, k.box.area) }
+            if (!dup) out.add(d)
+        }
+        return out
+    }
+
     /** Motif de rejet d'une ligne OCR (null si elle est utilisable) : sert au regroupement et au mode diagnostic. */
-    fun dropReason(l: OcrLine): String? {
+    fun dropReason(l: OcrLine, relaxed: Boolean = false): String? {
         val t = l.text.trim()
         if (t.isEmpty()) return "vide"
-        if (l.confidence < (if (t.any { it.isCjk() }) cfg.minConfidenceCjk else cfg.minConfidence)) return "confiance"
-        if (l.box.isEmpty || min(l.box.width, l.box.height) < cfg.minSidePx) return "trop petit"
+        // ligne située dans une zone confirmée par le détecteur : seuils assouplis
+        val minConf = if (relaxed) 0.12f else if (t.any { it.isCjk() }) cfg.minConfidenceCjk else cfg.minConfidence
+        if (l.confidence < minConf) return "confiance"
+        if (l.box.isEmpty || min(l.box.width, l.box.height) < (if (relaxed) 4f else cfg.minSidePx)) return "trop petit"
         if (!t.any { it.isLetterOrDigit() || it.isCjk() }) return "ponctuation"
         return null
     }

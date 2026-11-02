@@ -33,6 +33,9 @@ data class TranslatedBlock(
     val lineTexts: List<String> = emptyList(),
     /** Texte après réparation des erreurs de lecture (mots collés, chiffres parasites) : ce que le traducteur a reçu. Vide si identique. */
     val repaired: String = "",
+    /** Nature du bloc selon le détecteur (« IN_BUBBLE », « FREE », ou vide) et boîte de la bulle qui le contient. */
+    val kind: String = "",
+    val bubble: RectF? = null,
 )
 
 data class PlacedBlock(

@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests()
+    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -150,7 +150,7 @@ fun glossaryTests() {
 // ---------- cache ----------
 fun cacheTests() {
     val key = CacheKey("abc", "ja", "fr", "eng1")
-    val res = PageResult(100, 200, listOf(TranslatedBlock(0, RectF(1f, 2f, 3f, 4f), "原文\tx", "tra\nduction", true, 12.5f, listOf(RectF(1f, 2f, 3f, 3f), RectF(1f, 3f, 3f, 4f)), listOf("ligne\t1", "ligne 2"), "répa\tré")))
+    val res = PageResult(100, 200, listOf(TranslatedBlock(0, RectF(1f, 2f, 3f, 4f), "原文\tx", "tra\nduction", true, 12.5f, listOf(RectF(1f, 2f, 3f, 3f), RectF(1f, 3f, 3f, 4f)), listOf("ligne\t1", "ligne 2"), "répa\tré", "IN_BUBBLE", RectF(1f, 2f, 30f, 40f))))
     T.test("cache: écriture puis lecture, persistance après redémarrage") {
         val d = tmp(); ResultCache(d).put(key, res)
         T.eq(res, ResultCache(d).get(key))
@@ -897,5 +897,38 @@ fun chapterNavTests() {
         T.eq(null, ChapterNav.next("https://s.example/series/a/chapter-12-5")); T.eq(null, ChapterNav.next("https://s.example/series/a/chapter-12.5"))
         T.eq(null, ChapterNav.previous("https://s.example/series/a/chapter-1")); T.eq(null, ChapterNav.next("https://s.example/series/a")); T.eq(null, ChapterNav.next("about:blank"))
         T.eq(null, ChapterNav.next("https://chapter7.example"))
+    }
+}
+
+// ---------- regroupement par zones détectées ----------
+fun anchoredGroupTests() {
+    val g = BlockGrouper()
+    fun ln(t: String, l: Float, tp: Float, r: Float, b: Float, c: Float = 0.9f) = OcrLine(t, RectF(l, tp, r, b), c)
+    fun det(c: RegionClass, l: Float, tp: Float, r: Float, b: Float, s: Float = 0.9f) = Detection(c, RectF(l, tp, r, b), s)
+    T.test("zones détectées : deux bulles qui se touchent restent deux blocs (le regroupement par proximité les fusionne)") {
+        val lines = listOf(ln("I SAID NO", 100f, 100f, 300f, 130f), ln("ONCE AGAIN", 110f, 135f, 290f, 165f), ln("AND I MEAN IT", 120f, 175f, 320f, 205f), ln("TOO", 140f, 210f, 280f, 240f))
+        T.eq(1, g.group(lines).size)   // sans détection : tout est rapproché
+        val dets = listOf(det(RegionClass.BUBBLE, 80f, 90f, 330f, 172f), det(RegionClass.BUBBLE, 90f, 168f, 340f, 250f), det(RegionClass.TEXT_BUBBLE, 100f, 100f, 300f, 165f), det(RegionClass.TEXT_BUBBLE, 120f, 175f, 320f, 240f))
+        val blocks = g.group(lines, dets)
+        T.eq(2, blocks.size); T.eq("I SAID NO ONCE AGAIN", blocks[0].text); T.eq("AND I MEAN IT TOO", blocks[1].text)
+        T.eq(BlockKind.IN_BUBBLE, blocks[0].kind); T.ok(blocks[0].container != null, "boîte de bulle conservée")
+    }
+    T.test("zones détectées : cartouche de narration collé à une bulle, texte libre hors bulle") {
+        val lines = listOf(ln("MEANWHILE AT THE GATE", 50f, 20f, 350f, 50f), ln("HEY YOU!", 100f, 60f, 260f, 90f), ln("CRACK", 400f, 300f, 600f, 380f, 0.2f))
+        val dets = listOf(det(RegionClass.TEXT_BUBBLE, 50f, 20f, 350f, 52f), det(RegionClass.TEXT_BUBBLE, 100f, 60f, 260f, 92f), det(RegionClass.TEXT_FREE, 395f, 295f, 610f, 385f))
+        val b = g.group(lines, dets)
+        T.eq(3, b.size); T.eq("CRACK", b[2].text); T.eq(BlockKind.FREE, b[2].kind)
+    }
+    T.test("zones détectées : ligne sans zone → regroupement géométrique ; confiance basse tolérée dans une zone confirmée") {
+        val lines = listOf(ln("INSIDE ZONE", 10f, 10f, 200f, 40f, 0.2f), ln("LOOSE ONE", 10f, 400f, 200f, 430f), ln("LOOSE TWO", 12f, 435f, 198f, 465f))
+        val b = g.group(lines, listOf(det(RegionClass.TEXT_FREE, 5f, 5f, 210f, 45f)))
+        T.eq(2, b.size); T.eq("INSIDE ZONE", b[0].text); T.eq("LOOSE ONE LOOSE TWO", b[1].text)
+        T.eq(g.group(lines).map { it.text }, g.group(lines, emptyList()).map { it.text })
+    }
+    T.test("zones détectées : doublons de zones (même texte vu deux fois) fusionnés ; colonnes verticales de droite à gauche") {
+        val lines = listOf(OcrLine("AA", RectF(100f, 10f, 140f, 200f), 0.9f, vertical = true), OcrLine("BB", RectF(150f, 10f, 190f, 200f), 0.9f, vertical = true))
+        val dets = listOf(det(RegionClass.TEXT_BUBBLE, 95f, 5f, 195f, 205f, 0.9f), det(RegionClass.TEXT_FREE, 98f, 8f, 192f, 203f, 0.5f))
+        val b = g.group(lines, dets)
+        T.eq(1, b.size); T.eq("BB AA", b[0].text); T.ok(b[0].vertical, "vertical")
     }
 }

@@ -44,7 +44,16 @@ data class OcrLine(
     val vertical: Boolean = false,
 )
 
-data class OcrResult(val imageWidth: Int, val imageHeight: Int, val lines: List<OcrLine>)
+/** Classes du détecteur de bulles et de texte de bande dessinée. */
+enum class RegionClass { BUBBLE, TEXT_BUBBLE, TEXT_FREE }
+
+/** Région détectée (en pixels de l'image d'origine) : bulle, texte dans une bulle ou texte hors bulle. */
+data class Detection(val cls: RegionClass, val box: RectF, val score: Float)
+
+/** Nature d'un bloc de texte : dans une bulle détectée, hors bulle, ou sans région détectée. */
+enum class BlockKind { UNKNOWN, IN_BUBBLE, FREE }
+
+data class OcrResult(val imageWidth: Int, val imageHeight: Int, val lines: List<OcrLine>, val detections: List<Detection> = emptyList())
 
 /** Groupe de lignes formant une bulle ou une zone de texte. */
 data class TextBlock(
@@ -53,6 +62,9 @@ data class TextBlock(
     val box: RectF,
     val text: String,
     val vertical: Boolean,
+    /** Nature du bloc (selon le détecteur) et boîte de la bulle qui le contient, si elle a été détectée. */
+    val kind: BlockKind = BlockKind.UNKNOWN,
+    val container: RectF? = null,
 )
 
 fun Char.isCjk(): Boolean {

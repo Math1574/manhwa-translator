@@ -52,7 +52,10 @@ jobs:
           curl -sSfL --retry 3 -o app/src/main/assets/ocr/manga_ocr_encoder_int8.onnx $MO/encoder_model_int8.onnx
           curl -sSfL --retry 3 -o app/src/main/assets/ocr/manga_ocr_decoder_int8.onnx $MO/decoder_model_int8.onnx
           curl -sSfL --retry 3 -o app/src/main/assets/ocr/manga_ocr_vocab.txt https://huggingface.co/kha-white/manga-ocr-base/resolve/main/vocab.txt
-          ls -la app/src/main/assets/ocr
+          # détecteur de bulles et de texte de bande dessinée (RT-DETR, Apache-2.0, version quantifiée 11 Mo)
+          mkdir -p app/src/main/assets/detector
+          curl -sSfL --retry 3 -o app/src/main/assets/detector/detector-v4-s_int8.onnx https://huggingface.co/ogkalu/comic-text-and-bubble-detector/resolve/main/detector-v4-s_int8.onnx
+          ls -la app/src/main/assets/ocr app/src/main/assets/detector
       - name: Compiler l'APK debug
         run: |
           set -o pipefail
@@ -99,6 +102,7 @@ jobs:
           mkdir -p /tmp/site /tmp/e2e
           bash ci/fixtures/fetch_pc.sh /tmp/site/pc | tail -5
           python3 ci/fixtures/gen_synthetic.py /tmp/site/synth
+          python3 ci/fixtures/gen_layouts.py /tmp/site/synth
           python3 ci/fixtures/make_site.py /tmp/site
           mkdir -p /tmp/site/ref && ln -sfn /tmp/site/pc/en /tmp/site/ref/en
           nohup python3 ci/fixtures/server.py /tmp/site 8000 > /tmp/server.log 2>&1 &

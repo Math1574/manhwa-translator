@@ -62,6 +62,26 @@ for path in sorted(glob.glob(f"{OUT}/reports/*.json")):
     shaped = sum(1 for im in imgs for b in (im.get('overlay') or {}).get('blocks', []) if b.get('shape'))
     if nblocks: P(f"- rendu : {shaped}/{nblocks} bulles à forme détectée · texte ne tenant pas dans sa zone : {nofit}")
     if nofit: problems.append(f"{name}: texte ne tient pas dans sa zone ({nofit})")
+    if name.startswith("synth_layouts"):
+        # regroupement : un bloc lu qui recouvre deux blocs de la vérité est une fusion à tort ; un bloc de la vérité réparti sur deux blocs lus est une scission
+        merges = splits = 0; gt_total = 0; read_total = 0
+        for k, im in enumerate(r.get("images", [])):
+            try: gtb = json.load(open(f"{SYN}/layouts_{k}.json"))
+            except Exception: continue
+            gboxes = []
+            for b in gtb:
+                xs0 = min(l["box"][0] for l in b["lines"]); ys0 = min(l["box"][1] for l in b["lines"]); xs1 = max(l["box"][2] for l in b["lines"]); ys1 = max(l["box"][3] for l in b["lines"])
+                gboxes.append((xs0, ys0, xs1, ys1))
+            def cov(g, d):
+                ix = max(0, min(g[2], d[2]) - max(g[0], d[0])); iy = max(0, min(g[3], d[3]) - max(g[1], d[1])); return ix * iy / max(1, (g[2] - g[0]) * (g[3] - g[1]))
+            rboxes = [(b["x0"], b["y0"], b["x1"], b["y1"]) for b in im.get("blocks", [])]
+            gt_total += len(gboxes); read_total += len(rboxes)
+            for d in rboxes:
+                if sum(1 for g in gboxes if cov(g, d) >= 0.35) >= 2: merges += 1
+            for g in gboxes:
+                if sum(1 for d in rboxes if cov(g, d) >= 0.35) >= 2: splits += 1
+        P(f"- regroupement : {read_total} blocs lus pour {gt_total} blocs réels · fusions à tort {merges} · scissions {splits}")
+        if merges > 2: problems.append(f"{name}: {merges} blocs fusionnés à tort")
     if name.startswith("adblock"):
         blocked = r.get("blocked", 0); final = r.get("finalUrl", "")
         P(f"- blocage des publicités : {blocked} requêtes ou redirections bloquées · adresse finale {final}")

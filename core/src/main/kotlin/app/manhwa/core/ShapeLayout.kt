@@ -29,6 +29,19 @@ class RowShape(val top: Float, val rowH: Float, val left: FloatArray, val right:
     }
 
     companion object {
+        /** Ellipse inscrite dans le rectangle (repli pour une bulle détectée dont la forme n'a pas pu être relevée sur l'image). */
+        fun ellipse(l: Float, t: Float, r: Float, b: Float): RowShape {
+            val h = max(1, (b - t).toInt()); val rowH = (b - t) / h
+            val cx = (l + r) / 2f; val cy = (t + b) / 2f; val rx = (r - l) / 2f; val ry = (b - t) / 2f
+            val left = FloatArray(h); val right = FloatArray(h)
+            for (i in 0 until h) {
+                val dy = (t + rowH * (i + 0.5f) - cy) / ry
+                val half = rx * kotlin.math.sqrt(max(0f, 1f - dy * dy))
+                if (half < 2f) { left[i] = 1f; right[i] = 0f } else { left[i] = cx - half; right[i] = cx + half }
+            }
+            return RowShape(t, rowH, left, right)
+        }
+
         fun rect(l: Float, t: Float, r: Float, b: Float): RowShape {
             val h = max(1, (b - t).toInt())
             return RowShape(t, (b - t) / h, FloatArray(h) { l }, FloatArray(h) { r })

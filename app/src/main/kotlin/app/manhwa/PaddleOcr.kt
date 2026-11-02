@@ -43,6 +43,9 @@ class PaddleModels(private val ctx: Context) {
 
     val environment: OrtEnvironment get() = env
 
+    /** Détecteur de bulles et de texte hors bulle (zones servant d'ancres au regroupement des lignes). */
+    val detector: ComicDetector by lazy { ComicDetector(ctx, env) }
+
     /** Lecture du japonais vertical (manga-ocr) : appelée pour les colonnes que la lecture horizontale ne sait pas traiter. */
     val manga: MangaOcrReader by lazy { MangaOcrReader(ctx, env) }
 
@@ -89,6 +92,7 @@ class PaddleModels(private val ctx: Context) {
 
     @Synchronized fun close() {
         try { manga.close() } catch (_: Throwable) {}
+        try { detector.close() } catch (_: Throwable) {}
         try { altEn?.session?.close() } catch (_: Throwable) {}
         altEn = null; altEnChecked = false
         try { det?.close() } catch (_: Throwable) {}
@@ -102,6 +106,10 @@ class PaddleModels(private val ctx: Context) {
  * puis lecture de chaque ligne. Les longues images sont découpées en tuiles.
  */
 class PaddleOcr(private val models: PaddleModels) {
+
+    /** Zones détectées (bulles, texte dans une bulle, texte hors bulle) ; liste vide si le modèle n'est pas dans l'APK. */
+    fun detectRegions(imageBytes: ByteArray, imageW: Int, imageH: Int): List<app.manhwa.core.Detection> =
+        if (models.detector.available) models.detector.detect(imageBytes, imageW, imageH) else emptyList()
 
     fun recognize(imageBytes: ByteArray, lang: String, imageW: Int, imageH: Int): List<OcrLine> {
         @Suppress("DEPRECATION")
@@ -265,7 +273,11 @@ class CombinedOcr(
         val pp = try { paddle.recognize(imageBytes, script, w, h) } catch (e: Throwable) {
             Log.w("MT", "PaddleOCR a échoué : $e"); emptyList()
         }
-        return OcrResult(w, h, OcrMerge.merge(ml?.lines ?: emptyList(), pp, script))
+        val dets = try { paddle.detectRegions(imageBytes, w, h) } catch (e: Throwable) {
+            Log.w("MT", "détecteur de bulles : $e"); OcrDebug.note += " [détecteur : ${(e.javaClass.simpleName + ": " + (e.message ?: "")).take(120)}]"; emptyList()
+        }
+        OcrDebug.note = (OcrDebug.note + " [zones : bulles=${dets.count { it.cls == app.manhwa.core.RegionClass.BUBBLE }} texte_bulle=${dets.count { it.cls == app.manhwa.core.RegionClass.TEXT_BUBBLE }} texte_libre=${dets.count { it.cls == app.manhwa.core.RegionClass.TEXT_FREE }}]").takeLast(600)
+        return OcrResult(w, h, OcrMerge.merge(ml?.lines ?: emptyList(), pp, script), dets)
     }
 
     private fun scriptFor(mlLines: List<OcrLine>): String = when (source) {
