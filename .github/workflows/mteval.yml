@@ -12,17 +12,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: llama.cpp (binaire officiel, CPU)
+        env: { GH_TOKEN: "${{ github.token }}" }
         run: |
           set -e
-          URL=$(curl -sS https://api.github.com/repos/ggml-org/llama.cpp/releases/latest | python3 -c "
-          import sys,json
-          a=json.load(sys.stdin)['assets']
-          c=[x['browser_download_url'] for x in a if 'ubuntu-x64' in x['name'] and not any(k in x['name'] for k in ('vulkan','rocm','openvino','sycl','cuda','hip'))]
-          print(c[0])")
+          URL=$(python3 ci/get_llama_url.py)
           echo "binaire : $URL"
-          curl -sSL -o /tmp/llama.pkg "$URL"
-          mkdir -p /tmp/llama && cd /tmp/llama
-          case "$URL" in *.zip) unzip -oq /tmp/llama.pkg;; *) tar xzf /tmp/llama.pkg;; esac
+          curl -sSL -o /tmp/llama.tgz "$URL"
+          mkdir -p /tmp/llama && tar xzf /tmp/llama.tgz -C /tmp/llama
           find /tmp/llama -name "llama-server" -type f | head -1 > /tmp/server_path
           cat /tmp/server_path
       - name: Évaluation Hy-MT2-1.8B (Q4_K_M)
