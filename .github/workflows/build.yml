@@ -1,6 +1,7 @@
 name: Build
 on:
   push:
+    paths-ignore: ['.github/workflows/probe.yml', '.github/workflows/mteval.yml', 'ci/probe_hf.py', 'ci/mteval.py']
     branches: [main]
   workflow_dispatch:
     inputs:
@@ -41,6 +42,9 @@ jobs:
           V5=https://huggingface.co/monkt/paddleocr-onnx/resolve/main/languages/english
           curl -sSfL --retry 3 -o app/src/main/assets/ocr/en_PP-OCRv5_rec_infer.onnx $V5/rec.onnx
           curl -sSfL --retry 3 -o app/src/main/assets/ocr/en_v5_dict.txt $V5/dict.txt
+          K5=https://huggingface.co/monkt/paddleocr-onnx/resolve/main/languages/korean
+          curl -sSfL --retry 3 -o app/src/main/assets/ocr/korean_PP-OCRv5_rec_infer.onnx $K5/rec.onnx
+          curl -sSfL --retry 3 -o app/src/main/assets/ocr/ko_v5_dict.txt $K5/dict.txt
           ls -la app/src/main/assets/ocr
       - name: Compiler l'APK debug
         run: |

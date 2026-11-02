@@ -9,16 +9,6 @@ jobs:
       - uses: actions/checkout@v4
       - name: Sondage Hugging Face (fichiers et tailles)
         run: python3 ci/probe_hf.py /tmp/hf.txt || true
-      - name: Télécharger quelques modèles à tester en local
-        run: |
-          mkdir -p /tmp/models; cd /tmp/models
-          H=https://huggingface.co
-          for f in monkt/paddleocr-onnx/languages/english/rec.onnx monkt/paddleocr-onnx/languages/english/dict.txt monkt/paddleocr-onnx/languages/english/config.json \
-                   monkt/paddleocr-onnx/languages/korean/rec.onnx monkt/paddleocr-onnx/languages/korean/dict.txt monkt/paddleocr-onnx/languages/latin/rec.onnx monkt/paddleocr-onnx/languages/latin/dict.txt \
-                   monkt/paddleocr-onnx/languages/chinese/rec.onnx monkt/paddleocr-onnx/languages/chinese/dict.txt monkt/paddleocr-onnx/languages/korean/config.json; do
-            n=$(echo $f | sed 's#/#__#g'); curl -sSfL -m 300 -o "$n" "$H/${f%%/*}/$(echo $f | cut -d/ -f2)/resolve/main/$(echo $f | cut -d/ -f3-)" || echo "ECHEC $f"
-          done
-          ls -la /tmp/models
       - name: Signatures LiteRT-LM (annulation, limite de sortie)
         run: |
           set +e +o pipefail

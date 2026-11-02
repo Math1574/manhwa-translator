@@ -2,6 +2,7 @@
 """Sondage Hugging Face : liste (avec tailles) les fichiers des dépôts de modèles utiles et lit quelques fiches."""
 import json, sys, urllib.request, urllib.parse
 REPOS = [
+    "PaddlePaddle/PP-OCRv5_mobile_rec_onnx", "PaddlePaddle/PP-OCRv5_mobile_det_onnx", "PaddlePaddle/korean_PP-OCRv5_mobile_rec_onnx", "PaddlePaddle/en_PP-OCRv5_mobile_rec_onnx", "litert-community/PP-OCRv5-LiteRT",
     "SWHL/RapidOCR", "monkt/paddleocr-onnx",
     "edgetools/migan", "CardAnvilModels/MI-GAN-ONNX", "edgetools/lama", "mayocream/lama-manga-onnx", "mayocream/lama-manga",
     "ogkalu/comic-speech-bubble-detector-yolov8m", "ogkalu/comic-text-segmenter-yolov8m",
@@ -53,3 +54,18 @@ for repo, path, n in docs:
     try: more.append(get(f"https://huggingface.co/{repo}/resolve/main/{path}").decode("utf8", "replace")[:n])
     except Exception as e: more.append(f"  ERREUR {e}")
 open(sys.argv[1], "a", encoding="utf8").write("\n".join(more))
+
+# ---- téléchargement des fichiers utiles (< 95 Mo) de quelques dépôts, pour les tester en local ----
+import os
+os.makedirs("/tmp/models", exist_ok=True)
+for repo in ("PaddlePaddle/PP-OCRv5_mobile_rec_onnx", "PaddlePaddle/PP-OCRv5_mobile_det_onnx", "PaddlePaddle/korean_PP-OCRv5_mobile_rec_onnx", "PaddlePaddle/en_PP-OCRv5_mobile_rec_onnx"):
+    try:
+        tree = json.loads(get(f"https://huggingface.co/api/models/{repo}/tree/main?recursive=1"))
+        for t in tree:
+            if t.get("type") != "file": continue
+            p = t["path"]; size = t.get("size") or 0
+            if not p.endswith((".onnx", ".yml", ".yaml", ".json", ".txt")) or size > 95_000_000: continue
+            data = get(f"https://huggingface.co/{repo}/resolve/main/{p}")
+            open("/tmp/models/" + repo.replace("/", "__") + "__" + p.replace("/", "__"), "wb").write(data)
+    except Exception as e:
+        open(sys.argv[1], "a", encoding="utf8").write(f"\nERREUR téléchargement {repo}: {e}")

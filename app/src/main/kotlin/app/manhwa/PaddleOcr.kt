@@ -50,7 +50,9 @@ class PaddleModels(private val ctx: Context) {
 
     @Synchronized fun recognizer(lang: String): Rec = recs.getOrPut(lang) {
         when (lang) {
-            "ko" -> Rec(session("ocr/korean_mobile_v2.0_rec_infer.onnx"), Ctc.charset(lines("ocr/korean_dict.txt"), false), 32)
+            // coréen : PP-OCRv5 (erreur de caractères mesurée 3 % contre 27 % pour l'ancien modèle sur ma page de test), ancien modèle en repli
+            "ko" -> try { Rec(session("ocr/korean_PP-OCRv5_rec_infer.onnx"), Ctc.charset(lines("ocr/ko_v5_dict.txt"), true), 48) }
+                    catch (e: Throwable) { Rec(session("ocr/korean_mobile_v2.0_rec_infer.onnx"), Ctc.charset(lines("ocr/korean_dict.txt"), false), 32) }
             "ja" -> Rec(session("ocr/japan_rec_crnn.onnx"), Ctc.charset(lines("ocr/japan_dict.txt"), false), 32)
             "zh" -> Rec(session("ocr/ch_PP-OCRv4_rec_infer.onnx"), Ctc.charset(lines("ocr/ppocr_keys_v1.txt"), true), 48)
             else -> Rec(session("ocr/en_PP-OCRv3_rec_infer.onnx"), Ctc.charset(lines("ocr/en_dict.txt"), true), 48)
