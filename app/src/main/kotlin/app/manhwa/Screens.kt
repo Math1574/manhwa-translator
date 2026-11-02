@@ -68,6 +68,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import app.manhwa.core.ChapterNav
 import app.manhwa.core.LlmModels
 import app.manhwa.core.ModelSpec
 import app.manhwa.core.QualityMode
@@ -176,12 +177,25 @@ fun BrowserScreen(graph: AppGraph) {
                             containerColor = MaterialTheme.colorScheme.surface.copy(alpha = if (auto) 0.6f else 1f),
                         ) { Text(if (c.overlaysVisible) "Original" else "Traduit", Modifier.padding(horizontal = 12.dp)) }
                     }
+                    val nextUrl = if (c.nearBottom) ChapterNav.next(c.currentUrl) else null
+                    if (nextUrl != null) {
+                        ExtendedFloatingActionButton(onClick = { c.load(nextUrl) }, containerColor = MaterialTheme.colorScheme.primary) { Text("Chapitre suivant") }
+                    }
                     if (!auto) {
                         ExtendedFloatingActionButton(
                             onClick = { c.start(force = c.active) },
                             containerColor = MaterialTheme.colorScheme.secondary,
                         ) { Text(if (c.active) "Retraduire" else "Traduire") }
                     }
+                }
+            }
+            if (c.fullscreen && c.nearBottom) {
+                // lecture en plein écran : discret bouton de fin de chapitre, centré en bas
+                ChapterNav.next(c.currentUrl)?.let { nextUrl ->
+                    Box(
+                        Modifier.align(Alignment.BottomCenter).padding(bottom = 28.dp).background(Color(0xB3000000), CircleShape).clickable { c.load(nextUrl) }.padding(horizontal = 20.dp, vertical = 10.dp),
+                        contentAlignment = Alignment.Center,
+                    ) { Text("Chapitre suivant ›", color = Color.White) }
                 }
             }
             if (c.fullscreen) {

@@ -115,6 +115,12 @@ object PageScript {
   try { new MutationObserver(notify).observe(document.documentElement, {childList:true, subtree:true, attributes:true, attributeFilter:['src','srcset','data-src']}); } catch(e) {}
   setInterval(function(){ for (var id in S.entries){ place(S.entries[id]); } }, 300);
   window.addEventListener('resize', function(){ for (var id in S.entries){ S.entries[id].key = ''; place(S.entries[id]); } });
+  // fin de chapitre : prévient l'application quand on approche du bas de la page
+  var nbState = false, nbTick = false;
+  function nbCheck(){ nbTick = false; var nb = (window.innerHeight + window.scrollY) >= (document.documentElement.scrollHeight - 900); if (nb !== nbState) { nbState = nb; try { AndroidMT.onBottom(nb); } catch(e) {} } }
+  window.addEventListener('scroll', function(){ if (!nbTick) { nbTick = true; setTimeout(nbCheck, 300); } }, {passive:true});
+  setTimeout(nbCheck, 800);
+
   // appui long sur une traduction : ouvre l'édition (correction manuelle)
   var LP = {x:0, y:0, timer:null};
   function hit(x, y){

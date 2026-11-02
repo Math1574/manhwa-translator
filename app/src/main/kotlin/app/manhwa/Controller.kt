@@ -66,6 +66,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
     // État observé par l'interface
     var currentUrl by mutableStateOf("")
+    /** Vrai quand la page est lue presque jusqu'en bas (bouton « Chapitre suivant »). */
+    var nearBottom by mutableStateOf(false)
     /** Titre de la page affichée (pour les favoris). */
     val pageTitle: String get() = webView?.title ?: ""
     var loading by mutableStateOf(false)
@@ -207,6 +209,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                 pageHost = try { android.net.Uri.parse(url).host } catch (e: Throwable) { null }
                 graph.gemma.seriesTitle = if (url.startsWith("http")) app.manhwa.core.SeriesHint.fromUrl(url) else null
                 loading = true
+                nearBottom = false
                 pageError = null
                 resetSession()
                 view.evaluateJavascript(PageScript.INJECT, null)
@@ -496,6 +499,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     }
 
     private inner class Bridge {
+        @JavascriptInterface fun onBottom(nb: Boolean) { main.post { nearBottom = nb } }
         @JavascriptInterface fun onImagesChanged() { main.post { if (active) start(false) } }
         @JavascriptInterface fun onB64(id: String, data: String) { b64Waiters[id]?.complete(data) }
         @JavascriptInterface fun onEdit(id: String, bid: String, src: String, tr: String) { main.post { editTarget = EditTarget(id, bid.toIntOrNull() ?: -1, src, tr) } }

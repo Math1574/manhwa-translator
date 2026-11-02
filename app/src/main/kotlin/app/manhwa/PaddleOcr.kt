@@ -137,7 +137,7 @@ class PaddleOcr(private val models: PaddleModels) {
         val scaled = Bitmap.createScaledBitmap(tile, dw, dh, true)
         val prob = try { detect(env, scaled, dw, dh) } finally { if (scaled !== tile) scaled.recycle() }
         val boxes = DbPost.boxes(prob, dw, dh)
-        if (boxes.isEmpty()) return emptyList()
+        if (boxes.isEmpty()) { OcrDebug.note = (OcrDebug.note + " [y=$yOffset : aucune boîte]").takeLast(500); return emptyList() }
 
         // 2) lecture de chaque ligne détectée
         val rec = models.recognizer(lang)
@@ -180,7 +180,7 @@ class PaddleOcr(private val models: PaddleModels) {
                 ),
             )
         }
-        OcrDebug.note = "langue=$lang boîtes=${boxes.size} colonnes=$tall manga(dispo=$mangaAvail, lues=$mangaRead) ${mangaErr}"
+        OcrDebug.note = (OcrDebug.note + " [y=$yOffset langue=$lang boîtes=${boxes.size} colonnes=$tall manga(dispo=$mangaAvail, lues=$mangaRead) $mangaErr]").takeLast(500)
         return lines
     }
 
@@ -257,6 +257,7 @@ class CombinedOcr(
             Log.w("MT", "ML Kit a échoué : $e"); null
         }
         if (paddle == null) return ml!!
+        OcrDebug.note = ""
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size, bounds)
         val w = ml?.imageWidth ?: bounds.outWidth; val h = ml?.imageHeight ?: bounds.outHeight

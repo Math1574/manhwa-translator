@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests()
+    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -881,5 +881,21 @@ fun mangaOcrTests() {
         val r = MangaOcrDecoder.greedy({ ids -> logitsFor(5 + ids.size % 3) }, maxLen = 10)
         T.ok(r.ids.size <= 10, "longueur ${r.ids.size}")
         T.eq("お…", MangaOcrDecoder.text(listOf(5, 11), vocab))
+    }
+}
+
+// ---------- navigation entre chapitres ----------
+fun chapterNavTests() {
+    T.test("chapitre suivant et précédent déduits de l'adresse") {
+        T.eq("https://asurascans.com/comics/the-heavenly-demon-wants-a-quiet-life-11fe7da3/chapter/8", ChapterNav.next("https://asurascans.com/comics/the-heavenly-demon-wants-a-quiet-life-11fe7da3/chapter/7"))
+        T.eq("https://asurascans.com/comics/x-9f8e7d/chapter/6", ChapterNav.previous("https://asurascans.com/comics/x-9f8e7d/chapter/7"))
+        T.eq("https://s.example/series/solo-leveling/chapter-10", ChapterNav.next("https://s.example/series/solo-leveling/chapter-9"))
+        T.eq("https://s.example/manga/abc/ch-008?lang=fr", ChapterNav.next("https://s.example/manga/abc/ch-007?lang=fr#page3"))
+        T.eq("https://s.example/read/one-piece/chapitre-100", ChapterNav.next("https://s.example/read/one-piece/chapitre-99"))
+    }
+    T.test("pas de chapitre voisin : chapitre décimal, premier chapitre, adresse sans numéro de chapitre") {
+        T.eq(null, ChapterNav.next("https://s.example/series/a/chapter-12-5")); T.eq(null, ChapterNav.next("https://s.example/series/a/chapter-12.5"))
+        T.eq(null, ChapterNav.previous("https://s.example/series/a/chapter-1")); T.eq(null, ChapterNav.next("https://s.example/series/a")); T.eq(null, ChapterNav.next("about:blank"))
+        T.eq(null, ChapterNav.next("https://chapter7.example"))
     }
 }
