@@ -2,9 +2,10 @@
 """Sondage Hugging Face : liste (avec tailles) les fichiers des dépôts de modèles utiles et lit quelques fiches."""
 import json, sys, urllib.request, urllib.parse
 REPOS = [
-    "ogkalu/comic-text-and-bubble-detector", "ogkalu/comic-text-segmenter-yolov8m", "ogkalu/comic-speech-bubble-detector-yolov8m",
-    "mayocream/comic-text-detector-onnx", "mayocream/comic-text-detector", "mayocream/manga-text-segmentation", "kitsumed/yolov8m_seg-speech-bubble",
-    "huyvnphan/comic-text-detector", "deepghs/manga109_yolo", "deepghs/anime_text_detect",
+    "a-b-c-x-y-z/Manga-Text-Segmentation-2025", "mayocream/manga-text-segmentation-2025", "iamokish/manga-text-segmentation-safetensors",
+    "mloet/comic_text_bubble_detector", "hon-lu/comic-text-and-bubble-detector-onnx-fp16", "depreciation84/comic-text-and-bubble-detector-int8",
+    "hhuggg/comictextdetector", "rikimaruwebsite/comic-text-detector-web", "petersunde/anima-manga-text-removal-flow", "mayocream/manga109-segmentation-bubble",
+    "mednasserallah/manga109-segmentation-bubble-onnx", "ShadowB/Manga109-panel-balloon-text-yolov26-segmentation",
 ]
 def get(url):
     req = urllib.request.Request(url, headers={"User-Agent": "probe"})
@@ -23,31 +24,33 @@ for repo in REPOS:
         if len(files) > 400: out.append(f"  ... {len(files)} fichiers au total")
     except Exception as e:
         out.append(f"  ERREUR {e}")
-out.append("===== recherche PP-OCRv5 / RapidOCR")
-for q in ("comic text detector", "comictextdetector", "manga text detection", "speech bubble detector", "bubble segmentation manga", "manga text segmentation", "text removal manga", "comic-translate", "manga109 yolo", "webtoon text detection"):
-    try:
-        for m in json.loads(get("https://huggingface.co/api/models?search=" + urllib.parse.quote(q) + "&limit=25")): out.append(f"  [{q}] {m['id']}")
-    except Exception as e: out.append(f"  ERREUR {q} {e}")
 out.append("===== recherche Hy-MT2")
 try:
     for m in json.loads(get("https://huggingface.co/api/models?search=Hy-MT2&limit=20")): out.append("  " + m["id"])
 except Exception as e: out.append(f"  ERREUR {e}")
 open(sys.argv[1], "w", encoding="utf8").write("\n".join(out))
 
-# ---- fiches techniques (début des README et configs utiles) ----
-docs = [
-    ("monkt/paddleocr-onnx", "README.md", 5000), ("monkt/paddleocr-onnx", "languages/english/config.json", 1500), ("monkt/paddleocr-onnx", "languages/korean/config.json", 1500),
-    ("monkt/paddleocr-onnx", "languages/latin/config.json", 1500), ("monkt/paddleocr-onnx", "detection/v3/config.json", 1500), ("monkt/paddleocr-onnx", "detection/v5/config.json", 1500),
-    ("edgetools/migan", "README.md", 6000), ("CardAnvilModels/MI-GAN-ONNX", "README.md", 6000),
-    ("litert-community/gemma-4-E4B-it-litert-lm", "README.md", 9000),
-    ("tencent/Hy-MT2-1.8B-GGUF", "README.md", 9000),
-    ("onnx-community/manga-ocr-base-ONNX", "README.md", 4000),
-    ("mayocream/lama-manga-onnx", "README.md", 3000),
-]
+# ---- fiches techniques et téléchargements ----
+import os, re
+docs = [("ogkalu/comic-text-and-bubble-detector", "README.md", 7000), ("ogkalu/comic-text-and-bubble-detector", "config.json", 2500),
+        ("ogkalu/comic-text-and-bubble-detector", "preprocessor_config.json", 1200), ("mayocream/comic-text-detector-onnx", "README.md", 5000),
+        ("a-b-c-x-y-z/Manga-Text-Segmentation-2025", "README.md", 5000), ("mayocream/manga-text-segmentation-2025", "README.md", 4000)]
 more = []
 for repo, path, n in docs:
     more.append(f"\n===== DOC {repo}/{path}")
     try: more.append(get(f"https://huggingface.co/{repo}/resolve/main/{path}").decode("utf8", "replace")[:n])
     except Exception as e: more.append(f"  ERREUR {e}")
 open(sys.argv[1], "a", encoding="utf8").write("\n".join(more))
-
+os.makedirs("/tmp/models", exist_ok=True)
+JOBS = [("ogkalu/comic-text-and-bubble-detector", r"(detector-v4-s_int8\.onnx|detector_int8\.onnx|config\.json|preprocessor_config\.json)$"),
+        ("mayocream/comic-text-detector-onnx", r"\.onnx$")]
+for repo, pattern in JOBS:
+    try:
+        tree = json.loads(get(f"https://huggingface.co/api/models/{repo}/tree/main?recursive=1"))
+        for t in tree:
+            if t.get("type") != "file": continue
+            pth = t["path"]; size = t.get("size") or (t.get("lfs") or {}).get("size") or 0
+            if not re.search(pattern, pth) or size > 95_500_000: continue
+            open("/tmp/models/" + repo.replace("/", "__") + "__" + pth.replace("/", "__"), "wb").write(get(f"https://huggingface.co/{repo}/resolve/main/{pth}"))
+    except Exception as e:
+        open(sys.argv[1], "a", encoding="utf8").write(f"\nERREUR téléchargement {repo}: {e}")
