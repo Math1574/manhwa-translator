@@ -67,6 +67,12 @@ for path in sorted(glob.glob(f"{OUT}/reports/*.json")):
         P(f"- blocage des publicités : {blocked} requêtes ou redirections bloquées · adresse finale {final}")
         if blocked < 3: problems.append(f"{name}: blocage insuffisant ({blocked})")
         if "evil-redirect" in final: problems.append(f"{name}: la redirection automatique a abouti")
+    try:
+        import re as _re
+        mem = open(path.replace(".json", ".mem")).read()
+        m = _re.search(r"TOTAL PSS:\s+(\d+)", mem) or _re.search(r"TOTAL\s+(\d+)", mem)
+        if m: P(f"- mémoire de l'application (PSS) : {int(m.group(1)) // 1024} Mo")
+    except Exception: pass
     if r.get("ocrNote"): P(f"- lecture Paddle : {r['ocrNote']}")
     P(f"- OCR : {tot_ocr} lignes ({kept} utilisées, {rej} écartées) · bulles affichées {nblocks} · hors image {outside} · chevauchements {overlap} · texte < 10px {tiny}")
     if outside or overlap: problems.append(f"{name}: mise en page (hors image {outside}, chevauchements {overlap})")

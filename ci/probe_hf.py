@@ -2,13 +2,9 @@
 """Sondage Hugging Face : liste (avec tailles) les fichiers des dépôts de modèles utiles et lit quelques fiches."""
 import json, sys, urllib.request, urllib.parse
 REPOS = [
-    "PaddlePaddle/PP-OCRv5_mobile_rec_onnx", "PaddlePaddle/PP-OCRv5_mobile_det_onnx", "PaddlePaddle/korean_PP-OCRv5_mobile_rec_onnx", "PaddlePaddle/en_PP-OCRv5_mobile_rec_onnx", "litert-community/PP-OCRv5-LiteRT",
-    "SWHL/RapidOCR", "monkt/paddleocr-onnx",
-    "edgetools/migan", "CardAnvilModels/MI-GAN-ONNX", "edgetools/lama", "mayocream/lama-manga-onnx", "mayocream/lama-manga",
-    "ogkalu/comic-speech-bubble-detector-yolov8m", "ogkalu/comic-text-segmenter-yolov8m",
-    "litert-community/gemma-4-E4B-it-litert-lm", "litert-community/gemma-4-E2B-it-litert-lm",
-    "tencent/Hy-MT2-1.8B", "tencent/Hy-MT2-1.8B-GGUF", "tencent/Hy-MT2-7B-GGUF",
-    "onnx-community/manga-ocr-base-ONNX", "mlboydaisuke/manga-ocr-ExecuTorch",
+    "ogkalu/comic-text-and-bubble-detector", "ogkalu/comic-text-segmenter-yolov8m", "ogkalu/comic-speech-bubble-detector-yolov8m",
+    "mayocream/comic-text-detector-onnx", "mayocream/comic-text-detector", "mayocream/manga-text-segmentation", "kitsumed/yolov8m_seg-speech-bubble",
+    "huyvnphan/comic-text-detector", "deepghs/manga109_yolo", "deepghs/anime_text_detect",
 ]
 def get(url):
     req = urllib.request.Request(url, headers={"User-Agent": "probe"})
@@ -28,7 +24,7 @@ for repo in REPOS:
     except Exception as e:
         out.append(f"  ERREUR {e}")
 out.append("===== recherche PP-OCRv5 / RapidOCR")
-for q in ("PP-OCRv5 onnx", "RapidOCR", "ppocrv5", "PP-OCRv5_mobile_rec"):
+for q in ("comic text detector", "comictextdetector", "manga text detection", "speech bubble detector", "bubble segmentation manga", "manga text segmentation", "text removal manga", "comic-translate", "manga109 yolo", "webtoon text detection"):
     try:
         for m in json.loads(get("https://huggingface.co/api/models?search=" + urllib.parse.quote(q) + "&limit=25")): out.append(f"  [{q}] {m['id']}")
     except Exception as e: out.append(f"  ERREUR {q} {e}")
@@ -55,21 +51,3 @@ for repo, path, n in docs:
     except Exception as e: more.append(f"  ERREUR {e}")
 open(sys.argv[1], "a", encoding="utf8").write("\n".join(more))
 
-# ---- téléchargement des fichiers utiles (< 95 Mo) de quelques dépôts, pour les tester en local ----
-import os, re
-os.makedirs("/tmp/models", exist_ok=True)
-JOBS = [
-    ("onnx-community/manga-ocr-base-ONNX", r"(config|generation_config|preprocessor_config)\.json$|onnx/(encoder|decoder)_model_(int8|uint8|quantized)\.onnx$"),
-    ("kha-white/manga-ocr-base", r"(vocab\.txt|config\.json|special_tokens_map\.json|tokenizer_config\.json|preprocessor_config\.json)$"),
-]
-for repo, pattern in JOBS:
-    try:
-        tree = json.loads(get(f"https://huggingface.co/api/models/{repo}/tree/main?recursive=1"))
-        for t in tree:
-            if t.get("type") != "file": continue
-            p = t["path"]; size = t.get("size") or 0
-            if not re.search(pattern, p) or size > 95_000_000: continue
-            data = get(f"https://huggingface.co/{repo}/resolve/main/{p}")
-            open("/tmp/models/" + repo.replace("/", "__") + "__" + p.replace("/", "__"), "wb").write(data)
-    except Exception as e:
-        open(sys.argv[1], "a", encoding="utf8").write(f"\nERREUR téléchargement {repo}: {e}")

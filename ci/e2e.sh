@@ -46,8 +46,9 @@ run() { # nom page moteur source cible modèles timeout [lazy]
     if [ "$mode" = lazy ]; then adb shell input swipe 540 1900 540 800 500; fi
   done
   adb exec-out "run-as $PKG cat files/report.json" > $OUT/reports/$name.json
+  adb shell dumpsys meminfo $PKG 2>/dev/null | grep -m3 -E "TOTAL" > $OUT/reports/$name.mem
   adb logcat -d > $OUT/reports/$name.full.log
-  grep -E "MTTEST|FATAL|AndroidRuntime|litert|LiteRT|tflite|OutOfMemory|ANR" $OUT/reports/$name.full.log | head -60 > $OUT/reports/$name.log
+  grep -E "MTTEST|FATAL|AndroidRuntime|litert|LiteRT|tflite|OutOfMemory|ANR| MT +: " $OUT/reports/$name.full.log | head -80 > $OUT/reports/$name.log
   rm -f $OUT/reports/$name.full.log
   for i in 1 2 3 4 5 6; do adb shell input swipe 540 700 540 2000 250; done; sleep 1
   shot $name 0
