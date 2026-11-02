@@ -1,0 +1,100 @@
+"""Pages de test « textes atypiques » (équivalents synthétiques de cas rencontrés en lecture réelle, sans image protégée) :
+0. page blanche, texte libre dont la couleur est un dégradé (beige → noir) ;
+1. page noire, texte blanc à lueur rouge ;
+2. fond à trame de points et texte blanc contouré incliné, avec une bulle à police manuscrite ;
+3. bulle à grand texte et petit texte libre incliné qui chevauche le contour de la bulle."""
+import math, os, sys
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
+
+OUT = sys.argv[1] if len(sys.argv) > 1 else "/tmp/site/synth"
+os.makedirs(OUT, exist_ok=True)
+W = 800
+DJ = "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf"
+DJB = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+CN = "/usr/share/fonts/truetype/comic-neue/ComicNeue-Bold.ttf"
+
+
+def F(path, size):
+    for p in (path, DJB):
+        try: return ImageFont.truetype(p, size)
+        except OSError: continue
+    return ImageFont.load_default()
+
+
+def text_mask(size, lines, font, spacing, angle=0.0, center=None):
+    m = Image.new("L", size, 0); d = ImageDraw.Draw(m)
+    y = center[1] - spacing * len(lines) / 2 if center else 20
+    for l in lines:
+        w = d.textlength(l, font=font); d.text(((center[0] if center else size[0] / 2) - w / 2, y), l, font=font, fill=255); y += spacing
+    return m.rotate(angle, resample=Image.BICUBIC, center=center) if angle else m
+
+
+def page0():
+    img = Image.new("RGB", (W, 520), "white")
+    f = F(DJ, 48)
+    m1 = text_mask(img.size, ["WHATEVER THE CASE IS,", "I MUST GATHER MORE SOULS."], f, 64, center=(W / 2, 110))
+    img.paste(Image.new("RGB", img.size, (20, 20, 20)), mask=m1)
+    m2 = text_mask(img.size, ["IF I KEEP DOING THAT,", "THEN ONE DAY..."], f, 64, center=(W / 2, 380))
+    grad = Image.new("RGB", img.size); gp = grad.load()
+    for x in range(W):
+        t = x / W; c = tuple(int(a * (1 - t) + b * t) for a, b in zip((165, 140, 95), (28, 24, 20)))
+        for y in range(520): gp[x, y] = c
+    img.paste(grad, mask=m2)
+    return img, [{"kind": "free", "text": "WHATEVER THE CASE IS, I MUST GATHER MORE SOULS.", "box": [90, 70, 710, 190]}, {"kind": "free", "text": "IF I KEEP DOING THAT, THEN ONE DAY...", "box": [140, 340, 660, 450]}]
+
+
+def page1():
+    img = Image.new("RGB", (W, 560), (0, 0, 0))
+    f = F(DJ, 52)
+    blocks = []
+    for lines, cy in ((["IN THE WAKE OF THEIR", "DECEITFUL TEMPTATIONS."], 110), (["THE WORLD'S", "BALANCE WAS TEETERING", "PRECARIOUSLY."], 400)):
+        m = text_mask(img.size, lines, f, 66, center=(W / 2, cy))
+        glow = m.filter(ImageFilter.GaussianBlur(16)).point(lambda v: min(255, v * 2))
+        img = Image.composite(Image.new("RGB", img.size, (235, 20, 35)), img, glow)
+        img.paste(Image.new("RGB", img.size, (255, 255, 255)), mask=m)
+        bb = m.getbbox(); blocks.append({"kind": "free", "text": " ".join(lines), "box": list(bb)})
+    return img, blocks
+
+
+def page2():
+    img = Image.new("RGB", (W, 560)); px = img.load()
+    for y in range(560):
+        for x in range(W):
+            t = y / 560; base = (int(60 + 120 * t), int(80 + 110 * t), int(130 + 90 * t))
+            dot = ((x // 8 + y // 8) % 2 == 0) and ((x % 8) < 4 and (y % 8) < 4)
+            px[x, y] = tuple(min(255, c + (28 if dot else 0)) for c in base)
+    d = ImageDraw.Draw(img)
+    d.ellipse((520, 250, 960, 700), fill=(52, 66, 62), outline=(12, 14, 12), width=4)          # « chapeau » sombre en bord de page
+    # bulle à police manuscrite
+    d.ellipse((330, 14, 790, 200), fill="white", outline="black", width=3)
+    f = F(CN, 30)
+    for i, l in enumerate(["YES, SIR! I'LL", "SHUT MY MOUTH BY", "PUTTING A BOULDER"]):
+        w = d.textlength(l, font=f); d.text((560 - w / 2, 48 + i * 40), l, font=f, fill="black")
+    # texte libre incliné, blanc contouré de noir
+    layer = Image.new("RGBA", img.size, (0, 0, 0, 0)); ld = ImageDraw.Draw(layer); f2 = F(CN, 34)
+    for i, l in enumerate(["PLEASE JUST", "SHUT UP ALREADY, YOU", "CRAZY BASTARD..."]):
+        w = ld.textlength(l, font=f2); ld.text((230 - w / 2, 300 + i * 44), l, font=f2, fill=(255, 255, 255, 255), stroke_width=3, stroke_fill=(0, 0, 0, 255))
+    layer = layer.rotate(7, resample=Image.BICUBIC, center=(230, 360))
+    img = Image.alpha_composite(img.convert("RGBA"), layer).convert("RGB")
+    return img, [{"kind": "bubble", "text": "YES, SIR! I'LL SHUT MY MOUTH BY PUTTING A BOULDER", "box": [380, 40, 740, 170]}, {"kind": "free", "text": "PLEASE JUST SHUT UP ALREADY, YOU CRAZY BASTARD...", "box": [80, 290, 400, 460]}]
+
+
+def page3():
+    img = Image.new("RGB", (W, 560), "white"); d = ImageDraw.Draw(img)
+    d.rectangle((0, 0, W, 90), fill=(70, 80, 70))
+    d.ellipse((60, 40, 640, 420), fill="white", outline="black", width=3)
+    f = F(DJB, 54)
+    for i, l in enumerate(["SHUT UP,", "THAT SOUNDS", "GROSS."]):
+        w = d.textlength(l, font=f); d.text((350 - w / 2, 120 + i * 78), l, font=f, fill="black")
+    layer = Image.new("RGBA", img.size, (0, 0, 0, 0)); ld = ImageDraw.Draw(layer); f2 = F(CN, 28)
+    for i, l in enumerate(["WANT ME TO PUT", "A RESTRICTION ON YOUR", "MOUTH?"]):
+        w = ld.textlength(l, font=f2); ld.text((560 - w / 2, 365 + i * 34), l, font=f2, fill=(0, 0, 0, 255))
+    layer = layer.rotate(7, resample=Image.BICUBIC, center=(560, 410))
+    img = Image.alpha_composite(img.convert("RGBA"), layer).convert("RGB")
+    return img, [{"kind": "bubble", "text": "SHUT UP, THAT SOUNDS GROSS.", "box": [200, 120, 500, 340]}, {"kind": "free", "text": "WANT ME TO PUT A RESTRICTION ON YOUR MOUTH?", "box": [400, 350, 720, 480]}]
+
+
+import json
+for i, fn in enumerate((page0, page1, page2, page3)):
+    im, gt = fn(); im.save(f"{OUT}/atypical_{i}.png"); json.dump(gt, open(f"{OUT}/atypical_{i}.json", "w"))
+print("pages atypiques générées : 4")

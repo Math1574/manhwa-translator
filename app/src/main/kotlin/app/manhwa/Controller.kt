@@ -342,7 +342,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val spec = LlmModels.specFor(s.engine)
         val translator = if (spec == null) MlKitTranslation(graph.models) else graph.gemma
         val enhanced = s.enhancedOcr && graph.paddleModels.available
-        val ocrEngine = CombinedOcr(s.source, MlKitOcr(s.source), if (enhanced) graph.paddle else null)
+        val ocrEngine = CombinedOcr(s.source, MlKitOcr(s.source), if (enhanced) graph.paddle else null, Lexicon.get(ctx))
         val engineId = (if (spec == null) MlKitTranslation.ID else GemmaTranslator.engineId(spec)) + (if (enhanced) "+pp1" else "")
         var debug: DebugInfo? = null
         val lexicon = Lexicon.get(ctx)

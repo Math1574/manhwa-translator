@@ -96,6 +96,8 @@ class MlKitOcr(private val source: SourceLang) : OcrEngine {
                             line.text,
                             RectF(b.left.toFloat() * sample, b.top.toFloat() * sample + y, b.right.toFloat() * sample, b.bottom.toFloat() * sample + y),
                             line.confidence,
+                            // ML Kit donne les quatre coins du texte (éventuellement incliné) : la hauteur réelle de la ligne est la distance entre deux coins d'un même côté
+                            thickness = line.cornerPoints?.takeIf { it.size == 4 }?.let { c -> kotlin.math.hypot((c[3].x - c[0].x).toFloat(), (c[3].y - c[0].y).toFloat()) * sample } ?: 0f,
                         ),
                     )
                 }

@@ -117,7 +117,7 @@ class PagePipeline(
     }
 
     private fun medianLineHeight(b: TextBlock): Float {
-        val hs = b.lines.map { if (b.vertical) it.box.width else it.box.height }.sorted()
+        val hs = b.lines.map { if (b.vertical) it.box.width else it.lineHeight }.sorted()
         return if (hs.isEmpty()) 0f else hs[hs.size / 2]
     }
 

@@ -9,6 +9,8 @@ import android.graphics.Paint
 import android.graphics.Typeface
 import android.util.Base64
 import app.manhwa.core.AppSettings
+import app.manhwa.core.BubbleVerifier
+import app.manhwa.core.LayoutArea
 import app.manhwa.core.Erasure
 import app.manhwa.core.PixelSource
 import app.manhwa.core.ColorMath
@@ -19,6 +21,7 @@ import app.manhwa.core.GlyphRenderer
 import app.manhwa.core.PageResult
 import app.manhwa.core.RectF
 import app.manhwa.core.RowShape
+import app.manhwa.core.ShapeFit
 import app.manhwa.core.ScriptDetector
 import app.manhwa.core.ShapeLayout
 import app.manhwa.core.TextMeasurer
@@ -128,6 +131,8 @@ object PageRenderer {
         val plan: Erasure.Plan?,       // null si l'image n'a pas pu être décodée
         val style: FontStyle,
         val text: String,              // traduction avec typographie
+        val bubble: RectF? = null,     // bulle détectée ET confirmée par son contour ; null = texte hors bulle
+        val obstacles: List<RectF> = emptyList(),   // emprises des textes voisins (le texte hors bulle ne doit pas les recouvrir)
     )
 
     fun render(fonts: Typefaces, imageBytes: ByteArray, result: PageResult, settings: AppSettings, debug: DebugInfo?): JSONObject {
@@ -140,10 +145,17 @@ object PageRenderer {
         val patches = JSONArray(); val report = JSONArray()
         try {
             val src = bmp?.let { BitmapSource(it) }
+            // bulles annoncées par le détecteur et confirmées par un contour visible (le texte libre sur page blanche ou noire n'en a pas)
+            val verified = HashMap<Int, RectF?>()
+            for (b in blocks) {
+                val bb = b.bubble ?: continue
+                val u = b.lineBoxes.ifEmpty { listOf(b.box) }.reduce { x, y -> x.union(y) }
+                verified[b.id] = if (src == null) bb else try { if (BubbleVerifier.verify(src, s, bb, u, iw, ih)) bb else null } catch (e: Throwable) { null }
+            }
             for ((bi, b) in blocks.withIndex()) {
                 // lignes des autres blocs : ce bloc ne doit pas les effacer
                 val others = blocks.withIndex().filter { it.index != bi }.flatMap { it.value.lineBoxes.ifEmpty { listOf(it.value.box) } }
-                val prep = prepare(b, src, s, iw, ih, medianLine, settings.target.code, others)
+                val prep = prepare(b, src, s, iw, ih, medianLine, settings.target.code, others, blocks, verified)
                 val rendered = try { drawBlock(fonts, s, prep, iw, ih, settings.textScale) } catch (e: Throwable) { null } ?: continue
                 patches.put(rendered.first); report.put(rendered.second)
             }
@@ -158,17 +170,41 @@ object PageRenderer {
     private fun lineHeightOf(b: TranslatedBlock): Float =
         if (b.lineHeight > 0f) b.lineHeight else if (b.vertical) b.box.width else b.box.height
 
-    private fun prepare(b: TranslatedBlock, src: PixelSource?, s: Float, iw: Float, ih: Float, medianLine: Float, target: String, others: List<RectF>): Prep {
+    /** Bulles voisines détectées (celles qui ne contiennent pas ce bloc) : leur contour ne doit pas être entamé par l'effacement. */
+    private fun protectOf(b: TranslatedBlock, all: List<TranslatedBlock>, verified: Map<Int, RectF?>): List<RectF> {
+        val u = b.lineBoxes.ifEmpty { listOf(b.box) }.reduce { x, y -> x.union(y) }
+        return all.filter { it !== b }.mapNotNull { verified[it.id] }.filter { !it.contains(u.centerX, u.centerY) }
+    }
+
+    private fun prepare(b: TranslatedBlock, src: PixelSource?, s: Float, iw: Float, ih: Float, medianLine: Float, target: String, others: List<RectF>, blocksAll: List<TranslatedBlock>, verified: Map<Int, RectF?>): Prep {
         val lineBoxes = b.lineBoxes.ifEmpty { listOf(b.box) }
         val union = lineBoxes.reduce { a, c -> a.union(c) }
         val lineH = lineHeightOf(b)
-        val plan = if (src != null) try { Erasure.plan(src, s, lineBoxes, lineH, iw, ih, others, b.bubble) } catch (e: Throwable) { null } else null
+        val bubble = verified[b.id]
+        val plan = if (src != null) try { Erasure.plan(src, s, lineBoxes, lineH, iw, ih, others, bubble, protectOf(b, blocksAll, verified), free = bubble == null) } catch (e: Throwable) { null } else null
         val flat = plan?.mode == Erasure.Mode.FLAT
         val rectangular = flat && plan?.shape == null && union.width > 2.2f * union.height && lineBoxes.size <= 2
-        val style = TextErase.chooseFont(b.source, lineH, medianLine, flat, plan?.outlined ?: false, rectangular)
+        // hauteur de ligne pour le choix du style : mesurée sur les lettres (les boîtes d'une ligne inclinée sont gonflées)
+        val inkH = measuredInkHeight(plan, b, s)
+        val lineHStyle = if (inkH > 0f && !b.vertical) min(lineH, inkH / 0.8f) else lineH
+        val style = TextErase.chooseFont(b.source, lineHStyle, medianLine, flat, plan?.outlined ?: false, rectangular)
         val text = if (target == "fr") Typography.french(b.translated) else b.translated
-        return Prep(b, plan, style, text)
+        val obstacles = blocksAll.filter { it !== b }.map { o -> o.lineBoxes.ifEmpty { listOf(o.box) }.reduce { x, y -> x.union(y) } }
+        return Prep(b, plan, style, text, bubble, obstacles)
     }
+
+    /** Hauteur médiane des lettres d'origine (pixels de l'image d'origine), 0 si inconnue. */
+    private fun measuredInkHeight(plan: Erasure.Plan?, b: TranslatedBlock, s: Float): Float {
+        val ink = plan?.ink ?: return 0f
+        val boxes = b.lineBoxes; val texts = b.lineTexts
+        if (boxes.isEmpty() || texts.size != boxes.size) return 0f
+        val hs = boxes.indices.mapNotNull { i ->
+            val bx = boxes[i]
+            FontMatcher.lineInk(ink, plan.w, plan.h, (bx.left * s).toInt() - plan.x0, (bx.top * s).toInt() - plan.y0, (bx.right * s).toInt() - plan.x0, (bx.bottom * s).toInt() - plan.y0, texts[i])?.letterHeight
+        }.sorted()
+        return if (hs.isEmpty()) 0f else min(hs[hs.size / 2] / s, if (!b.vertical && b.lineHeight > 0f) b.lineHeight / 1.12f else Float.MAX_VALUE)
+    }
+
 
     /** Hauteur des capitales / corps de police, mesurée sur la police réelle. */
     private fun capRatio(tf: Typeface): Float {
@@ -203,6 +239,8 @@ object PageRenderer {
         }
         val m = if (inks.isNotEmpty()) FontMatcher.best(inks, fonts.comicFamilies, AndroidGlyphRenderer(fonts)) else null
         if (m == null) return FontChoice(fonts.family("comicneue"), 0f, 700, 100f, family = "comicneue")
+        // aucune police comique ne ressemble (lettrage très particulier) : police neutre de même graisse plutôt qu'une police manuscrite étirée
+        if (m.score < 0.12f) { val wg = FontMatcher.weightOf(inks); return FontChoice(fonts.noto(wg, 100f), 0f, wg, 100f, scaleX = m.stretch.coerceIn(0.8f, 1.1f), skew = m.skew, family = "noto") }
         return FontChoice(fonts.family(m.family), 0f, 700, 100f, scaleX = m.stretch.coerceIn(0.72f, 1.25f), skew = m.skew, embolden = m.embolden, family = m.family)
     }
 
@@ -217,9 +255,11 @@ object PageRenderer {
         val inks = lineInks(p, s)
         val font = matchFont(fonts, p, s, inks)
         // texte vertical : la taille d'un caractère est la LARGEUR de la colonne (et non sa hauteur, qui est la longueur du texte)
-        val inkH = if (inks.isEmpty()) 0f else (if (b.vertical) inks.map { it.w } else inks.map { it.h }).sorted().let { it[it.size / 2] } / s       // pixels de l'image d'origine
+        val inkH = if (inks.isEmpty()) 0f else (if (b.vertical) inks.map { it.w } else inks.map { it.letterHeight }).sorted().let { it[it.size / 2] } / s       // pixels de l'image d'origine
         val cap = capRatio(font.typeface)
-        val baseH = if (inkH > 0f) inkH else lineH * 0.8f
+        // la hauteur de ligne mesurée dans l'axe du texte borne la hauteur d'encre (lettres collées à un contour ou à une autre ligne)
+        val capLimit = if (!b.vertical && lineH > 0f) lineH / 1.12f else Float.MAX_VALUE
+        val baseH = if (inkH > 0f) min(inkH, capLimit) else lineH * 0.8f
         val em = (if (allCaps && !b.vertical) baseH / cap else if (b.vertical) baseH / 0.95f else baseH / 0.85f) * userScale.coerceIn(0.5f, 2f)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG or Paint.LINEAR_TEXT_FLAG).apply {
             typeface = font.typeface; letterSpacing = font.letterSpacing; textScaleX = font.scaleX; textSkewX = font.skew
@@ -231,17 +271,33 @@ object PageRenderer {
         val pitch = if (tops.size >= 2) tops.zipWithNext { a, c -> c - a }.sorted().let { it[it.size / 2] } else 0f
         val stepRatio = if (pitch > 0f && !b.vertical) (pitch / (if (allCaps) baseH / cap else baseH / 0.85f)).coerceIn(1.0f, 1.6f) else 1.18f
 
-        // forme disponible : intérieur de la bulle si détecté ; sinon l'emprise d'origine légèrement élargie
-        val grow = if (plan?.mode == Erasure.Mode.ART) 0.12f else 0.06f
-        val rectArea = RectF(max(0f, union.left - union.width * grow), max(0f, union.top - union.height * grow), min(iw, union.right + union.width * grow), min(ih, union.bottom + union.height * grow))
-        // forme : intérieur relevé sur l'image ; sinon ellipse inscrite dans la bulle détectée (jamais plus petite que le texte d'origine) ; sinon rectangle autour du texte
-        val bubbleShape = b.bubble?.let { c ->
+        // forme disponible : intérieur de la bulle relevé sur l'image ; sinon ellipse inscrite dans la bulle confirmée ; sinon (texte hors bulle) l'emprise
+        // d'origine progressivement agrandie, sans sortir de l'image ni recouvrir un voisin, jusqu'à ce que la traduction y tienne à une taille proche de l'original
+        val art = plan?.mode == Erasure.Mode.ART
+        val bubbleShape = p.bubble?.let { c ->
             val inset = RectF(c.left + c.width * 0.06f, c.top + c.height * 0.06f, c.right - c.width * 0.06f, c.bottom - c.height * 0.06f)
             if (inset.width >= union.width * 0.9f && inset.height >= union.height * 0.9f) RowShape.ellipse(inset.left, inset.top, inset.right, inset.bottom) else null
         }
-        val shape = plan?.shape ?: bubbleShape ?: RowShape.rect(rectArea.left, rectArea.top, rectArea.right, rectArea.bottom)
-        val margin = max(3f, em * 0.12f)
-        val fit = ShapeLayout.fit(shape, (union.top + union.bottom) / 2f, p.text, measurer, em, max(5f, em * 0.4f), stepRatio, margin)
+        val margin = max(4f, em * 0.14f)
+        // majuscules accentuées : l'accent d'une ligne ne doit pas toucher la ligne du dessus
+        val accents = TextNormalizer.isAllCaps(p.text) && p.text.any { it in "ÀÂÄÉÈÊËÎÏÔÖÙÛÜÇŒŸ" }
+        val step = if (accents) max(stepRatio, 1.14f) else stepRatio
+        val centerY = (union.top + union.bottom) / 2f
+        val fixedShape = plan?.shape ?: bubbleShape
+        val fit: ShapeFit = if (fixedShape != null) {
+            ShapeLayout.fit(fixedShape, centerY, p.text, measurer, em, max(5f, em * 0.4f), step, margin)
+        } else {
+            var best: ShapeFit? = null
+            for (g in floatArrayOf(if (art) 0.12f else 0.06f, 0.3f, 0.55f, 0.9f)) {
+                val area = LayoutArea.expand(union, g, p.obstacles, iw, ih)
+                val cand = ShapeLayout.fit(RowShape.rect(area.left, area.top, area.right, area.bottom), centerY, p.text, measurer, em, max(5f, em * 0.5f), step, margin)
+                if (cand.lines.isEmpty()) continue
+                val cur = best
+                if (cur == null || (cand.fits && !cur.fits) || (cand.fits == cur.fits && cand.size > cur.size)) best = cand
+                if (cand.fits && cand.size >= em * 0.92f) break
+            }
+            best ?: ShapeLayout.fit(RowShape.rect(union.left, union.top, union.right, union.bottom), centerY, p.text, measurer, em, max(5f, em * 0.4f), step, margin)
+        }
         if (fit.lines.isEmpty()) return null
 
         // zone du patch : région effacée + toutes les lignes placées
@@ -273,7 +329,6 @@ object PageRenderer {
             val bgForText = plan?.let { if (it.fillMean != 0) it.fillMean else it.bg } ?: 0xFFFFFFFF.toInt()
             var fg = plan?.textColor ?: ColorMath.textColorFor(bgForText)
             if (plan?.mode != Erasure.Mode.ART && kotlin.math.abs(ColorMath.luminance(fg) - ColorMath.luminance(bgForText)) < 0.45f) fg = ColorMath.textColorFor(bgForText)
-            val art = plan?.mode == Erasure.Mode.ART
             val px = fit.size * ss
             paint.textSize = px
             val capPx = Rect().also { paint.getTextBounds("H", 0, 1, it) }.height().toFloat()
@@ -290,6 +345,15 @@ object PageRenderer {
                 }
                 if (font.embolden > 0f) { paint.style = Paint.Style.FILL_AND_STROKE; paint.strokeWidth = font.embolden * px; paint.strokeJoin = Paint.Join.ROUND }
                 else { paint.style = Paint.Style.FILL; paint.strokeWidth = 0f }
+                // lettrage à lueur (halo coloré sur fond uni) : la traduction reçoit le même halo
+                val glow = plan?.glow ?: 0
+                if (glow != 0) {
+                    paint.color = fg
+                    paint.setShadowLayer(px * 0.32f, 0f, 0f, glow)
+                    canvas.drawText(ln.text, cx, base, paint)
+                    canvas.drawText(ln.text, cx, base, paint)
+                    paint.clearShadowLayer()
+                }
                 paint.color = fg
                 canvas.drawText(ln.text, cx, base, paint)
             }

@@ -293,6 +293,104 @@ object TextErase {
     }
 
     /** Alpha adouci pour les bords d'une zone reconstruite sur un dessin (255 au centre, dégradé sur 3 px). */
+    /**
+     * Trame de points (ou tout motif périodique) : cherche le décalage (sx, sy) pour lequel l'image se ressemble le mieux à elle-même hors du masque,
+     * puis comble chaque pixel masqué en recopiant le pixel situé un ou plusieurs décalages plus loin. Renvoie le remplissage (les pixels sans source
+     * valable gardent la valeur de [fallback]) ou null si l'image n'a pas de motif périodique net autour du trou.
+     */
+    fun periodicFill(pixels: IntArray, w: Int, h: Int, mask: BooleanArray, fallback: IntArray, maxShift: Int = 24): IntArray? {
+        val n = w * h
+        val gray = IntArray(n) { val c = pixels[it]; (((c shr 16) and 0xFF) * 77 + ((c shr 8) and 0xFF) * 150 + (c and 0xFF) * 29) shr 8 }
+        // échantillon de pixels hors masque (au plus ~5000)
+        val free = ArrayList<Int>(); for (i in 0 until n) if (!mask[i]) free.add(i)
+        if (free.size < 600) return null
+        val stride = max(1, free.size / 5000)
+        val sample = ArrayList<Int>(); var k = 0; while (k < free.size) { sample.add(free[k]); k += stride }
+        var mean = 0.0; for (i in sample) mean += gray[i]; mean /= sample.size
+        var dev = 0.0; for (i in sample) dev += abs(gray[i] - mean); dev /= sample.size
+        if (dev < 3.0) return null                                   // fond quasi uni : le lissage suffit
+        // écart moyen entre l'image et elle-même décalée de (sx, sy), hors masque
+        val cache = HashMap<Int, Double>()
+        fun mad(sx: Int, sy: Int): Double = cache.getOrPut((sy + 64) * 257 + (sx + 128)) {
+            var sum = 0L; var cnt = 0
+            for (i in sample) {
+                val x = i % w + sx; val y = i / w + sy
+                if (x < 0 || y < 0 || x >= w || y >= h) continue
+                val j = y * w + x
+                if (mask[j]) continue
+                sum += abs(gray[i] - gray[j]); cnt++
+            }
+            if (cnt < 300) Double.MAX_VALUE else sum.toDouble() / cnt
+        }
+        var bestMad = Double.MAX_VALUE; var bsx = 0; var bsy = 0; var bestRatio = 0.0
+        for (sy in 0..maxShift) for (sx in -maxShift..maxShift) {
+            if (sy == 0 && sx <= 0) continue
+            if (abs(sx) + sy < 4) continue
+            val m = mad(sx, sy); if (m == Double.MAX_VALUE) continue
+            // un vrai motif périodique colle bien à un décalage d'une période et mal à une demi-période ; une image simplement lisse colle de moins en moins avec la distance
+            val half = mad((sx / 2.0).let { Math.round(it).toInt() }, (sy / 2.0).let { Math.round(it).toInt() })
+            if (half == Double.MAX_VALUE) continue
+            val ratio = half / max(m, 0.5)
+            if (ratio > bestRatio || (ratio >= bestRatio * 0.98 && m < bestMad)) { bestRatio = ratio; bestMad = m; bsx = sx; bsy = sy }
+        }
+        if (bestMad == Double.MAX_VALUE || bestRatio < 1.7 || bestMad > 0.35 * dev || bestMad > 14.0) return null     // pas de motif périodique net
+        val out = fallback.copyOf(); var found = 0; var total = 0
+        for (i in 0 until n) {
+            if (!mask[i]) continue
+            total++
+            val x = i % w; val y = i / w
+            var done = false
+            for (kk in 1..10) {
+                for (sgn in intArrayOf(1, -1)) {
+                    val qx = x + sgn * kk * bsx; val qy = y + sgn * kk * bsy
+                    if (qx < 0 || qy < 0 || qx >= w || qy >= h) continue
+                    val q = qy * w + qx
+                    if (!mask[q]) { out[i] = pixels[q]; found++; done = true; break }
+                }
+                if (done) break
+            }
+        }
+        return if (total == 0 || found < 0.85f * total) null else out
+    }
+
+
+    /**
+     * Grain : sur un fond à trame irrégulière ou à texture, un remplissage lissé se voit comme un voile gris. On y ajoute un bruit de même intensité que
+     * le grain des abords (écart entre l'image et sa version floutée, mesuré hors masque), sans effet sur un fond lisse.
+     */
+    fun addGrain(fill: IntArray, pixels: IntArray, w: Int, h: Int, mask: BooleanArray, seed: Long = 7L): IntArray {
+        val n = w * h
+        val gray = IntArray(n) { val c = pixels[it]; (((c shr 16) and 0xFF) * 77 + ((c shr 8) and 0xFF) * 150 + (c and 0xFF) * 29) shr 8 }
+        // flou de boîte 5×5 (images intégrales) pour isoler le grain
+        val integ = LongArray((w + 1) * (h + 1))
+        for (y in 0 until h) { var row = 0L; for (x in 0 until w) { row += gray[y * w + x]; integ[(y + 1) * (w + 1) + x + 1] = integ[y * (w + 1) + x + 1] + row } }
+        fun blur(x: Int, y: Int): Double {
+            val xa = max(0, x - 2); val xb = min(w, x + 3); val ya = max(0, y - 2); val yb = min(h, y + 3)
+            val sum = integ[yb * (w + 1) + xb] - integ[ya * (w + 1) + xb] - integ[yb * (w + 1) + xa] + integ[ya * (w + 1) + xa]
+            return sum.toDouble() / ((xb - xa) * (yb - ya))
+        }
+        // abords : pixels hors masque à moins de ~40 px du masque et sans gros contour (le grain, pas les bords de dessin)
+        val near = dilate(mask, w, h, 40)
+        var acc = 0.0; var cnt = 0
+        for (y in 2 until h - 2) for (x in 2 until w - 2) {
+            val i = y * w + x
+            if (mask[i] || !near[i]) continue
+            val d = abs(gray[i] - blur(x, y))
+            if (d < 40) { acc += d * d; cnt++ }
+        }
+        if (cnt < 300) return fill
+        val sigma = kotlin.math.sqrt(acc / cnt)
+        if (sigma < 4.0) return fill
+        val rnd = java.util.Random(seed); val out = fill.copyOf()
+        val amp = sigma * 0.9
+        for (i in 0 until n) if (mask[i]) {
+            val d = (rnd.nextGaussian() * amp).toInt(); val c = fill[i]
+            val r = (((c shr 16) and 0xFF) + d).coerceIn(0, 255); val g = (((c shr 8) and 0xFF) + d).coerceIn(0, 255); val b = ((c and 0xFF) + d).coerceIn(0, 255)
+            out[i] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+        }
+        return out
+    }
+
     fun featherAlpha(mask: BooleanArray, w: Int, h: Int): IntArray {
         fun erode(src: BooleanArray): BooleanArray {
             val o = BooleanArray(w * h)
@@ -389,8 +487,9 @@ object TextErase {
         val upper = if (letters.isEmpty() || cjk) 0f else letters.count { it.isUpperCase() }.toFloat() / letters.length
         val big = pageMedianLineHeight > 0 && lineHeight >= 1.5f * pageMedianLineHeight
         return when {
-            (!uniform && outlined && !cjk && source.length <= 40) || (big && (upper > 0.6f || source.trimEnd().endsWith("!"))) -> FontStyle.SHOUT
-            !uniform && outlined -> FontStyle.SHOUT
+            // grand lettrage d'effet (cri, onomatopée) : police de cri ; un texte hors bulle de taille normale, même cerné, passe par l'assortiment de police
+            big && (upper > 0.6f || source.trimEnd().endsWith("!")) -> FontStyle.SHOUT
+            !uniform && outlined && !cjk && big -> FontStyle.SHOUT
             uniform && rectangular && !big -> FontStyle.NARRATION
             cjk -> FontStyle.SANS
             else -> FontStyle.SPEECH

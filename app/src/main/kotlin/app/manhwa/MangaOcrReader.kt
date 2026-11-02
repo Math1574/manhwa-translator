@@ -12,7 +12,7 @@ import java.nio.FloatBuffer
 import java.nio.LongBuffer
 
 /**
- * Lecture du japonais vertical (et du texte manga stylisé) par manga-ocr, version quantifiée en entiers 8 bits (encodeur 87 Mo, décodeur 30 Mo).
+ * Lecture du japonais vertical (et du texte manga stylisé) par manga-ocr, version quantifiée en entiers 8 bits NON signés (encodeur 87 Mo, décodeur 30 Mo) : la version en entiers signés utilise ConvInteger, absent d'ONNX Runtime Android.
  * Les modèles sont copiés une fois dans le cache de l'application puis chargés depuis le fichier (pas de copie de 87 Mo en mémoire).
  */
 class MangaOcrReader(private val ctx: Context, private val env: OrtEnvironment) {
@@ -21,7 +21,7 @@ class MangaOcrReader(private val ctx: Context, private val env: OrtEnvironment) 
     private var vocab: List<String> = emptyList()
 
     val available: Boolean by lazy {
-        try { listOf("ocr/manga_ocr_encoder_int8.onnx", "ocr/manga_ocr_decoder_int8.onnx", "ocr/manga_ocr_vocab.txt").forEach { ctx.assets.open(it).close() }; true } catch (e: IOException) { false }
+        try { listOf("ocr/manga_ocr_encoder_u8.onnx", "ocr/manga_ocr_decoder_u8.onnx", "ocr/manga_ocr_vocab.txt").forEach { ctx.assets.open(it).close() }; true } catch (e: IOException) { false }
     }
 
     private fun fileFromAsset(asset: String): File {
@@ -41,8 +41,8 @@ class MangaOcrReader(private val ctx: Context, private val env: OrtEnvironment) 
     @Synchronized private fun load() {
         if (enc != null) return
         val opts = { OrtSession.SessionOptions().apply { setIntraOpNumThreads(4) } }
-        enc = env.createSession(fileFromAsset("ocr/manga_ocr_encoder_int8.onnx").absolutePath, opts())
-        dec = env.createSession(fileFromAsset("ocr/manga_ocr_decoder_int8.onnx").absolutePath, opts())
+        enc = env.createSession(fileFromAsset("ocr/manga_ocr_encoder_u8.onnx").absolutePath, opts())
+        dec = env.createSession(fileFromAsset("ocr/manga_ocr_decoder_u8.onnx").absolutePath, opts())
         vocab = ctx.assets.open("ocr/manga_ocr_vocab.txt").bufferedReader(Charsets.UTF_8).readLines()
     }
 

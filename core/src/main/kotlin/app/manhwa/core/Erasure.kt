@@ -1,5 +1,6 @@
 package app.manhwa.core
 
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
@@ -40,6 +41,8 @@ object Erasure {
         val ink: BooleanArray? = null,
         /** Couleur moyenne réellement obtenue après effacement (pixels remplacés), RGB opaque ; 0 si rien n'est remplacé. */
         val fillMean: Int = 0,
+        /** Couleur de la lueur entourant le lettrage (RGB opaque), 0 s'il n'y en a pas : la traduction est redessinée avec la même lueur. */
+        val glow: Int = 0,
     )
 
     /** Couleur moyenne (RGB opaque) des pixels effectivement remplacés ; 0 s'il n'y en a pas. */
@@ -50,8 +53,8 @@ object Erasure {
     }
 
     /** @param exclude lignes de texte des AUTRES blocs (pixels de l'image) : un bloc n'efface jamais ce qui appartient à un voisin. */
-    fun plan(src: PixelSource, s: Float, lineBoxes: List<RectF>, lineH: Float, imageW: Float, imageH: Float, exclude: List<RectF> = emptyList(), container: RectF? = null): Plan? {
-        val p = planUnclipped(src, s, lineBoxes, lineH, imageW, imageH, container = container) ?: return null
+    fun plan(src: PixelSource, s: Float, lineBoxes: List<RectF>, lineH: Float, imageW: Float, imageH: Float, exclude: List<RectF> = emptyList(), container: RectF? = null, protect: List<RectF> = emptyList(), free: Boolean = false): Plan? {
+        val p = planUnclipped(src, s, lineBoxes, lineH, imageW, imageH, container = container, protect = protect, free = free) ?: return null
         if (exclude.isEmpty()) return p
         var changed = false
         for (ex in exclude) {
@@ -62,7 +65,78 @@ object Erasure {
         return p
     }
 
-    private fun planUnclipped(src: PixelSource, s: Float, lineBoxes: List<RectF>, lineH: Float, imageW: Float, imageH: Float, padOverride: Float = 0f, container: RectF? = null): Plan? {
+
+    /**
+     * Texte hors bulle dont les abords sont unis : on cherche la plus petite zone (lignes de texte agrandies) dont le pourtour est d'une seule couleur
+     * (lueur comprise : la zone grandit jusqu'à sortir du halo) et on la remplit entièrement de cette couleur. Plus de fragments de dégradés de couleur,
+     * de contours ni de lueurs fantômes. Null si aucun pourtour n'est uni (dessin, trame) : le traitement des lettres seules prend le relais.
+     */
+    private fun planRing(src: PixelSource, s: Float, lineBoxes: List<RectF>, lineH: Float, imageW: Float, imageH: Float, protect: List<RectF>): Plan? {
+        val union = lineBoxes.reduce { a, c -> a.union(c) }
+        val lhPx = max(8f, lineH * s)
+        val pad = max(40f, lineH * 5f)
+        val x0 = (max(0f, union.left - pad) * s).toInt().coerceIn(0, src.width - 1)
+        val y0 = (max(0f, union.top - pad) * s).toInt().coerceIn(0, src.height - 1)
+        val x1 = (min(imageW, union.right + pad) * s).toInt().coerceIn(x0 + 1, src.width)
+        val y1 = (min(imageH, union.bottom + pad) * s).toInt().coerceIn(y0 + 1, src.height)
+        val w = x1 - x0; val h = y1 - y0
+        if (w < 8 || h < 8) return null
+        val px = src.pixels(x0, y0, w, h)
+        val rects = lineBoxes.map { l -> intArrayOf((l.left * s).toInt() - x0, (l.top * s).toInt() - y0, (l.right * s).toInt() - x0, (l.bottom * s).toInt() - y0) }
+        val prot = BooleanArray(w * h)
+        for (pr in protect) {
+            val ax0 = ((pr.left * s).toInt() - x0).coerceIn(0, w); val ax1 = ((pr.right * s).toInt() - x0).coerceIn(0, w)
+            val ay0 = ((pr.top * s).toInt() - y0).coerceIn(0, h); val ay1 = ((pr.bottom * s).toInt() - y0).coerceIn(0, h)
+            for (yy in ay0 until ay1) for (xx in ax0 until ax1) prot[yy * w + xx] = true
+        }
+        var chosen = -1f; var bg = 0; var zone: BooleanArray? = null
+        for (g in floatArrayOf(0.35f, 0.7f, 1.2f, 1.8f, 2.6f, 3.4f)) {
+            val zoneRad = max(4, (lhPx * g).toInt()); val ringRad = zoneRad + max(6, (lhPx * 0.35f).toInt())
+            val inner = TextErase.rectMask(w, h, rects, zoneRad); val outer = TextErase.rectMask(w, h, rects, ringRad)
+            val rr = ArrayList<Int>(); val gg = ArrayList<Int>(); val bb = ArrayList<Int>()
+            for (i in 0 until w * h) if (outer[i] && !inner[i] && !prot[i]) { val c = px[i]; rr.add((c shr 16) and 0xFF); gg.add((c shr 8) and 0xFF); bb.add(c and 0xFF) }
+            if (rr.size < 60) continue
+            rr.sort(); gg.sort(); bb.sort()
+            val mr = rr[rr.size / 2]; val mg = gg[gg.size / 2]; val mb = bb[bb.size / 2]
+            var near = 0; var total = 0
+            for (i in 0 until w * h) if (outer[i] && !inner[i] && !prot[i]) {
+                val c = px[i]; total++
+                if (max(abs(((c shr 16) and 0xFF) - mr), max(abs(((c shr 8) and 0xFF) - mg), abs((c and 0xFF) - mb))) <= 28) near++
+            }
+            if (near.toFloat() / total >= 0.92f) { chosen = g; bg = (0xFF shl 24) or (mr shl 16) or (mg shl 8) or mb; zone = inner; break }
+        }
+        val z = zone ?: return null
+        val mask = BooleanArray(w * h) { z[it] && !prot[it] }
+        if (mask.none { it }) return null
+        // bords adoucis : le remplissage se fond dans le fond restant (traces de lueur très faibles au-delà de la zone)
+        val alpha = TextErase.featherAlpha(mask, w, h)
+        val layer = IntArray(w * h) { if (mask[it]) (alpha[it] shl 24) or (bg and 0xFFFFFF) else 0 }
+        // couleur du texte : la plus éloignée du fond dans les lignes ; encre : pixels nettement plus éloignés du fond que la lueur éventuelle
+        val core = TextErase.rectMask(w, h, rects, 0)
+        val textColor = TextErase.extremeTextColor(px, core)
+        val bgr = (bg shr 16) and 0xFF; val bgg = (bg shr 8) and 0xFF; val bgb = bg and 0xFF
+        val dist = IntArray(w * h) { i -> val c = px[i]; val dr = ((c shr 16) and 0xFF) - bgr; val dg = ((c shr 8) and 0xFF) - bgg; val db = (c and 0xFF) - bgb; kotlin.math.sqrt((dr * dr + dg * dg + db * db).toFloat()).toInt() }
+        val coreD = ArrayList<Int>(); for (i in 0 until w * h) if (core[i]) coreD.add(dist[i])
+        coreD.sort()
+        val p95 = if (coreD.isEmpty()) 0 else coreD[(coreD.size * 0.95f).toInt().coerceAtMost(coreD.size - 1)]
+        val thr = max(60, (p95 * 0.7f).toInt())
+        val ink = BooleanArray(w * h) { core[it] && dist[it] >= thr }
+        // lueur : pixels de la zone ni fond ni encre, assez nombreux et colorés (halo rouge autour d'un texte blanc, par exemple)
+        var glowN = 0; var gr = 0L; var gg2 = 0L; var gb = 0L
+        for (i in 0 until w * h) if (mask[i] && !ink[i] && dist[i] in 40 until thr) { glowN++; val c = px[i]; gr += (c shr 16) and 0xFF; gg2 += (c shr 8) and 0xFF; gb += c and 0xFF }
+        val zoneN = mask.count { it }
+        var glow = 0
+        if (glowN > zoneN * 0.12f && glowN > 200) {
+            val r = (gr / glowN).toInt(); val g2 = (gg2 / glowN).toInt(); val b2 = (gb / glowN).toInt()
+            val mx = max(r, max(g2, b2)); val mn = kotlin.math.min(r, kotlin.math.min(g2, b2))
+            if (mx - mn >= 40) glow = (0xFF shl 24) or (min(255, (r * 1.6f).toInt()) shl 16) or (min(255, (g2 * 1.6f).toInt()) shl 8) or min(255, (b2 * 1.6f).toInt())
+        }
+        return Plan(Mode.FLAT, x0, y0, w, h, mask, layer, bg, textColor, false, null, null, TextErase.strokeWidth(ink, w, h), ink, bg and 0xFFFFFF, glow)
+    }
+
+    private fun planUnclipped(src: PixelSource, s: Float, lineBoxes: List<RectF>, lineH: Float, imageW: Float, imageH: Float, padOverride: Float = 0f, container: RectF? = null, protect: List<RectF> = emptyList(), free: Boolean = false): Plan? {
+        // texte hors bulle sur des abords unis (page blanche ou noire, aplat, lueur sur fond uni) : toute la zone est remplacée par la couleur des abords
+        if (free && padOverride == 0f) planRing(src, s, lineBoxes, lineH, imageW, imageH, protect)?.let { return it }
         val union = lineBoxes.reduce { a, c -> a.union(c) }
         val pad = max(max(10f, lineH * 0.7f), padOverride)
         val x0 = (max(0f, union.left - pad) * s).toInt().coerceIn(0, src.width - 1)
@@ -105,13 +179,22 @@ object Erasure {
             return Plan(Mode.FLAT, x0, y0, w, h, mask, layer, a.bg, a.textColor, a.outlined, bubble, shape, stroke, raw, meanFill(layer))
         }
         // bulle au fond non uni (dégradé, ombre, lueur sombre) : on remplace toute la zone du texte à l'intérieur de la bulle par un fond lissé
-        run {
+        if (!free) run {
             // la forme de la bulle est calculée sur une région plus large que la zone du texte (la bulle entière doit y tenir)
             val shape = bubbleShape(src, s, union, a.bg, imageW, imageH, smooth = true, container = container)
             if (shape != null) {
                 val farS = TextErase.localFarMask(px, w, h, max(5, (lh * 0.6f).toInt()), 40); val encS = TextErase.enclosedOnly(farS, w, h) // lettres isolées
                 val encG = TextErase.dilate(encS, w, h, max(2, (lh * 0.06f).toInt()))   // bords des lettres compris : ils ne doivent pas servir de référence au remplissage
-                val mask = BooleanArray(w * h) { i -> zone[i] && (shape.contains((x0 + i % w + 0.5f) / s, (y0 + i / w + 0.5f) / s) || encG[i]) }
+                // tout pixel nettement différent de son voisinage à l'intérieur d'une ligne de texte est du texte, même s'il touche le bord d'une bulle voisine
+                // (sauf dans une bulle voisine détectée : on ne grignote pas son contour)
+                val coreLines = TextErase.rectMask(w, h, rects(), 0)
+                val prot = BooleanArray(w * h)
+                for (pr in protect) {
+                    val px0 = ((pr.left * s).toInt() - x0).coerceIn(0, w); val px1 = ((pr.right * s).toInt() - x0).coerceIn(0, w)
+                    val py0 = ((pr.top * s).toInt() - y0).coerceIn(0, h); val py1 = ((pr.bottom * s).toInt() - y0).coerceIn(0, h)
+                    for (yy in py0 until py1) for (xx in px0 until px1) prot[yy * w + xx] = true
+                }
+                val mask = BooleanArray(w * h) { i -> zone[i] && (shape.contains((x0 + i % w + 0.5f) / s, (y0 + i / w + 0.5f) / s) || encG[i] || (coreLines[i] && farS[i] && !prot[i])) }
                 if (mask.count { it } > 0) {
                     // références du remplissage : seulement l'intérieur de la bulle (ni la page blanche autour, ni le contour)
                     val outside = BooleanArray(w * h) { i -> !shape.contains((x0 + i % w + 0.5f) / s, (y0 + i / w + 0.5f) / s) }
@@ -130,9 +213,10 @@ object Erasure {
         // lettrage à lueur : on élargit le masque pour effacer aussi la lueur, de sorte que la reconstruction vienne des abords du halo
         val mask = TextErase.artMask(px, w, h, zoneArt, fillColor, max(2, (lh * (if (a.outlined) 0.14f else 0.07f)).toInt()))
         // texte sur dessin : région élargie pour trouver de la vraie texture à copier à côté du trou (second passage)
-        if (padOverride == 0f) planUnclipped(src, s, lineBoxes, lineH, imageW, imageH, max(40f, lineH * 1.6f), container)?.let { if (it.mode == Mode.ART) return it }
+        if (padOverride == 0f) planUnclipped(src, s, lineBoxes, lineH, imageW, imageH, max(40f, lineH * 1.6f), container, protect, free)?.let { if (it.mode == Mode.ART) return it }
         val diffused = TextErase.inpaint(px, w, h, mask)
-        val fill = TextErase.inpaintClone(px, w, h, mask, diffused)
+        // trame de points ou motif répété autour du trou : on recopie le motif plutôt que de le lisser en un voile gris
+        val fill = TextErase.periodicFill(px, w, h, mask, diffused) ?: TextErase.addGrain(TextErase.inpaintClone(px, w, h, mask, diffused), px, w, h, mask)
         val alpha = TextErase.featherAlpha(mask, w, h)
         val layer = IntArray(w * h) { if (mask[it]) (alpha[it] shl 24) or (fill[it] and 0xFFFFFF) else 0 }
         val inkArt = TextErase.artMask(px, w, h, zoneArt, fillColor, 0)

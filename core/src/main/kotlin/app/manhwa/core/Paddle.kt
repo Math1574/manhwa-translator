@@ -4,7 +4,7 @@ import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
 
-data class ScoredBox(val x0: Float, val y0: Float, val x1: Float, val y1: Float, val score: Float) {
+data class ScoredBox(val x0: Float, val y0: Float, val x1: Float, val y1: Float, val score: Float, val thickness: Float = 0f) {
     val width: Float get() = x1 - x0
     val height: Float get() = y1 - y0
 }
@@ -41,9 +41,33 @@ object DbPost {
             val score = (sum / tail).toFloat()
             if (min(bw, bh) < minSide || score < boxThresh || tail < 6) continue
             val d = bw * bh * unclip / (2f * (bw + bh))
-            out.add(ScoredBox(max(0f, minX - d), max(0f, minY - d), min(w.toFloat(), maxX + 1 + d), min(h.toFloat(), maxY + 1 + d), score))
+            out.add(ScoredBox(max(0f, minX - d), max(0f, minY - d), min(w.toFloat(), maxX + 1 + d), min(h.toFloat(), maxY + 1 + d), score, orientedThickness(queue, tail, w, unclip)))
         }
         return out.sortedWith(compareBy({ it.y0 }, { it.x0 }))
+    }
+
+    /**
+     * Épaisseur de la ligne mesurée perpendiculairement à son axe principal (analyse en composantes principales des pixels de la composante), avec le
+     * même « unclip » que les boîtes : une ligne inclinée a une boîte englobante bien plus haute que le texte, son épaisseur reste celle des lettres.
+     */
+    private fun orientedThickness(pixels: IntArray, n: Int, w: Int, unclip: Float): Float {
+        if (n < 12) return 0f
+        var mx = 0.0; var my = 0.0
+        for (k in 0 until n) { mx += pixels[k] % w; my += pixels[k] / w }
+        mx /= n; my /= n
+        var cxx = 0.0; var cyy = 0.0; var cxy = 0.0
+        for (k in 0 until n) { val dx = pixels[k] % w - mx; val dy = pixels[k] / w - my; cxx += dx * dx; cyy += dy * dy; cxy += dx * dy }
+        val theta = 0.5 * Math.atan2(2 * cxy, cxx - cyy)          // axe principal
+        val ux = Math.cos(theta); val uy = Math.sin(theta)
+        var minU = Double.MAX_VALUE; var maxU = -Double.MAX_VALUE; var minV = Double.MAX_VALUE; var maxV = -Double.MAX_VALUE
+        for (k in 0 until n) {
+            val dx = pixels[k] % w - mx; val dy = pixels[k] / w - my
+            val u = dx * ux + dy * uy; val v = -dx * uy + dy * ux
+            if (u < minU) minU = u; if (u > maxU) maxU = u; if (v < minV) minV = v; if (v > maxV) maxV = v
+        }
+        val len = (maxU - minU + 1).toFloat(); val thick = (maxV - minV + 1).toFloat()
+        val (a, b) = if (len >= thick) Pair(len, thick) else Pair(thick, len)       // épaisseur = le petit côté
+        return b + 2f * (a * b * unclip / (2f * (a + b)))
     }
 
     /** Dimensions d'entrée du détecteur : multiples de 32, au moins 32. */
@@ -80,7 +104,14 @@ object Ctc {
 
 /** Fusion des lectures de deux moteurs d'OCR (ML Kit et PaddleOCR) : on garde tout texte vu par l'un ou l'autre, la lecture la plus sûre l'emporte. */
 object OcrMerge {
-    fun merge(mlkit: List<OcrLine>, paddle: List<OcrLine>, script: String): List<OcrLine> {
+    /** Part des mots d'une lecture (après réparation) qui sont de vrais mots anglais : départage deux lectures d'un même texte (un lecteur peut être très sûr de lui et se tromper). */
+    fun plausibility(text: String, lex: EnglishLexicon): Float {
+        val words = Regex("[A-Za-z]+(?:'[A-Za-z]+)?").findAll(OcrRepair.repair(text, lex)).map { it.value }.filter { it.length >= 2 || it.equals("I", true) || it.equals("A", true) }.toList()
+        if (words.isEmpty()) return 0.5f
+        return words.count { lex.known(it.lowercase()) }.toFloat() / words.size
+    }
+
+    fun merge(mlkit: List<OcrLine>, paddle: List<OcrLine>, script: String, lex: EnglishLexicon? = null): List<OcrLine> {
         val all = ArrayList<Pair<OcrLine, Boolean>>() // (ligne, vient de Paddle)
         mlkit.forEach { all.add(it to false) }
         paddle.forEach { all.add(it to true) }
@@ -101,7 +132,8 @@ object OcrMerge {
                 else -> {
                     fun score(ls: List<OcrLine>): Double {
                         val len = ls.sumOf { it.text.length }.coerceAtLeast(1)
-                        return ls.sumOf { it.confidence.toDouble() * it.text.length } / len
+                        // alphabet latin : la plausibilité des mots pèse sur la confiance du lecteur (un texte mal lu mais lu avec assurance perd)
+                        return ls.sumOf { l -> l.confidence.toDouble() * l.text.length * (if (lex != null && !cjk) 0.4 + 0.6 * plausibility(l.text, lex) else 1.0) } / len
                     }
                     // l'alphabet latin est mieux lu (espaces, ponctuation) par Paddle, le CJK par ML Kit
                     val sm = score(ml) + (if (cjk) 0.1 else 0.0)

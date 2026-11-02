@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests()
+    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -567,7 +567,8 @@ fun eraseTests() {
     }
     T.test("effacement: choix de police (parole, cri, narration, CJK)") {
         T.eq(TextErase.FontStyle.SPEECH, TextErase.chooseFont("I can't believe it.", 30f, 30f, true, false, false))
-        T.eq(TextErase.FontStyle.SHOUT, TextErase.chooseFont("NO CHOICE BUT TO KILL HIM?", 40f, 30f, false, true, false))
+        T.eq(TextErase.FontStyle.SHOUT, TextErase.chooseFont("NO CHOICE BUT TO KILL HIM?", 50f, 30f, false, true, false))
+        T.eq(TextErase.FontStyle.SPEECH, TextErase.chooseFont("PLEASE JUST SHUT UP ALREADY", 34f, 34f, false, true, false))   // texte hors bulle cerné de taille normale : assortiment de police
         T.eq(TextErase.FontStyle.SHOUT, TextErase.chooseFont("RUN!", 60f, 30f, true, false, false))
         T.eq(TextErase.FontStyle.NARRATION, TextErase.chooseFont("Three days later.", 28f, 30f, true, false, true))
         T.eq(TextErase.FontStyle.SANS, TextErase.chooseFont("제발 도와주세요", 30f, 30f, true, false, false))
@@ -935,5 +936,81 @@ fun anchoredGroupTests() {
         val dets = listOf(det(RegionClass.TEXT_BUBBLE, 95f, 5f, 195f, 205f, 0.9f), det(RegionClass.TEXT_FREE, 98f, 8f, 192f, 203f, 0.5f))
         val b = g.group(lines, dets)
         T.eq(1, b.size); T.eq("BB AA", b[0].text); T.ok(b[0].vertical, "vertical")
+    }
+}
+
+// ---------- encre d'une ligne : seules les lettres comptent ----------
+fun inkTests() {
+    T.test("encre d'une ligne : un contour de bulle ou une trame qui traverse la boîte ne gonfle pas la hauteur mesurée") {
+        val w = 300; val h = 120; val ink = BooleanArray(w * h)
+        for (k in 0 until 8) for (y in 50 until 82) for (x in 20 + k * 30 until 40 + k * 30) ink[y * w + x] = true   // 8 lettres de 32 px de haut
+        for (x in 0 until w) for (t in 0 until 3) ink[(5 + t) * w + x] = true                                   // trait de contour long traversant la boîte
+        for (y in 0 until h) ink[y * w + 295] = true                                                              // contour vertical
+        val li = FontMatcher.lineInk(ink, w, h, 10, 40, 280, 95, "TESTTEST")!!
+        T.ok(li.h in 30..36, "hauteur ${li.h}")
+        T.ok(li.w in 200..260, "largeur ${li.w}")
+    }
+}
+
+fun layoutAreaTests() {
+    T.test("zone d'un texte hors bulle : agrandie sans sortir de l'image ni toucher un voisin") {
+        val base = RectF(100f, 100f, 200f, 150f)
+        val free = LayoutArea.expand(base, 0.5f, emptyList(), 1000f, 1000f)
+        T.ok(free.left <= 50.5f && free.right >= 249.5f && free.top <= 75.5f && free.bottom >= 174.5f, "agrandie ${free.left},${free.top},${free.right},${free.bottom}")
+        val edge = LayoutArea.expand(RectF(5f, 5f, 100f, 50f), 0.5f, emptyList(), 130f, 70f)
+        T.ok(edge.left >= 0f && edge.top >= 0f && edge.right <= 130f && edge.bottom <= 70f, "reste dans l'image")
+        val near = LayoutArea.expand(base, 0.5f, listOf(RectF(215f, 90f, 400f, 160f)), 1000f, 1000f)
+        T.ok(near.right <= 215f && near.left < base.left && near.contains(150f, 125f), "coupée avant l'obstacle ${near.right}")
+        val over = LayoutArea.expand(base, 0.5f, listOf(RectF(120f, 90f, 300f, 160f)), 1000f, 1000f)   // chevauchait déjà : ignoré
+        T.ok(over.right >= 249f, "obstacle déjà recouvert ignoré")
+    }
+}
+
+fun verticalColumnsTests() {
+    T.test("colonnes verticales : le fragment final (point) se rattache à sa colonne, un texte horizontal reste à part") {
+        val col = ScoredBox(326f, 391f, 362f, 479f, 0.9f)
+        val dot = ScoredBox(330f, 486f, 338f, 496f, 0.9f)          // point final sous la colonne
+        val other = ScoredBox(100f, 50f, 300f, 90f, 0.9f)          // ligne horizontale ailleurs
+        val far = ScoredBox(333f, 700f, 345f, 712f, 0.9f)          // petit signe trop éloigné de la colonne
+        val r = VerticalColumns.merge(listOf(col, dot, other, far))
+        T.eq(1, r.columns.size); T.ok(r.columns[0].y1 >= 496f && r.columns[0].y0 == 391f, "colonne prolongée ${r.columns[0].y1}")
+        T.eq(2, r.rest.size)
+    }
+}
+
+fun ocrPlausibilityTests() {
+    val lex = EnglishLexicon(listOf("want", "me", "to", "put", "a", "restriction", "on", "your", "mouth", "shut", "up"), listOf("the", "i", "you"))
+    fun l(t: String, c: Float) = OcrLine(t, RectF(100f, 100f, 400f, 140f), c)
+    T.test("fusion des lectures : une lecture absurde mais très sûre d'elle perd contre une lecture plausible") {
+        val ml = listOf(l("A. RENRCTONON'YOUR", 0.99f))
+        val pp = listOf(l("A RESTRICTION ON YOUR", 0.85f))
+        T.eq("A. RENRCTONON'YOUR", OcrMerge.merge(ml, pp, "en").single().text)                // sans dictionnaire : la plus sûre d'elle l'emporte
+        T.eq("A RESTRICTION ON YOUR", OcrMerge.merge(ml, pp, "en", lex).single().text)        // avec dictionnaire : la plausible
+    }
+}
+
+fun halftoneTests() {
+    T.test("trame de points : le trou est comblé par le motif périodique (écart bien plus faible que le lissage)") {
+        val w = 160; val h = 120
+        val px = IntArray(w * h) { i ->
+            val x = i % w; val y = i / w; val dot = ((x % 8) < 4 && (y % 8) < 4)
+            val base = 90 + y / 3; val v = if (dot) base + 50 else base
+            (0xFF shl 24) or (v shl 16) or (v shl 8) or (v + 25)
+        }
+        val mask = BooleanArray(w * h) { i -> val x = i % w; val y = i / w; x in 60..110 && y in 40..80 }
+        val damaged = px.copyOf(); for (i in damaged.indices) if (mask[i]) damaged[i] = 0xFF808080.toInt()
+        val diffused = TextErase.inpaint(damaged, w, h, mask)
+        val fill = TextErase.periodicFill(damaged, w, h, mask, diffused)
+        T.ok(fill != null, "motif périodique détecté")
+        fun err(a: IntArray): Double { var s = 0.0; var n = 0; for (i in px.indices) if (mask[i]) { s += kotlin.math.abs(((a[i] shr 8) and 0xFF) - ((px[i] shr 8) and 0xFF)); n++ }; return s / n }
+        val ep = err(fill!!); val ed = err(diffused)
+        T.ok(ep < 8.0 && ep < ed * 0.5, "erreur motif $ep contre lissage $ed")
+    }
+    T.test("fond uni ou sans motif : pas de remplissage périodique") {
+        val w = 100; val h = 80
+        val flat = IntArray(w * h) { 0xFFF0F0F0.toInt() }
+        T.eq(null, TextErase.periodicFill(flat, w, h, BooleanArray(w * h) { it % w in 30..50 && it / w in 20..40 }, flat))
+        val rnd = java.util.Random(5); val noisy = IntArray(w * h) { val v = rnd.nextInt(255); (0xFF shl 24) or (v shl 16) or (v shl 8) or v }
+        T.eq(null, TextErase.periodicFill(noisy, w, h, BooleanArray(w * h) { it % w in 30..50 && it / w in 20..40 }, noisy))
     }
 }

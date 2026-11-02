@@ -44,7 +44,12 @@ data class OcrLine(
     val box: RectF,
     val confidence: Float = 1f,
     val vertical: Boolean = false,
-)
+    /** Hauteur réelle de la ligne mesurée dans l'axe du texte (0 si inconnue) : la boîte englobante d'une ligne inclinée est bien plus haute que le texte. */
+    val thickness: Float = 0f,
+) {
+    /** Hauteur de ligne à retenir : l'épaisseur mesurée si elle est connue, sinon la boîte (largeur pour une colonne verticale). */
+    val lineHeight: Float get() = if (thickness > 0f) min(thickness, if (vertical) box.width else box.height) else if (vertical) box.width else box.height
+}
 
 /** Classes du détecteur de bulles et de texte de bande dessinée. */
 enum class RegionClass { BUBBLE, TEXT_BUBBLE, TEXT_FREE }
