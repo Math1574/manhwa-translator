@@ -47,6 +47,11 @@ jobs:
           curl -sSfL --retry 3 -o app/src/main/assets/ocr/ko_v5_dict.txt $K5/dict.txt
           # lecteur unifié PP-OCRv5 mobile (officiel Paddle, Apache-2.0) : japonais
           curl -sSfL --retry 3 -o app/src/main/assets/ocr/ppocrv5_unified_rec_infer.onnx https://huggingface.co/PaddlePaddle/PP-OCRv5_mobile_rec_onnx/resolve/main/inference.onnx
+          # japonais vertical : manga-ocr quantifié (Apache-2.0) et son vocabulaire
+          MO=https://huggingface.co/onnx-community/manga-ocr-base-ONNX/resolve/main/onnx
+          curl -sSfL --retry 3 -o app/src/main/assets/ocr/manga_ocr_encoder_int8.onnx $MO/encoder_model_int8.onnx
+          curl -sSfL --retry 3 -o app/src/main/assets/ocr/manga_ocr_decoder_int8.onnx $MO/decoder_model_int8.onnx
+          curl -sSfL --retry 3 -o app/src/main/assets/ocr/manga_ocr_vocab.txt https://huggingface.co/kha-white/manga-ocr-base/resolve/main/vocab.txt
           ls -la app/src/main/assets/ocr
       - name: Compiler l'APK debug
         run: |

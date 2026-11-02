@@ -38,6 +38,9 @@ class PaddleModels(private val ctx: Context) {
 
     val environment: OrtEnvironment get() = env
 
+    /** Lecture du japonais vertical (manga-ocr) : appelée pour les colonnes que la lecture horizontale ne sait pas traiter. */
+    val manga: MangaOcrReader by lazy { MangaOcrReader(ctx, env) }
+
     private fun session(asset: String): OrtSession {
         val bytes = ctx.assets.open(asset).use { it.readBytes() }
         val opts = OrtSession.SessionOptions().apply { setIntraOpNumThreads(4) }
@@ -80,6 +83,7 @@ class PaddleModels(private val ctx: Context) {
     }
 
     @Synchronized fun close() {
+        try { manga.close() } catch (_: Throwable) {}
         try { altEn?.session?.close() } catch (_: Throwable) {}
         altEn = null; altEnChecked = false
         try { det?.close() } catch (_: Throwable) {}
@@ -139,7 +143,18 @@ class PaddleOcr(private val models: PaddleModels) {
             val x1 = (b.x1 / dw * tw).toInt().coerceIn(x0 + 1, tw); val y1 = (b.y1 / dh * th).toInt().coerceIn(y0 + 1, th)
             val cw = x1 - x0; val ch = y1 - y0
             if (cw < 8 || ch < 8) continue
-            if (ch > 2.2f * cw) continue // ligne verticale : la lecture horizontale ne convient pas (laissée à ML Kit)
+            if (ch > 2.2f * cw) {
+                // colonne verticale : la lecture horizontale ne convient pas. Japonais : manga-ocr ; autres écritures : laissée à ML Kit
+                val mr = if (lang == "ja") models.manga else null
+                if (mr != null && mr.available) {
+                    val bx0 = max(0, x0 - 4); val by0 = max(0, y0 - 4); val bx1 = min(tw, x1 + 4); val by1 = min(th, y1 + 4)
+                    val col = Bitmap.createBitmap(tile, bx0, by0, bx1 - bx0, by1 - by0)
+                    val res = try { mr.read(col) } catch (e: Throwable) { Log.w("MT", "manga-ocr : ${e.message}"); null } finally { col.recycle() }
+                    if (res != null && res.first.isNotEmpty() && res.second >= 0.5f)
+                        lines.add(OcrLine(res.first, RectF(x0.toFloat() * sample, y0.toFloat() * sample + yOffset, x1.toFloat() * sample, y1.toFloat() * sample + yOffset), res.second, vertical = true))
+                }
+                continue
+            }
             val crop = Bitmap.createBitmap(tile, x0, y0, cw, ch)
             val (text, conf) = try {
                 val a = readLine(env, rec, crop)

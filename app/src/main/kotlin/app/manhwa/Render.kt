@@ -216,10 +216,11 @@ object PageRenderer {
         // police assortie au lettrage d'origine ; corps cible : même hauteur de capitales que l'encre d'origine
         val inks = lineInks(p, s)
         val font = matchFont(fonts, p, s, inks)
-        val inkH = if (inks.isEmpty()) 0f else inks.map { it.h }.sorted().let { it[it.size / 2] } / s       // pixels de l'image d'origine
+        // texte vertical : la taille d'un caractère est la LARGEUR de la colonne (et non sa hauteur, qui est la longueur du texte)
+        val inkH = if (inks.isEmpty()) 0f else (if (b.vertical) inks.map { it.w } else inks.map { it.h }).sorted().let { it[it.size / 2] } / s       // pixels de l'image d'origine
         val cap = capRatio(font.typeface)
         val baseH = if (inkH > 0f) inkH else lineH * 0.8f
-        val em = (if (allCaps) baseH / cap else baseH / 0.85f) * userScale.coerceIn(0.5f, 2f)
+        val em = (if (allCaps && !b.vertical) baseH / cap else if (b.vertical) baseH / 0.95f else baseH / 0.85f) * userScale.coerceIn(0.5f, 2f)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG or Paint.LINEAR_TEXT_FLAG).apply {
             typeface = font.typeface; letterSpacing = font.letterSpacing; textScaleX = font.scaleX; textSkewX = font.skew
         }
@@ -228,7 +229,7 @@ object PageRenderer {
         // interligne d'origine : pas entre deux lignes / corps
         val tops = lineBoxes.map { it.top }.sorted()
         val pitch = if (tops.size >= 2) tops.zipWithNext { a, c -> c - a }.sorted().let { it[it.size / 2] } else 0f
-        val stepRatio = if (pitch > 0f) (pitch / (if (allCaps) baseH / cap else baseH / 0.85f)).coerceIn(1.0f, 1.6f) else 1.18f
+        val stepRatio = if (pitch > 0f && !b.vertical) (pitch / (if (allCaps) baseH / cap else baseH / 0.85f)).coerceIn(1.0f, 1.6f) else 1.18f
 
         // forme disponible : intérieur de la bulle si détecté ; sinon l'emprise d'origine légèrement élargie
         val grow = if (plan?.mode == Erasure.Mode.ART) 0.12f else 0.06f

@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests()
+    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -857,5 +857,29 @@ fun libraryTests() {
     T.test("temps relatif en français") {
         T.eq("à l'instant", RelativeTime.fr(10_000, 5_000)); T.eq("il y a 5 min", RelativeTime.fr(400_000, 100_000))
         T.eq("il y a 3 h", RelativeTime.fr(3 * 3600_000L + 5, 0)); T.eq("il y a 2 j", RelativeTime.fr(2 * 86400_000L + 5, 0)); T.eq("il y a 3 sem.", RelativeTime.fr(22 * 86400_000L, 0))
+    }
+}
+
+// ---------- manga-ocr : décodage ----------
+fun mangaOcrTests() {
+    val vocab = listOf("[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]", "お", "願", "い", "し", "ま", "す", "…", "##の", "<unused0>")
+    fun logitsFor(best: Int, second: Int = -1): FloatArray = FloatArray(vocab.size) { if (it == best) 5f else if (it == second) 3f else 0f }
+    T.test("manga-ocr : lecture d'une séquence jusqu'au jeton de fin, jetons spéciaux ignorés") {
+        val script = listOf(5, 6, 7, 8, 9, 10, 3)
+        val r = MangaOcrDecoder.greedy({ ids -> logitsFor(script[ids.size - 1]) })
+        T.eq(listOf(5, 6, 7, 8, 9, 10), r.ids); T.eq("お願いします", MangaOcrDecoder.text(r.ids, vocab))
+        T.ok(r.meanProb > 0.9f, "confiance élevée ${r.meanProb}")
+        T.eq("お願のい", MangaOcrDecoder.text(listOf(2, 5, 6, 12, 7, 13, 3), vocab))
+    }
+    T.test("manga-ocr : un trigramme déjà produit n'est pas répété (second meilleur choix)") {
+        // le meilleur choix voudrait répéter 5,6,7 ; le second choix (8) est retenu à la place
+        val script = listOf(5, 6, 7, 5, 6, 7)
+        val r = MangaOcrDecoder.greedy({ ids -> if (ids.size - 1 < script.size) logitsFor(script[ids.size - 1], second = if (ids.size - 1 == 5) 8 else 3) else logitsFor(3) })
+        T.eq(listOf(5, 6, 7, 5, 6, 8), r.ids.take(6))
+    }
+    T.test("manga-ocr : longueur maximale respectée et points de suspension normalisés") {
+        val r = MangaOcrDecoder.greedy({ ids -> logitsFor(5 + ids.size % 3) }, maxLen = 10)
+        T.ok(r.ids.size <= 10, "longueur ${r.ids.size}")
+        T.eq("お…", MangaOcrDecoder.text(listOf(5, 11), vocab))
     }
 }
