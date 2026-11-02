@@ -2,6 +2,7 @@
 """Sondage Hugging Face : liste (avec tailles) les fichiers des dépôts de modèles utiles et lit quelques fiches."""
 import json, sys, urllib.request, urllib.parse
 REPOS = [
+    "ogkalu/comic-text-and-bubble-detector", "PaddlePaddle/PP-OCRv6_small_det_onnx", "PaddlePaddle/PP-OCRv6_tiny_det_onnx", "Sundowner123/comic-text-and-bubble-detector",
     "a-b-c-x-y-z/Manga-Text-Segmentation-2025", "mayocream/manga-text-segmentation-2025", "iamokish/manga-text-segmentation-safetensors",
     "mloet/comic_text_bubble_detector", "hon-lu/comic-text-and-bubble-detector-onnx-fp16", "depreciation84/comic-text-and-bubble-detector-int8",
     "hhuggg/comictextdetector", "rikimaruwebsite/comic-text-detector-web", "petersunde/anima-manga-text-removal-flow", "mayocream/manga109-segmentation-bubble",
@@ -42,8 +43,11 @@ for repo, path, n in docs:
     except Exception as e: more.append(f"  ERREUR {e}")
 open(sys.argv[1], "a", encoding="utf8").write("\n".join(more))
 os.makedirs("/tmp/models", exist_ok=True)
-JOBS = [("ogkalu/comic-text-and-bubble-detector", r"(detector-v4-s_int8\.onnx|detector_int8\.onnx|config\.json|preprocessor_config\.json)$"),
-        ("mayocream/comic-text-detector-onnx", r"\.onnx$")]
+JOBS = [
+    ("ogkalu/comic-text-and-bubble-detector", r"(README\.md|config\.json|preprocessor_config\.json|.*\.onnx|.*\.json)$"),
+    ("PaddlePaddle/PP-OCRv6_small_det_onnx", r"(inference\.onnx|inference\.yml)$"),
+    ("PaddlePaddle/PP-OCRv6_tiny_det_onnx", r"(inference\.onnx|inference\.yml)$"),
+]
 for repo, pattern in JOBS:
     try:
         tree = json.loads(get(f"https://huggingface.co/api/models/{repo}/tree/main?recursive=1"))
