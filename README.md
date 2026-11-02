@@ -19,22 +19,28 @@ Application Android : navigateur intégré qui traduit automatiquement les manga
 - Un petit bouton ✕ discret s'efface seul ; **trois appuis rapides sur l'écran** le font réapparaître pour quitter le plein écran. Le bouton Retour d'Android quitte aussi.
 
 ## Ce que fait l'application
-- **OCR** local, deux moteurs fusionnés : ML Kit et **PaddleOCR** (modèles ONNX, Apache-2.0) pour repérer le texte stylisé, hors des bulles ou en lettrage spécial. Japonais, coréen, chinois, anglais.
-- **Traduction** locale avec contexte : Gemma 4 traduit toute la page d'un coup, avec les derniers dialogues du chapitre, le glossaire et des consignes de traducteur de bande dessinée.
+- **Navigateur** : barre d'adresse, précédent/suivant, actualisation, plein écran, **favoris** (cœur), **historique** et **reprise de la lecture** par œuvre (onglet Bibliothèque ; la page d'accueil du navigateur les affiche aussi).
+  **Blocage des publicités** (régies connues, fenêtres intempestives, redirections vers un autre site), réglable dans Réglages.
+- **Lecture du texte** (OCR) local, deux moteurs fusionnés : ML Kit et **PaddleOCR PP-OCRv5** (modèles ONNX, Apache-2.0) : anglais (deux lecteurs en concurrence), coréen, japonais, chinois ;
+  **japonais vertical** par manga-ocr. Un filtre écarte filigranes, logos et débris de lecture ; un dictionnaire anglais répare mots collés et chiffres parasites avant traduction.
+- **Traduction** locale avec contexte : Gemma 4 traduit toute la page d'un coup, avec les derniers dialogues du chapitre, le glossaire, les noms propres du chapitre et des consignes de traducteur de bande dessinée.
+  Chaque ligne passe des contrôles automatiques (mots anglais restants, contenu perdu, noms modifiés…) et est retraduite si besoin. Décodage spéculatif et **test de vitesse CPU / GPU** dans Réglages.
   ML Kit reste disponible comme option légère (traduction bulle par bulle, qualité inférieure).
-- **Rendu** : le texte d'origine est effacé (aplat dans les bulles, reconstruction du fond sur les dessins) puis la traduction est mise en page **dans la forme réelle de la bulle**
-  (retours à la ligne équilibrés, jamais de débordement), avec une police dont l'épaisseur et la largeur sont **calibrées sur le lettrage d'origine** (Noto Sans variable ; Bangers pour les cris),
+- **Correction manuelle** : un appui long sur une traduction l'ouvre pour correction ; on peut aussi fixer un nom ou un terme pour tout le chapitre. Les corrections sont mémorisées.
+- **Journal de traduction** (Réglages → Exporter) : texte lu, traduction et problèmes détectés, pour signaler des erreurs. Il reste sur le téléphone.
+- **Rendu** : le texte d'origine est effacé (aplat dans les bulles, fond lissé pour les dégradés, reconstruction sur les dessins) puis la traduction est mise en page **dans la forme réelle de la bulle**
+  (retours à la ligne équilibrés), avec une police choisie par **comparaison avec l'encre du lettrage d'origine** (Comic Neue, Kalam, Caveat Brush, Londrina, Noto Sans…),
   l'interligne d'origine, une double résolution pour la netteté et la typographie française. Polices libres (SIL OFL).
-- **Glossaire** local (noms de personnages), cache des pages traduites, traitement page par page en file d'attente.
+- **Glossaire** local, cache des pages traduites, traitement page par page en file d'attente.
 
 ## Limites connues
-- Lettrages très stylisés, texte vertical japonais : l'OCR les lit mal ou pas. Activez Réglages → **Diagnostic** pour voir ce qui est détecté (vert) ou rejeté (rouge).
-- Sur un dessin chargé, le fond reconstruit derrière un texte effacé peut paraître un peu flou.
-- Vitesse de Gemma et accélération GPU (option expérimentale) non mesurées sur téléphone réel : seulement sur émulateur (≈ 20 s par page sur CPU d'émulateur).
-- Mode « amélioré » d'effacement par modèle d'IA : non disponible.
+- Lettrages très stylisés : l'OCR peut se tromper ; Réglages → **Diagnostic** montre ce qui est détecté (vert) ou rejeté (rouge) ; le journal permet de me signaler les erreurs.
+- Sur un dessin chargé, le fond reconstruit derrière un texte effacé peut paraître flou ou taché (aucune méthode testée n'a fait nettement mieux, voir docs/STATUS.md).
+- Vitesse de Gemma et accélération GPU : mesurables sur votre téléphone avec « Tester CPU / GPU » ; non vérifiées sur un téléphone réel par le développeur.
+- Pas encore : onglets multiples, gestion des chapitres, détecteur de bulles dédié, NPU.
 
 ## Développement et tests
-- `core/` : logique pure Kotlin (regroupement des bulles, mise en page, effacement, cache, file d'attente, glossaire, téléchargement de modèles) : 73 tests, `gradle :core:test`.
+- `core/` : logique pure Kotlin (regroupement des bulles, mise en page, effacement, cache, file d'attente, glossaire, téléchargement de modèles) : plus de 110 tests, `gradle :core:test`.
 - `app/` : application Android (Compose, WebView, ML Kit, LiteRT-LM).
 - GitHub Actions (`.github/workflows/build.yml`) : tests du cœur, compilation de l'APK, publication en Release, puis **test de bout en bout sur émulateur**
   (faux site de lecture avec pages Pepper&Carrot, licence CC-BY 4.0, et pages synthétiques ; captures d'écran, rapport JSON, mesures).
