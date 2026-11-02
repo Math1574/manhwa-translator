@@ -43,3 +43,7 @@ Application Android : navigateur intégré qui traduit automatiquement les manga
 
 ## Crédits
 Pages de test : *Pepper&Carrot* par David Revoy (CC-BY 4.0), https://www.peppercarrot.com. Polices : SIL Open Font License 1.1.
+
+
+## Licences et crédits
+Voir [docs/CREDITS.md](docs/CREDITS.md) (modèles, polices, dictionnaire, liste de blocage des publicités).
