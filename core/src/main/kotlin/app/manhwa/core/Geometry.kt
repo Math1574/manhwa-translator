@@ -19,6 +19,8 @@ data class RectF(val left: Float, val top: Float, val right: Float, val bottom: 
 
     fun intersects(o: RectF): Boolean = intersection(o) != null
 
+    fun contains(x: Float, y: Float): Boolean = x >= left && x <= right && y >= top && y <= bottom
+
     fun union(o: RectF) = RectF(min(left, o.left), min(top, o.top), max(right, o.right), max(bottom, o.bottom))
 
     fun inflate(dx: Float, dy: Float) = RectF(left - dx, top - dy, right + dx, bottom + dy)

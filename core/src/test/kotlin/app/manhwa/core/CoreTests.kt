@@ -925,6 +925,11 @@ fun anchoredGroupTests() {
         T.eq(2, b.size); T.eq("INSIDE ZONE", b[0].text); T.eq("LOOSE ONE LOOSE TWO", b[1].text)
         T.eq(g.group(lines).map { it.text }, g.group(lines, emptyList()).map { it.text })
     }
+    T.test("zones détectées : la ligne que le détecteur n'a pas encadrée se rattache au bloc voisin, pas à un bloc lointain") {
+        val lines = listOf(ln("HOW DID YOU FIND THIS", 353f, 548f, 614f, 578f), ln("PLACE", 441f, 580f, 525f, 614f), ln("FAR AWAY LINE", 100f, 900f, 300f, 930f))
+        val b = g.group(lines, listOf(det(RegionClass.TEXT_FREE, 340f, 540f, 626f, 589f)))
+        T.eq(2, b.size); T.eq("HOW DID YOU FIND THIS PLACE", b[0].text); T.eq("FAR AWAY LINE", b[1].text)
+    }
     T.test("zones détectées : doublons de zones (même texte vu deux fois) fusionnés ; colonnes verticales de droite à gauche") {
         val lines = listOf(OcrLine("AA", RectF(100f, 10f, 140f, 200f), 0.9f, vertical = true), OcrLine("BB", RectF(150f, 10f, 190f, 200f), 0.9f, vertical = true))
         val dets = listOf(det(RegionClass.TEXT_BUBBLE, 95f, 5f, 195f, 205f, 0.9f), det(RegionClass.TEXT_FREE, 98f, 8f, 192f, 203f, 0.5f))

@@ -72,8 +72,23 @@ class BlockGrouper(private val cfg: GrouperConfig = GrouperConfig()) {
         val usable = lines.filter { l -> dropReason(l) == null || (anchorOf(l) >= 0 && dropReason(l, relaxed = true) == null) }
         val kept = dedupe(usable)
         if (kept.isEmpty()) return emptyList()
-        val byAnchor = HashMap<Int, MutableList<OcrLine>>(); val loose = ArrayList<OcrLine>()
+        val byAnchor = HashMap<Int, MutableList<OcrLine>>(); var loose = ArrayList<OcrLine>()
         for (l in kept) { val a = anchorOf(l); if (a >= 0) byAnchor.getOrPut(a) { ArrayList() }.add(l) else loose.add(l) }
+        // le détecteur n'encadre parfois qu'une partie du texte (la première ligne seulement) : une ligne sans zone se rattache au bloc détecté
+        // le plus proche si elle s'y joint géométriquement ou se trouve dans la même bulle ; sinon elle reste libre
+        val rest = ArrayList<OcrLine>()
+        for (l in loose) {
+            var best = -1; var bestD = Float.MAX_VALUE
+            for ((i, ls) in byAnchor) {
+                val ub = ls.map { it.box }.reduce { a, b -> a.union(b) }
+                val sameBubble = bubbles.any { b -> b.box.contains(l.box.centerX, l.box.centerY) && b.box.contains(ub.centerX, ub.centerY) }
+                if (!sameBubble && ls.none { shouldJoin(it, l) }) continue
+                val d = rectGap(ub, l.box)
+                if (d < bestD) { bestD = d; best = i }
+            }
+            if (best >= 0) byAnchor[best]!!.add(l) else rest.add(l)
+        }
+        loose = rest
         val blocks = ArrayList<Triple<List<OcrLine>, BlockKind, RectF?>>()
         for ((i, ls) in byAnchor) {
             val vertical = ls.count { isVertical(it) } * 2 > ls.size
@@ -89,6 +104,12 @@ class BlockGrouper(private val cfg: GrouperConfig = GrouperConfig()) {
             val vertical = ls.count { isVertical(it) } * 2 > ls.size
             TextBlock(i, ls, box, joinText(ls.map { it.text }), vertical, kc.first, kc.second)
         }
+    }
+
+    /** Distance entre deux rectangles (0 s'ils se touchent ou se recouvrent). */
+    private fun rectGap(a: RectF, b: RectF): Float {
+        val dx = max(0f, max(a.left, b.left) - min(a.right, b.right)); val dy = max(0f, max(a.top, b.top) - min(a.bottom, b.bottom))
+        return kotlin.math.sqrt(dx * dx + dy * dy)
     }
 
     /** Zones de texte sans doublons : deux zones qui se recouvrent à plus de 50 % (même classe ou non) sont une seule zone, la plus sûre l'emporte. */

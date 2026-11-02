@@ -21,6 +21,12 @@ def art_bg(W, H):
         od.polygon(pts, fill=tuple(random.randint(20, 230) for _ in range(3)) + (random.randint(60, 150),))
     img = Image.alpha_composite(img.convert("RGBA"), ov).convert("RGB")
     return img.filter(ImageFilter.GaussianBlur(1.2))
+def F(path, size):
+    for p in (path, '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'):
+        try: return ImageFont.truetype(p, size)
+        except OSError: continue
+    return ImageFont.load_default()
+
 def wrap(words,font,maxw,d):
     lines=[];cur=''
     for w in words:
@@ -37,7 +43,7 @@ def make(idx):
     y=random.randint(30,70); prev=None; bid=0
     while y<H-200 and bid<7:
         kind=random.choices(['bubble','dark','narration','cloud','spiky','free'],[34,10,16,10,10,20])[0]
-        font=ImageFont.truetype(random.choice(FONTS),random.choice([26,28,30,32]))
+        font=F(random.choice(FONTS),random.choice([26,28,30,32]))
         txt=random.choice(SENT); maxw=random.randint(220,330)
         ls=wrap(txt.split(),font,maxw,d)
         lh=int(font.size*1.22); tw=max(d.textlength(l,font=font) for l in ls); th=lh*len(ls)
