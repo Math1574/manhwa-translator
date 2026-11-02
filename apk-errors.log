@@ -5,9 +5,9 @@ w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kot
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/PaddleOcr.kt:116:94 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Render.kt:93:48 'fun computeBounds(p0: RectF, p1: Boolean): Unit' is deprecated. Deprecated in Java.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Render.kt:167:39 Unnecessary safe call on a non-null receiver of type 'Erasure.Plan'.
-BUILD SUCCESSFUL in 56s
+BUILD SUCCESSFUL in 55s
 total 398376
-drwxr-xr-x 2 runner runner      4096 Nov  2 14:09 .
-drwxr-xr-x 3 runner runner      4096 Nov  2 14:09 ..
--rw-r--r-- 1 runner runner 407923481 Nov  2 14:09 app-debug.apk
--rw-r--r-- 1 runner runner       405 Nov  2 14:09 output-metadata.json
+drwxr-xr-x 2 runner runner      4096 Nov  2 14:15 .
+drwxr-xr-x 3 runner runner      4096 Nov  2 14:15 ..
+-rw-r--r-- 1 runner runner 407923481 Nov  2 14:15 app-debug.apk
+-rw-r--r-- 1 runner runner       405 Nov  2 14:15 output-metadata.json
