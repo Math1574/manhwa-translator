@@ -11,3 +11,11 @@
 - Vitesse et mémoire de Gemma sur un vrai téléphone, GPU.
 - Sites de lecture réels (chargement, protections, structure de page propre à chaque site).
 - Qualité de lecture sur lettrages stylisés réels, texte vertical.
+
+
+## Mise à jour de novembre 2026
+- Lecture : PP-OCRv5 (anglais en concurrent de l'ancien lecteur, coréen, japonais horizontal), détection PP-OCRv4 conservée.
+- Traduction : Gemma 4 (E2B/E4B) avec décodage spéculatif et test CPU/GPU ; Hy-MT2 évalué et écarté (moins bon que Gemma sur le corpus maison).
+- Navigateur : blocage des publicités (liste AdAway, CC BY 3.0), bibliothèque (favoris, historique, reprise de lecture par œuvre).
+- Écarté après mesure : MI-GAN (gain négligeable), détection PP-OCRv5 mobile (moins bon rappel).
+- Reste à faire : japonais vertical (manga-ocr), détecteur de bulles, onglets multiples, gestion des chapitres, NPU.

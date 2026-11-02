@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import app.manhwa.core.AppSettings
+import app.manhwa.core.BrowsingLibrary
 import app.manhwa.core.Glossary
 import app.manhwa.core.GlossaryEntry
 import app.manhwa.core.ResultCache
@@ -30,6 +31,7 @@ class AppGraph(ctx: Context) {
     val cache = ResultCache(File(ctx.filesDir, "cache"), maxEntries = 64, maxDiskBytes = 100L * 1024 * 1024)
     val glossary = GlossaryStore(File(ctx.filesDir, "glossary.tsv"))
     val models = TranslationModels(ctx)
+    val library = LibraryStore(File(ctx.filesDir, "library.tsv"))
     val journal = TranslationJournal(File(ctx.filesDir, "journal.jsonl"))
     val llm = LlmModelsManager(ctx)
     val paddleModels = PaddleModels(ctx)
@@ -45,6 +47,23 @@ class AppGraph(ctx: Context) {
     }
     val gpuTest = GpuTester(ctx, this)
     val controller = TranslationController(ctx, this)
+}
+
+/** Historique de lecture et favoris, conservés sur le téléphone (fichier texte). */
+class LibraryStore(private val file: File) {
+    var library by mutableStateOf(BrowsingLibrary.parse(try { if (file.exists()) file.readText() else null } catch (e: Throwable) { null }))
+        private set
+
+    private fun commit(f: (BrowsingLibrary) -> BrowsingLibrary) {
+        library = f(library)
+        try { file.writeText(library.serialize()) } catch (_: Throwable) {}
+    }
+
+    fun visit(url: String, title: String) = commit { it.visit(url, title, System.currentTimeMillis()) }
+    fun toggleFavorite(url: String, title: String) = commit { it.toggleFavorite(url, title, System.currentTimeMillis()) }
+    fun removeHistory(url: String) = commit { it.removeHistory(url) }
+    fun removeFavorite(url: String) = commit { it.removeFavorite(url) }
+    fun clearHistory() = commit { it.clearHistory() }
 }
 
 class SettingsStore(ctx: Context) {

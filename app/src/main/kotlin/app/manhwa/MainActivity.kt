@@ -63,7 +63,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun Root(graph: AppGraph) {
     var tab by remember { mutableIntStateOf(0) }
-    val titles = listOf("Navigateur", "Modèles", "Glossaire", "Réglages")
+    val titles = listOf("Navigateur", "Bibliothèque", "Modèles", "Glossaire", "Réglages")
     val c = graph.controller
 
     // Retour : historique du navigateur, sinon retour à l'onglet navigateur, sinon sortie.
@@ -105,8 +105,9 @@ private fun Root(graph: AppGraph) {
             if (tab != 0) {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     when (tab) {
-                        1 -> ModelsScreen(graph)
-                        2 -> GlossaryScreen(graph)
+                        1 -> LibraryScreen(graph) { url -> c.load(url); tab = 0 }
+                        2 -> ModelsScreen(graph)
+                        3 -> GlossaryScreen(graph)
                         else -> SettingsScreen(graph)
                     }
                 }

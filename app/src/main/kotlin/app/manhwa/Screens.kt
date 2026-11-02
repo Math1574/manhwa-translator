@@ -29,6 +29,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
@@ -71,6 +74,7 @@ import app.manhwa.core.QualityMode
 import app.manhwa.core.SourceLang
 import app.manhwa.core.TargetLang
 import app.manhwa.core.TranslationEngineChoice
+import app.manhwa.core.RelativeTime
 import app.manhwa.core.UrlInput
 import java.util.Locale
 
@@ -111,10 +115,14 @@ fun BrowserScreen(graph: AppGraph) {
     Column(Modifier.fillMaxSize()) {
         if (!c.fullscreen) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { c.back() }, enabled = c.canGoBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Retour") }
-                IconButton(onClick = { c.forward() }, enabled = c.canGoForward) { Icon(Icons.AutoMirrored.Filled.ArrowForward, "Suivant") }
-                IconButton(onClick = { if (c.loading) c.stopLoading() else c.reload() }) { Icon(Icons.Filled.Refresh, "Actualiser") }
-                IconButton(onClick = { c.goHome() }) { Icon(Icons.Filled.Home, "Accueil") }
+                val fav = graph.library.library.isFavorite(c.currentUrl)
+                IconButton(onClick = { c.back() }, enabled = c.canGoBack, modifier = Modifier.size(40.dp)) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Retour") }
+                IconButton(onClick = { c.forward() }, enabled = c.canGoForward, modifier = Modifier.size(40.dp)) { Icon(Icons.AutoMirrored.Filled.ArrowForward, "Suivant") }
+                IconButton(onClick = { if (c.loading) c.stopLoading() else c.reload() }, modifier = Modifier.size(40.dp)) { Icon(Icons.Filled.Refresh, "Actualiser") }
+                IconButton(onClick = { c.goHome() }, modifier = Modifier.size(40.dp)) { Icon(Icons.Filled.Home, "Accueil") }
+                IconButton(
+                    onClick = { graph.library.toggleFavorite(c.currentUrl, c.pageTitle) }, enabled = c.currentUrl.startsWith("http"), modifier = Modifier.size(40.dp),
+                ) { Icon(if (fav) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, if (fav) "Retirer des favoris" else "Ajouter aux favoris", tint = if (fav) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }
                 TextButton(onClick = {
                     val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     cm.setPrimaryClip(ClipData.newPlainText("adresse", c.currentUrl))
@@ -486,5 +494,56 @@ fun SettingsScreen(graph: AppGraph) {
         }
         Text("Modèles Gemma stockés : ${String.format(Locale.FRANCE, "%.2f", graph.llm.usedBytes() / 1_000_000_000.0)} Go")
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+
+/** Bibliothèque : reprise de lecture par œuvre, favoris et historique. */
+@Composable
+fun LibraryScreen(graph: AppGraph, onOpen: (String) -> Unit) {
+    val lib = graph.library.library
+    val now = System.currentTimeMillis()
+    val series = remember(lib) { lib.series() }
+    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        item { Spacer(Modifier.height(12.dp)); Text("Bibliothèque", style = MaterialTheme.typography.headlineSmall) }
+        item { Text("Reprendre la lecture", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary) }
+        if (series.isEmpty()) item { Text("Les œuvres que vous lisez apparaîtront ici, avec le dernier chapitre ouvert.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
+        items(series.take(20), key = { it.key }) { e ->
+            Card(Modifier.fillMaxWidth().clickable { onOpen(e.lastUrl) }) {
+                Column(Modifier.padding(12.dp)) {
+                    Text(e.title, style = MaterialTheme.typography.titleSmall)
+                    Text(listOfNotNull(e.chapter, RelativeTime.fr(now, e.lastVisited), "${e.pages} page(s) ouverte(s)").joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+        item { Spacer(Modifier.height(8.dp)); Text("Favoris", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary) }
+        if (lib.favorites.isEmpty()) item { Text("Touchez le cœur dans le navigateur pour ajouter la page ouverte.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
+        items(lib.favorites, key = { "f" + it.url }) { f ->
+            Row(Modifier.fillMaxWidth().clickable { onOpen(f.url) }, verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f).padding(vertical = 4.dp)) {
+                    Text(f.title, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+                    Text(f.url, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                }
+                IconButton(onClick = { graph.library.removeFavorite(f.url) }) { Icon(Icons.Filled.Delete, "Retirer") }
+            }
+        }
+        item {
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Historique", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+                TextButton(onClick = { graph.library.clearHistory() }, enabled = lib.history.isNotEmpty()) { Text("Effacer") }
+            }
+        }
+        if (lib.history.isEmpty()) item { Text("Aucune page ouverte pour l'instant.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
+        items(lib.history.take(60), key = { "h" + it.url }) { h ->
+            Row(Modifier.fillMaxWidth().clickable { onOpen(h.url) }, verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f).padding(vertical = 4.dp)) {
+                    Text(h.title.ifEmpty { h.url }, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+                    Text(RelativeTime.fr(now, h.visitedAt) + " · " + h.url.substringAfter("://").substringBefore('/'), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                }
+                IconButton(onClick = { graph.library.removeHistory(h.url) }) { Icon(Icons.Filled.Delete, "Supprimer") }
+            }
+        }
+        item { Spacer(Modifier.height(16.dp)) }
     }
 }

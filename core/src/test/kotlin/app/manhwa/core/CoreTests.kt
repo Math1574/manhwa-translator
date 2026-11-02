@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests()
+    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -822,5 +822,40 @@ fun adBlockTests() {
         T.ok(!ab.isSuspiciousRedirect("evil.xyz", "manga-site.com", hasGesture = true, isRedirect = false), "clic")
         T.ok(!ab.isSuspiciousRedirect("cdn.manga-site.com", "www.manga-site.com", hasGesture = false, isRedirect = true), "même site")
         T.ok(!ab.isSuspiciousRedirect("bbc.co.uk", "news.bbc.co.uk", hasGesture = false, isRedirect = true), "suffixe co.uk")
+    }
+}
+
+// ---------- bibliothèque : historique, favoris, reprise de lecture ----------
+fun libraryTests() {
+    val a = "https://asurascans.com/comics/the-heavenly-demon-wants-a-quiet-life-11fe7da3/chapter/7"
+    val b = "https://asurascans.com/comics/the-heavenly-demon-wants-a-quiet-life-11fe7da3/chapter/8#comments"
+    T.test("bibliothèque : historique dédoublonné, récent en tête, fragment ignoré, pages non web écartées") {
+        var l = BrowsingLibrary().visit(a, "Chapter 7", 1000).visit("about:blank", "x", 1500).visit(b, "Chapter 8", 2000).visit(a, "", 3000)
+        T.eq(listOf(a, "https://asurascans.com/comics/the-heavenly-demon-wants-a-quiet-life-11fe7da3/chapter/8"), l.history.map { it.url })
+        T.eq("Chapter 7", l.history.first().title); T.eq(2, l.history.first().visits)
+        l = BrowsingLibrary().let { x -> (1..320).fold(x) { acc, i -> acc.visit("https://s.example/p$i", "p$i", i.toLong()) } }
+        T.eq(300, l.history.size); T.eq("https://s.example/p320", l.history.first().url)
+    }
+    T.test("bibliothèque : favoris ajoutés et retirés") {
+        var l = BrowsingLibrary().visit(a, "Chapter 7", 1)
+        T.ok(!l.isFavorite(a), "pas favori")
+        l = l.toggleFavorite(a, "", 2); T.ok(l.isFavorite(a) && l.favorites.single().title == "Chapter 7", "favori avec titre repris de l'historique")
+        l = l.toggleFavorite(a, "", 3); T.ok(!l.isFavorite(a), "retiré")
+    }
+    T.test("bibliothèque : œuvres regroupées avec dernier chapitre lu et libellé de chapitre") {
+        val l = BrowsingLibrary().visit(a, "Ch 7", 1000).visit(b, "Ch 8", 2000).visit("https://other.example/series/solo-leveling-9f8e7d6c/chapter-3", "Solo 3", 1500)
+        val s = l.series()
+        T.eq(2, s.size); T.eq("Chapitre 8", s[0].chapter); T.eq("The Heavenly Demon Wants A Quiet Life", s[0].title); T.eq(2, s[0].pages)
+        T.eq("Chapitre 3", s[1].chapter)
+    }
+    T.test("bibliothèque : sauvegarde et relecture, lignes abîmées ignorées") {
+        val l = BrowsingLibrary().visit(a, "Titre\tavec tab\net ligne", 5).toggleFavorite(a, "Fav", 6)
+        val r = BrowsingLibrary.parse(l.serialize() + "H\tcassé\n")
+        T.eq(l, r)
+        T.eq(BrowsingLibrary(), BrowsingLibrary.parse(null))
+    }
+    T.test("temps relatif en français") {
+        T.eq("à l'instant", RelativeTime.fr(10_000, 5_000)); T.eq("il y a 5 min", RelativeTime.fr(400_000, 100_000))
+        T.eq("il y a 3 h", RelativeTime.fr(3 * 3600_000L + 5, 0)); T.eq("il y a 2 j", RelativeTime.fr(2 * 86400_000L + 5, 0)); T.eq("il y a 3 sem.", RelativeTime.fr(22 * 86400_000L, 0))
     }
 }

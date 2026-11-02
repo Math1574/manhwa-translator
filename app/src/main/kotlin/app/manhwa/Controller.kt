@@ -66,6 +66,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
     // État observé par l'interface
     var currentUrl by mutableStateOf("")
+    /** Titre de la page affichée (pour les favoris). */
+    val pageTitle: String get() = webView?.title ?: ""
     var loading by mutableStateOf(false)
     var progress by mutableIntStateOf(0)
     var pageError by mutableStateOf<String?>(null)
@@ -212,6 +214,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
             override fun onPageFinished(view: WebView, url: String) {
                 loading = false
+                if (url.startsWith("http")) graph.library.visit(url, view.title ?: "")
                 view.evaluateJavascript(PageScript.INJECT, null)
                 if (graph.settingsStore.settings.blockAds) view.evaluateJavascript("(function(){var s=document.createElement('style');s.textContent='ins.adsbygoogle,[id^=\"google_ads_iframe\"],iframe[src*=\"doubleclick.net\"],iframe[src*=\"googlesyndication.com\"]{display:none!important}';(document.head||document.documentElement).appendChild(s)})()", null)
                 if (graph.settingsStore.settings.autoTranslate && url.startsWith("http")) start(false)
@@ -240,13 +243,21 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
     fun load(url: String) { if (url.isNotEmpty()) { pageError = null; webView?.loadUrl(url) } }
     fun goHome() {
-        webView?.loadDataWithBaseURL(
-            null,
-            "<html><body style='background:#0E0F1A;color:#C9CCE8;font-family:sans-serif;padding:24px'><h2 style='color:#B388FF'>Manhwa Translator</h2>" +
-                "<p>Saisissez l'adresse d'un site de lecture dans la barre ci-dessus, ouvrez un chapitre, puis appuyez sur « Traduire ».</p>" +
-                "<p>Avant la première traduction, téléchargez les modèles de langue dans l'onglet « Modèles ».</p></body></html>",
-            "text/html", "utf-8", null,
-        )
+        val lib = graph.library.library
+        fun esc(t: String) = android.text.Html.escapeHtml(t)
+        val sb = StringBuilder("<html><body style='background:#0E0F1A;color:#C9CCE8;font-family:sans-serif;padding:24px'><h2 style='color:#B388FF'>Manhwa Translator</h2>")
+        val series = lib.series().take(5)
+        if (series.isNotEmpty()) {
+            sb.append("<h3 style='color:#B388FF'>Reprendre la lecture</h3>")
+            for (e in series) sb.append("<p><a style='color:#8AB4FF' href='${esc(e.lastUrl)}'>${esc(e.title)}</a>${e.chapter?.let { " — $it" } ?: ""}</p>")
+        }
+        if (lib.favorites.isNotEmpty()) {
+            sb.append("<h3 style='color:#B388FF'>Favoris</h3>")
+            for (f in lib.favorites.take(8)) sb.append("<p><a style='color:#8AB4FF' href='${esc(f.url)}'>${esc(f.title)}</a></p>")
+        }
+        sb.append("<p>Saisissez l'adresse d'un site de lecture dans la barre ci-dessus, ouvrez un chapitre, puis appuyez sur « Traduire ».</p>")
+        sb.append("<p>Avant la première traduction, téléchargez les modèles de langue dans l'onglet « Modèles ». L'historique et les favoris sont dans l'onglet « Bibliothèque ».</p></body></html>")
+        webView?.loadDataWithBaseURL(null, sb.toString(), "text/html", "utf-8", null)
         currentUrl = ""; pageError = null; resetSession()
     }
     fun back() { webView?.goBack() }
