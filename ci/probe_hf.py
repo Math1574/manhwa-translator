@@ -56,15 +56,19 @@ for repo, path, n in docs:
 open(sys.argv[1], "a", encoding="utf8").write("\n".join(more))
 
 # ---- téléchargement des fichiers utiles (< 95 Mo) de quelques dépôts, pour les tester en local ----
-import os
+import os, re
 os.makedirs("/tmp/models", exist_ok=True)
-for repo in ("PaddlePaddle/PP-OCRv5_mobile_rec_onnx", "PaddlePaddle/PP-OCRv5_mobile_det_onnx", "PaddlePaddle/korean_PP-OCRv5_mobile_rec_onnx", "PaddlePaddle/en_PP-OCRv5_mobile_rec_onnx"):
+JOBS = [
+    ("onnx-community/manga-ocr-base-ONNX", r"(config|generation_config|preprocessor_config)\.json$|onnx/(encoder|decoder)_model_(int8|uint8|quantized)\.onnx$"),
+    ("kha-white/manga-ocr-base", r"(vocab\.txt|config\.json|special_tokens_map\.json|tokenizer_config\.json|preprocessor_config\.json)$"),
+]
+for repo, pattern in JOBS:
     try:
         tree = json.loads(get(f"https://huggingface.co/api/models/{repo}/tree/main?recursive=1"))
         for t in tree:
             if t.get("type") != "file": continue
             p = t["path"]; size = t.get("size") or 0
-            if not p.endswith((".onnx", ".yml", ".yaml", ".json", ".txt")) or size > 95_000_000: continue
+            if not re.search(pattern, p) or size > 95_000_000: continue
             data = get(f"https://huggingface.co/{repo}/resolve/main/{p}")
             open("/tmp/models/" + repo.replace("/", "__") + "__" + p.replace("/", "__"), "wb").write(data)
     except Exception as e:
