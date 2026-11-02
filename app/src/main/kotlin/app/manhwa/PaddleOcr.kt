@@ -24,6 +24,11 @@ import kotlin.math.max
 import kotlin.math.min
 
 /** Modèles PaddleOCR (détection + lecture par écriture) chargés à la demande depuis les assets de l'application. */
+/** Dernières statistiques de lecture (pour le rapport des tests) : colonnes verticales vues, lues par manga-ocr, première erreur. */
+object OcrDebug {
+    @Volatile var note: String = ""
+}
+
 class PaddleModels(private val ctx: Context) {
     class Rec(val session: OrtSession, val charset: List<String>, val imgH: Int)
 
@@ -138,6 +143,7 @@ class PaddleOcr(private val models: PaddleModels) {
         val rec = models.recognizer(lang)
         val alt = models.altRecognizer(lang)
         val lines = ArrayList<OcrLine>()
+        var tall = 0; var mangaRead = 0; var mangaErr = ""; var mangaAvail = "-"
         for (b in boxes) {
             val x0 = (b.x0 / dw * tw).toInt().coerceIn(0, tw - 1); val y0 = (b.y0 / dh * th).toInt().coerceIn(0, th - 1)
             val x1 = (b.x1 / dw * tw).toInt().coerceIn(x0 + 1, tw); val y1 = (b.y1 / dh * th).toInt().coerceIn(y0 + 1, th)
@@ -146,12 +152,15 @@ class PaddleOcr(private val models: PaddleModels) {
             if (ch > 2.2f * cw) {
                 // colonne verticale : la lecture horizontale ne convient pas. Japonais : manga-ocr ; autres écritures : laissée à ML Kit
                 val mr = if (lang == "ja") models.manga else null
+                tall++
+                if (mr != null) mangaAvail = mr.available.toString()
                 if (mr != null && mr.available) {
                     val bx0 = max(0, x0 - 4); val by0 = max(0, y0 - 4); val bx1 = min(tw, x1 + 4); val by1 = min(th, y1 + 4)
                     val col = Bitmap.createBitmap(tile, bx0, by0, bx1 - bx0, by1 - by0)
-                    val res = try { mr.read(col) } catch (e: Throwable) { Log.w("MT", "manga-ocr : ${e.message}"); null } finally { col.recycle() }
-                    if (res != null && res.first.isNotEmpty() && res.second >= 0.5f)
-                        lines.add(OcrLine(res.first, RectF(x0.toFloat() * sample, y0.toFloat() * sample + yOffset, x1.toFloat() * sample, y1.toFloat() * sample + yOffset), res.second, vertical = true))
+                    val res = try { mr.read(col) } catch (e: Throwable) { Log.w("MT", "manga-ocr : ${e.message}"); if (mangaErr.isEmpty()) mangaErr = (e.javaClass.simpleName + ": " + (e.message ?: "")).take(160); null } finally { col.recycle() }
+                    if (res != null && res.first.isNotEmpty() && res.second >= 0.5f) { mangaRead++
+                        lines.add(OcrLine(res.first, RectF(x0.toFloat() * sample, y0.toFloat() * sample + yOffset, x1.toFloat() * sample, y1.toFloat() * sample + yOffset), res.second, vertical = true)) }
+                    else if (res != null) mangaErr = mangaErr.ifEmpty { "rejeté: '${res.first.take(12)}' conf=${"%.2f".format(res.second)}" }
                 }
                 continue
             }
@@ -171,6 +180,7 @@ class PaddleOcr(private val models: PaddleModels) {
                 ),
             )
         }
+        OcrDebug.note = "langue=$lang boîtes=${boxes.size} colonnes=$tall manga(dispo=$mangaAvail, lues=$mangaRead) ${mangaErr}"
         return lines
     }
 

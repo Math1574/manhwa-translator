@@ -67,6 +67,7 @@ for path in sorted(glob.glob(f"{OUT}/reports/*.json")):
         P(f"- blocage des publicités : {blocked} requêtes ou redirections bloquées · adresse finale {final}")
         if blocked < 3: problems.append(f"{name}: blocage insuffisant ({blocked})")
         if "evil-redirect" in final: problems.append(f"{name}: la redirection automatique a abouti")
+    if r.get("ocrNote"): P(f"- lecture Paddle : {r['ocrNote']}")
     P(f"- OCR : {tot_ocr} lignes ({kept} utilisées, {rej} écartées) · bulles affichées {nblocks} · hors image {outside} · chevauchements {overlap} · texte < 10px {tiny}")
     if outside or overlap: problems.append(f"{name}: mise en page (hors image {outside}, chevauchements {overlap})")
 
