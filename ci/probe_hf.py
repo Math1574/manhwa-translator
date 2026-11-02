@@ -44,9 +44,7 @@ for repo, path, n in docs:
 open(sys.argv[1], "a", encoding="utf8").write("\n".join(more))
 os.makedirs("/tmp/models", exist_ok=True)
 JOBS = [
-    ("ogkalu/comic-text-and-bubble-detector", r"(README\.md|config\.json|preprocessor_config\.json|.*\.onnx|.*\.json)$"),
-    ("PaddlePaddle/PP-OCRv6_small_det_onnx", r"(inference\.onnx|inference\.yml)$"),
-    ("PaddlePaddle/PP-OCRv6_tiny_det_onnx", r"(inference\.onnx|inference\.yml)$"),
+    ("onnx-community/manga-ocr-base-ONNX", r"onnx/(encoder|decoder)_model_(uint8|quantized)\.onnx$"),
 ]
 for repo, pattern in JOBS:
     try:
