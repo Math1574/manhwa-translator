@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests(); openBubbleTests()
+    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests(); openBubbleTests(); barrierShapeTests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -1188,5 +1188,48 @@ fun openBubbleTests() {
         // un point sur la page blanche hors de l'ellipse (coin bas-droit de la boîte) ne doit pas faire partie de la forme
         T.ok(!(shape!!.contains(560f, 440f)), "le coin bas-droit de la boîte est hors forme")
         T.ok(shape.contains(350f, 300f), "le centre du texte est dans la forme")
+    }
+}
+
+fun barrierShapeTests() {
+    val W = 700; val H = 560; val white = 0xFFFFFFFF.toInt(); val black = 0xFF000000.toInt()
+    fun page(gap: ClosedRange<Double>?): ArraySrc {
+        val px = IntArray(W * H) { white }
+        for (y in 0 until H) for (x in 0 until W) {
+            val ex = (x - 350).toDouble() / 230; val ey = (y - 280).toDouble() / 170; val d = Math.sqrt(ex * ex + ey * ey)
+            val ang = Math.toDegrees(Math.atan2((y - 280).toDouble(), (x - 350).toDouble())).let { if (it < 0) it + 360 else it }
+            if (d in 0.985..1.015 && (gap == null || ang !in gap)) px[y * W + x] = black
+        }
+        for (y in 300..330) for (x in 280..420) if ((x + y) % 7 < 3) px[y * W + x] = black   // texte d'origine, au centre
+        return ArraySrc(W, H, px)
+    }
+    T.test("forme sur les pixels : s'arrête au contour de chaque côté, hors le texte propre") {
+        val src = page(null)
+        val own = listOf(RectF(275f, 296f, 425f, 334f))
+        val sh = BarrierShape.build(src, 1f, white, null, 0, 0, 0, 0, own, 350f, 140f, 430f, 60f, 640f, W.toFloat(), H.toFloat())!!
+        // rangée y=300 : l'ellipse (centre 350,280 ; rayons 230×170) a un demi-chord de 230·√(1-(20/170)²) ≈ 228
+        val span = sh.span(299f, 301f)!!
+        T.ok(span[0] in 118f..128f && span[1] in 572f..582f, "bornes ${span[0]} .. ${span[1]} attendues ≈ 122 .. 578")
+        // plus près du bas, la forme se resserre comme l'ellipse (rangée y=400 : demi-chord ≈ 230·√(1-(120/170)²) ≈ 163)
+        val low = sh.span(399f, 401f)!!
+        T.ok(low[0] in 183f..197f && low[1] in 503f..517f, "rangée basse ${low[0]} .. ${low[1]}")
+    }
+    T.test("forme sur les pixels : un contour ouvert laisse la rangée libre jusqu'à la limite, l'intersection avec l'ellipse la ramène dans la bulle") {
+        val src = page(0.0..100.0)       // quart bas-droit sans contour
+        val own = listOf(RectF(275f, 296f, 425f, 334f))
+        val sh = BarrierShape.build(src, 1f, white, null, 0, 0, 0, 0, own, 350f, 140f, 430f, 60f, 640f, W.toFloat(), H.toFloat())!!
+        val open = sh.span(409f, 411f)!!
+        T.ok(open[1] > 600f, "ouvert à droite : ${open[1]}")
+        val ellipse = RowShape.ellipse(120f, 110f, 580f, 450f)
+        val both = sh.intersect(ellipse)!!
+        val bounded = both.span(409f, 411f)!!
+        T.ok(bounded[1] < 530f, "borné par l'ellipse : ${bounded[1]}")
+        T.ok(both.span(299f, 301f) != null, "rangée du texte conservée")
+    }
+    T.test("intersection de formes : étendue commune et rangées vides") {
+        val a = RowShape.rect(0f, 0f, 100f, 50f); val b = RowShape.rect(40f, 20f, 200f, 90f)
+        val c = a.intersect(b)!!
+        T.ok(c.top == 20f && c.bottom == 50f && c.span(25f, 45f)!![0] == 40f && c.span(25f, 45f)!![1] == 100f, "rectangles")
+        T.eq(null, RowShape.rect(0f, 0f, 10f, 10f).intersect(RowShape.rect(50f, 50f, 60f, 60f)))
     }
 }

@@ -3,7 +3,7 @@
 1. page noire, texte blanc à lueur rouge ;
 2. fond à trame de points et texte blanc contouré incliné, avec une bulle à police manuscrite ;
 3. bulle à grand texte et petit texte libre incliné qui chevauche le contour de la bulle."""
-import math, os, sys
+import math, os, random, sys
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
 OUT = sys.argv[1] if len(sys.argv) > 1 else "/tmp/site/synth"
@@ -94,7 +94,29 @@ def page3():
     return img, [{"kind": "bubble", "text": "SHUT UP, THAT SOUNDS GROSS.", "box": [200, 120, 500, 340]}, {"kind": "free", "text": "WANT ME TO PUT A RESTRICTION ON YOUR MOUTH?", "box": [400, 350, 720, 480]}]
 
 
+def page4():
+    """Bulle ronde dont le contour est ouvert en bas à droite (il se fond dans la page) : la traduction, plus longue, doit rester dans l'ellipse."""
+    random.seed(3)
+    img = Image.new("RGB", (W, 640), "white"); d = ImageDraw.Draw(img)
+    for y in range(0, 360):
+        t = y / 360; d.line((0, y, W, y), fill=(int(120 + 60 * t), int(130 + 50 * t), int(120 + 40 * t)))
+    for _ in range(60):
+        x = random.randint(0, W); y = random.randint(0, 330); r = random.randint(8, 40); c = random.randint(40, 150); d.ellipse((x, y, x + r, y + r), fill=(c, c + 10, c))
+    d.line((60, 360, W, 360), fill=(0, 0, 0), width=3)
+    cx, cy, rx, ry = 430, 330, 285, 225
+    d.ellipse((cx - rx, cy - ry, cx + rx, cy + ry), fill="white")
+    for a10 in range(0, 3600):
+        a = a10 / 10.0
+        if 0 <= a <= 100: continue
+        for t in (-1.5, 0, 1.5):
+            x = cx + (rx + t) * math.cos(math.radians(a)); y = cy + (ry + t) * math.sin(math.radians(a)); d.ellipse((x - 1.2, y - 1.2, x + 1.2, y + 1.2), fill="black")
+    f = F(CN, 44)
+    for i, l in enumerate(["ALL I DID WAS", "WATCH OVER THE", "STORAGE. HAHA."]):
+        w = d.textlength(l, font=f); d.text((cx - w / 2 + 20, cy - 5 + i * 62), l, font=f, fill="black")
+    return img, [{"kind": "bubble", "text": "ALL I DID WAS WATCH OVER THE STORAGE. HAHA.", "box": [290, 325, 640, 500]}]
+
+
 import json
-for i, fn in enumerate((page0, page1, page2, page3)):
+for i, fn in enumerate((page0, page1, page2, page3, page4)):
     im, gt = fn(); im.save(f"{OUT}/atypical_{i}.png"); json.dump(gt, open(f"{OUT}/atypical_{i}.json", "w"))
-print("pages atypiques générées : 4")
+print("pages atypiques générées : 5")

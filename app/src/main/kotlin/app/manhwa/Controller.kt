@@ -375,9 +375,32 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             }
             if (json != null) sendOverlay(c.id, json)
             overlayForLog = json
+            if (json != null && out is PageOutcome.Done) journalLayout(c, pageUrl, out, json)
         }
         if (testing) logForTest(c, out, debug, overlayForLog, System.currentTimeMillis() - t0)
         return out
+    }
+
+    /**
+     * Géométrie du rendu de chaque bloc (texte d'origine, zone détectée, bulle, mode d'effacement, taille, lignes) : permet de rejouer à l'identique un défaut
+     * d'affichage signalé avec le journal, sans l'image.
+     */
+    private fun journalLayout(c: Candidate, pageUrl: String, out: PageOutcome.Done, json: JSONObject) {
+        try {
+            val rep = json.optJSONArray("blocks") ?: return
+            val blocks = JSONArray()
+            for (i in 0 until rep.length()) {
+                val r = rep.getJSONObject(i)
+                blocks.put(
+                    JSONObject().put("t", r.optString("t").replace('\n', ' ').take(40)).put("kind", r.optString("kind")).put("mode", r.optString("mode"))
+                        .put("fs", Math.round(r.optDouble("fs") * 10) / 10.0).put("lines", r.optInt("lines")).put("fits", r.optBoolean("fits")).put("shape", r.optBoolean("shape"))
+                        .put("bubbleOk", r.optBoolean("bubbleOk")).put("rectBubble", r.optBoolean("rectBubble"))
+                        .put("orig", r.opt("orig")).put("cont", r.opt("cont")).put("zone", r.opt("zoneBox"))
+                        .put("out", JSONArray(listOf("x", "y", "w", "h").map { k -> Math.round(r.optDouble(k)) })),
+                )
+            }
+            graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "layout").put("url", pageUrl).put("img", c.id).put("w", out.result.imageWidth).put("h", out.result.imageHeight).put("blocks", blocks))
+        } catch (_: Throwable) {}
     }
 
     /** Ajoute la page au journal de traduction : texte lu, traduction et problèmes détectés par les contrôles automatiques. */

@@ -28,6 +28,22 @@ class RowShape(val top: Float, val rowH: Float, val left: FloatArray, val right:
         return if (l < r) floatArrayOf(l, r) else null
     }
 
+    /** Intersection de deux formes (mêmes coordonnées image) : rangées d'un pixel sur leur étendue verticale commune ; null s'il n'en reste aucune. */
+    fun intersect(o: RowShape): RowShape? {
+        val t = max(top, o.top); val b = min(bottom, o.bottom)
+        val n = (b - t).toInt()
+        if (n < 4) return null
+        val l = FloatArray(n); val r = FloatArray(n); var valid = 0
+        for (i in 0 until n) {
+            val y = t + i + 0.5f
+            val a = ((y - top) / rowH).toInt().coerceIn(0, rows - 1); val c = ((y - o.top) / o.rowH).toInt().coerceIn(0, o.rows - 1)
+            if (left[a] > right[a] || o.left[c] > o.right[c]) { l[i] = 1f; r[i] = 0f; continue }
+            val ll = max(left[a], o.left[c]); val rr = min(right[a], o.right[c])
+            if (ll < rr) { l[i] = ll; r[i] = rr; valid++ } else { l[i] = 1f; r[i] = 0f }
+        }
+        return if (valid == 0) null else RowShape(t, 1f, l, r)
+    }
+
     companion object {
         /**
          * Rectangle dont on retire l'intérieur de bulles voisines (ellipses inscrites dans [avoid], agrandies de [margin]) : un texte hors bulle posé

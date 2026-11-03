@@ -53,8 +53,8 @@ object Erasure {
     }
 
     /** @param exclude lignes de texte des AUTRES blocs (pixels de l'image) : un bloc n'efface jamais ce qui appartient à un voisin. */
-    fun plan(src: PixelSource, s: Float, lineBoxes: List<RectF>, lineH: Float, imageW: Float, imageH: Float, exclude: List<RectF> = emptyList(), container: RectF? = null, protect: List<RectF> = emptyList(), free: Boolean = false, outlines: List<RectF> = emptyList(), extra: List<RectF> = emptyList()): Plan? {
-        val p = planUnclipped(src, s, lineBoxes, lineH, imageW, imageH, container = container, protect = protect, free = free, outlines = outlines, extra = extra) ?: return null
+    fun plan(src: PixelSource, s: Float, lineBoxes: List<RectF>, lineH: Float, imageW: Float, imageH: Float, exclude: List<RectF> = emptyList(), container: RectF? = null, protect: List<RectF> = emptyList(), free: Boolean = false, outlines: List<RectF> = emptyList(), extra: List<RectF> = emptyList(), protectRound: List<RectF> = emptyList()): Plan? {
+        val p = planUnclipped(src, s, lineBoxes, lineH, imageW, imageH, container = container, protect = protect, free = free, outlines = outlines, extra = extra, protectRound = protectRound) ?: return null
         // contour d'une bulle voisine : les traits qui le forment ne sont jamais remplacés, quelle que soit la méthode d'effacement employée
         // seulement pour un texte sombre : un trait noir de texte qui chevauche un contour noir y est invisible. Un texte clair cerné de noir laisserait au contraire
         // des fragments de cerne visibles : son effacement reste complet.
@@ -63,6 +63,19 @@ object Erasure {
             val px = src.pixels(p.x0, p.y0, p.w, p.h)
             val keep = outlineKeep(px, p.w, p.h, p.mask, p.x0, p.y0, s, outlines)
             for (i in keep.indices) if (keep[i]) { p.mask[i] = false; p.layer[i] = 0 }
+        }
+        // intérieur et contour d'une bulle voisine ronde : jamais effacés, sauf sous le texte propre de ce bloc (texte posé sur la bulle)
+        if (protectRound.isNotEmpty()) {
+            val own = TextErase.rectMask(p.w, p.h, lineBoxes.map { l -> intArrayOf((l.left * s).toInt() - p.x0, (l.top * s).toInt() - p.y0, (l.right * s).toInt() - p.x0, (l.bottom * s).toInt() - p.y0) }, 3)
+            for (pe in protectRound) {
+                val ecx = pe.centerX * s - p.x0; val ecy = pe.centerY * s - p.y0; val erx = pe.width / 2f * s * 1.1f; val ery = pe.height / 2f * s * 1.1f
+                for (y in 0 until p.h) for (x in 0 until p.w) {
+                    val i = y * p.w + x
+                    if (!(p.layer[i] != 0 || p.mask[i]) || own[i]) continue
+                    val ex = (x + 0.5f - ecx) / erx; val ey = (y + 0.5f - ecy) / ery
+                    if (ex * ex + ey * ey <= 1f) { p.layer[i] = 0; p.mask[i] = false }
+                }
+            }
         }
         if (exclude.isEmpty()) return p
         var changed = false
@@ -80,7 +93,7 @@ object Erasure {
      * (lueur comprise : la zone grandit jusqu'à sortir du halo) et on la remplit entièrement de cette couleur. Plus de fragments de dégradés de couleur,
      * de contours ni de lueurs fantômes. Null si aucun pourtour n'est uni (dessin, trame) : le traitement des lettres seules prend le relais.
      */
-    private fun planRing(src: PixelSource, s: Float, lineBoxes0: List<RectF>, lineH: Float, imageW: Float, imageH: Float, protect: List<RectF>, outlines: List<RectF> = emptyList(), extra: List<RectF> = emptyList()): Plan? {
+    private fun planRing(src: PixelSource, s: Float, lineBoxes0: List<RectF>, lineH: Float, imageW: Float, imageH: Float, protect: List<RectF>, outlines: List<RectF> = emptyList(), extra: List<RectF> = emptyList(), protectRound: List<RectF> = emptyList()): Plan? {
         val lineBoxes = lineBoxes0 + extra
         val union = lineBoxes.reduce { a, c -> a.union(c) }
         val lhPx = max(8f, lineH * s)
@@ -98,6 +111,17 @@ object Erasure {
             val ax0 = ((pr.left * s).toInt() - x0).coerceIn(0, w); val ax1 = ((pr.right * s).toInt() - x0).coerceIn(0, w)
             val ay0 = ((pr.top * s).toInt() - y0).coerceIn(0, h); val ay1 = ((pr.bottom * s).toInt() - y0).coerceIn(0, h)
             for (yy in ay0 until ay1) for (xx in ax0 until ax1) prot[yy * w + xx] = true
+        }
+        // bulles voisines rondes : leur intérieur et leur contour sont protégés (ni échantillonnés pour le fond, ni effacés), sauf sous le texte propre du bloc
+        if (protectRound.isNotEmpty()) {
+            val own = TextErase.rectMask(w, h, lineBoxes0.map { l -> intArrayOf((l.left * s).toInt() - x0, (l.top * s).toInt() - y0, (l.right * s).toInt() - x0, (l.bottom * s).toInt() - y0) }, 3)
+            for (pe in protectRound) {
+                val ecx = pe.centerX * s - x0; val ecy = pe.centerY * s - y0; val erx = pe.width / 2f * s * 1.1f; val ery = pe.height / 2f * s * 1.1f
+                for (yy in 0 until h) for (xx in 0 until w) {
+                    val ex = (xx + 0.5f - ecx) / erx; val ey = (yy + 0.5f - ecy) / ery
+                    if (ex * ex + ey * ey <= 1f && !own[yy * w + xx]) prot[yy * w + xx] = true
+                }
+            }
         }
         var chosen = -1f; var bg = 0; var zone: BooleanArray? = null
         for (g in floatArrayOf(0.35f, 0.7f, 1.2f, 1.8f, 2.6f, 3.4f)) {
@@ -186,9 +210,9 @@ object Erasure {
         return keep
     }
 
-    private fun planUnclipped(src: PixelSource, s: Float, lineBoxes: List<RectF>, lineH: Float, imageW: Float, imageH: Float, padOverride: Float = 0f, container: RectF? = null, protect: List<RectF> = emptyList(), free: Boolean = false, outlines: List<RectF> = emptyList(), extra: List<RectF> = emptyList()): Plan? {
+    private fun planUnclipped(src: PixelSource, s: Float, lineBoxes: List<RectF>, lineH: Float, imageW: Float, imageH: Float, padOverride: Float = 0f, container: RectF? = null, protect: List<RectF> = emptyList(), free: Boolean = false, outlines: List<RectF> = emptyList(), extra: List<RectF> = emptyList(), protectRound: List<RectF> = emptyList()): Plan? {
         // texte hors bulle sur des abords unis (page blanche ou noire, aplat, lueur sur fond uni) : toute la zone est remplacée par la couleur des abords
-        if (free && padOverride == 0f) planRing(src, s, lineBoxes, lineH, imageW, imageH, protect, outlines, extra)?.let { return it }
+        if (free && padOverride == 0f) planRing(src, s, lineBoxes, lineH, imageW, imageH, protect, outlines, extra, protectRound)?.let { return it }
         // texte lu : sert à relever la forme de la bulle ; avec la zone détectée en plus : étendue de l'effacement
         val textUnion = lineBoxes.reduce { a, c -> a.union(c) }
         val union = (lineBoxes + extra).reduce { a, c -> a.union(c) }
@@ -267,7 +291,7 @@ object Erasure {
         // lettrage à lueur : on élargit le masque pour effacer aussi la lueur, de sorte que la reconstruction vienne des abords du halo
         val mask = TextErase.artMask(px, w, h, zoneArt, fillColor, max(2, (lh * (if (a.outlined) 0.14f else 0.07f)).toInt()))
         // texte sur dessin : région élargie pour trouver de la vraie texture à copier à côté du trou (second passage)
-        if (padOverride == 0f) planUnclipped(src, s, lineBoxes, lineH, imageW, imageH, max(40f, lineH * 1.6f), container, protect, free, outlines, extra)?.let { if (it.mode == Mode.ART) return it }
+        if (padOverride == 0f) planUnclipped(src, s, lineBoxes, lineH, imageW, imageH, max(40f, lineH * 1.6f), container, protect, free, outlines, extra, protectRound)?.let { if (it.mode == Mode.ART) return it }
         val diffused = TextErase.inpaint(px, w, h, mask)
         // trame de points ou motif répété autour du trou : on recopie le motif plutôt que de le lisser en un voile gris
         val fill = TextErase.periodicFill(px, w, h, mask, diffused) ?: TextErase.addGrain(TextErase.inpaintClone(px, w, h, mask, diffused), px, w, h, mask)

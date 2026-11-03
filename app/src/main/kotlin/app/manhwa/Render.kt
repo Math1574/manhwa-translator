@@ -9,6 +9,7 @@ import android.graphics.Paint
 import android.graphics.Typeface
 import android.util.Base64
 import app.manhwa.core.AppSettings
+import app.manhwa.core.BarrierShape
 import app.manhwa.core.BubbleVerifier
 import app.manhwa.core.LayoutArea
 import app.manhwa.core.Erasure
@@ -135,8 +136,9 @@ object PageRenderer {
         val obstacles: List<RectF> = emptyList(),   // emprises des textes voisins (le texte hors bulle ne doit pas les recouvrir)
         val neighborBubbles: List<RectF> = emptyList(),   // bulles voisines confirmées : un texte hors bulle ne doit pas recouvrir leur contour
         val hardObstacles: List<RectF> = emptyList(),     // texte déjà placé d'autres blocs : toujours évité
+        val bubbleRect: Boolean = false,                  // la bulle confirmée est un cartouche rectangulaire (sinon : bulle ronde, bornée par son ellipse)
     ) {
-        fun withHard(h: List<RectF>) = Prep(block, plan, style, text, bubble, obstacles, neighborBubbles, h)
+        fun withHard(h: List<RectF>) = Prep(block, plan, style, text, bubble, obstacles, neighborBubbles, h, bubbleRect)
     }
 
     fun render(fonts: Typefaces, imageBytes: ByteArray, result: PageResult, settings: AppSettings, debug: DebugInfo?): JSONObject {
@@ -156,14 +158,17 @@ object PageRenderer {
                 val u = b.lineBoxes.ifEmpty { listOf(b.box) }.reduce { x, y -> x.union(y) }
                 verified[b.id] = if (src == null) bb else try { if (BubbleVerifier.verify(src, s, bb, u, iw, ih)) bb else null } catch (e: Throwable) { null }
             }
+            // cartouche rectangulaire ou bulle ronde : décide si la forme est bornée par l'ellipse de la bulle et comment sont protégées les bulles voisines
+            val rectCache = HashMap<RectF, Boolean>()
+            val isRect: (RectF) -> Boolean = { bb -> rectCache.getOrPut(bb) { if (src == null) false else try { BubbleVerifier.isRectangular(src, s, bb, iw, ih) } catch (e: Throwable) { false } } }
             // 1) préparation (effacement) et mise en page de chaque bloc
             val preps = ArrayList<Prep>(); val laids = ArrayList<Laid?>()
             for ((bi, b) in blocks.withIndex()) {
                 // lignes des autres blocs : ce bloc ne doit pas les effacer
                 val others = blocks.withIndex().filter { it.index != bi }.flatMap { it.value.lineBoxes.ifEmpty { listOf(it.value.box) } }
-                val prep = prepare(b, src, s, iw, ih, medianLine, settings.target.code, others, blocks, verified)
+                val prep = prepare(b, src, s, iw, ih, medianLine, settings.target.code, others, blocks, verified, isRect)
                 preps.add(prep)
-                laids.add(try { layoutBlock(fonts, s, prep, iw, ih, settings.textScale) } catch (e: Throwable) { null })
+                laids.add(try { layoutBlock(fonts, s, prep, iw, ih, settings.textScale, src) } catch (e: Throwable) { null })
             }
             // 2) collisions : un texte hors bulle (forme libre) dont le texte placé recouvre celui d'un autre bloc est replacé en évitant le texte réellement placé
             //    des autres (leur traduction est plus longue que l'original, que chaque bloc évitait seul)
@@ -176,7 +181,7 @@ object PageRenderer {
                     val mine = li.placed(2f)
                     val others = preps.indices.filter { it != i }.mapNotNull { j -> laids[j]?.placed(4f) }
                     if (others.none { o -> (mine.intersection(o)?.area ?: 0f) > 0.04f * mine.area }) continue
-                    val relaid = try { layoutBlock(fonts, s, pi.withHard(others), iw, ih, settings.textScale) } catch (e: Throwable) { null } ?: continue
+                    val relaid = try { layoutBlock(fonts, s, pi.withHard(others), iw, ih, settings.textScale, src) } catch (e: Throwable) { null } ?: continue
                     laids[i] = relaid; changed = true
                 }
                 if (!changed) break
@@ -184,7 +189,8 @@ object PageRenderer {
             // 3) dessin
             for (i in preps.indices) {
                 val laid = laids[i] ?: continue
-                val rendered = try { paintBlock(s, preps[i], laid, iw, ih) } catch (e: Throwable) { null } ?: continue
+                val othersPlaced = laids.indices.filter { it != i }.flatMap { j -> laids[j]?.lineRects(3f) ?: emptyList() }
+                val rendered = try { paintBlock(s, preps[i], laid, iw, ih, othersPlaced) } catch (e: Throwable) { null } ?: continue
                 patches.put(rendered.first); report.put(rendered.second)
             }
             val json = JSONObject().put("w", result.imageWidth).put("h", result.imageHeight).put("patches", patches).put("blocks", report)
@@ -204,16 +210,22 @@ object PageRenderer {
         return all.filter { it !== b }.mapNotNull { verified[it.id] }.filter { !it.contains(u.centerX, u.centerY) }
     }
 
-    private fun prepare(b: TranslatedBlock, src: PixelSource?, s: Float, iw: Float, ih: Float, medianLine: Float, target: String, others: List<RectF>, blocksAll: List<TranslatedBlock>, verified: Map<Int, RectF?>): Prep {
+    private fun prepare(b: TranslatedBlock, src: PixelSource?, s: Float, iw: Float, ih: Float, medianLine: Float, target: String, others: List<RectF>, blocksAll: List<TranslatedBlock>, verified: Map<Int, RectF?>, isRect: (RectF) -> Boolean): Prep {
         val lineBoxes = b.lineBoxes.ifEmpty { listOf(b.box) }
         val union = lineBoxes.reduce { a, c -> a.union(c) }
         val lineH = lineHeightOf(b)
         val bubble = verified[b.id]
         // zone de texte détectée : tout ce qu'elle contient est effacé, y compris une ligne que la lecture n'a pas trouvée (sinon il en reste un morceau)
         val zone = b.zone?.takeIf { z -> z.area <= 3.5f * union.area && z.area >= 0.8f * union.area && z.contains(union.centerX, union.centerY) }
-        // contours des bulles voisines : le texte libre qui les chevauche ne doit pas les entamer
-        val neighborBubbles = blocksAll.filter { it !== b }.mapNotNull { verified[it.id] }.filter { nb -> !nb.contains(union.centerX, union.centerY) || bubble == null }
-        val plan = if (src != null) try { Erasure.plan(src, s, lineBoxes, lineH, iw, ih, others, bubble, protectOf(b, blocksAll, verified), free = bubble == null, outlines = if (bubble == null) neighborBubbles else emptyList(), extra = listOfNotNull(zone)) } catch (e: Throwable) { null } else null
+        // bulles voisines (autres que celle qui contient ce bloc) : le texte libre qui les chevauche ne doit entamer ni leur intérieur ni leur contour.
+        // « Contient ce bloc » se mesure sur l'ellipse pour une bulle ronde : le coin de sa boîte n'est pas dans la bulle.
+        fun containsMe(nb: RectF): Boolean = if (isRect(nb)) nb.contains(union.centerX, union.centerY) else {
+            val ex = (union.centerX - nb.centerX) / (nb.width / 2f * 1.06f); val ey = (union.centerY - nb.centerY) / (nb.height / 2f * 1.06f); ex * ex + ey * ey <= 1f
+        }
+        val neighborAll = blocksAll.filter { it !== b }.mapNotNull { verified[it.id] }.distinct()
+        val neighborBubbles = neighborAll.filter { nb -> !containsMe(nb) || bubble == null }
+        val outside = neighborAll.filter { nb -> !containsMe(nb) }
+        val plan = if (src != null) try { Erasure.plan(src, s, lineBoxes, lineH, iw, ih, others, bubble, outside.filter { isRect(it) }, free = bubble == null, outlines = if (bubble == null) neighborBubbles else emptyList(), extra = listOfNotNull(zone), protectRound = outside.filter { !isRect(it) }) } catch (e: Throwable) { null } else null
         val flat = plan?.mode == Erasure.Mode.FLAT
         val rectangular = flat && plan?.shape == null && union.width > 2.2f * union.height && lineBoxes.size <= 2
         // hauteur de ligne pour le choix du style : mesurée sur les lettres (les boîtes d'une ligne inclinée sont gonflées)
@@ -222,7 +234,7 @@ object PageRenderer {
         val style = TextErase.chooseFont(b.source, lineHStyle, medianLine, flat, plan?.outlined ?: false, rectangular)
         val text = if (target == "fr") Typography.french(b.translated) else b.translated
         val obstacles = blocksAll.filter { it !== b }.map { o -> o.lineBoxes.ifEmpty { listOf(o.box) }.reduce { x, y -> x.union(y) } }
-        return Prep(b, plan, style, text, bubble, obstacles, neighborBubbles)
+        return Prep(b, plan, style, text, bubble, obstacles, neighborBubbles, emptyList(), bubble != null && isRect(bubble))
     }
 
     /** Hauteur médiane des lettres d'origine (pixels de l'image d'origine), 0 si inconnue. */
@@ -282,6 +294,9 @@ object PageRenderer {
 
     /** Résultat de la mise en page d'un bloc : police, pinceau de mesure, lignes placées. */
     private class Laid(val font: FontChoice, val paint: Paint, val fit: ShapeFit, val art: Boolean, val allCaps: Boolean, val em: Float, val stepRatio: Float) {
+        /** Rectangle de chaque ligne placée : sert à ne pas recouvrir le texte d'un autre bloc avec un aplat d'effacement. */
+        fun lineRects(margin: Float): List<RectF> = fit.lines.map { ln -> RectF(ln.cx - ln.width / 2f - margin, ln.top - margin, ln.cx + ln.width / 2f + margin, ln.top + fit.lineStep + margin) }
+
         /** Rectangle occupé par le texte placé (lignes) : sert à détecter les collisions entre blocs. */
         fun placed(margin: Float): RectF {
             var l = Float.MAX_VALUE; var t = Float.MAX_VALUE; var r = -Float.MAX_VALUE; var b = -Float.MAX_VALUE
@@ -290,7 +305,7 @@ object PageRenderer {
         }
     }
 
-    private fun layoutBlock(fonts: Typefaces, s: Float, p: Prep, iw: Float, ih: Float, userScale: Float): Laid? {
+    private fun layoutBlock(fonts: Typefaces, s: Float, p: Prep, iw: Float, ih: Float, userScale: Float, src: PixelSource? = null): Laid? {
         val b = p.block; val plan = p.plan
         val lineBoxes = b.lineBoxes.ifEmpty { listOf(b.box) }
         val union = lineBoxes.reduce { a, c -> a.union(c) }
@@ -320,9 +335,12 @@ object PageRenderer {
         // forme disponible : intérieur de la bulle relevé sur l'image ; sinon ellipse inscrite dans la bulle confirmée ; sinon (texte hors bulle) l'emprise
         // d'origine progressivement agrandie, sans sortir de l'image ni recouvrir un voisin, jusqu'à ce que la traduction y tienne à une taille proche de l'original
         val art = plan?.mode == Erasure.Mode.ART
+        // une bulle confirmée par son contour borne toujours le texte : ellipse inscrite (cartouche : rectangle), marge réduite si le texte d'origine la remplissait déjà.
+        // Sans cela, une bulle presque pleine retombait sur la mise en page d'un texte libre, qui n'a aucune limite de contour.
         val bubbleShape = p.bubble?.let { c ->
-            val inset = RectF(c.left + c.width * 0.06f, c.top + c.height * 0.06f, c.right - c.width * 0.06f, c.bottom - c.height * 0.06f)
-            if (inset.width >= union.width * 0.9f && inset.height >= union.height * 0.9f) RowShape.ellipse(inset.left, inset.top, inset.right, inset.bottom) else null
+            val k = if (c.width * 0.88f < union.width * 1.05f || c.height * 0.88f < union.height * 1.05f) 0.025f else 0.06f
+            val inset = RectF(c.left + c.width * k, c.top + c.height * k, c.right - c.width * k, c.bottom - c.height * k)
+            if (p.bubbleRect) RowShape.rect(inset.left, inset.top, inset.right, inset.bottom) else RowShape.ellipse(inset.left, inset.top, inset.right, inset.bottom)
         }
         val margin = max(4f, em * 0.14f)
         // majuscules accentuées : l'accent d'une ligne ne doit pas toucher la ligne du dessus
@@ -330,8 +348,28 @@ object PageRenderer {
         val step = if (accents) max(stepRatio, 1.14f) else stepRatio
         val centerY = (union.top + union.bottom) / 2f
         val fixedShape = plan?.shape ?: bubbleShape
+        // garde-fou indépendant de la détection : forme relevée sur les pixels (premier trait sombre de chaque côté du texte), pour les fonds unis. Le texte n'est jamais
+        // posé sur un contour ou un dessin, même si la bulle n'a pas été reconnue ou si le remplissage de la bulle a fui par un trou du contour.
+        val guard: RowShape? = if (src != null && plan != null && plan.mode == Erasure.Mode.FLAT) try {
+            val c = p.bubble
+            val own = lineBoxes + listOfNotNull(b.zone?.takeIf { z -> z.area <= 3.5f * union.area })
+            val padX = union.width * 1.0f + 20f; val padY = union.height * 1.0f + 20f
+            BarrierShape.build(
+                src, s, plan.bg, plan.layer, plan.x0, plan.y0, plan.w, plan.h, own, union.centerX,
+                if (c != null) min(c.top, union.top - 8f) else union.top - padY, if (c != null) max(c.bottom, union.bottom + 8f) else union.bottom + padY,
+                if (c != null) min(c.left, union.left - 8f) else union.left - padX, if (c != null) max(c.right, union.right + 8f) else union.right + padX, iw, ih,
+            )
+        } catch (e: Throwable) { null } else null
+        // bulle ronde confirmée : jamais au-delà de son ellipse (un contour ouvert laisse la forme relevée déborder sur la page)
+        val ellipseLimit: RowShape? = p.bubble?.takeIf { !p.bubbleRect }?.let { c -> RowShape.ellipse(c.left + c.width * 0.015f, c.top + c.height * 0.015f, c.right - c.width * 0.015f, c.bottom - c.height * 0.015f) }
         val fit: ShapeFit = if (fixedShape != null) {
-            ShapeLayout.fit(fixedShape, centerY, p.text, measurer, em, max(5f, em * 0.4f), step, margin)
+            val base = ShapeLayout.fit(fixedShape, centerY, p.text, measurer, em, max(5f, em * 0.4f), step, margin)
+            var constrained: RowShape? = fixedShape
+            if (ellipseLimit != null) constrained = constrained?.intersect(ellipseLimit)
+            if (guard != null) constrained = constrained?.intersect(guard)
+            val alt = if (constrained != null && constrained !== fixedShape) ShapeLayout.fit(constrained, centerY, p.text, measurer, em, max(5f, em * 0.4f), step, margin) else null
+            // on garde la mise en page contrainte si elle tient (ou si l'autre ne tenait pas) sans rétrécir le texte de plus de moitié
+            if (alt != null && alt.lines.isNotEmpty() && (alt.fits || !base.fits) && alt.size >= 0.55f * base.size) alt else base
         } else {
             var best: ShapeFit? = null
             for (g in floatArrayOf(if (art) 0.12f else 0.06f, 0.3f, 0.55f, 0.9f)) {
@@ -345,7 +383,8 @@ object PageRenderer {
                     shapes.add(RowShape.rectAvoiding(area.left, area.top, area.right, area.bottom, near, gap))
                     for (nb in near) for (r in LayoutArea.candidatesAround(area, nb, gap, union.height * 1.4f, iw, ih)) if (near.none { o -> o !== nb && o.left < r.right && o.right > r.left && o.top < r.bottom && o.bottom > r.top }) shapes.add(RowShape.rect(r.left, r.top, r.right, r.bottom))
                 }
-                for (areaShape in shapes) {
+                for (areaShape0 in shapes) {
+                    val areaShape = if (guard != null) (areaShape0.intersect(guard) ?: continue) else areaShape0
                     val sy = if (centerY in areaShape.top..areaShape.bottom) centerY else (areaShape.top + areaShape.bottom) / 2f
                     val cand = ShapeLayout.fit(areaShape, sy, p.text, measurer, em, max(5f, em * 0.5f), step, margin)
                     if (cand.lines.isEmpty()) continue
@@ -361,7 +400,7 @@ object PageRenderer {
         return Laid(font, paint, fit, art, allCaps, em, stepRatio)
     }
 
-    private fun paintBlock(s: Float, p: Prep, laid: Laid, iw: Float, ih: Float): Pair<JSONObject, JSONObject>? {
+    private fun paintBlock(s: Float, p: Prep, laid: Laid, iw: Float, ih: Float, othersPlaced: List<RectF> = emptyList()): Pair<JSONObject, JSONObject>? {
         val b = p.block; val plan = p.plan
         val font = laid.font; val paint = laid.paint; val fit = laid.fit; val art = laid.art; val allCaps = laid.allCaps; val em = laid.em; val stepRatio = laid.stepRatio
 
@@ -381,7 +420,15 @@ object PageRenderer {
             val canvas = Canvas(patch)
             // 1) effacement du texte d'origine (couche à la résolution échantillonnée, agrandie à la double résolution)
             if (plan != null) {
-                val layerBmp = Bitmap.createBitmap(plan.layer, plan.w, plan.h, Bitmap.Config.ARGB_8888)
+                // l'aplat d'effacement ne recouvre jamais le texte placé d'un autre bloc (sinon il en coupe le bas, comme une lettre rognée)
+                val layerPx = if (othersPlaced.isEmpty()) plan.layer else plan.layer.copyOf().also { arr ->
+                    for (o in othersPlaced) {
+                        val x0 = ((o.left * s).toInt() - plan.x0).coerceIn(0, plan.w); val x1 = ((o.right * s).toInt() - plan.x0 + 1).coerceIn(0, plan.w)
+                        val y0 = ((o.top * s).toInt() - plan.y0).coerceIn(0, plan.h); val y1 = ((o.bottom * s).toInt() - plan.y0 + 1).coerceIn(0, plan.h)
+                        for (yy in y0 until y1) for (xx in x0 until x1) arr[yy * plan.w + xx] = 0
+                    }
+                }
+                val layerBmp = Bitmap.createBitmap(layerPx, plan.w, plan.h, Bitmap.Config.ARGB_8888)
                 try {
                     val dst = android.graphics.RectF((plan.x0 / s - rect.left) * ss, (plan.y0 / s - rect.top) * ss, ((plan.x0 + plan.w) / s - rect.left) * ss, ((plan.y0 + plan.h) / s - rect.top) * ss)
                     canvas.drawBitmap(layerBmp, null, dst, Paint(if (plan.mode == Erasure.Mode.ART) Paint.FILTER_BITMAP_FLAG else 0))
@@ -432,6 +479,10 @@ object PageRenderer {
                 .put("fg", "#%06x".format(fg and 0xFFFFFF)).put("fillMean", "#%06x".format((plan?.fillMean ?: 0) and 0xFFFFFF)).put("planBg", "#%06x".format((plan?.bg ?: 0) and 0xFFFFFF))
                 .put("mode", plan?.mode?.name ?: "NONE").put("outlined", plan?.outlined ?: false)
                 .put("fits", fit.fits).put("lines", fit.lines.size).put("shape", plan?.shape != null)
+                .put("kind", b.kind).put("bubbleOk", p.bubble != null).put("rectBubble", p.bubbleRect)
+                .put("orig", JSONArray(b.lineBoxes.ifEmpty { listOf(b.box) }.reduce { a, c -> a.union(c) }.let { u -> listOf(u.left, u.top, u.right, u.bottom).map { v -> Math.round(v) } }))
+                .put("cont", b.bubble?.let { c -> JSONArray(listOf(c.left, c.top, c.right, c.bottom).map { v -> Math.round(v) }) } ?: JSONObject.NULL)
+                .put("zoneBox", b.zone?.let { c -> JSONArray(listOf(c.left, c.top, c.right, c.bottom).map { v -> Math.round(v) }) } ?: JSONObject.NULL)
                 .put("family", font.family).put("skew", font.skew.toDouble()).put("embolden", font.embolden.toDouble()).put("scaleX", font.scaleX.toDouble()).put("wght", font.wght).put("wdth", font.wdth.toDouble()).put("em", em.toDouble()).put("stepRatio", stepRatio.toDouble())
             return patchJson to rep
         } finally {

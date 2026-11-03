@@ -57,7 +57,14 @@ for path in sorted(glob.glob(f"{OUT}/reports/*.json")):
                 a, b2 = rects[i], rects[j]
                 ix = max(0, min(a[2], b2[2]) - max(a[0], b2[0])); iy = max(0, min(a[3], b2[3]) - max(a[1], b2[1]))
                 small = min((a[2]-a[0])*(a[3]-a[1]), (b2[2]-b2[0])*(b2[3]-b2[1]))
-                if small > 0 and ix * iy / small > 0.1: overlap += 1
+                if small > 0 and ix * iy / small > 0.1:
+                    # un recouvrement déjà présent dans l'image d'origine (bruitage dessiné sur une bulle) n'est pas un défaut de la traduction
+                    oa, ob = ov[i].get("orig"), ov[j].get("orig")
+                    if oa and ob:
+                        oix = max(0, min(oa[2], ob[2]) - max(oa[0], ob[0])); oiy = max(0, min(oa[3], ob[3]) - max(oa[1], ob[1]))
+                        osmall = min((oa[2]-oa[0])*(oa[3]-oa[1]), (ob[2]-ob[0])*(ob[3]-ob[1]))
+                        if osmall > 0 and oix * oiy / osmall > 0.1: continue
+                    overlap += 1
     nofit = sum(1 for im in imgs for b in (im.get('overlay') or {}).get('blocks', []) if b.get('fits') is False)
     shaped = sum(1 for im in imgs for b in (im.get('overlay') or {}).get('blocks', []) if b.get('shape'))
     if nblocks: P(f"- rendu : {shaped}/{nblocks} bulles à forme détectée · texte ne tenant pas dans sa zone : {nofit}")
@@ -82,6 +89,19 @@ for path in sorted(glob.glob(f"{OUT}/reports/*.json")):
                 if sum(1 for d in rboxes if cov(g, d) >= 0.35) >= 2: splits += 1
         P(f"- regroupement : {read_total} blocs lus pour {gt_total} blocs réels · fusions à tort {merges} · scissions {splits}")
         if merges > 2: problems.append(f"{name}: {merges} blocs fusionnés à tort")
+    if name.startswith("synth_atypical"):
+        # bulle ouverte (page 5) : toutes les lignes de la traduction doivent rester dans l'ellipse de la bulle (centre 430,330 ; rayons 285 × 225)
+        try:
+            im = r.get("images", [])[4]
+            out = 0
+            for b in im.get("overlay", {}).get("blocks", []):
+                import math
+                bx, by, bw, bh = b["x"], b["y"], b["w"], b["h"]
+                for cxp, cyp in ((bx, by), (bx + bw, by), (bx, by + bh), (bx + bw, by + bh)):
+                    if ((cxp - 430) / 285.0) ** 2 + ((cyp - 330) / 225.0) ** 2 > 1.7 and cyp < 600: out += 1   # coins du rectangle des lignes : un texte dans l'ellipse en a naturellement un peu au-delà (1,3), un texte qui déborde bien plus (3)
+            if out: problems.append(f"{name}: texte de la bulle ouverte hors de l'ellipse ({out} coins)")
+            P(f"- bulle ouverte : {'texte hors ellipse' if out else 'texte dans l ellipse'}")
+        except Exception: pass
     if name.startswith("adblock"):
         blocked = r.get("blocked", 0); final = r.get("finalUrl", "")
         P(f"- blocage des publicités : {blocked} requêtes ou redirections bloquées · adresse finale {final}")
