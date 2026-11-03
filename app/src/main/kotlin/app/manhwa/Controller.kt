@@ -357,7 +357,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             useCache = !s.diagnostic && !testing, // en diagnostic on veut voir la détection réelle, pas un résultat en cache
             debugSink = { debug = it },
             // l'anglais est lu par OCR avec beaucoup de bruit : on écarte filigranes et débris, puis on répare mots collés et chiffres parasites
-            junk = { t, rel -> s.source.code != "ja" && s.source.code != "ko" && s.source.code != "zh" && (JunkFilter.isWatermark(t) || (rel < 1.6f && JunkFilter.isDebris(t, lexicon)) || repeatedAcrossPages(t, keysById[c.id]?.imageHash ?: c.id)) },
+            // un texte libre sans zone du détecteur est écarté s'il ne contient aucun mot reconnu, même en gros lettrage (décor lu comme du texte : « IC », « RIC », « PY »)
+            junk = { t, rel, anchored -> s.source.code != "ja" && s.source.code != "ko" && s.source.code != "zh" && (JunkFilter.isWatermark(t) || ((rel < 1.6f || !anchored) && JunkFilter.isDebris(t, lexicon)) || repeatedAcrossPages(t, keysById[c.id]?.imageHash ?: c.id)) },
             repair = { t -> try { OcrRepair.repair(t, lexicon, graph.gemma.chapterNames()) } catch (e: Throwable) { t } },
             reader = if (rereadOn) graph.blockReader else null,
             // part de vrais mots anglais (noms propres du chapitre compris) : repère les lectures absurdes et vérifie les relectures
@@ -394,12 +395,12 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                 blocks.put(
                     JSONObject().put("t", r.optString("t").replace('\n', ' ').take(40)).put("kind", r.optString("kind")).put("mode", r.optString("mode"))
                         .put("fs", Math.round(r.optDouble("fs") * 10) / 10.0).put("lines", r.optInt("lines")).put("fits", r.optBoolean("fits")).put("shape", r.optBoolean("shape"))
-                        .put("bubbleOk", r.optBoolean("bubbleOk")).put("rectBubble", r.optBoolean("rectBubble"))
+                        .put("bubbleOk", r.optBoolean("bubbleOk")).put("rectBubble", r.optBoolean("rectBubble")).put("erase", r.optInt("erase"))
                         .put("orig", r.opt("orig")).put("cont", r.opt("cont")).put("zone", r.opt("zoneBox"))
                         .put("out", JSONArray(listOf("x", "y", "w", "h").map { k -> Math.round(r.optDouble(k)) })),
                 )
             }
-            graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "layout").put("url", pageUrl).put("img", c.id).put("w", out.result.imageWidth).put("h", out.result.imageHeight).put("blocks", blocks))
+            graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "layout").put("url", pageUrl).put("img", c.id).put("w", out.result.imageWidth).put("h", out.result.imageHeight).put("skipped", json.optInt("skipped")).put("blocks", blocks))
         } catch (_: Throwable) {}
     }
 
@@ -414,7 +415,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         }
         graph.journal.add(
             JSONObject().put("t", System.currentTimeMillis()).put("type", "page").put("url", pageUrl).put("series", graph.gemma.seriesTitle ?: "")
-                .put("engine", engineId).put("img", c.id).put("w", out.result.imageWidth).put("h", out.result.imageHeight).put("ms", ms).put("blocks", blocks),
+                .put("engine", engineId).put("img", c.id).put("w", out.result.imageWidth).put("h", out.result.imageHeight).put("ms", ms).put("dbg", OcrDebug.note.take(1500)).put("blocks", blocks),
         )
     }
 

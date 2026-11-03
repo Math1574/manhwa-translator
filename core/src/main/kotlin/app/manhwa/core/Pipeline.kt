@@ -34,7 +34,8 @@ class PagePipeline(
     private val useCache: Boolean = true,
     private val debugSink: ((DebugInfo) -> Unit)? = null,
     /** Vrai pour une ligne à ignorer (filigrane, logo, débris de lecture sur le dessin). */
-    private val junk: (text: String, relativeHeight: Float) -> Boolean = { _, _ -> false },
+    /** Texte à écarter ? (texte, hauteur relative à la médiane de la page, bloc ancré par le détecteur : zone ou bulle). */
+    private val junk: (text: String, relativeHeight: Float, anchored: Boolean) -> Boolean = { _, _, _ -> false },
     /** Répare les erreurs de lecture avant traduction (mots collés, chiffres ou minuscules parasites). */
     private val repair: (String) -> String = { it },
     /** Relit les blocs douteux avec un modèle vision-langage (null = désactivé). */
@@ -56,7 +57,8 @@ class PagePipeline(
         // hauteur de ligne relative à la médiane de la page : un gros lettrage (onomatopée, titre) n'est jamais un débris
         val heights = grouped.map { medianLineHeight(it) }.filter { it > 0f }.sorted()
         val medianH = if (heights.isEmpty()) 0f else heights[heights.size / 2]
-        val blocks = grouped.filter { !TextNormalizer.isNoise(it.text) && !junk(it.text, if (medianH > 0f) medianLineHeight(it) / medianH else 1f) }
+        val blocks = grouped.filter { !TextNormalizer.isNoise(it.text) && !junk(it.text, if (medianH > 0f) medianLineHeight(it) / medianH else 1f, it.kind == BlockKind.IN_BUBBLE || it.zone != null) }
+        for (g in grouped) if (g !in blocks) log("écarté « ${g.text.take(40)} » (${if (TextNormalizer.isNoise(g.text)) "bruit" else "débris, filigrane ou répété"}${if (g.kind != BlockKind.IN_BUBBLE && g.zone == null) ", hors zone" else ""})")
         val clean = blocks.map { repair(it.text) }.toMutableList()
         reportDebug(ocrResult, grouped, blocks, emptySet())
         if (blocks.isEmpty()) return PageOutcome.NoText(ocrResult.imageWidth, ocrResult.imageHeight)

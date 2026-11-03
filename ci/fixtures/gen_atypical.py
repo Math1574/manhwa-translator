@@ -116,7 +116,24 @@ def page4():
     return img, [{"kind": "bubble", "text": "ALL I DID WAS WATCH OVER THE STORAGE. HAHA.", "box": [290, 325, 640, 500]}]
 
 
+def page5():
+    """Bulle dont la boîte contient le logo du site (filigrane) : la ligne de logo ne doit pas faire supprimer toute la bulle."""
+    img = Image.new("RGB", (W, 520), (40, 46, 60)); d = ImageDraw.Draw(img)
+    for y in range(0, 520):
+        t = y / 520; d.line((0, y, W, y), fill=(int(40 + 70 * t), int(46 + 60 * t), int(60 + 40 * t)))
+    d.rectangle((40, 10, W - 40, 510), outline=(0, 0, 0), width=4)
+    cx, cy, rx, ry = 440, 290, 300, 190
+    d.ellipse((cx - rx, cy - ry, cx + rx, cy + ry), fill="white", outline="black", width=4)
+    # logo du site discret (texte directement sur le décor, sans bandeau) au coin de la boîte de la bulle, hors de l'ellipse : le détecteur ne lui donne pas de zone,
+    # la ligne est « libre » et se rattachait à la bulle voisine (puis la bulle entière était supprimée comme filigrane)
+    d.text((165, 120), "ASURASCANS.COM", font=F(CN, 20), fill=(90, 85, 130))
+    f = F(CN, 46)
+    for i, l in enumerate(["THAT DOESN'T", "SEEM TO BE THE", "CASE."]):
+        w = d.textlength(l, font=f); d.text((cx - w / 2, 215 + i * 62), l, font=f, fill="black")
+    return img, [{"kind": "bubble", "text": "THAT DOESN'T SEEM TO BE THE CASE.", "box": [250, 215, 630, 400]}]
+
+
 import json
-for i, fn in enumerate((page0, page1, page2, page3, page4)):
+for i, fn in enumerate((page0, page1, page2, page3, page4, page5)):
     im, gt = fn(); im.save(f"{OUT}/atypical_{i}.png"); json.dump(gt, open(f"{OUT}/atypical_{i}.json", "w"))
-print("pages atypiques générées : 5")
+print("pages atypiques générées : 6")

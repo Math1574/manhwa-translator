@@ -82,8 +82,10 @@ class BlockGrouper(private val cfg: GrouperConfig = GrouperConfig()) {
             for ((i, ls) in byAnchor) {
                 val ub = ls.map { it.box }.reduce { a, b -> a.union(b) }
                 val sameBubble = bubbles.any { b -> b.box.contains(l.box.centerX, l.box.centerY) && b.box.contains(ub.centerX, ub.centerY) }
-                if (!sameBubble && ls.none { shouldJoin(it, l) }) continue
                 val d = rectGap(ub, l.box)
+                // « même bulle » ne suffit pas : une ligne loin du texte (logo, filigrane, bruitage au bord de la boîte) n'en fait pas partie
+                val lh = ls.map { it.box.height }.sorted()[ls.size / 2]
+                if (!(sameBubble && d <= 2.2f * lh) && ls.none { shouldJoin(it, l) }) continue
                 if (d < bestD) { bestD = d; best = i }
             }
             if (best >= 0) byAnchor[best]!!.add(l) else rest.add(l)
@@ -127,6 +129,8 @@ class BlockGrouper(private val cfg: GrouperConfig = GrouperConfig()) {
     fun dropReason(l: OcrLine, relaxed: Boolean = false): String? {
         val t = l.text.trim()
         if (t.isEmpty()) return "vide"
+        // filigrane du site : écarté ligne par ligne, avant tout regroupement (rattaché à une bulle voisine, il ferait supprimer toute la bulle)
+        if (JunkFilter.isWatermark(t)) return "filigrane"
         // ligne située dans une zone confirmée par le détecteur : seuils assouplis
         val minConf = if (relaxed) 0.12f else if (t.any { it.isCjk() }) cfg.minConfidenceCjk else cfg.minConfidence
         if (l.confidence < minConf) return "confiance"

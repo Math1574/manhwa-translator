@@ -137,7 +137,21 @@ object Erasure {
                 val c = px[i]; total++
                 if (max(abs(((c shr 16) and 0xFF) - mr), max(abs(((c shr 8) and 0xFF) - mg), abs((c and 0xFF) - mb))) <= 28) near++
             }
-            if (near.toFloat() / total >= 0.92f) { chosen = g; bg = (0xFF shl 24) or (mr shl 16) or (mg shl 8) or mb; zone = inner; break }
+            if (near.toFloat() / total >= 0.92f) {
+                // la couronne lointaine est unie, mais la zone elle-même peut contenir du dessin (un grand bruitage sur un décor entouré d'une marge blanche ou noire) :
+                // au-delà de 0,35 hauteur de ligne autour du texte, tout pixel nettement différent du fond est du dessin qu'un aplat effacerait à tort
+                val base = TextErase.rectMask(w, h, rects, max(4, (lhPx * 0.35f).toInt()))
+                var shellN = 0; var shellFar = 0; var zoneN = 0
+                for (i in 0 until w * h) if (inner[i] && !prot[i]) {
+                    zoneN++
+                    if (!base[i]) { shellN++; val c = px[i]; if (max(abs(((c shr 16) and 0xFF) - mr), max(abs(((c shr 8) and 0xFF) - mg), abs((c and 0xFF) - mb))) > 40) shellFar++ }
+                }
+                if (shellN >= 120 && shellFar.toFloat() / shellN > 0.10f) return null
+                // et la zone effacée reste du même ordre que le texte (jamais un panneau entier)
+                var textN = 0; for (i in 0 until w * h) if (base[i]) textN++
+                if (zoneN > 12 * max(1, textN)) return null
+                chosen = g; bg = (0xFF shl 24) or (mr shl 16) or (mg shl 8) or mb; zone = inner; break
+            }
         }
         val z = zone ?: return null
         val mask = BooleanArray(w * h) { z[it] && !prot[it] }

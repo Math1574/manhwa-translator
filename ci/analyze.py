@@ -38,7 +38,7 @@ for path in sorted(glob.glob(f"{OUT}/reports/*.json")):
     if not imgs: problems.append(f"{name}: aucune image traitée")
     ms = [i.get("ms", 0) for i in imgs if i.get("outcome", "").startswith("done")]
     if ms: P(f"- temps moyen par image : {sum(ms)/len(ms)/1000:.1f}s (max {max(ms)/1000:.1f}s)")
-    tot_ocr = rej = kept = 0; overlap = outside = tiny = 0; nblocks = 0
+    tot_ocr = rej = kept = 0; overlap = outside = tiny = excess = 0; nblocks = 0
     for im in imgs:
         if im.get("outcome") == "failed": problems.append(f"{name}: image en échec ({im.get('stage')}: {im.get('message')})")
         for o in im.get("ocr", []):
@@ -52,6 +52,8 @@ for path in sorted(glob.glob(f"{OUT}/reports/*.json")):
         for b, rc in zip(ov, rects):
             if rc[0] < -1 or rc[1] < -1 or rc[2] > W + 1 or rc[3] > H + 1: outside += 1
             if b["fs"] < 10: tiny += 1
+            # effacement disproportionné : la zone effacée ne doit pas dépasser de beaucoup le texte (sinon du dessin est abîmé)
+            if b.get("mode") != "SMOOTH" and b.get("erase", 0) > 12 * max(1, b["w"] * b["h"]): excess += 1
         for i in range(len(rects)):
             for j in range(i + 1, len(rects)):
                 a, b2 = rects[i], rects[j]
@@ -100,6 +102,11 @@ for path in sorted(glob.glob(f"{OUT}/reports/*.json")):
                 for cxp, cyp in ((bx, by), (bx + bw, by), (bx, by + bh), (bx + bw, by + bh)):
                     if ((cxp - 430) / 285.0) ** 2 + ((cyp - 330) / 225.0) ** 2 > 1.7 and cyp < 600: out += 1   # coins du rectangle des lignes : un texte dans l'ellipse en a naturellement un peu au-delà (1,3), un texte qui déborde bien plus (3)
             if out: problems.append(f"{name}: texte de la bulle ouverte hors de l'ellipse ({out} coins)")
+            # page 6 : filigrane collé à une bulle ; la bulle doit être traduite (un bloc affiché), le filigrane jamais
+            im6 = r.get("images", [])[5]
+            n6 = len(im6.get("overlay", {}).get("blocks", [])) if im6.get("overlay") else 0
+            P(f"- filigrane contre une bulle : {n6} bloc(s) traduit(s)")
+            if n6 < 1: problems.append(f"{name}: bulle supprimée avec le filigrane voisin")
             P(f"- bulle ouverte : {'texte hors ellipse' if out else 'texte dans l ellipse'}")
         except Exception: pass
     if name.startswith("adblock"):
@@ -116,6 +123,7 @@ for path in sorted(glob.glob(f"{OUT}/reports/*.json")):
     if r.get("ocrNote"): P(f"- lecture Paddle : {r['ocrNote']}")
     P(f"- OCR : {tot_ocr} lignes ({kept} utilisées, {rej} écartées) · bulles affichées {nblocks} · hors image {outside} · chevauchements {overlap} · texte < 10px {tiny}")
     if outside or overlap: problems.append(f"{name}: mise en page (hors image {outside}, chevauchements {overlap})")
+    if excess: problems.append(f"{name}: effacement disproportionné sur {excess} bloc(s)")
 
     # vérité terrain (pages synthétiques)
     m = re.match(r"synth_(.+?)_(mlkitonly|combined|mlkit|gemma4b|gemma)$", name)

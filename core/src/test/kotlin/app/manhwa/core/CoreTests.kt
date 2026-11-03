@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests(); openBubbleTests(); barrierShapeTests()
+    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests(); openBubbleTests(); barrierShapeTests(); safetyTests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -1231,5 +1231,51 @@ fun barrierShapeTests() {
         val c = a.intersect(b)!!
         T.ok(c.top == 20f && c.bottom == 50f && c.span(25f, 45f)!![0] == 40f && c.span(25f, 45f)!![1] == 100f, "rectangles")
         T.eq(null, RowShape.rect(0f, 0f, 10f, 10f).intersect(RowShape.rect(50f, 50f, 60f, 60f)))
+    }
+}
+
+fun safetyTests() {
+    T.test("filigrane : une ligne de logo dans la boîte de la bulle n'est plus rattachée au bloc (la bulle n'est plus supprimée)") {
+        fun ln(t: String, l: Float, tp: Float, r: Float, b: Float) = OcrLine(t, RectF(l, tp, r, b), 0.98f)
+        val lines = listOf(ln("ASURASCANS.COM", 148f, 599f, 337f, 629f), ln("THAT DOESN'T", 360f, 741f, 776f, 794f), ln("SEEM TO BE THE", 328f, 808f, 804f, 858f), ln("CASE.", 485f, 868f, 652f, 924f))
+        val dets = listOf(Detection(RegionClass.BUBBLE, RectF(229f, 587f, 905f, 1059f), 0.93f), Detection(RegionClass.TEXT_BUBBLE, RectF(305f, 722f, 827f, 940f), 0.94f))
+        val blocks = BlockGrouper().group(lines, dets)
+        T.eq(1, blocks.size)
+        T.ok(!blocks[0].text.contains("ASURA", true) && blocks[0].text.contains("CASE"), "bloc : ${blocks[0].text}")
+        T.eq(3, blocks[0].lines.size)
+        T.ok(JunkFilter.isWatermark("ASURASCANS.COM"), "le filigrane reste reconnu")
+    }
+    T.test("ne pas toucher à l'image : traduction identique au texte lu, ou texte libre sans zone sur un dessin") {
+        T.ok(RenderGate.unchanged("Ahem.!", "Ahem !") && RenderGate.unchanged("AY TOR", "AY TOR") && RenderGate.unchanged("Sun Tzu", "Sun Tzu"), "identiques")
+        T.ok(!RenderGate.unchanged("SHUT UP", "TAIS-TOI"), "traduit")
+        T.ok(RenderGate.tooUncertain("FREE", false, false, true), "libre, sans zone, sur dessin")
+        T.ok(!RenderGate.tooUncertain("FREE", true, false, true) && !RenderGate.tooUncertain("FREE", false, false, false) && !RenderGate.tooUncertain("IN_BUBBLE", false, false, true), "autres cas : rendu")
+    }
+    T.test("effacement d'un texte libre : un panneau de dessin entouré d'une marge blanche n'est jamais effacé (la zone ne contient que du fond)") {
+        val W = 800; val H = 800; val white = 0xFFFFFFFF.toInt()
+        val px = IntArray(W * H) { white }
+        val rnd = java.util.Random(7)
+        for (y in 200 until 600) for (x in 100 until 700) { val v = 60 + rnd.nextInt(160); px[y * W + x] = (0xFF shl 24) or (v shl 16) or (((v * 7) % 200 + 30) shl 8) or (255 - v) }    // décor texturé
+        for (y in 350 until 450) for (x in 300 until 500) if ((x / 9 + y / 9) % 2 == 0) px[y * W + x] = 0xFF000000.toInt()                     // gros bruitage au centre
+        val src = ArraySrc(W, H, px)
+        val plan = Erasure.plan(src, 1f, listOf(RectF(300f, 350f, 500f, 450f)), 100f, W.toFloat(), H.toFloat(), emptyList(), null, free = true)
+        var panelErased = 0
+        if (plan != null) for (i in plan.mask.indices) if (plan.mask[i]) { val x = plan.x0 + i % plan.w; val y = plan.y0 + i / plan.w; if (x in 100 until 700 && y in 200 until 600 && (x < 260 || x > 540 || y < 310 || y > 490)) panelErased++ }
+        T.ok(panelErased < 400, "pixels du décor effacés loin du texte : $panelErased (mode ${plan?.mode})")
+    }
+    T.test("bulle ronde au contour ouvert dont le texte d'origine dépasse de la boîte détectée : elle reste confirmée") {
+        val W = 700; val H = 560; val white = 0xFFFFFFFF.toInt(); val black = 0xFF000000.toInt()
+        val px = IntArray(W * H) { white }
+        for (y in 0 until H) for (x in 0 until W) {
+            val ex = (x - 350).toDouble() / 230; val ey = (y - 280).toDouble() / 170; val d = Math.sqrt(ex * ex + ey * ey)
+            val ang = Math.toDegrees(Math.atan2((y - 280).toDouble(), (x - 350).toDouble())).let { if (it < 0) it + 360 else it }
+            if (d in 0.985..1.015 && ang !in 0.0..100.0) px[y * W + x] = black
+        }
+        for (y in 330..420) for (x in 280..600) if ((x + y) % 9 < 3) px[y * W + x] = black      // texte d'origine qui sort de la boîte à droite et touche le bas
+        val src = ArraySrc(W, H, px)
+        T.ok(BubbleVerifier.verify(src, 1f, RectF(120f, 110f, 580f, 450f), RectF(280f, 330f, 600f, 448f), W.toFloat(), H.toFloat()), "bulle confirmée malgré le texte qui dépasse")
+        // une page blanche sans aucun contour n'est pas une bulle
+        val blank = ArraySrc(W, H, IntArray(W * H) { white })
+        T.ok(!BubbleVerifier.verify(blank, 1f, RectF(120f, 110f, 580f, 450f), RectF(280f, 250f, 420f, 300f), W.toFloat(), H.toFloat()), "page blanche non confirmée")
     }
 }

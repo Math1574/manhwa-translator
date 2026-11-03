@@ -32,7 +32,7 @@ object BubbleVerifier {
             val ix = ((x * s).toInt() - x0).coerceIn(0, w - 1); val iy = ((y * s).toInt() - y0).coerceIn(0, h - 1); return lum[iy * w + ix]
         }
         val n = 40
-        var edges = 0
+        var edges = 0; var tested = 0
         val rx = bubble.width / 2f; val ry = bubble.height / 2f
         val bx = bubble.centerX; val by = bubble.centerY
         for (k in 0 until n) {
@@ -49,7 +49,8 @@ object BubbleVerifier {
             if (dy > 1e-4f) tText = min(tText, (text.bottom - cy) / dy) else if (dy < -1e-4f) tText = min(tText, (text.top - cy) / dy)
             if (tText == Float.MAX_VALUE) continue
             val t0 = tText + 3f; val t1 = tMax + 8f
-            if (t1 - t0 < 6f) continue            // pas de place entre le texte et le bord annoncé : pas de contour visible
+            if (t1 - t0 < 6f) continue            // pas de place entre le texte et le bord annoncé : ce rayon ne dit rien (ni pour ni contre)
+            tested++
             val step = max(1.2f, (t1 - t0) / 40f)
             var prev = at(cx + dx * t0, cy + dy * t0)
             var minL = prev; var maxL = prev; var best = 0
@@ -62,8 +63,45 @@ object BubbleVerifier {
             // contour : saut net de luminance entre deux pas rapprochés (≥ 55), ou trait sombre entre deux zones claires
             if (best >= 55 || (minL < 90 && maxL - minL >= 90)) edges++
         }
-        // la queue de la bulle et les parties cachées par un autre élément ne comptent pas : seuil à la moitié du pourtour
-        return edges >= (n * MIN_SHARE).toInt()
+        // la queue de la bulle et les parties cachées par un autre élément ne comptent pas : seuil à la moitié du pourtour. Quand le texte occupe presque toute la
+        // boîte, beaucoup de rayons ne disent rien : on juge alors la part des rayons utiles
+        if (edges >= (n * MIN_SHARE).toInt()) return true
+        if (tested >= 12 && edges >= (tested * 0.6f).toInt()) return true
+        // contour ouvert (il se fond dans la page) ET texte qui remplit la boîte : on regarde le pourtour de l'ellipse de la bulle, sans dépendre de la place du texte,
+        // et l'intérieur doit être un aplat (une bulle a un fond uni ; un décor, non)
+        return ellipseOutline(::at, bubble, text) 
+    }
+
+    /** Contour retrouvé sur le pourtour de l'ellipse inscrite dans la boîte (≥ 45 % des 48 directions) avec un intérieur uni autour du texte. */
+    private fun ellipseOutline(at: (Float, Float) -> Int, bubble: RectF, text: RectF): Boolean {
+        val n = 48
+        val rx = bubble.width / 2f; val ry = bubble.height / 2f; val bx = bubble.centerX; val by = bubble.centerY
+        var hits = 0
+        for (k in 0 until n) {
+            val a = 2.0 * Math.PI * k / n
+            val dx = cos(a).toFloat(); val dy = sin(a).toFloat()
+            val r = 1f / kotlin.math.sqrt((dx / rx) * (dx / rx) + (dy / ry) * (dy / ry))      // distance du centre à l'ellipse dans cette direction
+            val t0 = r * 0.86f; val t1 = r * 1.10f + 4f
+            val step = max(1.2f, (t1 - t0) / 36f)
+            var prev = at(bx + dx * t0, by + dy * t0)
+            var minL = prev; var maxL = prev; var best = 0
+            var t = t0 + step
+            while (t <= t1) { val l = at(bx + dx * t, by + dy * t); best = max(best, abs(l - prev)); minL = min(minL, l); maxL = max(maxL, l); prev = l; t += step }
+            if (best >= 55 || (minL < 90 && maxL - minL >= 90)) hits++
+        }
+        if (hits < (n * 0.45f).toInt()) return false
+        // intérieur uni : points de l'ellipse réduite à 80 %, hors texte ; la grande majorité doit avoir la luminance médiane
+        val vals = ArrayList<Int>()
+        for (iy in -8..8) for (ix in -8..8) {
+            val ex = ix / 8f; val ey = iy / 8f
+            if (ex * ex + ey * ey > 0.64f) continue
+            val x = bx + ex * rx; val y = by + ey * ry
+            if (x >= text.left - 4f && x <= text.right + 4f && y >= text.top - 4f && y <= text.bottom + 4f) continue
+            vals.add(at(x, y))
+        }
+        if (vals.size < 12) return true
+        vals.sort(); val med = vals[vals.size / 2]
+        return vals.count { abs(it - med) <= 30 }.toFloat() / vals.size >= 0.8f
     }
 
     /**
