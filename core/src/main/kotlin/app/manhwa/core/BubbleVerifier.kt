@@ -65,4 +65,36 @@ object BubbleVerifier {
         // la queue de la bulle et les parties cachées par un autre élément ne comptent pas : seuil à la moitié du pourtour
         return edges >= (n * MIN_SHARE).toInt()
     }
+
+    /**
+     * Vrai si la bulle est un cartouche rectangulaire (son contour ou son fond suit les bords de la boîte détectée), faux pour une bulle ronde, y compris
+     * quand son contour est ouvert. Aux quatre coins de la boîte, une ellipse n'a rien : ni trait, ni changement de fond. Un cartouche, si.
+     */
+    fun isRectangular(src: PixelSource, s: Float, bubble: RectF, imageW: Float, imageH: Float): Boolean {
+        val x0 = (max(0f, bubble.left - 14f) * s).toInt().coerceIn(0, src.width - 1); val y0 = (max(0f, bubble.top - 14f) * s).toInt().coerceIn(0, src.height - 1)
+        val x1 = (min(imageW, bubble.right + 14f) * s).toInt().coerceIn(x0 + 1, src.width); val y1 = (min(imageH, bubble.bottom + 14f) * s).toInt().coerceIn(y0 + 1, src.height)
+        val w = x1 - x0; val h = y1 - y0
+        if (w < 24 || h < 24) return false
+        val px = src.pixels(x0, y0, w, h)
+        fun lum(x: Float, y: Float): Int {
+            val ix = ((x * s).toInt() - x0).coerceIn(0, w - 1); val iy = ((y * s).toInt() - y0).coerceIn(0, h - 1)
+            val c = px[iy * w + ix]; return (((c shr 16) and 0xFF) * 77 + ((c shr 8) and 0xFF) * 150 + (c and 0xFF) * 29) shr 8
+        }
+        val cx = bubble.centerX; val cy = bubble.centerY; val rx = bubble.width / 2f; val ry = bubble.height / 2f
+        var hits = 0; var tested = 0
+        // pour chaque coin de la boîte : le coin lui-même et deux points du bord tout près du coin (là où une ellipse inscrite est loin du bord)
+        for (sx in floatArrayOf(-1f, 1f)) for (sy in floatArrayOf(-1f, 1f)) for (fr in arrayOf(floatArrayOf(1f, 1f), floatArrayOf(0.86f, 1f), floatArrayOf(1f, 0.86f))) {
+            val tx = sx * rx * fr[0]; val ty = sy * ry * fr[1]
+            val dist = sqrt(tx * tx + ty * ty); val dx = tx / dist; val dy = ty / dist
+            val tEll = 1f / sqrt((dx / rx) * (dx / rx) + (dy / ry) * (dy / ry))
+            if (dist - tEll < 8f) continue                       // trop près de l'ellipse pour trancher
+            tested++
+            val inside = lum(cx + dx * dist * 0.93f, cy + dy * dist * 0.93f); val outside = lum(cx + dx * dist * 1.07f, cy + dy * dist * 1.07f)
+            var minL = 255; var t = dist * 0.9f
+            while (t <= dist * 1.06f) { minL = min(minL, lum(cx + dx * t, cy + dy * t)); t += max(1f, dist * 0.01f) }
+            // trait sombre sur le bord de la boîte, ou changement de fond net de part et d'autre
+            if ((minL < 90 && max(inside, outside) - minL >= 70) || abs(inside - outside) >= 45) hits++
+        }
+        return tested >= 6 && hits >= (tested * 0.75f).toInt().coerceAtLeast(5)
+    }
 }

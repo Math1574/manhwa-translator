@@ -53,10 +53,13 @@ object Erasure {
     }
 
     /** @param exclude lignes de texte des AUTRES blocs (pixels de l'image) : un bloc n'efface jamais ce qui appartient à un voisin. */
-    fun plan(src: PixelSource, s: Float, lineBoxes: List<RectF>, lineH: Float, imageW: Float, imageH: Float, exclude: List<RectF> = emptyList(), container: RectF? = null, protect: List<RectF> = emptyList(), free: Boolean = false, outlines: List<RectF> = emptyList()): Plan? {
-        val p = planUnclipped(src, s, lineBoxes, lineH, imageW, imageH, container = container, protect = protect, free = free, outlines = outlines) ?: return null
+    fun plan(src: PixelSource, s: Float, lineBoxes: List<RectF>, lineH: Float, imageW: Float, imageH: Float, exclude: List<RectF> = emptyList(), container: RectF? = null, protect: List<RectF> = emptyList(), free: Boolean = false, outlines: List<RectF> = emptyList(), extra: List<RectF> = emptyList()): Plan? {
+        val p = planUnclipped(src, s, lineBoxes, lineH, imageW, imageH, container = container, protect = protect, free = free, outlines = outlines, extra = extra) ?: return null
         // contour d'une bulle voisine : les traits qui le forment ne sont jamais remplacés, quelle que soit la méthode d'effacement employée
-        if (outlines.isNotEmpty()) {
+        // seulement pour un texte sombre : un trait noir de texte qui chevauche un contour noir y est invisible. Un texte clair cerné de noir laisserait au contraire
+        // des fragments de cerne visibles : son effacement reste complet.
+        val textLum = (((p.textColor shr 16) and 0xFF) * 77 + ((p.textColor shr 8) and 0xFF) * 150 + (p.textColor and 0xFF) * 29) shr 8
+        if (outlines.isNotEmpty() && textLum < 110) {
             val px = src.pixels(p.x0, p.y0, p.w, p.h)
             val keep = outlineKeep(px, p.w, p.h, p.mask, p.x0, p.y0, s, outlines)
             for (i in keep.indices) if (keep[i]) { p.mask[i] = false; p.layer[i] = 0 }
@@ -77,7 +80,8 @@ object Erasure {
      * (lueur comprise : la zone grandit jusqu'à sortir du halo) et on la remplit entièrement de cette couleur. Plus de fragments de dégradés de couleur,
      * de contours ni de lueurs fantômes. Null si aucun pourtour n'est uni (dessin, trame) : le traitement des lettres seules prend le relais.
      */
-    private fun planRing(src: PixelSource, s: Float, lineBoxes: List<RectF>, lineH: Float, imageW: Float, imageH: Float, protect: List<RectF>, outlines: List<RectF> = emptyList()): Plan? {
+    private fun planRing(src: PixelSource, s: Float, lineBoxes0: List<RectF>, lineH: Float, imageW: Float, imageH: Float, protect: List<RectF>, outlines: List<RectF> = emptyList(), extra: List<RectF> = emptyList()): Plan? {
+        val lineBoxes = lineBoxes0 + extra
         val union = lineBoxes.reduce { a, c -> a.union(c) }
         val lhPx = max(8f, lineH * s)
         val pad = max(40f, lineH * 5f)
@@ -182,10 +186,12 @@ object Erasure {
         return keep
     }
 
-    private fun planUnclipped(src: PixelSource, s: Float, lineBoxes: List<RectF>, lineH: Float, imageW: Float, imageH: Float, padOverride: Float = 0f, container: RectF? = null, protect: List<RectF> = emptyList(), free: Boolean = false, outlines: List<RectF> = emptyList()): Plan? {
+    private fun planUnclipped(src: PixelSource, s: Float, lineBoxes: List<RectF>, lineH: Float, imageW: Float, imageH: Float, padOverride: Float = 0f, container: RectF? = null, protect: List<RectF> = emptyList(), free: Boolean = false, outlines: List<RectF> = emptyList(), extra: List<RectF> = emptyList()): Plan? {
         // texte hors bulle sur des abords unis (page blanche ou noire, aplat, lueur sur fond uni) : toute la zone est remplacée par la couleur des abords
-        if (free && padOverride == 0f) planRing(src, s, lineBoxes, lineH, imageW, imageH, protect, outlines)?.let { return it }
-        val union = lineBoxes.reduce { a, c -> a.union(c) }
+        if (free && padOverride == 0f) planRing(src, s, lineBoxes, lineH, imageW, imageH, protect, outlines, extra)?.let { return it }
+        // texte lu : sert à relever la forme de la bulle ; avec la zone détectée en plus : étendue de l'effacement
+        val textUnion = lineBoxes.reduce { a, c -> a.union(c) }
+        val union = (lineBoxes + extra).reduce { a, c -> a.union(c) }
         val pad = max(max(10f, lineH * 0.7f), padOverride)
         val x0 = (max(0f, union.left - pad) * s).toInt().coerceIn(0, src.width - 1)
         val y0 = (max(0f, union.top - pad) * s).toInt().coerceIn(0, src.height - 1)
@@ -194,14 +200,14 @@ object Erasure {
         val w = x1 - x0; val h = y1 - y0
         if (w < 8 || h < 8) return null
         val px = src.pixels(x0, y0, w, h)
-        fun rects() = lineBoxes.map { l -> intArrayOf((l.left * s).toInt() - x0, (l.top * s).toInt() - y0, (l.right * s).toInt() - x0, (l.bottom * s).toInt() - y0) }
+        fun rects() = (lineBoxes + extra).map { l -> intArrayOf((l.left * s).toInt() - x0, (l.top * s).toInt() - y0, (l.right * s).toInt() - x0, (l.bottom * s).toInt() - y0) }
         val lh = lineH * s
 
         var a = TextErase.analyze(px, w, h, TextErase.rectMask(w, h, rects(), max(3, (lh * 0.2f).toInt())), grow = max(2, (lh * 0.06f).toInt()))
         if (a.outlined) a = TextErase.analyze(px, w, h, TextErase.rectMask(w, h, rects(), max(6, (lh * 0.3f).toInt())), grow = max(3, (lh * 0.1f).toInt()))
 
         // bulle : zone de texte sur fond uni ET (abords unis OU contour fermé : le remplissage depuis le texte reste borné)
-        val bubble = if (!a.outlined && a.zoneFlat >= 0.9f && a.bgShare >= 0.45f) bubbleArea(src, s, union, a.bg, imageW, imageH) else null
+        val bubble = if (!a.outlined && a.zoneFlat >= 0.9f && a.bgShare >= 0.45f) bubbleArea(src, s, textUnion, a.bg, imageW, imageH) else null
         // un lettrage cerné d'un contour ou d'une lueur est traité comme du dessin : l'aplat laisserait des fragments du contour
         val flat = !a.outlined && a.zoneFlat >= 0.9f && a.bgShare >= 0.45f && (a.uniformity >= 0.85f || bubble != null)
         val textRect = intArrayOf((union.left * s).toInt() - x0, (union.top * s).toInt() - y0, (union.right * s).toInt() - x0, (union.bottom * s).toInt() - y0)
@@ -223,13 +229,13 @@ object Erasure {
             val grown = TextErase.dilate(raw, w, h, max(2, (lh * 0.06f).toInt()))
             val mask = BooleanArray(w * h) { clean[it] || grown[it] }
             val layer = IntArray(w * h) { if (mask[it]) (0xFF shl 24) or (a.bg and 0xFFFFFF) else 0 }
-            val shape = bubbleShape(src, s, union, a.bg, imageW, imageH, container = container)
+            val shape = bubbleShape(src, s, textUnion, a.bg, imageW, imageH, container = container)
             return Plan(Mode.FLAT, x0, y0, w, h, mask, layer, a.bg, a.textColor, a.outlined, bubble, shape, stroke, raw, meanFill(layer))
         }
         // bulle au fond non uni (dégradé, ombre, lueur sombre) : on remplace toute la zone du texte à l'intérieur de la bulle par un fond lissé
         if (!free) run {
             // la forme de la bulle est calculée sur une région plus large que la zone du texte (la bulle entière doit y tenir)
-            val shape = bubbleShape(src, s, union, a.bg, imageW, imageH, smooth = true, container = container)
+            val shape = bubbleShape(src, s, textUnion, a.bg, imageW, imageH, smooth = true, container = container)
             if (shape != null) {
                 val farS = TextErase.localFarMask(px, w, h, max(5, (lh * 0.6f).toInt()), 40); val encS = TextErase.enclosedOnly(farS, w, h) // lettres isolées
                 val encG = TextErase.dilate(encS, w, h, max(2, (lh * 0.06f).toInt()))   // bords des lettres compris : ils ne doivent pas servir de référence au remplissage
@@ -261,7 +267,7 @@ object Erasure {
         // lettrage à lueur : on élargit le masque pour effacer aussi la lueur, de sorte que la reconstruction vienne des abords du halo
         val mask = TextErase.artMask(px, w, h, zoneArt, fillColor, max(2, (lh * (if (a.outlined) 0.14f else 0.07f)).toInt()))
         // texte sur dessin : région élargie pour trouver de la vraie texture à copier à côté du trou (second passage)
-        if (padOverride == 0f) planUnclipped(src, s, lineBoxes, lineH, imageW, imageH, max(40f, lineH * 1.6f), container, protect, free, outlines)?.let { if (it.mode == Mode.ART) return it }
+        if (padOverride == 0f) planUnclipped(src, s, lineBoxes, lineH, imageW, imageH, max(40f, lineH * 1.6f), container, protect, free, outlines, extra)?.let { if (it.mode == Mode.ART) return it }
         val diffused = TextErase.inpaint(px, w, h, mask)
         // trame de points ou motif répété autour du trou : on recopie le motif plutôt que de le lisser en un voile gris
         val fill = TextErase.periodicFill(px, w, h, mask, diffused) ?: TextErase.addGrain(TextErase.inpaintClone(px, w, h, mask, diffused), px, w, h, mask)
@@ -288,24 +294,21 @@ object Erasure {
         if (container != null) {
             val c = container.inflate(4f, 4f)
             for (i in mask.indices) if (mask[i]) { val ix = (x0 + i % w + 0.5f) / s; val iy = (y0 + i / w + 0.5f) / s; if (ix < c.left || ix > c.right || iy < c.top || iy > c.bottom) mask[i] = false }
-            // fuite : si le remplissage déborde nettement de l'ellipse de la bulle (trou du contour, queue ouverte), on le borne à l'ellipse ; sinon on garde sa forme
-            // exacte (nuage, bulle à pointes, cartouche). Un remplissage qui occupe presque toute la boîte est un rectangle : jamais borné.
-            val boxArea = max(1f, container.width * container.height * s * s)
-            val fillRatio = mask.count { it } / boxArea
-            if (fillRatio < 0.84f) {
-                val cx = (container.left + container.right) / 2f; val cy = (container.top + container.bottom) / 2f
-                fun outside(scale: Float): Int {
-                    val rx = container.width / 2f * scale; val ry = container.height / 2f * scale; var n = 0
-                    for (i in mask.indices) if (mask[i]) { val ex = ((x0 + i % w + 0.5f) / s - cx) / rx; val ey = ((y0 + i / w + 0.5f) / s - cy) / ry; if (ex * ex + ey * ey > 1f) n++ }
-                    return n
-                }
-                val total = max(1, mask.count { it })
-                if (outside(1.12f).toFloat() / total > 0.05f) {
-                    val rx = container.width / 2f * 1.05f; val ry = container.height / 2f * 1.05f
-                    for (i in mask.indices) if (mask[i]) {
-                        val ex = ((x0 + i % w + 0.5f) / s - cx) / rx; val ey = ((y0 + i / w + 0.5f) / s - cy) / ry
-                        if (ex * ex + ey * ey > 1f) mask[i] = false
-                    }
+            // fuite : une bulle ronde dont le contour est ouvert (il se fond dans la page) laisse le remplissage couler jusqu'aux coins de la boîte. Si une part
+            // du remplissage est hors de l'ellipse de la bulle, on le borne à l'ellipse (légèrement réduite : le texte ne doit pas toucher le contour).
+            // Un cartouche rectangulaire (trait ou fond tranché aux quatre coins de la boîte) garde sa forme.
+            val cx = (container.left + container.right) / 2f; val cy = (container.top + container.bottom) / 2f
+            val total = max(1, mask.count { it })
+            var outsideN = 0
+            run {
+                val rx = container.width / 2f; val ry = container.height / 2f
+                for (i in mask.indices) if (mask[i]) { val ex = ((x0 + i % w + 0.5f) / s - cx) / rx; val ey = ((y0 + i / w + 0.5f) / s - cy) / ry; if (ex * ex + ey * ey > 1f) outsideN++ }
+            }
+            if (outsideN.toFloat() / total > 0.02f && !BubbleVerifier.isRectangular(src, s, container, imageW, imageH)) {
+                val rx = container.width / 2f * 0.98f; val ry = container.height / 2f * 0.98f
+                for (i in mask.indices) if (mask[i]) {
+                    val ex = ((x0 + i % w + 0.5f) / s - cx) / rx; val ey = ((y0 + i / w + 0.5f) / s - cy) / ry
+                    if (ex * ex + ey * ey > 1f) mask[i] = false
                 }
             }
         }

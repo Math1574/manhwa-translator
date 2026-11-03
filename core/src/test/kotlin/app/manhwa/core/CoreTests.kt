@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests()
+    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests(); openBubbleTests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -1148,5 +1148,43 @@ fun rereadPipelineTests() {
         val off = object : BlockReader { override val available = false; override fun reread(imageBytes: ByteArray, block: TextBlock, engineText: String): VisionRead? = throw IllegalStateException("ne doit pas être appelé") }
         PagePipeline(ResultCache(tmp()), partial, echo, "e", reader = off, plausibility = plaus, useCache = false).process(img, "en", "fr")
         T.ok(seen.single().uppercase().contains("KIND OF ELIXIR"), "lecteur indisponible")
+    }
+}
+
+class ArraySrc(val w: Int, val h: Int, val px: IntArray) : PixelSource {
+    override val width get() = w
+    override val height get() = h
+    override fun pixels(x: Int, y: Int, w: Int, h: Int): IntArray { val a = IntArray(w * h); for (j in 0 until h) for (i in 0 until w) a[j * w + i] = px[(y + j) * this.w + x + i]; return a }
+}
+
+fun openBubbleTests() {
+    val W = 700; val H = 560; val white = 0xFFFFFFFF.toInt(); val black = 0xFF000000.toInt(); val grey = 0xFF8C8C8C.toInt()
+    fun page(draw: (IntArray) -> Unit): ArraySrc { val px = IntArray(W * H) { grey }; for (y in 330 until H) for (x in 0 until W) px[y * W + x] = white; draw(px); return ArraySrc(W, H, px) }
+    fun ellipse(px: IntArray, cx: Int, cy: Int, rx: Int, ry: Int, gap: (Double) -> Boolean) {
+        for (y in 0 until H) for (x in 0 until W) {
+            val ex = (x - cx).toDouble() / rx; val ey = (y - cy).toDouble() / ry; val d = Math.sqrt(ex * ex + ey * ey)
+            if (d <= 1.0) px[y * W + x] = white
+            val ang = Math.toDegrees(Math.atan2((y - cy).toDouble(), (x - cx).toDouble())).let { if (it < 0) it + 360 else it }
+            if (d in 0.985..1.015 && !gap(ang)) px[y * W + x] = black
+        }
+    }
+    T.test("cartouche ou bulle ronde : seul un cartouche est jugé rectangulaire, même quand le contour de la bulle est ouvert") {
+        val rectPage = page { px -> for (y in 150..450) for (x in 120..580) px[y * W + x] = white; for (x in 120..580) for (t in 0..2) { px[(150 + t) * W + x] = black; px[(450 - t) * W + x] = black }; for (y in 150..450) for (t in 0..2) { px[y * W + 120 + t] = black; px[y * W + 580 - t] = black } }
+        T.ok(BubbleVerifier.isRectangular(rectPage, 1f, RectF(120f, 150f, 580f, 450f), W.toFloat(), H.toFloat()), "cartouche à contour")
+        val round = page { px -> ellipse(px, 350, 280, 230, 170) { false } }
+        T.ok(!BubbleVerifier.isRectangular(round, 1f, RectF(120f, 110f, 580f, 450f), W.toFloat(), H.toFloat()), "bulle ronde fermée")
+        val open = page { px -> ellipse(px, 350, 280, 230, 170) { a -> a in 0.0..100.0 } }
+        T.ok(!BubbleVerifier.isRectangular(open, 1f, RectF(120f, 110f, 580f, 450f), W.toFloat(), H.toFloat()), "bulle ronde ouverte en bas à droite")
+    }
+    T.test("bulle ronde au contour ouvert : la forme relevée reste dans l'ellipse (le remplissage ne coule plus sur la page)") {
+        val open = page { px -> ellipse(px, 350, 280, 230, 170) { a -> a in 0.0..100.0 }
+            for (y in 250..340) for (x in 280..420) if ((x + y) % 11 < 3) px[y * W + x] = black }   // texte sombre dans la moitié basse
+        val boxes = listOf(RectF(285f, 255f, 420f, 290f), RectF(290f, 300f, 415f, 335f))
+        val plan = Erasure.plan(open, 1f, boxes, 35f, W.toFloat(), H.toFloat(), emptyList(), RectF(120f, 110f, 580f, 450f), free = false)!!
+        val shape = plan.shape
+        T.ok(shape != null, "forme relevée")
+        // un point sur la page blanche hors de l'ellipse (coin bas-droit de la boîte) ne doit pas faire partie de la forme
+        T.ok(!(shape!!.contains(560f, 440f)), "le coin bas-droit de la boîte est hors forme")
+        T.ok(shape.contains(350f, 300f), "le centre du texte est dans la forme")
     }
 }
