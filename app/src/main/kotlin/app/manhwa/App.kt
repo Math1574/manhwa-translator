@@ -46,6 +46,8 @@ class AppGraph(ctx: Context) {
         }
     }
     val gpuTest = GpuTester(ctx, this)
+    val blockReader = GemmaBlockReader(gemma) { settingsStore.settings }
+    val visionTest = VisionTester(ctx, gemma)
     val controller = TranslationController(ctx, this)
 }
 

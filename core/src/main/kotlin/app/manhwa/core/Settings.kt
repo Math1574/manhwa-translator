@@ -23,6 +23,8 @@ data class AppSettings(
     val refinePass: Boolean = false,
     /** Blocage des publicités, fenêtres intempestives et redirections dans le navigateur. */
     val blockAds: Boolean = true,
+    /** Relecture automatique des textes douteux par Gemma (modèle de vision) quand elle a été validée par le test. */
+    val autoReread: Boolean = true,
 ) {
     /** Ramène les valeurs dans des bornes valides. */
     fun sanitized() = copy(
@@ -35,7 +37,7 @@ data class AppSettings(
         it["source"] = source.name; it["target"] = target.name; it["textScale"] = textScale.toString()
         it["autoTranslate"] = autoTranslate.toString(); it["mode"] = mode.name
         it["maxPrefetchPages"] = maxPrefetchPages.toString(); it["cacheMaxMb"] = cacheMaxMb.toString()
-        it["schema"] = "2"; it["engine"] = engine.name; it["useGpu"] = useGpu.toString(); it["diagnostic"] = diagnostic.toString(); it["enhancedOcr"] = enhancedOcr.toString(); it["refinePass"] = refinePass.toString(); it["blockAds"] = blockAds.toString()
+        it["schema"] = "2"; it["engine"] = engine.name; it["useGpu"] = useGpu.toString(); it["diagnostic"] = diagnostic.toString(); it["enhancedOcr"] = enhancedOcr.toString(); it["refinePass"] = refinePass.toString(); it["blockAds"] = blockAds.toString(); it["autoReread"] = autoReread.toString()
     }.let { p -> java.io.StringWriter().also { w -> p.store(w, null) }.toString() }
 
     companion object {
@@ -58,6 +60,7 @@ data class AppSettings(
                 p.getProperty("enhancedOcr")?.toBooleanStrictOrNull() ?: d.enhancedOcr,
                 p.getProperty("refinePass")?.toBooleanStrictOrNull() ?: d.refinePass,
                 p.getProperty("blockAds")?.toBooleanStrictOrNull() ?: d.blockAds,
+                p.getProperty("autoReread")?.toBooleanStrictOrNull() ?: d.autoReread,
             ).sanitized()
         }
     }

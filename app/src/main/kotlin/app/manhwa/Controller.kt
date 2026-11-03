@@ -26,6 +26,7 @@ import app.manhwa.core.AdBlocker
 import app.manhwa.core.CacheKey
 import app.manhwa.core.DebugInfo
 import app.manhwa.core.JunkFilter
+import app.manhwa.core.OcrMerge
 import app.manhwa.core.OcrRepair
 import app.manhwa.core.TranslationChecks
 import app.manhwa.core.sha256Hex
@@ -343,7 +344,9 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val translator = if (spec == null) MlKitTranslation(graph.models) else graph.gemma
         val enhanced = s.enhancedOcr && graph.paddleModels.available
         val ocrEngine = CombinedOcr(s.source, MlKitOcr(s.source), if (enhanced) graph.paddle else null, Lexicon.get(ctx))
-        val engineId = (if (spec == null) MlKitTranslation.ID else GemmaTranslator.engineId(spec)) + (if (enhanced) "+pp1" else "")
+        val rereadOn = spec != null && s.source.code == "en" && graph.blockReader.available
+        // « pp2 » : lecture des lignes inclinées sur recadrage redressé ; « rr » : relecture des textes douteux par Gemma (résultats différents, cache à part)
+        val engineId = (if (spec == null) MlKitTranslation.ID else GemmaTranslator.engineId(spec)) + (if (enhanced) "+pp2" else "") + (if (rereadOn) "+rr1" else "")
         var debug: DebugInfo? = null
         val lexicon = Lexicon.get(ctx)
         candidatesById[c.id] = c
@@ -356,6 +359,10 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             // l'anglais est lu par OCR avec beaucoup de bruit : on écarte filigranes et débris, puis on répare mots collés et chiffres parasites
             junk = { t, rel -> s.source.code != "ja" && s.source.code != "ko" && s.source.code != "zh" && (JunkFilter.isWatermark(t) || (rel < 1.6f && JunkFilter.isDebris(t, lexicon)) || repeatedAcrossPages(t, keysById[c.id]?.imageHash ?: c.id)) },
             repair = { t -> try { OcrRepair.repair(t, lexicon, graph.gemma.chapterNames()) } catch (e: Throwable) { t } },
+            reader = if (rereadOn) graph.blockReader else null,
+            // part de vrais mots anglais (noms propres du chapitre compris) : repère les lectures absurdes et vérifie les relectures
+            plausibility = { t -> try { val names = graph.gemma.chapterNames(); OcrMerge.plausibility(t, lexicon, names) } catch (e: Throwable) { 1f } },
+            log = { msg -> OcrDebug.note = (OcrDebug.note + " [" + msg + "]").takeLast(1500); android.util.Log.i("MT", msg) },
         )
         val out = pipeline.process(bytes, s.source.code, s.target.code)
         var overlayForLog: JSONObject? = null

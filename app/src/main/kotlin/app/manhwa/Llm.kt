@@ -16,6 +16,7 @@ import app.manhwa.core.ModelSpec
 import app.manhwa.core.ModelStatus
 import app.manhwa.core.ModelStore
 import app.manhwa.core.TranslationEngine
+import app.manhwa.core.VisionPrompt
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Content
 import com.google.ai.edge.litertlm.ConversationConfig
@@ -124,7 +125,7 @@ class GemmaTranslator(
         if (!models.isReady(spec)) throw IllegalStateException("Modèle Gemma absent : téléchargez-le dans l'onglet Modèles")
         main.removeCallbacks(releaseTask)
         try {
-            val eng = ensureEngine(spec, s.useGpu)
+            val eng = ensureEngine(spec, s.useGpu, vision = visionReady && s.autoReread)
             var out = ask(eng, texts, source, target, glossary)
             // lignes manquantes dans la réponse : une seconde tentative, ligne par ligne
             for (i in out.indices) if (out[i] == null) out[i] = ask(eng, listOf(texts[i]), source, target, glossary).firstOrNull()
@@ -220,28 +221,132 @@ class GemmaTranslator(
      * il suppose un modèle récent (fichier publié après mai 2026) : en cas d'échec on réessaie sans.
      */
     @OptIn(ExperimentalApi::class)
-    private fun createEngine(path: String, backend: Backend, speculative: Boolean): Engine {
+    private fun createEngine(path: String, backend: Backend, speculative: Boolean, vision: Boolean = false): Engine {
         ExperimentalFlags.enableSpeculativeDecoding = speculative
-        return Engine(EngineConfig(modelPath = path, backend = backend, maxNumTokens = 4096, cacheDir = ctx.cacheDir.path)).also { it.initialize() }
+        // lecture d'image : encodeur de vision sur GPU (la voie CPU plante au deuxième tour d'image sur certains Snapdragon), une image à la fois
+        val cfg = if (vision) EngineConfig(modelPath = path, backend = backend, visionBackend = Backend.GPU(), maxNumTokens = 4096, maxNumImages = 1, cacheDir = ctx.cacheDir.path)
+        else EngineConfig(modelPath = path, backend = backend, maxNumTokens = 4096, cacheDir = ctx.cacheDir.path)
+        return Engine(cfg).also { it.initialize() }
     }
 
-    private fun ensureEngine(spec: ModelSpec, gpu: Boolean): Engine {
-        val key = spec.id + if (gpu) ":gpu" else ":cpu"
+    /** Vrai si le moteur chargé sait lire une image. */
+    @Volatile var engineHasVision: Boolean = false
+        private set
+
+    private fun ensureEngine(spec: ModelSpec, gpu: Boolean, vision: Boolean = false): Engine {
+        val key = spec.id + (if (gpu) ":gpu" else ":cpu") + (if (vision) ":v" else "")
         engine?.let { if (engineKey == key) return it }
         release()
         val path = models.fileOf(spec).absolutePath
         // ordre d'essai : GPU + spéculatif, GPU, CPU + spéculatif, CPU (repli automatique si une option n'est pas disponible)
         val attempts = (if (gpu) listOf(true to true, true to false) else emptyList()) + listOf(false to true, false to false)
         var last: Throwable? = null
-        for ((useGpu, spec2) in attempts) {
-            try {
-                val e = createEngine(path, if (useGpu) Backend.GPU() else Backend.CPU(), spec2)
-                engine = e; engineKey = key
-                backendLabel = (if (useGpu) "GPU" else "CPU") + (if (spec2) " + décodage spéculatif" else "")
-                return e
-            } catch (t: Throwable) { last = t }
+        for (withVision in if (vision) listOf(true, false) else listOf(false)) {
+            for ((useGpu, spec2) in attempts) {
+                try {
+                    val e = createEngine(path, if (useGpu) Backend.GPU() else Backend.CPU(), spec2, withVision)
+                    engine = e; engineKey = spec.id + (if (gpu) ":gpu" else ":cpu") + (if (withVision) ":v" else "")
+                    engineHasVision = withVision
+                    backendLabel = (if (useGpu) "GPU" else "CPU") + (if (spec2) " + décodage spéculatif" else "") + (if (withVision) " + lecture d'image" else "")
+                    if (vision && !withVision) markVision(false, "le moteur n'a pas pu être créé avec la lecture d'image : ${last?.message ?: last?.javaClass?.simpleName}")
+                    return e
+                } catch (t: Throwable) { last = t }
+            }
         }
         throw last ?: IllegalStateException("moteur indisponible")
+    }
+
+    // ---------- lecture d'image (relecture des textes douteux) ----------
+
+    private val visionFile = File(ctx.filesDir, "vision_probe.state")
+    /** Vrai si le test de lecture d'image a réussi : la relecture automatique est alors possible. */
+    @Volatile var visionReady: Boolean = false
+        private set
+    @Volatile var visionStatus: String = ""
+        private set
+
+    init {
+        // un plantage natif ne s'intercepte pas : « running » écrit avant chaque lecture d'image et effacé après ; s'il reste, la lecture d'image est désactivée
+        try {
+            if (visionFile.exists()) {
+                val t = visionFile.readText().trim()
+                when {
+                    t == "running" -> { markVision(false, "l'application a planté pendant une lecture d'image : fonction désactivée") }
+                    t == "ok" -> { visionReady = true; visionStatus = "Validée : les textes douteux sont relus automatiquement." }
+                    t.startsWith("failed|") -> { visionStatus = "Indisponible : " + t.removePrefix("failed|") }
+                }
+            }
+        } catch (_: Throwable) {}
+    }
+
+    private fun markVision(ok: Boolean, note: String) {
+        visionReady = ok
+        visionStatus = if (ok) "Validée : les textes douteux sont relus automatiquement." else "Indisponible : $note"
+        try { visionFile.writeText(if (ok) "ok" else "failed|$note") } catch (_: Throwable) {}
+    }
+
+    /** Lit une image avec une consigne (texte transcrit) ; null en cas d'échec. Une conversation neuve par image (pas de contexte partagé). */
+    @Synchronized fun readImage(png: ByteArray, system: String, user: String, maxTokens: Int = 200): String? {
+        val s = settings()
+        val spec = LlmModels.specFor(s.engine) ?: return null
+        if (!models.isReady(spec) || !visionReady) return null
+        main.removeCallbacks(releaseTask)
+        try {
+            visionFile.writeText("running")
+            val eng = ensureEngine(spec, s.useGpu, vision = true)
+            if (!engineHasVision) return null
+            val config = ConversationConfig(
+                systemInstruction = Contents.of(system),
+                samplerConfig = SamplerConfig(topK = 1, topP = 1.0, temperature = 0.05),
+                maxOutputToken = maxTokens,
+            )
+            val reply = eng.createConversation(config).use { conv ->
+                withWatchdog(conv) { textOf(conv.sendMessage(Contents.of(listOf(Content.ImageBytes(png), Content.Text(user))))) }
+            }
+            visionFile.writeText("ok")
+            return reply
+        } catch (t: Throwable) {
+            markVision(false, t.message ?: t.javaClass.simpleName)
+            return null
+        } finally {
+            main.postDelayed(releaseTask, IDLE_RELEASE_MS)
+        }
+    }
+
+    class VisionTestResult(val ok: Boolean, val text: String, val firstMs: Long, val secondMs: Long, val note: String)
+
+    /** Test de la lecture d'image : un recadrage type (texte manuscrit incliné traversé par un contour) doit être lu correctement. */
+    @Synchronized fun testVision(png: ByteArray, expected: List<String>): VisionTestResult {
+        val s = settings()
+        val spec = LlmModels.specFor(s.engine)?.takeIf { models.isReady(it) } ?: listOf(LlmModels.E4B, LlmModels.E2B).firstOrNull { models.isReady(it) }
+            ?: return VisionTestResult(false, "", 0, 0, "Téléchargez d'abord un modèle Gemma dans l'onglet Modèles.")
+        main.removeCallbacks(releaseTask)
+        try {
+            visionFile.writeText("running")
+            release()
+            val eng = ensureEngine(spec, s.useGpu, vision = true)
+            if (!engineHasVision) { markVision(false, "le moteur n'accepte pas les images"); return VisionTestResult(false, "", 0, 0, visionStatus) }
+            fun once(): Pair<String, Long> {
+                val t0 = System.currentTimeMillis()
+                val config = ConversationConfig(systemInstruction = Contents.of(VisionPrompt.system()), samplerConfig = SamplerConfig(topK = 1, topP = 1.0, temperature = 0.05), maxOutputToken = 200)
+                val reply = eng.createConversation(config).use { conv ->
+                    withWatchdog(conv) { textOf(conv.sendMessage(Contents.of(listOf(Content.ImageBytes(png), Content.Text(VisionPrompt.user("(none)")))))) }
+                }
+                return reply to (System.currentTimeMillis() - t0)
+            }
+            val (r1, t1) = once()
+            val (_, t2) = once()      // deuxième image d'affilée : c'est le cas qui plantait sur la voie CPU
+            val text = VisionPrompt.parse(r1)?.text ?: r1
+            val ok = expected.all { text.uppercase().contains(it) }
+            if (ok) { visionFile.writeText("ok"); visionReady = true; visionStatus = "Validée : les textes douteux sont relus automatiquement." }
+            else markVision(false, "lecture incorrecte pendant le test (« ${text.take(60)} »)")
+            return VisionTestResult(ok, text, t1, t2, visionStatus)
+        } catch (t: Throwable) {
+            markVision(false, t.message ?: t.javaClass.simpleName)
+            return VisionTestResult(false, "", 0, 0, visionStatus)
+        } finally {
+            main.postDelayed(releaseTask, IDLE_RELEASE_MS)
+        }
     }
 
     class BenchResult(val label: String, val ok: Boolean, val initMs: Long, val translateMs: Long, val error: String?)
@@ -287,7 +392,7 @@ class GemmaTranslator(
 
     @Synchronized fun release() {
         try { engine?.close() } catch (_: Throwable) {}
-        engine = null; engineKey = ""
+        engine = null; engineKey = ""; engineHasVision = false
     }
 
     companion object {

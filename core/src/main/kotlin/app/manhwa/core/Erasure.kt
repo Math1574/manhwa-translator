@@ -288,16 +288,24 @@ object Erasure {
         if (container != null) {
             val c = container.inflate(4f, 4f)
             for (i in mask.indices) if (mask[i]) { val ix = (x0 + i % w + 0.5f) / s; val iy = (y0 + i / w + 0.5f) / s; if (ix < c.left || ix > c.right || iy < c.top || iy > c.bottom) mask[i] = false }
-            // bulle ronde : le remplissage ne doit pas non plus déborder de l'ellipse de la bulle (fuite par la queue ou un trou du contour). Un cartouche
-            // rectangulaire (remplissage qui occupe presque toute la boîte) garde sa forme.
+            // fuite : si le remplissage déborde nettement de l'ellipse de la bulle (trou du contour, queue ouverte), on le borne à l'ellipse ; sinon on garde sa forme
+            // exacte (nuage, bulle à pointes, cartouche). Un remplissage qui occupe presque toute la boîte est un rectangle : jamais borné.
             val boxArea = max(1f, container.width * container.height * s * s)
-            if (mask.count { it } / boxArea < 0.84f) {
+            val fillRatio = mask.count { it } / boxArea
+            if (fillRatio < 0.84f) {
                 val cx = (container.left + container.right) / 2f; val cy = (container.top + container.bottom) / 2f
-                val rx = container.width / 2f * 1.05f; val ry = container.height / 2f * 1.05f
-                for (i in mask.indices) if (mask[i]) {
-                    val ix = (x0 + i % w + 0.5f) / s; val iy = (y0 + i / w + 0.5f) / s
-                    val ex = (ix - cx) / rx; val ey = (iy - cy) / ry
-                    if (ex * ex + ey * ey > 1f) mask[i] = false
+                fun outside(scale: Float): Int {
+                    val rx = container.width / 2f * scale; val ry = container.height / 2f * scale; var n = 0
+                    for (i in mask.indices) if (mask[i]) { val ex = ((x0 + i % w + 0.5f) / s - cx) / rx; val ey = ((y0 + i / w + 0.5f) / s - cy) / ry; if (ex * ex + ey * ey > 1f) n++ }
+                    return n
+                }
+                val total = max(1, mask.count { it })
+                if (outside(1.12f).toFloat() / total > 0.05f) {
+                    val rx = container.width / 2f * 1.05f; val ry = container.height / 2f * 1.05f
+                    for (i in mask.indices) if (mask[i]) {
+                        val ex = ((x0 + i % w + 0.5f) / s - cx) / rx; val ey = ((y0 + i / w + 0.5f) / s - cy) / ry
+                        if (ex * ex + ey * ey > 1f) mask[i] = false
+                    }
                 }
             }
         }

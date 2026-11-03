@@ -1,10 +1,32 @@
 package app.manhwa.core
 
 import kotlin.math.ceil
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
-data class ScoredBox(val x0: Float, val y0: Float, val x1: Float, val y1: Float, val score: Float, val thickness: Float = 0f) {
+data class ScoredBox(
+    val x0: Float, val y0: Float, val x1: Float, val y1: Float, val score: Float, val thickness: Float = 0f,
+    /** Inclinaison de la ligne en degrés (0 = horizontale, positif = descend vers la droite) et rectangle orienté : centre, longueur, épaisseur (0 s'il n'y en a pas). */
+    val angle: Float = 0f, val ocx: Float = 0f, val ocy: Float = 0f, val olen: Float = 0f, val othick: Float = 0f,
+) {
+    /** Vrai si la ligne est inclinée : on la lit sur un recadrage redressé plutôt que sur sa boîte alignée sur les axes (qui déborde sur les lignes voisines). */
+    val oriented: Boolean get() = olen > 0f
+
+    /** Coins du rectangle orienté (haut-gauche, haut-droit, bas-droit, bas-gauche), en coordonnées de la carte ; x0, y1… ci-dessus en sont l'enveloppe. */
+    fun orientedCorners(): FloatArray? {
+        if (!oriented) return null
+        val a = Math.toRadians(angle.toDouble()); val ux = Math.cos(a).toFloat(); val uy = Math.sin(a).toFloat()
+        val vx = -uy; val vy = ux
+        val hl = olen / 2f; val ht = othick / 2f
+        return floatArrayOf(
+            ocx - hl * ux - ht * vx, ocy - hl * uy - ht * vy,
+            ocx + hl * ux - ht * vx, ocy + hl * uy - ht * vy,
+            ocx + hl * ux + ht * vx, ocy + hl * uy + ht * vy,
+            ocx - hl * ux + ht * vx, ocy - hl * uy + ht * vy,
+        )
+    }
+
     val width: Float get() = x1 - x0
     val height: Float get() = y1 - y0
 }
@@ -41,9 +63,47 @@ object DbPost {
             val score = (sum / tail).toFloat()
             if (min(bw, bh) < minSide || score < boxThresh || tail < 6) continue
             val d = bw * bh * unclip / (2f * (bw + bh))
+            val o = orientedRect(queue, tail, w, unclip)
+            if (o != null && abs(o.angle) in 2f..35f && o.len >= 1.8f * o.thick) {
+                // ligne inclinée : enveloppe du rectangle orienté (bien plus serrée que la boîte de la composante agrandie) et recadrage redressé à la lecture
+                val sb = ScoredBox(0f, 0f, 0f, 0f, score, o.thick, o.angle, o.cx, o.cy, o.len, o.thick)
+                val c = sb.orientedCorners()!!
+                val ex0 = max(0f, minOf(c[0], c[2], c[4], c[6])); val ey0 = max(0f, minOf(c[1], c[3], c[5], c[7]))
+                val ex1 = min(w.toFloat(), maxOf(c[0], c[2], c[4], c[6])); val ey1 = min(h.toFloat(), maxOf(c[1], c[3], c[5], c[7]))
+                if (ex1 - ex0 >= 3f && ey1 - ey0 >= 3f) { out.add(sb.copy(x0 = ex0, y0 = ey0, x1 = ex1, y1 = ey1)); continue }
+            }
             out.add(ScoredBox(max(0f, minX - d), max(0f, minY - d), min(w.toFloat(), maxX + 1 + d), min(h.toFloat(), maxY + 1 + d), score, orientedThickness(queue, tail, w, unclip)))
         }
         return out.sortedWith(compareBy({ it.y0 }, { it.x0 }))
+    }
+
+    private class Oriented(val cx: Float, val cy: Float, val angle: Float, val len: Float, val thick: Float)
+
+    /** Rectangle orienté d'une composante (axes principaux de ses pixels) avec l'agrandissement « unclip » : longueur, épaisseur, centre et angle en degrés (axe de lecture, -90..90). */
+    private fun orientedRect(pixels: IntArray, n: Int, w: Int, unclip: Float): Oriented? {
+        if (n < 12) return null
+        var mx = 0.0; var my = 0.0
+        for (k in 0 until n) { mx += pixels[k] % w; my += pixels[k] / w }
+        mx /= n; my /= n
+        var cxx = 0.0; var cyy = 0.0; var cxy = 0.0
+        for (k in 0 until n) { val dx = pixels[k] % w - mx; val dy = pixels[k] / w - my; cxx += dx * dx; cyy += dy * dy; cxy += dx * dy }
+        val theta = 0.5 * Math.atan2(2 * cxy, cxx - cyy)
+        val ux = Math.cos(theta); val uy = Math.sin(theta)
+        var minU = Double.MAX_VALUE; var maxU = -Double.MAX_VALUE; var minV = Double.MAX_VALUE; var maxV = -Double.MAX_VALUE
+        for (k in 0 until n) {
+            val dx = pixels[k] % w - mx; val dy = pixels[k] / w - my
+            val u = dx * ux + dy * uy; val v = -dx * uy + dy * ux
+            if (u < minU) minU = u; if (u > maxU) maxU = u; if (v < minV) minV = v; if (v > maxV) maxV = v
+        }
+        val len = (maxU - minU + 1).toFloat(); val thick = (maxV - minV + 1).toFloat()
+        // l'axe de lecture est l'axe long ; angle ramené entre -90 et 90 degrés
+        var ang = Math.toDegrees(theta)
+        if (thick > len) return null                         // ce n'est pas une ligne : pas de rectangle orienté
+        while (ang > 90) ang -= 180; while (ang <= -90) ang += 180
+        val d = len * thick * unclip / (2f * (len + thick))
+        val cu = (minU + maxU) / 2; val cv = (minV + maxV) / 2
+        val ccx = (mx + cu * ux - cv * uy).toFloat(); val ccy = (my + cu * uy + cv * ux).toFloat()
+        return Oriented(ccx, ccy, ang.toFloat(), len + 2f * d, thick + 2f * d)
     }
 
     /**
@@ -105,10 +165,10 @@ object Ctc {
 /** Fusion des lectures de deux moteurs d'OCR (ML Kit et PaddleOCR) : on garde tout texte vu par l'un ou l'autre, la lecture la plus sûre l'emporte. */
 object OcrMerge {
     /** Part des mots d'une lecture (après réparation) qui sont de vrais mots anglais : départage deux lectures d'un même texte (un lecteur peut être très sûr de lui et se tromper). */
-    fun plausibility(text: String, lex: EnglishLexicon): Float {
-        val words = Regex("[A-Za-z]+(?:'[A-Za-z]+)?").findAll(OcrRepair.repair(text, lex)).map { it.value }.filter { it.length >= 2 || it.equals("I", true) || it.equals("A", true) }.toList()
+    fun plausibility(text: String, lex: EnglishLexicon, names: Set<String> = emptySet()): Float {
+        val words = Regex("[A-Za-z]+(?:'[A-Za-z]+)?").findAll(OcrRepair.repair(text, lex, names)).map { it.value }.filter { it.length >= 2 || it.equals("I", true) || it.equals("A", true) }.toList()
         if (words.isEmpty()) return 0.5f
-        return words.count { lex.known(it.lowercase()) }.toFloat() / words.size
+        return words.count { lex.known(it.lowercase()) || it.lowercase() in names }.toFloat() / words.size
     }
 
     fun merge(mlkit: List<OcrLine>, paddle: List<OcrLine>, script: String, lex: EnglishLexicon? = null): List<OcrLine> {

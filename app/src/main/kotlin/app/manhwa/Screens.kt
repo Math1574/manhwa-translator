@@ -430,6 +430,18 @@ fun SettingsScreen(graph: AppGraph) {
         if (graph.gpuTest.summary.isNotEmpty()) Text(graph.gpuTest.summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
+                Text("Relecture des textes difficiles (Gemma)", style = MaterialTheme.typography.titleMedium)
+                Text("Quand une lecture paraît incomplète ou absurde (lettrage manuscrit, incliné, traversé par un contour), Gemma relit la zone sur l'image avant la traduction. Appuyez une fois sur « Tester » ; ensuite c'est automatique.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            }
+            Switch(checked = s.autoReread, onCheckedChange = { v -> store.update { it.copy(autoReread = v) } })
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedButton(onClick = { graph.visionTest.run() }, enabled = !graph.visionTest.running) { Text("Tester la relecture") }
+            if (graph.visionTest.running) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+        }
+        if (graph.visionTest.summary.isNotEmpty()) Text(graph.visionTest.summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
                 Text("Bloquer les publicités", style = MaterialTheme.typography.titleMedium)
                 Text("Filtre les régies publicitaires connues, les fenêtres intempestives et les redirections vers d'autres sites. Désactivez-le si un site de lecture ne s'affiche plus correctement.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             }

@@ -13,6 +13,7 @@ import app.manhwa.core.Ctc
 import app.manhwa.core.DbPost
 import app.manhwa.core.OcrEngine
 import app.manhwa.core.OcrLine
+import app.manhwa.core.ScoredBox
 import app.manhwa.core.VerticalColumns
 import app.manhwa.core.OcrMerge
 import app.manhwa.core.OcrResult
@@ -176,7 +177,8 @@ class PaddleOcr(private val models: PaddleModels) {
                 }
                 continue
             }
-            val crop = Bitmap.createBitmap(tile, x0, y0, cw, ch)
+            // ligne inclinée : recadrage redressé selon le rectangle orienté (comme PaddleOCR), sinon boîte alignée sur les axes
+            val crop = (if (b.oriented) orientedCrop(tile, b, dw, dh) else null) ?: Bitmap.createBitmap(tile, x0, y0, cw, ch)
             val (text, conf) = try {
                 val a = readLine(env, rec, crop)
                 // deux lecteurs anglais : on garde le plus confiant (égalité : le v5, plus récent)
@@ -195,6 +197,23 @@ class PaddleOcr(private val models: PaddleModels) {
         }
         OcrDebug.note = (OcrDebug.note + " [y=$yOffset langue=$lang boîtes=${boxes.size} colonnes=$tall manga(dispo=$mangaAvail, lues=$mangaRead) $mangaErr]").takeLast(500)
         return lines
+    }
+
+    /** Recadrage redressé d'une ligne inclinée : le rectangle orienté du détecteur est ramené à l'horizontale par une transformation affine. */
+    private fun orientedCrop(tile: Bitmap, b: ScoredBox, dw: Int, dh: Int): Bitmap? {
+        val c = b.orientedCorners() ?: return null
+        val sx = tile.width.toFloat() / dw; val sy = tile.height.toFloat() / dh
+        val src = FloatArray(8) { if (it % 2 == 0) c[it] * sx else c[it] * sy }
+        val outW = Math.hypot((src[2] - src[0]).toDouble(), (src[3] - src[1]).toDouble()).toInt().coerceIn(8, 2400)
+        val outH = Math.hypot((src[6] - src[0]).toDouble(), (src[7] - src[1]).toDouble()).toInt().coerceIn(8, 800)
+        val dst = floatArrayOf(0f, 0f, outW.toFloat(), 0f, outW.toFloat(), outH.toFloat(), 0f, outH.toFloat())
+        val m = android.graphics.Matrix()
+        if (!m.setPolyToPoly(src, 0, dst, 0, 4)) return null
+        val out = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888)
+        val cv = android.graphics.Canvas(out)
+        cv.drawColor(android.graphics.Color.WHITE)
+        cv.drawBitmap(tile, m, android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG))
+        return out
     }
 
     private fun detect(env: OrtEnvironment, bmp: Bitmap, w: Int, h: Int): FloatArray {

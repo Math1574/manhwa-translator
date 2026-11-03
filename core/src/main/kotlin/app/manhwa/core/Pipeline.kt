@@ -37,6 +37,13 @@ class PagePipeline(
     private val junk: (text: String, relativeHeight: Float) -> Boolean = { _, _ -> false },
     /** Répare les erreurs de lecture avant traduction (mots collés, chiffres ou minuscules parasites). */
     private val repair: (String) -> String = { it },
+    /** Relit les blocs douteux avec un modèle vision-langage (null = désactivé). */
+    private val reader: BlockReader? = null,
+    /** Part des mots d'une lecture qui sont de vrais mots (0..1) : sert à repérer les blocs douteux et à vérifier les relectures. */
+    private val plausibility: (String) -> Float = { 1f },
+    /** Journal de diagnostic (relectures proposées, acceptées ou refusées). */
+    private val log: (String) -> Unit = {},
+    private val maxReread: Int = 4,
 ) {
     fun process(imageBytes: ByteArray, source: String, target: String): PageOutcome {
         val key = CacheKey(sha256Hex(imageBytes), source, target, engineId)
@@ -50,9 +57,10 @@ class PagePipeline(
         val heights = grouped.map { medianLineHeight(it) }.filter { it > 0f }.sorted()
         val medianH = if (heights.isEmpty()) 0f else heights[heights.size / 2]
         val blocks = grouped.filter { !TextNormalizer.isNoise(it.text) && !junk(it.text, if (medianH > 0f) medianLineHeight(it) / medianH else 1f) }
-        val clean = blocks.map { repair(it.text) }
+        val clean = blocks.map { repair(it.text) }.toMutableList()
         reportDebug(ocrResult, grouped, blocks, emptySet())
         if (blocks.isEmpty()) return PageOutcome.NoText(ocrResult.imageWidth, ocrResult.imageHeight)
+        reread(imageBytes, source, blocks, clean)
 
         val g = glossary()
         val translated = arrayOfNulls<String>(blocks.size)
@@ -98,6 +106,25 @@ class PagePipeline(
         val result = PageResult(ocrResult.imageWidth, ocrResult.imageHeight, out)
         if (errors == 0) cache.put(key, result) // une page partielle n'est pas mise en cache
         return PageOutcome.Done(result, fromCache = false)
+    }
+
+    /**
+     * Relecture des blocs douteux (lecture incomplète ou absurde) : au plus [maxReread] par page, les plus suspects d'abord. Une relecture n'est retenue
+     * que si elle passe la vérification (mots plausibles, appui des lectures des moteurs) : sinon on garde la lecture d'origine.
+     */
+    private fun reread(imageBytes: ByteArray, source: String, blocks: List<TextBlock>, clean: MutableList<String>) {
+        val r = reader ?: return
+        if (source != "en" || !r.available) return
+        val suspects = blocks.indices.map { it to BlockSuspicion.assess(blocks[it], clean[it], plausibility) }.filter { it.second.suspect }.sortedByDescending { it.second.score }.take(maxReread)
+        if (suspects.isEmpty()) return
+        log("relecture : ${suspects.size} bloc(s) douteux sur ${blocks.size}")
+        for ((i, sus) in suspects) {
+            val read = try { r.reread(imageBytes, blocks[i], clean[i]) } catch (e: Throwable) { log("relecture en échec : ${e.message ?: e.javaClass.simpleName}"); null }
+            if (read == null) { log("bloc ${blocks[i].id} : pas de relecture"); continue }
+            val v = ReadingVerifier.verify(clean[i], read, sus, plausibility)
+            log("bloc ${blocks[i].id} (${sus.reasons.joinToString(", ")}) : « ${clean[i].take(40)} » → « ${read.text.take(70)} » : ${v.reason}")
+            if (v.accepted) clean[i] = v.text
+        }
     }
 
     private fun reportDebug(ocr: OcrResult, grouped: List<TextBlock>, kept: List<TextBlock>, failedIds: Set<Int>) {

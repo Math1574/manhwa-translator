@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests()
+    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -1041,5 +1041,112 @@ fun avoidTests() {
         for (y in 50..110) for (x in 140..199) { val ex = (x - 100) / 90.0; val ey = (y - 80) / 70.0; val d = kotlin.math.sqrt(ex * ex + ey * ey); if (d in 0.98..1.02 && px[y * w + x] == black) { outlineTotal++; if (keep[y * w + x]) outlineKept++ } }
         T.ok(outlineTotal > 20 && outlineKept == outlineTotal, "contour gardé $outlineKept/$outlineTotal")
         T.ok(!keep[80 * w + 155], "la lettre isolée n'est pas protégée")
+    }
+}
+
+fun orientedBoxTests() {
+    T.test("détection : trois lignes inclinées de 7° donnent trois rectangles orientés (angle, enveloppe moins gonflée que l'ancienne boîte)") {
+        val w = 400; val h = 260; val prob = FloatArray(w * h)
+        val a = Math.toRadians(7.0); val ca = Math.cos(a); val sa = Math.sin(a)
+        for (line in 0 until 3) {
+            val cy0 = 60.0 + line * 55.0
+            for (u in -150..150) for (v in -12..12) {                  // bande de 301 × 25 px
+                val x = 200 + u * ca - v * sa; val y = cy0 + u * sa + v * ca
+                val xi = x.toInt(); val yi = y.toInt()
+                if (xi in 0 until w && yi in 0 until h) prob[yi * w + xi] = 0.9f
+            }
+        }
+        val boxes = DbPost.boxes(prob, w, h)
+        T.eq(3, boxes.size)
+        for (b in boxes) { T.ok(b.oriented, "rectangle orienté"); T.ok(kotlin.math.abs(b.angle - 7f) < 2.5f, "angle ${b.angle}") }
+        // ancienne boîte : composante alignée sur les axes (301 × 25 inclinée de 7°) agrandie par « unclip » ; l'enveloppe du rectangle orienté est nettement plus basse
+        val bw = 301f * Math.cos(Math.toRadians(7.0)).toFloat() + 25f * Math.sin(Math.toRadians(7.0)).toFloat(); val bh = 301f * Math.sin(Math.toRadians(7.0)).toFloat() + 25f * Math.cos(Math.toRadians(7.0)).toFloat()
+        val oldHeight = bh + 2f * (bw * bh * 1.6f / (2f * (bw + bh)))
+        for (b in boxes) T.ok(b.y1 - b.y0 < 0.8f * oldHeight, "hauteur de l'enveloppe ${b.y1 - b.y0} contre ${oldHeight} avant")
+        val c = boxes[0].orientedCorners()!!
+        T.ok(c.size == 8 && c[2] > c[0] && c[3] > c[1], "coins du rectangle orienté")
+    }
+    T.test("détection : une ligne droite garde la boîte d'avant (pas de rectangle orienté)") {
+        val w = 300; val h = 100; val prob = FloatArray(w * h)
+        for (y in 40 until 60) for (x in 20 until 280) prob[y * w + x] = 0.9f
+        val b = DbPost.boxes(prob, w, h).single()
+        T.ok(!b.oriented, "ligne droite")
+    }
+}
+
+fun readingCheckTests() {
+    val lex = EnglishLexicon(listOf("did", "he", "consume", "some", "kind", "of", "elixir", "want", "me", "to", "put", "a", "restriction", "on", "your", "mouth", "shut", "up", "that", "sounds", "gross", "yes", "sir", "i'll", "the"), listOf("the", "you", "i"))
+    val plaus = { t: String -> OcrMerge.plausibility(t, lex) }
+    fun ln(t: String, l: Float, tp: Float, r: Float, b: Float, c: Float = 0.95f) = OcrLine(t, RectF(l, tp, r, b), c)
+    T.test("blocs suspects : une zone détectée mal couverte par la lecture est signalée ; un bloc propre et complet ne l'est pas") {
+        val partial = TextBlock(0, listOf(ln("KIND OF ELIXIR?", 750f, 1300f, 1080f, 1380f)), RectF(750f, 1300f, 1080f, 1380f), "KIND OF ELIXIR?", false, BlockKind.FREE, null, RectF(650f, 1215f, 1155f, 1395f))
+        val s1 = BlockSuspicion.assess(partial, "KIND OF ELIXIR?", plaus)
+        T.ok(s1.suspect && s1.coverageGap, "bloc partiel suspect : ${s1.reasons}")
+        val full = TextBlock(1, listOf(ln("DID HE CONSUME SOME", 613f, 1226f, 1139f, 1338f), ln("KIND OF ELIXIR?", 752f, 1299f, 1078f, 1383f)), RectF(613f, 1226f, 1139f, 1383f), "DID HE CONSUME SOME KIND OF ELIXIR?", false, BlockKind.FREE, null, RectF(650f, 1215f, 1155f, 1395f))
+        val s2 = BlockSuspicion.assess(full, "DID HE CONSUME SOME KIND OF ELIXIR?", plaus)
+        T.ok(!s2.suspect, "bloc complet non suspect : ${s2.score} ${s2.reasons}")
+    }
+    T.test("blocs suspects : mots absurdes, lettres répétées et confiance faible") {
+        val b = TextBlock(2, listOf(ln("A. RENRCTONON'YOUR", 100f, 100f, 400f, 140f, 0.99f)), RectF(100f, 100f, 400f, 140f), "A. RENRCTONON'YOUR", false)
+        T.ok(BlockSuspicion.assess(b, "A. RENRCTONON'YOUR", plaus).suspect, "lecture absurde malgré une confiance de 0,99")
+        val c = TextBlock(3, listOf(ln("SSSSSSSS", 100f, 100f, 400f, 140f)), RectF(100f, 100f, 400f, 140f), "SSSSSSSS", false)
+        T.ok(BlockSuspicion.assess(c, "SSSSSSSS", plaus).suspect, "lettres répétées")
+        val d = TextBlock(4, listOf(ln("SHUT UP", 100f, 100f, 400f, 140f, 0.99f)), RectF(100f, 100f, 400f, 140f), "SHUT UP", false)
+        T.ok(!BlockSuspicion.assess(d, "SHUT UP", plaus).suspect, "texte propre")
+    }
+    T.test("vérification de la relecture : une ligne manquante est acceptée, une invention est refusée") {
+        val gap = Suspicion(1.5f, listOf("zone mal couverte"), true)
+        val v1 = ReadingVerifier.verify("KIND OF ELIXIR?", VisionRead("DID HE CONSUME SOME KIND OF ELIXIR?", 2, false), gap, plaus)
+        T.ok(v1.accepted && v1.text.startsWith("DID HE"), "complétion acceptée : ${v1.reason}")
+        val v2 = ReadingVerifier.verify("KIND OF ELIXIR?", VisionRead("THE MASTER WILL NOT SEE ANYONE TODAY", 1, false), gap, plaus)
+        T.ok(!v2.accepted, "invention refusée : ${v2.reason}")
+        val garbled = Suspicion(2.5f, listOf("mots peu plausibles"), false)
+        val v3 = ReadingVerifier.verify("A. RENRCTONON'YOUR", VisionRead("A RESTRICTION ON YOUR MOUTH?", 2, false), garbled, plaus)
+        T.ok(v3.accepted, "correction d'un mot abîmé acceptée : ${v3.reason}")
+        val v4 = ReadingVerifier.verify("SHUT UP", VisionRead("SHUT [?] UP [?]", 1, true), garbled, plaus)
+        T.ok(!v4.accepted && v4.reason.contains("illisible"), "texte illisible refusé : ${v4.reason}")
+        val good = Suspicion(1.0f, listOf("confiance moyenne"), false)
+        val v5 = ReadingVerifier.verify("SHUT UP THAT SOUNDS GROSS", VisionRead("YES SIR I'LL SHUT UP", 1, false), good, plaus)
+        T.ok(!v5.accepted, "une lecture plausible des moteurs n'est pas réécrite : ${v5.reason}")
+    }
+    T.test("consigne et lecture de la réponse du modèle") {
+        val r = VisionPrompt.parse("LINES: 3\nTEXT:\nDID HE CONSUME SOME\nKIND OF ELIXIR?")!!
+        T.eq("DID HE CONSUME SOME KIND OF ELIXIR?", r.text); T.eq(3, r.lines); T.ok(!r.uncertain, "pas d'incertitude")
+        T.ok(VisionPrompt.parse("LINES: 1\nTEXT:\nWANT ME [?] PUT")!!.uncertain, "marqueur d'illisible")
+        T.eq("HELLO THERE", VisionPrompt.parse("HELLO THERE")!!.text)
+        T.eq(null, VisionPrompt.parse("   "))
+        T.ok(VisionPrompt.user("KIND OF ELIXIR?").contains("KIND OF ELIXIR?") && VisionPrompt.user("x").contains("EXACTLY"), "consigne")
+    }
+}
+
+fun rereadPipelineTests() {
+    val lex = EnglishLexicon(listOf("did", "he", "consume", "some", "kind", "of", "elixir", "yes", "sir"), listOf("the", "you", "i"))
+    val plaus = { t: String -> OcrMerge.plausibility(t, lex) }
+    val partial = OcrEngine { OcrResult(1200, 1500, listOf(OcrLine("KIND OF ELIXIR?", RectF(750f, 1300f, 1080f, 1380f), 0.95f)), listOf(Detection(RegionClass.TEXT_FREE, RectF(650f, 1215f, 1155f, 1395f), 0.8f))) }
+    val seen = ArrayList<String>()
+    val echo = TranslationEngine { texts, _, _ -> seen.addAll(texts); texts.map { "FR:" + it } }
+    val img = ByteArray(4) { it.toByte() }
+    T.test("pipeline : un bloc dont une ligne manque est relu, la lecture corrigée est traduite") {
+        seen.clear()
+        val reader = object : BlockReader { override val available = true; override fun reread(imageBytes: ByteArray, block: TextBlock, engineText: String) = VisionRead("DID HE CONSUME SOME KIND OF ELIXIR?", 2, false) }
+        val logs = ArrayList<String>()
+        val out = PagePipeline(ResultCache(tmp()), partial, echo, "e", reader = reader, plausibility = plaus, log = { logs.add(it) }, useCache = false).process(img, "en", "fr") as PageOutcome.Done
+        T.eq("FR:Did he consume some kind of elixir?".uppercase(), out.result.blocks.single().translated.uppercase().replace("FR:DID", "FR:DID"))
+        T.ok(seen.single().uppercase().contains("DID HE CONSUME"), "le texte traduit est la lecture corrigée : $seen")
+        T.ok(logs.any { it.contains("relecture acceptée") }, "journal : $logs")
+        T.eq("DID HE CONSUME SOME KIND OF ELIXIR?", out.result.blocks.single().repaired)
+    }
+    T.test("pipeline : une invention est refusée, et sans lecteur ou hors anglais rien ne change") {
+        seen.clear()
+        val liar = object : BlockReader { override val available = true; override fun reread(imageBytes: ByteArray, block: TextBlock, engineText: String) = VisionRead("YES SIR I WILL OBEY", 1, false) }
+        PagePipeline(ResultCache(tmp()), partial, echo, "e", reader = liar, plausibility = plaus, useCache = false).process(img, "en", "fr")
+        T.ok(seen.single().uppercase().contains("KIND OF ELIXIR") && !seen.single().uppercase().contains("OBEY"), "lecture d'origine conservée : $seen")
+        seen.clear()
+        PagePipeline(ResultCache(tmp()), partial, echo, "e", plausibility = plaus, useCache = false).process(img, "en", "fr")
+        T.ok(seen.single().uppercase().contains("KIND OF ELIXIR"), "sans lecteur")
+        seen.clear()
+        val off = object : BlockReader { override val available = false; override fun reread(imageBytes: ByteArray, block: TextBlock, engineText: String): VisionRead? = throw IllegalStateException("ne doit pas être appelé") }
+        PagePipeline(ResultCache(tmp()), partial, echo, "e", reader = off, plausibility = plaus, useCache = false).process(img, "en", "fr")
+        T.ok(seen.single().uppercase().contains("KIND OF ELIXIR"), "lecteur indisponible")
     }
 }
