@@ -1,9 +1,13 @@
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/PageQueue.kt:26:24 This class is not recommended for use in Kotlin. Use 'kotlin.Any' instead.
-> Task :app:compileDebugKotlin FAILED
-e: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Render.kt:319:21 Unresolved reference 'cand'.
-e: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Render.kt:319:34 Unresolved reference 'cand'.
-* What went wrong:
-Execution failed for task ':app:compileDebugKotlin'.
-org.gradle.api.tasks.TaskExecutionException: Execution failed for task ':app:compileDebugKotlin'.
-BUILD FAILED in 43s
-ls: cannot access 'app/build/outputs/apk/debug/': No such file or directory
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/ComicDetector.kt:40:94 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:366:80 Unnecessary non-null assertion (!!) on a non-null receiver of type 'DebugInfo'.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Engines.kt:50:13 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/PaddleOcr.kt:117:94 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Render.kt:96:48 'fun computeBounds(p0: RectF, p1: Boolean): Unit' is deprecated. Deprecated in Java.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Render.kt:192:39 Unnecessary safe call on a non-null receiver of type 'Erasure.Plan'.
+BUILD SUCCESSFUL in 1m 19s
+total 399028
+drwxr-xr-x 2 runner runner      4096 Nov  3 00:58 .
+drwxr-xr-x 3 runner runner      4096 Nov  3 00:58 ..
+-rw-r--r-- 1 runner runner 408589797 Nov  3 00:58 app-debug.apk
+-rw-r--r-- 1 runner runner       405 Nov  3 00:58 output-metadata.json
