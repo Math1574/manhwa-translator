@@ -1,0 +1,87 @@
+---- Content
+Compiled from "Message.kt"
+public abstract class com.google.ai.edge.litertlm.Content {
+  public abstract com.google.gson.JsonObject toJson$third_party_odml_litert_lm_kotlin_java_com_google_ai_edge_litertlm_litertlm_android();
+  public com.google.ai.edge.litertlm.Content(kotlin.jvm.internal.DefaultConstructorMarker);
+}
+---- Content$Text
+Compiled from "Message.kt"
+public final class com.google.ai.edge.litertlm.Content$Text extends com.google.ai.edge.litertlm.Content {
+  public com.google.ai.edge.litertlm.Content$Text(java.lang.String);
+  public final java.lang.String getText();
+  public com.google.gson.JsonObject toJson$third_party_odml_litert_lm_kotlin_java_com_google_ai_edge_litertlm_litertlm_android();
+  public java.lang.String toString();
+}
+---- Content$ImageBytes
+Compiled from "Message.kt"
+public final class com.google.ai.edge.litertlm.Content$ImageBytes extends com.google.ai.edge.litertlm.Content {
+  public com.google.ai.edge.litertlm.Content$ImageBytes(byte[]);
+  public final byte[] getBytes();
+  public com.google.gson.JsonObject toJson$third_party_odml_litert_lm_kotlin_java_com_google_ai_edge_litertlm_litertlm_android();
+  public java.lang.String toString();
+}
+---- Content$ImageFile
+Compiled from "Message.kt"
+public final class com.google.ai.edge.litertlm.Content$ImageFile extends com.google.ai.edge.litertlm.Content {
+  public com.google.ai.edge.litertlm.Content$ImageFile(java.lang.String);
+  public final java.lang.String getAbsolutePath();
+  public com.google.gson.JsonObject toJson$third_party_odml_litert_lm_kotlin_java_com_google_ai_edge_litertlm_litertlm_android();
+  public java.lang.String toString();
+}
+---- Contents
+Compiled from "Message.kt"
+public final class com.google.ai.edge.litertlm.Contents {
+  public static final com.google.ai.edge.litertlm.Contents$Companion Companion;
+  public final java.util.List<com.google.ai.edge.litertlm.Content> getContents();
+  public final com.google.gson.JsonArray toJson$third_party_odml_litert_lm_kotlin_java_com_google_ai_edge_litertlm_litertlm_android();
+  public java.lang.String toString();
+  public com.google.ai.edge.litertlm.Contents(java.util.List, kotlin.jvm.internal.DefaultConstructorMarker);
+}
+---- Message
+Compiled from "Message.kt"
+public final class com.google.ai.edge.litertlm.Message {
+  public static final com.google.ai.edge.litertlm.Message$Companion Companion;
+  public com.google.ai.edge.litertlm.Message(com.google.ai.edge.litertlm.Role, com.google.ai.edge.litertlm.Contents, java.util.List<com.google.ai.edge.litertlm.ToolCall>, java.util.Map<java.lang.String, java.lang.String>);
+  public com.google.ai.edge.litertlm.Message(com.google.ai.edge.litertlm.Role, com.google.ai.edge.litertlm.Contents, java.util.List, java.util.Map, int, kotlin.jvm.internal.DefaultConstructorMarker);
+  public final com.google.ai.edge.litertlm.Role getRole();
+  public final com.google.ai.edge.litertlm.Contents getContents();
+  public final java.util.List<com.google.ai.edge.litertlm.ToolCall> getToolCalls();
+  public final java.util.Map<java.lang.String, java.lang.String> getChannels();
+  public final com.google.gson.JsonObject toJson$third_party_odml_litert_lm_kotlin_java_com_google_ai_edge_litertlm_litertlm_android();
+  public java.lang.String toString();
+}
+---- ThinkingConfig
+Compiled from "Config.kt"
+public final class com.google.ai.edge.litertlm.ThinkingConfig {
+  public com.google.ai.edge.litertlm.ThinkingConfig(boolean, int);
+  public com.google.ai.edge.litertlm.ThinkingConfig(boolean, int, int, kotlin.jvm.internal.DefaultConstructorMarker);
+  public final boolean getEnableThinking();
+  public final int getThinkingTokenBudget();
+  public java.lang.String toString();
+  public com.google.ai.edge.litertlm.ThinkingConfig(boolean);
+  public com.google.ai.edge.litertlm.ThinkingConfig();
+}
+---- Message$Companion
+Compiled from "Message.kt"
+public final class com.google.ai.edge.litertlm.Message$Companion {
+  public final com.google.ai.edge.litertlm.Message system(java.lang.String);
+  public final com.google.ai.edge.litertlm.Message system(com.google.ai.edge.litertlm.Contents);
+  public final com.google.ai.edge.litertlm.Message user(java.lang.String);
+  public final com.google.ai.edge.litertlm.Message user(com.google.ai.edge.litertlm.Contents);
+  public final com.google.ai.edge.litertlm.Message model(java.lang.String);
+  public final com.google.ai.edge.litertlm.Message model(com.google.ai.edge.litertlm.Contents, java.util.List<com.google.ai.edge.litertlm.ToolCall>, java.util.Map<java.lang.String, java.lang.String>);
+  public final com.google.ai.edge.litertlm.Message tool(com.google.ai.edge.litertlm.Contents);
+  public final com.google.ai.edge.litertlm.Message of(java.lang.String);
+  public final com.google.ai.edge.litertlm.Message of(com.google.ai.edge.litertlm.Content...);
+  public final com.google.ai.edge.litertlm.Message of(java.util.List<? extends com.google.ai.edge.litertlm.Content>);
+  public com.google.ai.edge.litertlm.Message$Companion(kotlin.jvm.internal.DefaultConstructorMarker);
+}
+---- Contents$Companion
+Compiled from "Message.kt"
+public final class com.google.ai.edge.litertlm.Contents$Companion {
+  public final com.google.ai.edge.litertlm.Contents empty$third_party_odml_litert_lm_kotlin_java_com_google_ai_edge_litertlm_litertlm_android();
+  public final com.google.ai.edge.litertlm.Contents of(java.lang.String);
+  public final com.google.ai.edge.litertlm.Contents of(com.google.ai.edge.litertlm.Content...);
+  public final com.google.ai.edge.litertlm.Contents of(java.util.List<? extends com.google.ai.edge.litertlm.Content>);
+  public com.google.ai.edge.litertlm.Contents$Companion(kotlin.jvm.internal.DefaultConstructorMarker);
+}

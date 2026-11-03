@@ -1,0 +1,737 @@
+===== ogkalu/comic-text-and-bubble-detector
+licence=apache-2.0 tags=onnx,safetensors,rt_detr_v2,license:apache-2.0,region:us mis_à_jour=2026-05-15T04:38:36.000Z
+       0.00 Mo  .gitattributes
+       0.00 Mo  README.md
+       0.00 Mo  config.json
+      11.12 Mo  detector-v4-s_int8.onnx
+     168.48 Mo  detector.onnx
+      43.84 Mo  detector_int8.onnx
+     171.54 Mo  model.safetensors
+       0.00 Mo  preprocessor_config.json
+===== PaddlePaddle/PP-OCRv6_small_det_onnx
+licence=apache-2.0 tags=PaddleOCR,onnx,OCR,PaddlePaddle,textline_detection,ONNX,image-to-text,en,zh,arxiv:2606.13108,license:apache-2.0,region:us mis_à_jour=2026-06-18T10:57:07.000Z
+       0.00 Mo  .gitattributes
+       0.02 Mo  README.md
+       0.23 Mo  inference.json
+       9.88 Mo  inference.onnx
+       0.00 Mo  inference.yml
+===== PaddlePaddle/PP-OCRv6_tiny_det_onnx
+licence=apache-2.0 tags=PaddleOCR,onnx,OCR,PaddlePaddle,textline_detection,ONNX,image-to-text,en,zh,arxiv:2606.13108,license:apache-2.0,region:us mis_à_jour=2026-06-18T10:59:06.000Z
+       0.00 Mo  .gitattributes
+       0.02 Mo  README.md
+       0.23 Mo  inference.json
+       1.78 Mo  inference.onnx
+       0.00 Mo  inference.yml
+===== Sundowner123/comic-text-and-bubble-detector
+licence=apache-2.0 tags=onnx,object-detection,manga,comic,base_model:ogkalu/comic-text-and-bubble-detector,base_model:quantized:ogkalu/comic-text-and-bubble-detector,license:apache-2.0,region:us mis_à_jour=2026-08-29T16:21:18.000Z
+       0.00 Mo  .gitattributes
+       0.01 Mo  LICENSE
+       0.00 Mo  NOTICE.txt
+       0.00 Mo  README.md
+      11.12 Mo  detector.onnx
+===== a-b-c-x-y-z/Manga-Text-Segmentation-2025
+licence=None tags=region:us mis_à_jour=2025-12-25T22:55:50.000Z
+       0.00 Mo  .gitattributes
+       0.00 Mo  README.md
+       0.01 Mo  inference.py
+     216.91 Mo  model.pth
+===== mayocream/manga-text-segmentation-2025
+licence=None tags=safetensors,dataset:hal-utokyo/Manga109-s,region:us mis_à_jour=2026-03-21T06:38:34.000Z
+       0.00 Mo  .gitattributes
+       0.00 Mo  README.md
+     216.52 Mo  model.safetensors
+===== iamokish/manga-text-segmentation-safetensors
+licence=None tags=safetensors,manga,text-segmentation,image-segmentation,computer-vision,region:us mis_à_jour=2026-08-24T10:59:19.000Z
+       0.00 Mo  .gitattributes
+       0.00 Mo  README.md
+     216.52 Mo  model.safetensors
+===== mloet/comic_text_bubble_detector
+licence=None tags=onnx,region:us mis_à_jour=2025-04-18T02:21:29.000Z
+       0.00 Mo  .gitattributes
+     171.77 Mo  comic_text_bubble_detector.onnx
+===== hon-lu/comic-text-and-bubble-detector-onnx-fp16
+licence=apache-2.0 tags=onnx,fp16,rt-detr,comics,manga,text-detection,object-detection,base_model:ogkalu/comic-text-and-bubble-detector,base_model:quantized:ogkalu/comic-text-and-bubble-detector,license:apache-2.0,region:us mis_à_jour=2026-09-29T13:16:27.000Z
+       0.00 Mo  .gitattributes
+       0.01 Mo  LICENSE
+       0.00 Mo  README.md
+      84.73 Mo  detector.fp16.onnx
+===== depreciation84/comic-text-and-bubble-detector-int8
+licence=apache-2.0 tags=onnx,int8,quantized,rt-detr,comic,manga,webtoon,speech-bubble,object-detection,base_model:ogkalu/comic-text-and-bubble-detector,base_model:quantized:ogkalu/comic-text-and-bubble-detector,license:apache-2.0 mis_à_jour=2026-10-28T13:24:42.000Z
+       0.00 Mo  .gitattributes
+       0.01 Mo  LICENSE
+       0.00 Mo  README.md
+      67.06 Mo  detector_rtdetr_int8c.onnx
+===== hhuggg/comictextdetector
+licence=None tags=region:us mis_à_jour=2025-08-28T00:42:29.000Z
+       0.00 Mo  .gitattributes
+      79.95 Mo  comictextdetector.pt
+===== rikimaruwebsite/comic-text-detector-web
+licence=None tags=onnx,region:us mis_à_jour=2026-07-03T22:33:12.000Z
+       0.00 Mo  .gitattributes
+     145.77 Mo  detector.onnx
+===== petersunde/anima-manga-text-removal-flow
+licence=other tags=inpainting,anime,text-removal,dataset:petersunde/danbooru2023-animetext-clean,base_model:circlestone-labs/Anima,base_model:finetune:circlestone-labs/Anima,license:other,region:us mis_à_jour=2026-10-28T05:45:58.000Z
+       0.05 Mo  .gitattributes
+       0.00 Mo  README.md
+       0.01 Mo  TRAINING_PLAN.md
+     136.87 Mo  adapter.safetensors
+       0.00 Mo  code/font-provenance.json
+       0.01 Mo  code/pilot/anima.py
+       0.00 Mo  code/pilot/anima_assets.py
+       0.00 Mo  code/pilot/anima_baseline.py
+       0.00 Mo  code/pilot/anima_block_offload.py
+       0.00 Mo  code/pilot/anima_color.py
+       0.00 Mo  code/pilot/anima_conditioning.py
+       0.00 Mo  code/pilot/anima_edit_flow.py
+       0.00 Mo  code/pilot/anima_endpoint_loss.py
+       0.00 Mo  code/pilot/anima_evidence_integrity.py
+       0.00 Mo  code/pilot/anima_latent_supervision.py
+       0.00 Mo  code/pilot/anima_lora.py
+       0.00 Mo  code/pilot/anima_losses.py
+       0.00 Mo  code/pilot/anima_lowfreq_loss.py
+       0.00 Mo  code/pilot/anima_memory.py
+       0.00 Mo  code/pilot/anima_multi_schedule.py
+       0.00 Mo  code/pilot/anima_overfit_objective.py
+       0.00 Mo  code/pilot/anima_rgb_loss.py
+       0.00 Mo  code/pilot/anima_rollout_loss.py
+       0.00 Mo  code/pilot/anima_schedules.py
+       0.00 Mo  code/pilot/anima_unfreeze.py
+       0.00 Mo  code/pilot/anima_vae_check.py
+       0.00 Mo  code/pilot/anima_zero_flow.py
+       0.00 Mo  code/pilot/assets.py
+       0.00 Mo  code/pilot/checkpoint_io.py
+       0.02 Mo  code/pilot/expand_animetext.py
+       0.01 Mo  code/pilot/full_flow_controller.py
+       0.00 Mo  code/pilot/full_flow_data.py
+       0.00 Mo  code/pilot/full_flow_evaluate.py
+       0.00 Mo  code/pilot/full_flow_model.py
+       0.01 Mo  code/pilot/full_flow_model_publish.py
+       0.00 Mo  code/pilot/full_flow_publish.py
+       0.00 Mo  code/pilot/full_flow_restore.py
+       0.00 Mo  code/pilot/full_flow_sample.py
+       0.00 Mo  code/pilot/full_flow_state.py
+       0.00 Mo  code/pilot/full_flow_status.py
+       0.01 Mo  code/pilot/full_flow_train.py
+       0.00 Mo  code/pilot/gpu_monitor.py
+       0.01 Mo  code/pilot/render.py
+       0.00 Mo  config.json
+       0.52 Mo  diagnostics/gpu-telemetry.jsonl
+       0.00 Mo  diagnostics/gradient-audit.json
+       0.00 Mo  diagnostics/progress.json
+       0.09 Mo  diagnostics/training-curves.png
+       2.24 Mo  diagnostics/training.jsonl
+      91.82 Mo  lora.safetensors
+       0.00 Mo  resume.json
+       0.20 Mo  samples/evaluation-00000000/00-input.png
+       0.00 Mo  samples/evaluation-00000000/00-mask.png
+       0.23 Mo  samples/evaluation-00000000/00-prediction.png
+       0.20 Mo  samples/evaluation-00000000/00-target.png
+       0.07 Mo  samples/evaluation-00000000/01-input.png
+       0.00 Mo  samples/evaluation-00000000/01-mask.png
+       0.07 Mo  samples/evaluation-00000000/01-prediction.png
+       0.07 Mo  samples/evaluation-00000000/01-target.png
+       0.29 Mo  samples/evaluation-00000000/02-input.png
+       0.00 Mo  samples/evaluation-00000000/02-mask.png
+       0.38 Mo  samples/evaluation-00000000/02-prediction.png
+       0.39 Mo  samples/evaluation-00000000/02-target.png
+       0.14 Mo  samples/evaluation-00000000/03-input.png
+       0.00 Mo  samples/evaluation-00000000/03-mask.png
+       0.12 Mo  samples/evaluation-00000000/03-prediction.png
+       0.12 Mo  samples/evaluation-00000000/03-target.png
+       0.39 Mo  samples/evaluation-00000000/04-input.png
+       0.00 Mo  samples/evaluation-00000000/04-mask.png
+       0.47 Mo  samples/evaluation-00000000/04-prediction.png
+       0.50 Mo  samples/evaluation-00000000/04-target.png
+       0.39 Mo  samples/evaluation-00000000/05-input.png
+       0.00 Mo  samples/evaluation-00000000/05-mask.png
+       0.41 Mo  samples/evaluation-00000000/05-prediction.png
+       0.40 Mo  samples/evaluation-00000000/05-target.png
+       0.17 Mo  samples/evaluation-00000000/06-input.png
+       0.00 Mo  samples/evaluation-00000000/06-mask.png
+       0.17 Mo  samples/evaluation-00000000/06-prediction.png
+       0.17 Mo  samples/evaluation-00000000/06-target.png
+       0.21 Mo  samples/evaluation-00000000/07-input.png
+       0.00 Mo  samples/evaluation-00000000/07-mask.png
+       0.20 Mo  samples/evaluation-00000000/07-prediction.png
+       0.19 Mo  samples/evaluation-00000000/07-target.png
+       0.35 Mo  samples/evaluation-00000000/08-input.png
+       0.00 Mo  samples/evaluation-00000000/08-mask.png
+       0.35 Mo  samples/evaluation-00000000/08-prediction.png
+       0.35 Mo  samples/evaluation-00000000/08-target.png
+       0.35 Mo  samples/evaluation-00000000/09-input.png
+       0.00 Mo  samples/evaluation-00000000/09-mask.png
+       0.35 Mo  samples/evaluation-00000000/09-prediction.png
+       0.34 Mo  samples/evaluation-00000000/09-target.png
+       0.31 Mo  samples/evaluation-00000000/10-input.png
+       0.00 Mo  samples/evaluation-00000000/10-mask.png
+       0.33 Mo  samples/evaluation-00000000/10-prediction.png
+       0.32 Mo  samples/evaluation-00000000/10-target.png
+       0.32 Mo  samples/evaluation-00000000/11-input.png
+       0.00 Mo  samples/evaluation-00000000/11-mask.png
+       0.32 Mo  samples/evaluation-00000000/11-prediction.png
+       0.32 Mo  samples/evaluation-00000000/11-target.png
+       0.41 Mo  samples/evaluation-00000000/12-input.png
+       0.00 Mo  samples/evaluation-00000000/12-mask.png
+       0.39 Mo  samples/evaluation-00000000/12-prediction.png
+       0.39 Mo  samples/evaluation-00000000/12-target.png
+       0.26 Mo  samples/evaluation-00000000/13-input.png
+       0.00 Mo  samples/evaluation-00000000/13-mask.png
+       0.23 Mo  samples/evaluation-00000000/13-prediction.png
+       0.21 Mo  samples/evaluation-00000000/13-target.png
+       0.27 Mo  samples/evaluation-00000000/14-input.png
+       0.00 Mo  samples/evaluation-00000000/14-mask.png
+       0.26 Mo  samples/evaluation-00000000/14-prediction.png
+       0.25 Mo  samples/evaluation-00000000/14-target.png
+       0.20 Mo  samples/evaluation-00000000/15-input.png
+       0.00 Mo  samples/evaluation-00000000/15-mask.png
+       0.15 Mo  samples/evaluation-00000000/15-prediction.png
+       0.12 Mo  samples/evaluation-00000000/15-target.png
+       0.14 Mo  samples/evaluation-00000000/16-input.png
+       0.00 Mo  samples/evaluation-00000000/16-mask.png
+       0.12 Mo  samples/evaluation-00000000/16-prediction.png
+       0.11 Mo  samples/evaluation-00000000/16-target.png
+       0.33 Mo  samples/evaluation-00000000/17-input.png
+       0.00 Mo  samples/evaluation-00000000/17-mask.png
+       0.33 Mo  samples/evaluation-00000000/17-prediction.png
+       0.33 Mo  samples/evaluation-00000000/17-target.png
+       0.38 Mo  samples/evaluation-00000000/18-input.png
+       0.00 Mo  samples/evaluation-00000000/18-mask.png
+       0.38 Mo  samples/evaluation-00000000/18-prediction.png
+       0.38 Mo  samples/evaluation-00000000/18-target.png
+       0.42 Mo  samples/evaluation-00000000/19-input.png
+       0.00 Mo  samples/evaluation-00000000/19-mask.png
+       0.40 Mo  samples/evaluation-00000000/19-prediction.png
+       0.40 Mo  samples/evaluation-00000000/19-target.png
+       0.33 Mo  samples/evaluation-00000000/20-input.png
+       0.00 Mo  samples/evaluation-00000000/20-mask.png
+       0.32 Mo  samples/evaluation-00000000/20-prediction.png
+       0.32 Mo  samples/evaluation-00000000/20-target.png
+       0.26 Mo  samples/evaluation-00000000/21-input.png
+       0.00 Mo  samples/evaluation-00000000/21-mask.png
+       0.25 Mo  samples/evaluation-00000000/21-prediction.png
+       0.24 Mo  samples/evaluation-00000000/21-target.png
+       0.20 Mo  samples/evaluation-00000000/22-input.png
+       0.00 Mo  samples/evaluation-00000000/22-mask.png
+       0.15 Mo  samples/evaluation-00000000/22-prediction.png
+       0.13 Mo  samples/evaluation-00000000/22-target.png
+       0.35 Mo  samples/evaluation-00000000/23-input.png
+       0.00 Mo  samples/evaluation-00000000/23-mask.png
+       0.35 Mo  samples/evaluation-00000000/23-prediction.png
+       0.36 Mo  samples/evaluation-00000000/23-target.png
+       0.03 Mo  samples/evaluation-00000000/metrics.json
+       0.20 Mo  samples/evaluation-00000889/00-input.png
+       0.00 Mo  samples/evaluation-00000889/00-mask.png
+       0.22 Mo  samples/evaluation-00000889/00-prediction.png
+       0.20 Mo  samples/evaluation-00000889/00-target.png
+       0.07 Mo  samples/evaluation-00000889/01-input.png
+       0.00 Mo  samples/evaluation-00000889/01-mask.png
+       0.07 Mo  samples/evaluation-00000889/01-prediction.png
+       0.07 Mo  samples/evaluation-00000889/01-target.png
+       0.29 Mo  samples/evaluation-00000889/02-input.png
+       0.00 Mo  samples/evaluation-00000889/02-mask.png
+       0.38 Mo  samples/evaluation-00000889/02-prediction.png
+       0.39 Mo  samples/evaluation-00000889/02-target.png
+       0.14 Mo  samples/evaluation-00000889/03-input.png
+       0.00 Mo  samples/evaluation-00000889/03-mask.png
+       0.12 Mo  samples/evaluation-00000889/03-prediction.png
+       0.12 Mo  samples/evaluation-00000889/03-target.png
+       0.39 Mo  samples/evaluation-00000889/04-input.png
+       0.00 Mo  samples/evaluation-00000889/04-mask.png
+       0.49 Mo  samples/evaluation-00000889/04-prediction.png
+       0.50 Mo  samples/evaluation-00000889/04-target.png
+       0.39 Mo  samples/evaluation-00000889/05-input.png
+       0.00 Mo  samples/evaluation-00000889/05-mask.png
+       0.42 Mo  samples/evaluation-00000889/05-prediction.png
+       0.40 Mo  samples/evaluation-00000889/05-target.png
+       0.17 Mo  samples/evaluation-00000889/06-input.png
+       0.00 Mo  samples/evaluation-00000889/06-mask.png
+       0.17 Mo  samples/evaluation-00000889/06-prediction.png
+       0.17 Mo  samples/evaluation-00000889/06-target.png
+       0.21 Mo  samples/evaluation-00000889/07-input.png
+       0.00 Mo  samples/evaluation-00000889/07-mask.png
+       0.20 Mo  samples/evaluation-00000889/07-prediction.png
+       0.19 Mo  samples/evaluation-00000889/07-target.png
+       0.35 Mo  samples/evaluation-00000889/08-input.png
+       0.00 Mo  samples/evaluation-00000889/08-mask.png
+       0.36 Mo  samples/evaluation-00000889/08-prediction.png
+       0.35 Mo  samples/evaluation-00000889/08-target.png
+       0.35 Mo  samples/evaluation-00000889/09-input.png
+       0.00 Mo  samples/evaluation-00000889/09-mask.png
+       0.35 Mo  samples/evaluation-00000889/09-prediction.png
+       0.34 Mo  samples/evaluation-00000889/09-target.png
+       0.31 Mo  samples/evaluation-00000889/10-input.png
+       0.00 Mo  samples/evaluation-00000889/10-mask.png
+       0.32 Mo  samples/evaluation-00000889/10-prediction.png
+       0.32 Mo  samples/evaluation-00000889/10-target.png
+       0.32 Mo  samples/evaluation-00000889/11-input.png
+       0.00 Mo  samples/evaluation-00000889/11-mask.png
+       0.32 Mo  samples/evaluation-00000889/11-prediction.png
+       0.32 Mo  samples/evaluation-00000889/11-target.png
+       0.41 Mo  samples/evaluation-00000889/12-input.png
+       0.00 Mo  samples/evaluation-00000889/12-mask.png
+       0.39 Mo  samples/evaluation-00000889/12-prediction.png
+       0.39 Mo  samples/evaluation-00000889/12-target.png
+       0.26 Mo  samples/evaluation-00000889/13-input.png
+       0.00 Mo  samples/evaluation-00000889/13-mask.png
+       0.23 Mo  samples/evaluation-00000889/13-prediction.png
+       0.21 Mo  samples/evaluation-00000889/13-target.png
+       0.27 Mo  samples/evaluation-00000889/14-input.png
+       0.00 Mo  samples/evaluation-00000889/14-mask.png
+       0.26 Mo  samples/evaluation-00000889/14-prediction.png
+       0.25 Mo  samples/evaluation-00000889/14-target.png
+       0.20 Mo  samples/evaluation-00000889/15-input.png
+       0.00 Mo  samples/evaluation-00000889/15-mask.png
+       0.14 Mo  samples/evaluation-00000889/15-prediction.png
+       0.12 Mo  samples/evaluation-00000889/15-target.png
+       0.14 Mo  samples/evaluation-00000889/16-input.png
+       0.00 Mo  samples/evaluation-00000889/16-mask.png
+       0.12 Mo  samples/evaluation-00000889/16-prediction.png
+       0.11 Mo  samples/evaluation-00000889/16-target.png
+       0.33 Mo  samples/evaluation-00000889/17-input.png
+       0.00 Mo  samples/evaluation-00000889/17-mask.png
+       0.33 Mo  samples/evaluation-00000889/17-prediction.png
+       0.33 Mo  samples/evaluation-00000889/17-target.png
+       0.38 Mo  samples/evaluation-00000889/18-input.png
+       0.00 Mo  samples/evaluation-00000889/18-mask.png
+       0.38 Mo  samples/evaluation-00000889/18-prediction.png
+       0.38 Mo  samples/evaluation-00000889/18-target.png
+       0.42 Mo  samples/evaluation-00000889/19-input.png
+       0.00 Mo  samples/evaluation-00000889/19-mask.png
+       0.40 Mo  samples/evaluation-00000889/19-prediction.png
+       0.40 Mo  samples/evaluation-00000889/19-target.png
+       0.33 Mo  samples/evaluation-00000889/20-input.png
+       0.00 Mo  samples/evaluation-00000889/20-mask.png
+       0.32 Mo  samples/evaluation-00000889/20-prediction.png
+       0.32 Mo  samples/evaluation-00000889/20-target.png
+       0.26 Mo  samples/evaluation-00000889/21-input.png
+       0.00 Mo  samples/evaluation-00000889/21-mask.png
+       0.25 Mo  samples/evaluation-00000889/21-prediction.png
+       0.24 Mo  samples/evaluation-00000889/21-target.png
+       0.20 Mo  samples/evaluation-00000889/22-input.png
+       0.00 Mo  samples/evaluation-00000889/22-mask.png
+       0.14 Mo  samples/evaluation-00000889/22-prediction.png
+       0.13 Mo  samples/evaluation-00000889/22-target.png
+       0.35 Mo  samples/evaluation-00000889/23-input.png
+       0.00 Mo  samples/evaluation-00000889/23-mask.png
+       0.35 Mo  samples/evaluation-00000889/23-prediction.png
+       0.36 Mo  samples/evaluation-00000889/23-target.png
+       0.03 Mo  samples/evaluation-00000889/metrics.json
+       0.20 Mo  samples/evaluation-00001822/00-input.png
+       0.00 Mo  samples/evaluation-00001822/00-mask.png
+       0.22 Mo  samples/evaluation-00001822/00-prediction.png
+       0.20 Mo  samples/evaluation-00001822/00-target.png
+       0.07 Mo  samples/evaluation-00001822/01-input.png
+       0.00 Mo  samples/evaluation-00001822/01-mask.png
+       0.07 Mo  samples/evaluation-00001822/01-prediction.png
+       0.07 Mo  samples/evaluation-00001822/01-target.png
+       0.29 Mo  samples/evaluation-00001822/02-input.png
+       0.00 Mo  samples/evaluation-00001822/02-mask.png
+       0.38 Mo  samples/evaluation-00001822/02-prediction.png
+       0.39 Mo  samples/evaluation-00001822/02-target.png
+       0.14 Mo  samples/evaluation-00001822/03-input.png
+       0.00 Mo  samples/evaluation-00001822/03-mask.png
+       0.12 Mo  samples/evaluation-00001822/03-prediction.png
+       0.12 Mo  samples/evaluation-00001822/03-target.png
+       0.39 Mo  samples/evaluation-00001822/04-input.png
+       0.00 Mo  samples/evaluation-00001822/04-mask.png
+       0.48 Mo  samples/evaluation-00001822/04-prediction.png
+       0.50 Mo  samples/evaluation-00001822/04-target.png
+       0.39 Mo  samples/evaluation-00001822/05-input.png
+       0.00 Mo  samples/evaluation-00001822/05-mask.png
+       0.43 Mo  samples/evaluation-00001822/05-prediction.png
+       0.40 Mo  samples/evaluation-00001822/05-target.png
+       0.17 Mo  samples/evaluation-00001822/06-input.png
+       0.00 Mo  samples/evaluation-00001822/06-mask.png
+       0.17 Mo  samples/evaluation-00001822/06-prediction.png
+       0.17 Mo  samples/evaluation-00001822/06-target.png
+       0.21 Mo  samples/evaluation-00001822/07-input.png
+       0.00 Mo  samples/evaluation-00001822/07-mask.png
+       0.20 Mo  samples/evaluation-00001822/07-prediction.png
+       0.19 Mo  samples/evaluation-00001822/07-target.png
+       0.35 Mo  samples/evaluation-00001822/08-input.png
+       0.00 Mo  samples/evaluation-00001822/08-mask.png
+       0.36 Mo  samples/evaluation-00001822/08-prediction.png
+       0.35 Mo  samples/evaluation-00001822/08-target.png
+       0.35 Mo  samples/evaluation-00001822/09-input.png
+       0.00 Mo  samples/evaluation-00001822/09-mask.png
+       0.35 Mo  samples/evaluation-00001822/09-prediction.png
+       0.34 Mo  samples/evaluation-00001822/09-target.png
+       0.31 Mo  samples/evaluation-00001822/10-input.png
+       0.00 Mo  samples/evaluation-00001822/10-mask.png
+       0.32 Mo  samples/evaluation-00001822/10-prediction.png
+       0.32 Mo  samples/evaluation-00001822/10-target.png
+       0.32 Mo  samples/evaluation-00001822/11-input.png
+       0.00 Mo  samples/evaluation-00001822/11-mask.png
+       0.32 Mo  samples/evaluation-00001822/11-prediction.png
+       0.32 Mo  samples/evaluation-00001822/11-target.png
+       0.41 Mo  samples/evaluation-00001822/12-input.png
+       0.00 Mo  samples/evaluation-00001822/12-mask.png
+       0.39 Mo  samples/evaluation-00001822/12-prediction.png
+       0.39 Mo  samples/evaluation-00001822/12-target.png
+       0.26 Mo  samples/evaluation-00001822/13-input.png
+       0.00 Mo  samples/evaluation-00001822/13-mask.png
+       0.23 Mo  samples/evaluation-00001822/13-prediction.png
+       0.21 Mo  samples/evaluation-00001822/13-target.png
+       0.27 Mo  samples/evaluation-00001822/14-input.png
+       0.00 Mo  samples/evaluation-00001822/14-mask.png
+       0.26 Mo  samples/evaluation-00001822/14-prediction.png
+       0.25 Mo  samples/evaluation-00001822/14-target.png
+       0.20 Mo  samples/evaluation-00001822/15-input.png
+       0.00 Mo  samples/evaluation-00001822/15-mask.png
+       0.15 Mo  samples/evaluation-00001822/15-prediction.png
+       0.12 Mo  samples/evaluation-00001822/15-target.png
+       0.14 Mo  samples/evaluation-00001822/16-input.png
+       0.00 Mo  samples/evaluation-00001822/16-mask.png
+       0.12 Mo  samples/evaluation-00001822/16-prediction.png
+       0.11 Mo  samples/evaluation-00001822/16-target.png
+       0.33 Mo  samples/evaluation-00001822/17-input.png
+       0.00 Mo  samples/evaluation-00001822/17-mask.png
+       0.33 Mo  samples/evaluation-00001822/17-prediction.png
+       0.33 Mo  samples/evaluation-00001822/17-target.png
+       0.38 Mo  samples/evaluation-00001822/18-input.png
+       0.00 Mo  samples/evaluation-00001822/18-mask.png
+       0.38 Mo  samples/evaluation-00001822/18-prediction.png
+       0.38 Mo  samples/evaluation-00001822/18-target.png
+       0.42 Mo  samples/evaluation-00001822/19-input.png
+       0.00 Mo  samples/evaluation-00001822/19-mask.png
+       0.41 Mo  samples/evaluation-00001822/19-prediction.png
+       0.40 Mo  samples/evaluation-00001822/19-target.png
+       0.33 Mo  samples/evaluation-00001822/20-input.png
+       0.00 Mo  samples/evaluation-00001822/20-mask.png
+       0.33 Mo  samples/evaluation-00001822/20-prediction.png
+       0.32 Mo  samples/evaluation-00001822/20-target.png
+       0.26 Mo  samples/evaluation-00001822/21-input.png
+       0.00 Mo  samples/evaluation-00001822/21-mask.png
+       0.24 Mo  samples/evaluation-00001822/21-prediction.png
+       0.24 Mo  samples/evaluation-00001822/21-target.png
+       0.20 Mo  samples/evaluation-00001822/22-input.png
+       0.00 Mo  samples/evaluation-00001822/22-mask.png
+       0.14 Mo  samples/evaluation-00001822/22-prediction.png
+       0.13 Mo  samples/evaluation-00001822/22-target.png
+       0.35 Mo  samples/evaluation-00001822/23-input.png
+       0.00 Mo  samples/evaluation-00001822/23-mask.png
+       0.35 Mo  samples/evaluation-00001822/23-prediction.png
+       0.36 Mo  samples/evaluation-00001822/23-target.png
+       0.03 Mo  samples/evaluation-00001822/metrics.json
+       0.20 Mo  samples/evaluation-00002757/00-input.png
+       0.00 Mo  samples/evaluation-00002757/00-mask.png
+       0.22 Mo  samples/evaluation-00002757/00-prediction.png
+       0.20 Mo  samples/evaluation-00002757/00-target.png
+       0.07 Mo  samples/evaluation-00002757/01-input.png
+       0.00 Mo  samples/evaluation-00002757/01-mask.png
+       0.07 Mo  samples/evaluation-00002757/01-prediction.png
+       0.07 Mo  samples/evaluation-00002757/01-target.png
+       0.29 Mo  samples/evaluation-00002757/02-input.png
+       0.00 Mo  samples/evaluation-00002757/02-mask.png
+       0.38 Mo  samples/evaluation-00002757/02-prediction.png
+       0.39 Mo  samples/evaluation-00002757/02-target.png
+       0.14 Mo  samples/evaluation-00002757/03-input.png
+       0.00 Mo  samples/evaluation-00002757/03-mask.png
+       0.12 Mo  samples/evaluation-00002757/03-prediction.png
+       0.12 Mo  samples/evaluation-00002757/03-target.png
+       0.39 Mo  samples/evaluation-00002757/04-input.png
+       0.00 Mo  samples/evaluation-00002757/04-mask.png
+       0.49 Mo  samples/evaluation-00002757/04-prediction.png
+       0.50 Mo  samples/evaluation-00002757/04-target.png
+       0.39 Mo  samples/evaluation-00002757/05-input.png
+       0.00 Mo  samples/evaluation-00002757/05-mask.png
+       0.42 Mo  samples/evaluation-00002757/05-prediction.png
+       0.40 Mo  samples/evaluation-00002757/05-target.png
+       0.17 Mo  samples/evaluation-00002757/06-input.png
+       0.00 Mo  samples/evaluation-00002757/06-mask.png
+       0.17 Mo  samples/evaluation-00002757/06-prediction.png
+       0.17 Mo  samples/evaluation-00002757/06-target.png
+       0.21 Mo  samples/evaluation-00002757/07-input.png
+       0.00 Mo  samples/evaluation-00002757/07-mask.png
+       0.20 Mo  samples/evaluation-00002757/07-prediction.png
+       0.19 Mo  samples/evaluation-00002757/07-target.png
+       0.35 Mo  samples/evaluation-00002757/08-input.png
+       0.00 Mo  samples/evaluation-00002757/08-mask.png
+       0.36 Mo  samples/evaluation-00002757/08-prediction.png
+       0.35 Mo  samples/evaluation-00002757/08-target.png
+       0.35 Mo  samples/evaluation-00002757/09-input.png
+       0.00 Mo  samples/evaluation-00002757/09-mask.png
+       0.34 Mo  samples/evaluation-00002757/09-prediction.png
+       0.34 Mo  samples/evaluation-00002757/09-target.png
+       0.31 Mo  samples/evaluation-00002757/10-input.png
+       0.00 Mo  samples/evaluation-00002757/10-mask.png
+       0.32 Mo  samples/evaluation-00002757/10-prediction.png
+       0.32 Mo  samples/evaluation-00002757/10-target.png
+       0.32 Mo  samples/evaluation-00002757/11-input.png
+       0.00 Mo  samples/evaluation-00002757/11-mask.png
+       0.32 Mo  samples/evaluation-00002757/11-prediction.png
+       0.32 Mo  samples/evaluation-00002757/11-target.png
+       0.41 Mo  samples/evaluation-00002757/12-input.png
+       0.00 Mo  samples/evaluation-00002757/12-mask.png
+       0.39 Mo  samples/evaluation-00002757/12-prediction.png
+       0.39 Mo  samples/evaluation-00002757/12-target.png
+       0.26 Mo  samples/evaluation-00002757/13-input.png
+       0.00 Mo  samples/evaluation-00002757/13-mask.png
+       0.23 Mo  samples/evaluation-00002757/13-prediction.png
+       0.21 Mo  samples/evaluation-00002757/13-target.png
+       0.27 Mo  samples/evaluation-00002757/14-input.png
+       0.00 Mo  samples/evaluation-00002757/14-mask.png
+  ... 972 fichiers au total
+===== mayocream/manga109-segmentation-bubble
+licence=apache-2.0 tags=pytorch,safetensors,yolo11-seg,yolo,yolov11,manga,speech-bubble,segmentation,image-segmentation,base_model:huyvux3005/manga109-segmentation-bubble,base_model:finetune:huyvux3005/manga109-segmentation-bubble,license:apache-2.0 mis_à_jour=2026-07-19T10:48:56.000Z
+       0.00 Mo  .gitattributes
+       0.00 Mo  README.md
+       0.00 Mo  config.json
+      11.48 Mo  model.safetensors
+===== mednasserallah/manga109-segmentation-bubble-onnx
+licence=apache-2.0 tags=onnx,manga,speech-bubble,segmentation,instance-segmentation,yolo,yolo11,comic,image-segmentation,en,ja,dataset:MS92/MangaSegmentation mis_à_jour=2026-08-13T04:42:33.000Z
+       0.00 Mo  .gitattributes
+       0.01 Mo  LICENSE
+       0.00 Mo  NOTICE
+       0.01 Mo  README.md
+      11.85 Mo  manga109_segmentation_bubble_1024.onnx
+===== ShadowB/Manga109-panel-balloon-text-yolov26-segmentation
+licence=mit tags=ultralytics,manga,manga-segmentation,image-segmentation,instance-segmentation,yolo,yolo26,yolo26s,comics,document-understanding,layout-analysis,ocr-preprocessing mis_à_jour=2026-06-10T17:10:07.000Z
+       0.00 Mo  .gitattributes
+       0.14 Mo  BoxF1_curve.png
+       0.12 Mo  BoxPR_curve.png
+       0.11 Mo  BoxP_curve.png
+       0.14 Mo  BoxR_curve.png
+       0.14 Mo  MaskF1_curve.png
+       0.11 Mo  MaskPR_curve.png
+       0.11 Mo  MaskP_curve.png
+       0.14 Mo  MaskR_curve.png
+       0.02 Mo  README.md
+      23.44 Mo  best.pt
+       0.00 Mo  book_split_audit.csv
+       0.13 Mo  confusion_matrix.png
+       0.14 Mo  labels.jpg
+      23.44 Mo  last.pt
+       0.01 Mo  results.csv
+       0.56 Mo  results.png
+===== recherche Hy-MT2
+  tencent/Hy-MT2-30B-A3B
+  tencent/Hy-MT2-7B-GGUF
+  tencent/Hy-MT2-1.8B
+  tencent/Hy-MT2-7B
+  tencent/Hy-MT2-30B-A3B-FP8
+  tencent/Hy-MT2-1.8B-GGUF
+  unsloth/Hy-MT2-7B-GGUF
+  alexwkleung/Hy-MT2-7B-Abliterated-GGUF
+  fumetodev/Hy-MT2-1.8B-JP-Manga-Finetune-v5-GGUF
+  Arm/hy-mt2-1-8b-2bit-translation-gguf
+  infosave/Hy-MT2-cmf
+  alphaZimuth/Hy-MT2-30B-A3B-Uncensored-Heretic-APEX-GGUF
+  AlekseyCalvin/LYRICAL_MT2_Hy1.8B_ru2en_SFT_LoRA
+  tencent/Hy-MT2-7B-FP8
+  tencent/Hy-MT2-1.8B-FP8
+  FlagRelease/HY-MT2-30B-A3B-nvidia-FlagOS
+  FlagRelease/HY-MT2-7B-nvidia-FlagOS
+  FlagRelease/HY-MT2-1.8B-nvidia-FlagOS
+  FlagRelease/HY-MT2-1.8B-ascend-FlagOS
+  FlagRelease/HY-MT2-7B-ascend-FlagOS
+===== DOC ogkalu/comic-text-and-bubble-detector/README.md
+---
+license: apache-2.0
+---
+RT-DETR-v2 r50vd model fine-tuned on about 11k Manga, Webtoon, Manhua and Western Comic style Images for text and speech bubble detection.<br>
+Training Image Size = 640. Training Images were resized, not cropped.<br>Tall Webtoons were split vertically.<br>
+Classes are:<br>
+0: bubble<br>
+1: text_bubble (text inside bubbles)<br>
+2: text_free (text outside bubbles)<br>
+
+===== DOC ogkalu/comic-text-and-bubble-detector/config.json
+{
+  "activation_dropout": 0.0,
+  "activation_function": "silu",
+  "anchor_image_size": null,
+  "architectures": [
+    "RTDetrV2ForObjectDetection"
+  ],
+  "attention_dropout": 0.0,
+  "auxiliary_loss": true,
+  "backbone": null,
+  "backbone_config": {
+    "model_type": "rt_detr_resnet",
+    "out_features": [
+      "stage2",
+      "stage3",
+      "stage4"
+    ],
+    "out_indices": [
+      2,
+      3,
+      4
+    ]
+  },
+  "backbone_kwargs": null,
+  "batch_norm_eps": 1e-05,
+  "box_noise_scale": 1.0,
+  "d_model": 256,
+  "decoder_activation_function": "relu",
+  "decoder_attention_heads": 8,
+  "decoder_ffn_dim": 1024,
+  "decoder_in_channels": [
+    256,
+    256,
+    256
+  ],
+  "decoder_layers": 6,
+  "decoder_method": "default",
+  "decoder_n_levels": 3,
+  "decoder_n_points": 4,
+  "decoder_offset_scale": 0.5,
+  "dropout": 0.0,
+  "encode_proj_layers": [
+    2
+  ],
+  "encoder_activation_function": "gelu",
+  "encoder_attention_heads": 8,
+  "encoder_ffn_dim": 1024,
+  "encoder_hidden_dim": 256,
+  "encoder_in_channels": [
+    512,
+    1024,
+    2048
+  ],
+  "encoder_layers": 1,
+  "eos_coefficient": 0.0001,
+  "eval_size": null,
+  "feat_strides": [
+    8,
+    16,
+    32
+  ],
+  "focal_loss_alpha": 0.75,
+  "focal_loss_gamma": 2.0,
+  "freeze_backbone_batch_norms": true,
+  "hidden_expansion": 1.0,
+  "id2label": {
+    "0": "bubble",
+    "1": "text_bubble",
+    "2": "text_free"
+  },
+  "initializer_bias_prior_prob": null,
+  "initializer_range": 0.01,
+  "is_encoder_decoder": true,
+  "label2id": {
+    "bubble": 0,
+    "text_bubble": 1,
+    "text_free": 2
+  },
+  "label_noise_ratio": 0.5,
+  "layer_norm_eps": 1e-05,
+  "learn_initial_query": false,
+  "matcher_alpha": 0.25,
+  "matcher_bbox_cost": 5.0,
+  "matcher_class_cost": 2.0,
+  "matcher_gamma": 2.0,
+  "matcher_giou_cost": 2.0,
+  "model_type": "rt_detr_v2",
+  "normalize_before": false,
+  "num_denoising": 100,
+  "num_feature_levels": 3,
+  "num_queries": 300,
+  "positional_encoding_temperature": 10000,
+  "torch_dtype": "float32",
+  "transformers_version": "4.49.0",
+  "use_focal_loss": true,
+  "use_pretrained_backbone": false,
+  "use_timm_backbone": false,
+  "weight_loss_bbox": 5.0,
+  "weight_loss_giou": 2.0,
+  "weight_loss_vfl": 1.0,
+  "with_box_refine": true
+}
+
+
+===== DOC ogkalu/comic-text-and-bubble-detector/preprocessor_config.json
+{
+  "do_convert_annotations": true,
+  "do_normalize": false,
+  "do_pad": false,
+  "do_rescale": true,
+  "do_resize": true,
+  "format": "coco_detection",
+  "image_mean": [
+    0.485,
+    0.456,
+    0.406
+  ],
+  "image_processor_type": "RTDetrImageProcessor",
+  "image_std": [
+    0.229,
+    0.224,
+    0.225
+  ],
+  "pad_size": null,
+  "resample": 2,
+  "rescale_factor": 0.00392156862745098,
+  "size": {
+    "height": 640,
+    "width": 640
+  }
+}
+
+
+===== DOC mayocream/comic-text-detector-onnx/README.md
+---
+license: apache-2.0
+datasets:
+- hal-utokyo/Manga109-s
+---
+# Comic text detector ONNX
+
+The ONNX model of the [comic text detector](https://github.com/dmMaze/comic-text-detector).
+
+===== DOC a-b-c-x-y-z/Manga-Text-Segmentation-2025/README.md
+# Manga-Text-Segmentation
+Segmentation of text in manga.
+
+## Model
+The model is available in [HuggingFace](https://huggingface.co/a-b-c-x-y-z/Manga-Text-Segmentation-2025). The Model has a Unet++ architecture with an EfficientNetv2 backbone. 
+
+## Example
+Input:
+<img width="1654" height="1170" alt="image" src="https://github.com/user-attachments/assets/251a8aa0-f3bd-4f79-953e-067f777fad0d" />
+Output:
+<img width="1654" height="1170" alt="image" src="https://github.com/user-attachments/assets/43e17f96-323c-441a-ba57-06ba019a0f8f" />
+<sup>(source: [manga109](http://www.manga109.org/en/), © Tadashi Satō)</sup>
+
+## Dataset
+Label masks used for training are available at [zenodo](https://zenodo.org/record/4511796). For the original Manga109 images, please refer to [Manga 109 website](http://www.manga109.org/en/).
+
+## Citations:
+````
+@InProceedings{10.1007/978-3-030-67070-2_38,
+author="Del Gobbo, Juli{\'a}n
+and Matuk Herrera, Rosana",
+editor="Bartoli, Adrien
+and Fusiello, Andrea",
+title="Unconstrained Text Detection in Manga: A New Dataset and Baseline",
+booktitle="Computer Vision -- ECCV 2020 Workshops",
+year="2020",
+publisher="Springer International Publishing",
+address="Cham",
+pages="629--646",
+abstract="The detection and recognition of unconstrained text is an open problem in research. Text in comic books has unusual styles that raise many challenges for text detection. This work aims to binarize text in a comic genre with highly sophisticated text styles: Japanese manga. To overcome the lack of a manga dataset with text annotations at a pixel level, we create our own. To improve the evaluation and search of an optimal model, in addition to standard metrics in binarization, we implement other special metrics. Using these resources, we designed and evaluated a deep network model, outperforming current methods for text binarization in manga in most metrics.",
+isbn="978-3-030-67070-2"
+}
+
+@dataset{segmentation_manga_dataset,
+  author       = {julian del gobbo and
+                  Rosana Matuk Herrera},
+  title        = {{Mask Dataset for: Unconstrained Text Detection in 
+                   Manga: a New Dataset and Baseline}},
+  month        = feb,
+  year         = 2021,
+  publisher    = {Zenodo},
+  version      = {1.0},
+  doi          = {10.5281/zenodo.4511796},
+  url          = {https://doi.org/10.5281/zenodo.4511796}
+}
+````
+
+===== DOC mayocream/manga-text-segmentation-2025/README.md
+---
+datasets:
+- hal-utokyo/Manga109-s
+---
+
+safetensors port of https://huggingface.co/a-b-c-x-y-z/Manga-Text-Segmentation-2025
