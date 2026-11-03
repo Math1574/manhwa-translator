@@ -173,7 +173,7 @@ object PageRenderer {
                 val others = blocks.withIndex().filter { it.index != bi }.flatMap { it.value.lineBoxes.ifEmpty { listOf(it.value.box) } }
                 val prep = prepare(b, src, s, iw, ih, medianLine, settings.target.code, others, blocks, verified, isRect)
                 // texte hors bulle, sans zone du détecteur, sur un dessin : trop risqué (faux texte dans le décor), l'image n'est pas touchée
-                if (RenderGate.tooUncertain(b.kind, b.zone != null, b.bubble != null, prep.plan?.mode == Erasure.Mode.ART)) { skipped++; continue }
+                if (RenderGate.tooUncertain(b.kind, b.zone != null, b.bubble != null, prep.plan?.mode == Erasure.Mode.ART, b.source)) { skipped++; continue }
                 // filet de sécurité, quelle que soit la méthode d'effacement : une zone effacée très supérieure au texte lu est du dessin qu'on abîmerait, on n'y touche pas
                 val pl = prep.plan
                 if (pl != null && pl.mode != Erasure.Mode.SMOOTH) {

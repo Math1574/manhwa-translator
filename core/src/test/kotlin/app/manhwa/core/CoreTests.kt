@@ -1248,8 +1248,10 @@ fun safetyTests() {
     T.test("ne pas toucher à l'image : traduction identique au texte lu, ou texte libre sans zone sur un dessin") {
         T.ok(RenderGate.unchanged("Ahem.!", "Ahem !") && RenderGate.unchanged("AY TOR", "AY TOR") && RenderGate.unchanged("Sun Tzu", "Sun Tzu"), "identiques")
         T.ok(!RenderGate.unchanged("SHUT UP", "TAIS-TOI"), "traduit")
-        T.ok(RenderGate.tooUncertain("FREE", false, false, true), "libre, sans zone, sur dessin")
-        T.ok(!RenderGate.tooUncertain("FREE", true, false, true) && !RenderGate.tooUncertain("FREE", false, false, false) && !RenderGate.tooUncertain("IN_BUBBLE", false, false, true), "autres cas : rendu")
+        T.ok(RenderGate.tooUncertain("FREE", false, false, true, "AY TOR"), "libre, sans zone, sur dessin")
+        T.ok(!RenderGate.tooUncertain("FREE", false, false, true, "ONE MONTH LATER ON THE ROAD"), "vraie phrase sur dessin : rendue")
+        T.ok(!RenderGate.tooUncertain("FREE", true, false, true, "AY TOR") && !RenderGate.tooUncertain("FREE", false, false, false, "AY TOR") && !RenderGate.tooUncertain("IN_BUBBLE", false, false, true, "AY TOR"), "autres cas : rendu")
+        T.ok(!RenderGate.tooUncertain("UNKNOWN", false, false, true, "AY TOR"), "sans détecteur : aucune règle")
     }
     T.test("effacement d'un texte libre : un panneau de dessin entouré d'une marge blanche n'est jamais effacé (la zone ne contient que du fond)") {
         val W = 800; val H = 800; val white = 0xFFFFFFFF.toInt()

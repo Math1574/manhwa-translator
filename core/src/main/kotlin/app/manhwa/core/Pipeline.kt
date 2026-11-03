@@ -57,7 +57,7 @@ class PagePipeline(
         // hauteur de ligne relative à la médiane de la page : un gros lettrage (onomatopée, titre) n'est jamais un débris
         val heights = grouped.map { medianLineHeight(it) }.filter { it > 0f }.sorted()
         val medianH = if (heights.isEmpty()) 0f else heights[heights.size / 2]
-        val blocks = grouped.filter { !TextNormalizer.isNoise(it.text) && !junk(it.text, if (medianH > 0f) medianLineHeight(it) / medianH else 1f, it.kind == BlockKind.IN_BUBBLE || it.zone != null) }
+        val blocks = grouped.filter { !TextNormalizer.isNoise(it.text) && !junk(it.text, if (medianH > 0f) medianLineHeight(it) / medianH else 1f, it.kind != BlockKind.FREE || it.zone != null) }
         for (g in grouped) if (g !in blocks) log("écarté « ${g.text.take(40)} » (${if (TextNormalizer.isNoise(g.text)) "bruit" else "débris, filigrane ou répété"}${if (g.kind != BlockKind.IN_BUBBLE && g.zone == null) ", hors zone" else ""})")
         val clean = blocks.map { repair(it.text) }.toMutableList()
         reportDebug(ocrResult, grouped, blocks, emptySet())
