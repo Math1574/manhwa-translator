@@ -24,7 +24,7 @@ object LayoutArea {
      * empiéter sur les obstacles (textes voisins, bulles voisines). Un obstacle déjà recouvert par plus de 15 % de l'emprise d'origine est ignoré :
      * le texte d'origine le chevauchait déjà (texte contre le bord d'une bulle).
      */
-    fun expand(base: RectF, grow: Float, obstacles: List<RectF>, imageW: Float, imageH: Float): RectF {
+    fun expand(base: RectF, grow: Float, obstacles: List<RectF>, imageW: Float, imageH: Float, hard: List<RectF> = emptyList()): RectF {
         var l = max(0f, base.left - base.width * grow); var t = max(0f, base.top - base.height * grow)
         var r = min(imageW, base.right + base.width * grow); var b = min(imageH, base.bottom + base.height * grow)
         for (o in obstacles) {
@@ -39,6 +39,19 @@ object LayoutArea {
             if (o.bottom <= base.top + 0.5f * base.height) cuts.add(Cut((r - l) * (b - max(t, o.bottom)), l, max(t, o.bottom), r, b))
             if (o.top >= base.bottom - 0.5f * base.height) cuts.add(Cut((r - l) * (min(b, o.top) - t), l, t, r, min(b, o.top)))
             val best = cuts.filter { it.l <= base.left + 1f && it.t <= base.top + 1f && it.r >= base.right - 1f && it.b >= base.bottom - 1f }.maxByOrNull { it.area } ?: continue
+            l = best.l; t = best.t; r = best.r; b = best.b
+        }
+        // obstacles « durs » (texte déjà placé d'un autre bloc) : toujours évités, même s'ils recouvrent l'emprise d'origine (la traduction voisine est plus longue
+        // que l'original et s'y est étendue). On garde la coupe qui laisse le plus de surface, à condition qu'il reste de quoi poser du texte.
+        for (o in hard) {
+            if (!(o.left < r && o.right > l && o.top < b && o.bottom > t)) continue
+            data class Cut2(val area: Float, val l: Float, val t: Float, val r: Float, val b: Float)
+            val cuts = ArrayList<Cut2>()
+            if (o.right < r) cuts.add(Cut2((r - max(l, o.right)) * (b - t), max(l, o.right), t, r, b))
+            if (o.left > l) cuts.add(Cut2((min(r, o.left) - l) * (b - t), l, t, min(r, o.left), b))
+            if (o.bottom < b) cuts.add(Cut2((r - l) * (b - max(t, o.bottom)), l, max(t, o.bottom), r, b))
+            if (o.top > t) cuts.add(Cut2((r - l) * (min(b, o.top) - t), l, t, r, min(b, o.top)))
+            val best = cuts.filter { it.r - it.l >= 0.5f * base.width && it.b - it.t >= 0.6f * base.height }.maxByOrNull { it.area } ?: continue
             l = best.l; t = best.t; r = best.r; b = best.b
         }
         return RectF(l, t, r, b)

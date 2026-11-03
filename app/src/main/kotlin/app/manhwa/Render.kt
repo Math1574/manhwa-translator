@@ -134,8 +134,9 @@ object PageRenderer {
         val bubble: RectF? = null,     // bulle détectée ET confirmée par son contour ; null = texte hors bulle
         val obstacles: List<RectF> = emptyList(),   // emprises des textes voisins (le texte hors bulle ne doit pas les recouvrir)
         val neighborBubbles: List<RectF> = emptyList(),   // bulles voisines confirmées : un texte hors bulle ne doit pas recouvrir leur contour
+        val hardObstacles: List<RectF> = emptyList(),     // texte déjà placé d'autres blocs : toujours évité
     ) {
-        fun withObstacles(o: List<RectF>) = Prep(block, plan, style, text, bubble, o, neighborBubbles)
+        fun withHard(h: List<RectF>) = Prep(block, plan, style, text, bubble, obstacles, neighborBubbles, h)
     }
 
     fun render(fonts: Typefaces, imageBytes: ByteArray, result: PageResult, settings: AppSettings, debug: DebugInfo?): JSONObject {
@@ -175,7 +176,7 @@ object PageRenderer {
                     val mine = li.placed(2f)
                     val others = preps.indices.filter { it != i }.mapNotNull { j -> laids[j]?.placed(4f) }
                     if (others.none { o -> (mine.intersection(o)?.area ?: 0f) > 0.04f * mine.area }) continue
-                    val relaid = try { layoutBlock(fonts, s, pi.withObstacles(pi.obstacles + others), iw, ih, settings.textScale) } catch (e: Throwable) { null } ?: continue
+                    val relaid = try { layoutBlock(fonts, s, pi.withHard(others), iw, ih, settings.textScale) } catch (e: Throwable) { null } ?: continue
                     laids[i] = relaid; changed = true
                 }
                 if (!changed) break
@@ -334,7 +335,7 @@ object PageRenderer {
         } else {
             var best: ShapeFit? = null
             for (g in floatArrayOf(if (art) 0.12f else 0.06f, 0.3f, 0.55f, 0.9f)) {
-                val area = LayoutArea.expand(union, g, p.obstacles, iw, ih)
+                val area = LayoutArea.expand(union, g, p.obstacles, iw, ih, p.hardObstacles)
                 val near = p.neighborBubbles.filter { nb -> nb.left < area.right && nb.right > area.left && nb.top < area.bottom && nb.bottom > area.top }
                 // contre une bulle voisine : lignes réparties autour de l'ellipse (forme par rangées) OU bloc compact au-dessous / à côté de la bulle
                 val shapes = ArrayList<RowShape>()

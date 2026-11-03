@@ -963,6 +963,8 @@ fun layoutAreaTests() {
         T.ok(near.right <= 215f && near.left < base.left && near.contains(150f, 125f), "coupée avant l'obstacle ${near.right}")
         val over = LayoutArea.expand(base, 0.5f, listOf(RectF(120f, 90f, 300f, 160f)), 1000f, 1000f)   // chevauchait déjà : ignoré
         T.ok(over.right >= 249f, "obstacle déjà recouvert ignoré")
+        val hard = LayoutArea.expand(base, 0.5f, emptyList(), 1000f, 1000f, listOf(RectF(160f, 60f, 400f, 130f)))   // texte voisin déjà placé : évité même s'il recouvre l'emprise
+        T.ok(hard.top >= 130f || hard.left >= 400f || hard.right <= 160f, "obstacle dur évité : ${hard.left},${hard.top},${hard.right},${hard.bottom}")
     }
 }
 
