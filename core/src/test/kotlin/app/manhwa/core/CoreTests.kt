@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests()
+    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -150,7 +150,7 @@ fun glossaryTests() {
 // ---------- cache ----------
 fun cacheTests() {
     val key = CacheKey("abc", "ja", "fr", "eng1")
-    val res = PageResult(100, 200, listOf(TranslatedBlock(0, RectF(1f, 2f, 3f, 4f), "原文\tx", "tra\nduction", true, 12.5f, listOf(RectF(1f, 2f, 3f, 3f), RectF(1f, 3f, 3f, 4f)), listOf("ligne\t1", "ligne 2"), "répa\tré", "IN_BUBBLE", RectF(1f, 2f, 30f, 40f))))
+    val res = PageResult(100, 200, listOf(TranslatedBlock(0, RectF(1f, 2f, 3f, 4f), "原文\tx", "tra\nduction", true, 12.5f, listOf(RectF(1f, 2f, 3f, 3f), RectF(1f, 3f, 3f, 4f)), listOf("ligne\t1", "ligne 2"), "répa\tré", "IN_BUBBLE", RectF(1f, 2f, 30f, 40f), RectF(3f, 4f, 20f, 30f))))
     T.test("cache: écriture puis lecture, persistance après redémarrage") {
         val d = tmp(); ResultCache(d).put(key, res)
         T.eq(res, ResultCache(d).get(key))
@@ -1012,5 +1012,34 @@ fun halftoneTests() {
         T.eq(null, TextErase.periodicFill(flat, w, h, BooleanArray(w * h) { it % w in 30..50 && it / w in 20..40 }, flat))
         val rnd = java.util.Random(5); val noisy = IntArray(w * h) { val v = rnd.nextInt(255); (0xFF shl 24) or (v shl 16) or (v shl 8) or v }
         T.eq(null, TextErase.periodicFill(noisy, w, h, BooleanArray(w * h) { it % w in 30..50 && it / w in 20..40 }, noisy))
+    }
+}
+
+fun avoidTests() {
+    T.test("texte libre contre une bulle : un seul côté de l'obstacle, rien dans l'ellipse") {
+        val area = RectF(100f, 100f, 500f, 300f)
+        val bubble = RectF(0f, 0f, 300f, 400f)       // ellipse qui mord la zone à gauche
+        val shape = RowShape.rectAvoiding(area.left, area.top, area.right, area.bottom, listOf(bubble), 4f)
+        var sides = HashSet<Boolean>()
+        for (i in 0 until shape.rows) if (shape.left[i] <= shape.right[i]) {
+            val mid = (shape.left[i] + shape.right[i]) / 2f; sides.add(mid < 150f)
+            val y = shape.top + shape.rowH * (i + 0.5f); val cy = 200f; val dy = (y - cy) / 200f
+            if (kotlin.math.abs(dy) < 1f) { val half = 150f * kotlin.math.sqrt(1f - dy * dy); T.ok(shape.left[i] >= 150f + half - 1f || shape.right[i] <= 150f - half + 1f, "rangée $i dans l'ellipse") }
+        }
+        T.eq(1, sides.size)
+    }
+    T.test("contour d'une bulle voisine : le trait qui se prolonge hors de la zone est gardé, la lettre isolée est effacée") {
+        val w = 200; val h = 160; val white = 0xFFFFFFFF.toInt(); val black = 0xFF000000.toInt()
+        val px = IntArray(w * h) { white }
+        // ellipse noire (contour) centrée (100, 80), rayons 90 × 70
+        for (y in 0 until h) for (x in 0 until w) { val ex = (x - 100) / 90.0; val ey = (y - 80) / 70.0; val d = kotlin.math.sqrt(ex * ex + ey * ey); if (d in 0.97..1.03) px[y * w + x] = black }
+        // une lettre isolée au milieu de la zone d'effacement
+        for (y in 70 until 90) for (x in 150 until 160) px[y * w + x] = black
+        val zone = BooleanArray(w * h) { val x = it % w; val y = it / w; x in 140..199 && y in 50..110 }
+        val keep = Erasure.outlineKeep(px, w, h, zone, 0, 0, 1f, listOf(RectF(10f, 10f, 190f, 150f)))
+        var outlineKept = 0; var outlineTotal = 0
+        for (y in 50..110) for (x in 140..199) { val ex = (x - 100) / 90.0; val ey = (y - 80) / 70.0; val d = kotlin.math.sqrt(ex * ex + ey * ey); if (d in 0.98..1.02 && px[y * w + x] == black) { outlineTotal++; if (keep[y * w + x]) outlineKept++ } }
+        T.ok(outlineTotal > 20 && outlineKept == outlineTotal, "contour gardé $outlineKept/$outlineTotal")
+        T.ok(!keep[80 * w + 155], "la lettre isolée n'est pas protégée")
     }
 }

@@ -64,20 +64,20 @@ class ResultCache(private val dir: File, private val maxEntries: Int = 64, priva
 
     companion object {
         fun encode(r: PageResult): String = buildString {
-            append("V6\t${r.imageWidth}\t${r.imageHeight}\n")
+            append("V7\t${r.imageWidth}\t${r.imageHeight}\n")
             for (b in r.blocks) {
                 append("B\t${b.id}\t${b.box.left}\t${b.box.top}\t${b.box.right}\t${b.box.bottom}\t${if (b.vertical) 1 else 0}\t${b.lineHeight}\t${b.lineBoxes.joinToString(";") { "${it.left},${it.top},${it.right},${it.bottom}" }}\t${b.lineTexts.joinToString("\u001F") { esc(it) }}\t")
-                append(esc(b.source)).append('\t').append(esc(b.repaired)).append('\t').append(esc(b.translated)).append('\t').append(b.kind).append('\t').append(b.bubble?.let { "${it.left},${it.top},${it.right},${it.bottom}" } ?: "").append('\n')
+                append(esc(b.source)).append('\t').append(esc(b.repaired)).append('\t').append(esc(b.translated)).append('\t').append(b.kind).append('\t').append(b.bubble?.let { "${it.left},${it.top},${it.right},${it.bottom}" } ?: "").append('\t').append(b.zone?.let { "${it.left},${it.top},${it.right},${it.bottom}" } ?: "").append('\n')
             }
         }
 
         fun decode(s: String): PageResult {
             val lines = s.lines().filter { it.isNotEmpty() }
             val h = lines.first().split('\t')
-            require(h.size == 3 && h[0] == "V6") { "en-tête invalide" }
+            require(h.size == 3 && h[0] == "V7") { "en-tête invalide" }
             val blocks = lines.drop(1).map { l ->
                 val p = l.split('\t')
-                require(p.size == 15 && p[0] == "B") { "ligne invalide" }
+                require(p.size == 16 && p[0] == "B") { "ligne invalide" }
                 TranslatedBlock(
                     p[1].toInt(), RectF(p[2].toFloat(), p[3].toFloat(), p[4].toFloat(), p[5].toFloat()),
                     unesc(p[10]), unesc(p[12]), p[6] == "1", p[7].toFloat(),
@@ -85,6 +85,7 @@ class ResultCache(private val dir: File, private val maxEntries: Int = 64, priva
                     if (p[9].isEmpty()) emptyList() else p[9].split("\u001F").map { unesc(it) },
                     unesc(p[11]),
                     p[13], if (p[14].isEmpty()) null else p[14].split(",").map(String::toFloat).let { v -> RectF(v[0], v[1], v[2], v[3]) },
+                    if (p[15].isEmpty()) null else p[15].split(",").map(String::toFloat).let { v -> RectF(v[0], v[1], v[2], v[3]) },
                 )
             }
             return PageResult(h[1].toInt(), h[2].toInt(), blocks)

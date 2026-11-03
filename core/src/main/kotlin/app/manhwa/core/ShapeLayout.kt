@@ -29,6 +29,40 @@ class RowShape(val top: Float, val rowH: Float, val left: FloatArray, val right:
     }
 
     companion object {
+        /**
+         * Rectangle dont on retire l'intérieur de bulles voisines (ellipses inscrites dans [avoid], agrandies de [margin]) : un texte hors bulle posé
+         * contre une bulle ne doit pas recouvrir son contour. À chaque rangée on garde le plus large segment libre (toujours du même côté de préférence).
+         */
+        fun rectAvoiding(l: Float, t: Float, r: Float, b: Float, avoid: List<RectF>, margin: Float = 8f): RowShape {
+            val h = max(1, (b - t).toInt()); val rowH = (b - t) / h
+            fun segsAt(y: Float): List<Pair<Float, Float>> {
+                var segs = listOf(Pair(l, r))
+                for (a in avoid) {
+                    val cy = (a.top + a.bottom) / 2f; val ry = (a.bottom - a.top) / 2f + margin
+                    val dy = (y - cy) / ry
+                    if (dy <= -1f || dy >= 1f) continue
+                    val rx = (a.right - a.left) / 2f + margin; val half = rx * kotlin.math.sqrt(max(0f, 1f - dy * dy)); val cx = (a.left + a.right) / 2f
+                    val cutL = cx - half; val cutR = cx + half
+                    segs = segs.flatMap { (sl, sr) ->
+                        if (cutR <= sl || cutL >= sr) listOf(Pair(sl, sr)) else listOfNotNull(if (cutL - sl > 4f) Pair(sl, cutL) else null, if (sr - cutR > 4f) Pair(cutR, sr) else null)
+                    }
+                }
+                return segs
+            }
+            // un seul côté de l'obstacle pour toutes les rangées (sinon les lignes sautent de gauche à droite) : celui qui offre le plus de surface
+            var leftArea = 0f; var rightArea = 0f; val mid = avoid.map { (it.left + it.right) / 2f }.average().toFloat()
+            for (i in 0 until h) for ((sl, sr) in segsAt(t + rowH * (i + 0.5f))) { val w = sr - sl; if ((sl + sr) / 2f < mid) leftArea += w else rightArea += w }
+            val preferLeft = leftArea > rightArea
+            val left = FloatArray(h); val right = FloatArray(h)
+            for (i in 0 until h) {
+                val segs = segsAt(t + rowH * (i + 0.5f)).filter { it.second - it.first >= 16f }
+                val onSide = segs.filter { if (preferLeft) (it.first + it.second) / 2f < mid else (it.first + it.second) / 2f >= mid }
+                val best = (if (onSide.isNotEmpty()) onSide else emptyList()).maxByOrNull { it.second - it.first } ?: segs.takeIf { avoid.isEmpty() }?.maxByOrNull { it.second - it.first }
+                if (best == null) { left[i] = 1f; right[i] = 0f } else { left[i] = best.first; right[i] = best.second }
+            }
+            return RowShape(t, rowH, left, right)
+        }
+
         /** Ellipse inscrite dans le rectangle (repli pour une bulle détectée dont la forme n'a pas pu être relevée sur l'image). */
         fun ellipse(l: Float, t: Float, r: Float, b: Float): RowShape {
             val h = max(1, (b - t).toInt()); val rowH = (b - t) / h

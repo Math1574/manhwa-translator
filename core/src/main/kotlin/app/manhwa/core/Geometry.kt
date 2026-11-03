@@ -72,6 +72,8 @@ data class TextBlock(
     /** Nature du bloc (selon le détecteur) et boîte de la bulle qui le contient, si elle a été détectée. */
     val kind: BlockKind = BlockKind.UNKNOWN,
     val container: RectF? = null,
+    /** Zone de texte détectée qui a servi d'ancre à ce bloc (boîte serrée autour de tout le texte, y compris les lignes que la lecture n'a pas trouvées). */
+    val zone: RectF? = null,
 )
 
 fun Char.isCjk(): Boolean {

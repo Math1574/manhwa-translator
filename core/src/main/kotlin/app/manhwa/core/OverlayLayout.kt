@@ -36,6 +36,8 @@ data class TranslatedBlock(
     /** Nature du bloc selon le détecteur (« IN_BUBBLE », « FREE », ou vide) et boîte de la bulle qui le contient. */
     val kind: String = "",
     val bubble: RectF? = null,
+    /** Zone de texte détectée (ancre du bloc) : toute la zone est effacée, même ce que la lecture n'a pas vu. */
+    val zone: RectF? = null,
 )
 
 data class PlacedBlock(

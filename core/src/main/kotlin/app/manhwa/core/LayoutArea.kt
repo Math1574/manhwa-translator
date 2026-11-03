@@ -6,6 +6,20 @@ import kotlin.math.min
 /** Zone disponible pour un texte hors bulle. */
 object LayoutArea {
     /**
+     * Rectangles candidats pour un texte hors bulle posé contre une bulle : au-dessous, à droite, à gauche et au-dessus de la bulle (boîte), dans la zone
+     * [area] agrandie. Un bloc compact dans un de ces rectangles se lit mieux que des lignes réparties de part et d'autre de l'ellipse.
+     */
+    fun candidatesAround(area: RectF, bubble: RectF, margin: Float, extraBelow: Float, imageW: Float, imageH: Float): List<RectF> {
+        val out = ArrayList<RectF>()
+        val below = RectF(area.left, bubble.bottom + margin, area.right, min(imageH, max(area.bottom, bubble.bottom + margin + extraBelow)))
+        val right = RectF(bubble.right + margin, area.top, area.right, area.bottom)
+        val left = RectF(area.left, area.top, bubble.left - margin, area.bottom)
+        val above = RectF(area.left, area.top, area.right, bubble.top - margin)
+        for (r in listOf(below, right, left, above)) if (r.right - r.left >= 40f && r.bottom - r.top >= 20f) out.add(RectF(max(0f, r.left), max(0f, r.top), min(imageW, r.right), min(imageH, r.bottom)))
+        return out
+    }
+
+    /**
      * L'emprise d'origine du texte agrandie de [grow] (proportion de sa largeur et de sa hauteur) dans chaque direction, sans sortir de l'image ni
      * empiéter sur les obstacles (textes voisins, bulles voisines). Un obstacle déjà recouvert par plus de 15 % de l'emprise d'origine est ignoré :
      * le texte d'origine le chevauchait déjà (texte contre le bord d'une bulle).

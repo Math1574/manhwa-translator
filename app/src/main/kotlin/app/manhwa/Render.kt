@@ -133,6 +133,7 @@ object PageRenderer {
         val text: String,              // traduction avec typographie
         val bubble: RectF? = null,     // bulle détectée ET confirmée par son contour ; null = texte hors bulle
         val obstacles: List<RectF> = emptyList(),   // emprises des textes voisins (le texte hors bulle ne doit pas les recouvrir)
+        val neighborBubbles: List<RectF> = emptyList(),   // bulles voisines confirmées : un texte hors bulle ne doit pas recouvrir leur contour
     )
 
     fun render(fonts: Typefaces, imageBytes: ByteArray, result: PageResult, settings: AppSettings, debug: DebugInfo?): JSONObject {
@@ -181,7 +182,12 @@ object PageRenderer {
         val union = lineBoxes.reduce { a, c -> a.union(c) }
         val lineH = lineHeightOf(b)
         val bubble = verified[b.id]
-        val plan = if (src != null) try { Erasure.plan(src, s, lineBoxes, lineH, iw, ih, others, bubble, protectOf(b, blocksAll, verified), free = bubble == null) } catch (e: Throwable) { null } else null
+        // zone de texte détectée : tout ce qu'elle contient est effacé, y compris une ligne que la lecture n'a pas trouvée (sinon il en reste un morceau)
+        val zone = b.zone?.takeIf { z -> z.area <= 3.5f * union.area && z.area >= 0.8f * union.area && z.contains(union.centerX, union.centerY) }
+        val eraseBoxes = if (zone != null) lineBoxes + zone else lineBoxes
+        // contours des bulles voisines : le texte libre qui les chevauche ne doit pas les entamer
+        val neighborBubbles = blocksAll.filter { it !== b }.mapNotNull { verified[it.id] }.filter { nb -> !nb.contains(union.centerX, union.centerY) || bubble == null }
+        val plan = if (src != null) try { Erasure.plan(src, s, eraseBoxes, lineH, iw, ih, others, bubble, protectOf(b, blocksAll, verified), free = bubble == null, outlines = if (bubble == null) neighborBubbles else emptyList()) } catch (e: Throwable) { null } else null
         val flat = plan?.mode == Erasure.Mode.FLAT
         val rectangular = flat && plan?.shape == null && union.width > 2.2f * union.height && lineBoxes.size <= 2
         // hauteur de ligne pour le choix du style : mesurée sur les lettres (les boîtes d'une ligne inclinée sont gonflées)
@@ -190,7 +196,7 @@ object PageRenderer {
         val style = TextErase.chooseFont(b.source, lineHStyle, medianLine, flat, plan?.outlined ?: false, rectangular)
         val text = if (target == "fr") Typography.french(b.translated) else b.translated
         val obstacles = blocksAll.filter { it !== b }.map { o -> o.lineBoxes.ifEmpty { listOf(o.box) }.reduce { x, y -> x.union(y) } }
-        return Prep(b, plan, style, text, bubble, obstacles)
+        return Prep(b, plan, style, text, bubble, obstacles, neighborBubbles)
     }
 
     /** Hauteur médiane des lettres d'origine (pixels de l'image d'origine), 0 si inconnue. */
@@ -240,7 +246,11 @@ object PageRenderer {
         val m = if (inks.isNotEmpty()) FontMatcher.best(inks, fonts.comicFamilies, AndroidGlyphRenderer(fonts)) else null
         if (m == null) return FontChoice(fonts.family("comicneue"), 0f, 700, 100f, family = "comicneue")
         // aucune police comique ne ressemble (lettrage très particulier) : police neutre de même graisse plutôt qu'une police manuscrite étirée
-        if (m.score < 0.12f) { val wg = FontMatcher.weightOf(inks); return FontChoice(fonts.noto(wg, 100f), 0f, wg, 100f, scaleX = m.stretch.coerceIn(0.8f, 1.1f), skew = m.skew, family = "noto") }
+        if (m.score < 0.12f) {
+            // aucune police comique ne ressemble : on garde l'esprit du lettrage de BD (fin ou gras selon le trait d'origine) plutôt qu'un Noto neutre
+            val fam = if (FontMatcher.weightOf(inks) < 600) "patrickhandsc" else "comicneue"
+            return FontChoice(fonts.family(fam), 0f, 700, 100f, family = fam)
+        }
         return FontChoice(fonts.family(m.family), 0f, 700, 100f, scaleX = m.stretch.coerceIn(0.72f, 1.25f), skew = m.skew, embolden = m.embolden, family = m.family)
     }
 
@@ -290,10 +300,22 @@ object PageRenderer {
             var best: ShapeFit? = null
             for (g in floatArrayOf(if (art) 0.12f else 0.06f, 0.3f, 0.55f, 0.9f)) {
                 val area = LayoutArea.expand(union, g, p.obstacles, iw, ih)
-                val cand = ShapeLayout.fit(RowShape.rect(area.left, area.top, area.right, area.bottom), centerY, p.text, measurer, em, max(5f, em * 0.5f), step, margin)
-                if (cand.lines.isEmpty()) continue
-                val cur = best
-                if (cur == null || (cand.fits && !cur.fits) || (cand.fits == cur.fits && cand.size > cur.size)) best = cand
+                val near = p.neighborBubbles.filter { nb -> nb.left < area.right && nb.right > area.left && nb.top < area.bottom && nb.bottom > area.top }
+                // contre une bulle voisine : lignes réparties autour de l'ellipse (forme par rangées) OU bloc compact au-dessous / à côté de la bulle
+                val shapes = ArrayList<RowShape>()
+                if (near.isEmpty()) shapes.add(RowShape.rect(area.left, area.top, area.right, area.bottom))
+                else {
+                    val gap = max(6f, em * 0.2f)
+                    shapes.add(RowShape.rectAvoiding(area.left, area.top, area.right, area.bottom, near, gap))
+                    for (nb in near) for (r in LayoutArea.candidatesAround(area, nb, gap, union.height * 1.4f, iw, ih)) if (near.none { o -> o !== nb && o.left < r.right && o.right > r.left && o.top < r.bottom && o.bottom > r.top }) shapes.add(RowShape.rect(r.left, r.top, r.right, r.bottom))
+                }
+                for (areaShape in shapes) {
+                    val cy = if (shapes.size > 1 && areaShape.rows > 0) (areaShape.top + areaShape.bottom) / 2f else centerY
+                    val cand = ShapeLayout.fit(areaShape, if (shapes.size > 1) max(areaShape.top + 1f, min(areaShape.bottom - 1f, centerY)).let { if (it in areaShape.top..areaShape.bottom) it else cy } else centerY, p.text, measurer, em, max(5f, em * 0.5f), step, margin)
+                    if (cand.lines.isEmpty()) continue
+                    val cur = best
+                    if (cur == null || (cand.fits && !cur.fits) || (cand.fits == cur.fits && cand.size > cur.size * 1.02f)) best = cand
+                }
                 if (cand.fits && cand.size >= em * 0.92f) break
             }
             best ?: ShapeLayout.fit(RowShape.rect(union.left, union.top, union.right, union.bottom), centerY, p.text, measurer, em, max(5f, em * 0.4f), step, margin)

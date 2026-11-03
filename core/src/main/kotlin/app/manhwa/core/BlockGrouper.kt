@@ -89,20 +89,20 @@ class BlockGrouper(private val cfg: GrouperConfig = GrouperConfig()) {
             if (best >= 0) byAnchor[best]!!.add(l) else rest.add(l)
         }
         loose = rest
-        val blocks = ArrayList<Triple<List<OcrLine>, BlockKind, RectF?>>()
+        val blocks = ArrayList<Triple<List<OcrLine>, BlockKind, Pair<RectF?, RectF?>>>()
         for ((i, ls) in byAnchor) {
             val vertical = ls.count { isVertical(it) } * 2 > ls.size
             val sorted = if (vertical) ls.sortedWith(compareByDescending<OcrLine> { it.box.centerX }.thenBy { it.box.top }) else readingOrder(ls)
             val box = sorted.map { it.box }.reduce { a, b -> a.union(b) }
             val container = bubbles.filter { b -> (box.intersection(b.box)?.area ?: 0f) >= 0.8f * box.area }.minByOrNull { it.box.area }?.box
             val kind = if (anchors[i].cls == RegionClass.TEXT_BUBBLE || container != null) BlockKind.IN_BUBBLE else BlockKind.FREE
-            blocks.add(Triple(sorted, kind, container))
+            blocks.add(Triple(sorted, kind, Pair(container, anchors[i].box)))
         }
-        for (b in group(loose)) blocks.add(Triple(b.lines, BlockKind.FREE, null))
-        val ordered = blocks.map { (ls, kind, c) -> Triple(ls, ls.map { it.box }.reduce { a, b -> a.union(b) }, Pair(kind, c)) }.sortedWith(compareBy({ it.second.top }, { it.second.left }))
+        for (b in group(loose)) blocks.add(Triple(b.lines, BlockKind.FREE, Pair(null, null)))
+        val ordered = blocks.map { (ls, kind, cz) -> Triple(ls, ls.map { it.box }.reduce { a, b -> a.union(b) }, Triple(kind, cz.first, cz.second)) }.sortedWith(compareBy({ it.second.top }, { it.second.left }))
         return ordered.mapIndexed { i, (ls, box, kc) ->
             val vertical = ls.count { isVertical(it) } * 2 > ls.size
-            TextBlock(i, ls, box, joinText(ls.map { it.text }), vertical, kc.first, kc.second)
+            TextBlock(i, ls, box, joinText(ls.map { it.text }), vertical, kc.first, kc.second, kc.third)
         }
     }
 
