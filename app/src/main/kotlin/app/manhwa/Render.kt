@@ -310,13 +310,14 @@ object PageRenderer {
                     for (nb in near) for (r in LayoutArea.candidatesAround(area, nb, gap, union.height * 1.4f, iw, ih)) if (near.none { o -> o !== nb && o.left < r.right && o.right > r.left && o.top < r.bottom && o.bottom > r.top }) shapes.add(RowShape.rect(r.left, r.top, r.right, r.bottom))
                 }
                 for (areaShape in shapes) {
-                    val cy = if (shapes.size > 1 && areaShape.rows > 0) (areaShape.top + areaShape.bottom) / 2f else centerY
-                    val cand = ShapeLayout.fit(areaShape, if (shapes.size > 1) max(areaShape.top + 1f, min(areaShape.bottom - 1f, centerY)).let { if (it in areaShape.top..areaShape.bottom) it else cy } else centerY, p.text, measurer, em, max(5f, em * 0.5f), step, margin)
+                    val sy = if (centerY in areaShape.top..areaShape.bottom) centerY else (areaShape.top + areaShape.bottom) / 2f
+                    val cand = ShapeLayout.fit(areaShape, sy, p.text, measurer, em, max(5f, em * 0.5f), step, margin)
                     if (cand.lines.isEmpty()) continue
                     val cur = best
                     if (cur == null || (cand.fits && !cur.fits) || (cand.fits == cur.fits && cand.size > cur.size * 1.02f)) best = cand
                 }
-                if (cand.fits && cand.size >= em * 0.92f) break
+                val bestNow = best
+                if (bestNow != null && bestNow.fits && bestNow.size >= em * 0.92f) break
             }
             best ?: ShapeLayout.fit(RowShape.rect(union.left, union.top, union.right, union.bottom), centerY, p.text, measurer, em, max(5f, em * 0.4f), step, margin)
         }
