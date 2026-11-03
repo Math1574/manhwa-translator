@@ -22,20 +22,20 @@ Solution: Please update the Gradle version to at least Gradle 8.14.4.
 > Task :app:mapDebugSourceSetPaths
 > Task :app:generateDebugResources
 > Task :app:packageDebugResources
+> Task :app:mergeDebugResources
 > Task :app:createDebugCompatibleScreenManifests
 > Task :app:extractDeepLinksDebug
 > Task :app:parseDebugLocalResources
-> Task :app:mergeDebugResources
 > Task :app:processDebugMainManifest
 > Task :app:processDebugManifest
 > Task :app:javaPreCompileDebug
 > Task :app:mergeDebugShaders
 > Task :app:compileDebugShaders NO-SOURCE
-> Task :app:generateDebugAssets UP-TO-DATE
-> Task :app:mergeDebugAssets
 > Task :app:processDebugManifestForPackage
-> Task :app:desugarDebugFileDependencies
+> Task :app:generateDebugAssets UP-TO-DATE
 > Task :app:processDebugResources
+> Task :app:mergeDebugAssets
+> Task :app:desugarDebugFileDependencies
 > Task :app:checkDebugDuplicateClasses
 > Task :app:mergeDebugJniLibFolders
 > Task :app:validateSigningDebug
@@ -43,6 +43,7 @@ Solution: Please update the Gradle version to at least Gradle 8.14.4.
 > Task :app:writeDebugSigningConfigVersions
 > Task :app:compressDebugAssets
 > Task :app:mergeExtDexDebug
+
 > Task :core:compileKotlin
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/PageQueue.kt:26:24 This class is not recommended for use in Kotlin. Use 'kotlin.Any' instead.
 
@@ -75,7 +76,7 @@ w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kot
 > Task :app:packageDebug
 > Task :app:createDebugApkListingFileRedirect
 > Task :app:assembleDebug
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_2-1793724846073.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_2-1793725179923.json
 
-BUILD SUCCESSFUL in 1m 13s
+BUILD SUCCESSFUL in 51s
 37 actionable tasks: 37 executed
