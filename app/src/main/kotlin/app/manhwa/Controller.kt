@@ -169,13 +169,13 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     }
 
     private var lastBarChange = 0L
-    private fun setBarsHidden(hide: Boolean) {
+    private fun changeBars(hide: Boolean) {
         if (barsHidden != hide) { barsHidden = hide; lastBarChange = android.os.SystemClock.uptimeMillis() }
     }
 
     /** Appui simple sur la page : en plein écran il ouvre ou ferme le menu de lecture, sinon il montre ou masque la barre d'adresse. */
     private fun onPageTap() {
-        if (fullscreen) showReaderBar(!readerBar) else setBarsHidden(!barsHidden)
+        if (fullscreen) showReaderBar(!readerBar) else changeBars(!barsHidden)
     }
 
     /**
@@ -185,7 +185,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     private fun onScrollDirection(down: Boolean) {
         if (fullscreen) { if (down && readerBar) showReaderBar(false); return }
         if (android.os.SystemClock.uptimeMillis() - lastBarChange < 500) return
-        setBarsHidden(down)
+        changeBars(down)
     }
 
     private fun onProgressReported(percent: Int) {
