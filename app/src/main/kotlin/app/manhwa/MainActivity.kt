@@ -12,6 +12,13 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -26,6 +33,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -59,7 +67,7 @@ class MainActivity : ComponentActivity() {
 private fun Root(graph: AppGraph) {
     var tab by remember { mutableIntStateOf(0) }
     val c = graph.controller
-    val tabs = listOf("Lire" to AppIcons.Book, "Bibliothèque" to AppIcons.Library, "Réglages" to Icons.Filled.Settings)
+    val tabs = listOf(NavTab("Lecture", AppIcons.Book), NavTab("Bibliothèque", AppIcons.Library), NavTab("Réglages", Icons.Filled.Settings))
 
     // Retour : plein écran, puis onglet courant, puis historique du navigateur, sinon sortie.
     BackHandler(enabled = c.fullscreen || tab != 0 || c.canGoBack) {
@@ -84,22 +92,31 @@ private fun Root(graph: AppGraph) {
         }
     }
 
+    // Quand on lit en descendant, la barre d'onglets se range avec la barre d'adresse (elles reviennent en remontant ou d'un appui sur la page).
+    val readingFree = tab == 0 && c.barsHidden && graph.settingsStore.settings.hideBarsWhileReading
+    // onglet affiché par-dessus la lecture : on garde le dernier pour que son contenu ne change pas pendant l'animation de sortie
+    var lastOther by remember { mutableIntStateOf(1) }
+    val shownTab = if (tab != 0) tab else lastOther
+    SideEffect { if (tab != 0) lastOther = tab }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
-            if (!c.fullscreen) NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                tabs.forEachIndexed { i, (label, icon) ->
-                    NavigationBarItem(selected = tab == i, onClick = { tab = i }, icon = { Icon(icon, label) }, label = { Text(label) }, alwaysShowLabel = true)
-                }
+            AnimatedVisibility(visible = !c.fullscreen && !readingFree, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                GlowNavBar(tabs, tab) { tab = it }
             }
         },
     ) { pad ->
         Box(Modifier.fillMaxSize().padding(pad)) {
             // Le navigateur reste toujours composé pour conserver la page ouverte quand on change d'onglet.
             BrowserScreen(graph)
-            if (tab != 0) {
+            AnimatedVisibility(
+                visible = tab != 0,
+                enter = fadeIn(tween(170)) + slideInVertically(tween(230)) { it / 28 },
+                exit = fadeOut(tween(120)),
+            ) {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    when (tab) {
+                    when (shownTab) {
                         1 -> LibraryScreen(graph) { url, resumeAt -> c.load(url, resumeAt); tab = 0 }
                         else -> SettingsRoot(graph)
                     }

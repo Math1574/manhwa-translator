@@ -27,12 +27,23 @@ data class AppSettings(
     val autoReread: Boolean = true,
     /** Traduire aussi les onomatopées (bruitages). Désactivé : elles restent telles quelles dans l'image. */
     val translateSfx: Boolean = false,
+    /**
+     * Traduire pendant la lecture (bouton Original | Traduit) : activé, les pages de chapitre sont traduites dès leur ouverture et pendant le défilement ;
+     * les autres pages du site (accueil, listes d'œuvres) ne le sont pas. Mémorisé entre les lancements.
+     */
+    val readTranslate: Boolean = false,
+    /** Position du bouton Original | Traduit : bord (droit ou gauche) et hauteur (0 = en haut, 1 = en bas). Il se déplace au doigt. */
+    val orbRight: Boolean = true,
+    val orbY: Float = 0.42f,
+    /** Masque la barre d'adresse et la barre d'onglets quand on lit en descendant ; elles reviennent en remontant ou d'un appui sur la page. */
+    val hideBarsWhileReading: Boolean = true,
 ) {
     /** Ramène les valeurs dans des bornes valides. */
     fun sanitized() = copy(
         textScale = textScale.coerceIn(0.5f, 2.0f),
         maxPrefetchPages = maxPrefetchPages.coerceIn(0, 10),
         cacheMaxMb = cacheMaxMb.coerceIn(10, 500),
+        orbY = orbY.coerceIn(0.04f, 0.96f),
     )
 
     fun serialize(): String = Properties().also {
@@ -40,6 +51,7 @@ data class AppSettings(
         it["autoTranslate"] = autoTranslate.toString(); it["mode"] = mode.name
         it["maxPrefetchPages"] = maxPrefetchPages.toString(); it["cacheMaxMb"] = cacheMaxMb.toString()
         it["schema"] = "2"; it["engine"] = engine.name; it["useGpu"] = useGpu.toString(); it["diagnostic"] = diagnostic.toString(); it["enhancedOcr"] = enhancedOcr.toString(); it["refinePass"] = refinePass.toString(); it["blockAds"] = blockAds.toString(); it["autoReread"] = autoReread.toString(); it["translateSfx"] = translateSfx.toString()
+        it["readTranslate"] = readTranslate.toString(); it["orbRight"] = orbRight.toString(); it["orbY"] = orbY.toString(); it["hideBarsWhileReading"] = hideBarsWhileReading.toString()
     }.let { p -> java.io.StringWriter().also { w -> p.store(w, null) }.toString() }
 
     companion object {
@@ -64,6 +76,10 @@ data class AppSettings(
                 p.getProperty("blockAds")?.toBooleanStrictOrNull() ?: d.blockAds,
                 p.getProperty("autoReread")?.toBooleanStrictOrNull() ?: d.autoReread,
                 p.getProperty("translateSfx")?.toBooleanStrictOrNull() ?: d.translateSfx,
+                p.getProperty("readTranslate")?.toBooleanStrictOrNull() ?: d.readTranslate,
+                p.getProperty("orbRight")?.toBooleanStrictOrNull() ?: d.orbRight,
+                p.getProperty("orbY")?.toFloatOrNull() ?: d.orbY,
+                p.getProperty("hideBarsWhileReading")?.toBooleanStrictOrNull() ?: d.hideBarsWhileReading,
             ).sanitized()
         }
     }

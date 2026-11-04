@@ -175,7 +175,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
     /** Appui simple sur la page : en plein écran il ouvre ou ferme le menu de lecture, sinon il montre ou masque la barre d'adresse. */
     private fun onPageTap() {
-        if (fullscreen) showReaderBar(!readerBar) else changeBars(!barsHidden)
+        if (fullscreen) showReaderBar(!readerBar) else if (graph.settingsStore.settings.hideBarsWhileReading) changeBars(!barsHidden)
     }
 
     /**
@@ -184,6 +184,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
      */
     private fun onScrollDirection(down: Boolean) {
         if (fullscreen) { if (down && readerBar) showReaderBar(false); return }
+        if (!graph.settingsStore.settings.hideBarsWhileReading) return
         if (android.os.SystemClock.uptimeMillis() - lastBarChange < 500) return
         changeBars(down)
     }
@@ -255,7 +256,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                     }
                 }
                 if (graph.settingsStore.settings.blockAds) view.evaluateJavascript("(function(){var s=document.createElement('style');s.textContent='ins.adsbygoogle,[id^=\"google_ads_iframe\"],iframe[src*=\"doubleclick.net\"],iframe[src*=\"googlesyndication.com\"]{display:none!important}';(document.head||document.documentElement).appendChild(s)})()", null)
-                if (graph.settingsStore.settings.autoTranslate && url.startsWith("http")) start(false)
+                // traduction pendant la lecture (bouton Original | Traduit) : seulement les pages de chapitre, pas les accueils ni les listes d'œuvres
+                if (translateOn && url.startsWith("http") && (testing || BrowsingLibrary.looksLikeChapter(url))) start(false)
             }
 
             override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
@@ -342,9 +344,27 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
     fun stop() { stopWork(); active = false }
 
-    fun toggleOverlays() {
-        overlaysVisible = !overlaysVisible
-        webView?.evaluateJavascript("window.__mt&&window.__mt.setVisible($overlaysVisible)", null)
+    /** Traduire pendant la lecture (bouton Original | Traduit) : réglage mémorisé entre les lancements. */
+    val translateOn: Boolean get() = graph.settingsStore.settings.readTranslate
+
+    private fun showOverlays(visible: Boolean) {
+        overlaysVisible = visible
+        webView?.evaluateJavascript("window.__mt&&window.__mt.setVisible($visible)", null)
+    }
+
+    /** Active ou désactive la traduction pendant la lecture. Désactivée : le travail en cours s'arrête et l'original réapparaît ; la page garde ses traductions en cache. */
+    fun setTranslate(on: Boolean) {
+        graph.settingsStore.update { it.copy(readTranslate = on) }
+        if (on) { showOverlays(true); start(false) } else { stopWork(); active = false; showOverlays(false) }
+    }
+
+    /** Appui sur le bouton Original | Traduit : traduit la page (puis les chapitres suivants), ou, si elle l'est déjà, revient à l'original. */
+    fun onTranslateButton() {
+        when {
+            !translateOn -> setTranslate(true)
+            !active -> { showOverlays(true); start(false) }   // activé, mais cette page n'est pas traduite (ce n'est pas un chapitre) : on la traduit maintenant
+            else -> setTranslate(false)
+        }
     }
 
     fun clearOverlays() {

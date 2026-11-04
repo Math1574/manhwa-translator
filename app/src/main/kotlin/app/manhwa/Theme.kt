@@ -1,6 +1,19 @@
 package app.manhwa
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
@@ -9,25 +22,28 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 private val ManhwaColors = darkColorScheme(
-    primary = Color(0xFF9DB1FF),
-    onPrimary = Color(0xFF0A1040),
-    primaryContainer = Color(0xFF2B3470),
-    onPrimaryContainer = Color(0xFFDDE2FF),
-    secondary = Color(0xFFC3A6FF),
-    onSecondary = Color(0xFF200A40),
-    secondaryContainer = Color(0xFF3A2D66),
-    onSecondaryContainer = Color(0xFFEADDFF),
-    background = Color(0xFF0E0F1A),
-    onBackground = Color(0xFFE3E4F4),
-    surface = Color(0xFF161828),
-    onSurface = Color(0xFFE3E4F4),
-    surfaceVariant = Color(0xFF22253A),
-    onSurfaceVariant = Color(0xFFB9BCD8),
-    outline = Color(0xFF4A4E6B),
-    error = Color(0xFFFF8A80),
+    primary = Color(0xFFB69CFF),
+    onPrimary = Color(0xFF1E0B50),
+    primaryContainer = Color(0xFF4A2CA6),
+    onPrimaryContainer = Color(0xFFE9DFFF),
+    secondary = Color(0xFFE2A8FF),
+    onSecondary = Color(0xFF3A0B5A),
+    secondaryContainer = Color(0xFF5B2B7E),
+    onSecondaryContainer = Color(0xFFF4DDFF),
+    tertiary = Color(0xFF8EDCFF),
+    background = Color(0xFF0F0A1F),
+    onBackground = Color(0xFFECE6FF),
+    surface = Color(0xFF181133),
+    onSurface = Color(0xFFECE6FF),
+    surfaceVariant = Color(0xFF291C4C),
+    onSurfaceVariant = Color(0xFFC6BAE8),
+    outline = Color(0xFF6B5A9E),
+    outlineVariant = Color(0xFF3A2D63),
+    error = Color(0xFFFF8A9B),
 )
 
 private val ManhwaShapes = Shapes(
@@ -41,6 +57,35 @@ private val ManhwaShapes = Shapes(
 @Composable
 fun ManhwaTheme(content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = ManhwaColors, shapes = ManhwaShapes, content = content)
+}
+
+/**
+ * Lueur violette douce autour de l'élément quand [active] (on le touche, il est sélectionné) : trois halos de plus en plus larges et transparents, qui s'allument vite et
+ * s'éteignent lentement. Dessinée derrière l'élément et hors de ses bornes.
+ */
+@Composable
+fun Modifier.glow(active: Boolean, color: Color, corner: Dp = 16.dp, spread: Dp = 14.dp, strength: Float = 0.22f): Modifier {
+    val a by animateFloatAsState(if (active) 1f else 0f, tween(if (active) 90 else 360), label = "glow")
+    return this.drawBehind {
+        if (a > 0.01f) {
+            val sp = spread.toPx(); val cr = corner.toPx()
+            for (i in 3 downTo 1) {
+                val g = sp * i / 3f
+                drawRoundRect(
+                    color = color.copy(alpha = strength * a * (4 - i) / 3f),
+                    topLeft = Offset(-g, -g), size = Size(size.width + 2 * g, size.height + 2 * g), cornerRadius = CornerRadius(cr + g),
+                )
+            }
+        }
+    }
+}
+
+/** Clic avec lueur violette tant qu'on appuie (en plus de l'ondulation habituelle). */
+@Composable
+fun Modifier.glowClickable(corner: Dp = 16.dp, enabled: Boolean = true, onClick: () -> Unit): Modifier {
+    val src = remember { MutableInteractionSource() }
+    val pressed by src.collectIsPressedAsState()
+    return this.glow(pressed, MaterialTheme.colorScheme.primary, corner).clickable(interactionSource = src, indication = LocalIndication.current, enabled = enabled, onClick = onClick)
 }
 
 /** Couleur propre à une œuvre (stable : déduite de son titre), pour sa pastille dans la bibliothèque. */
@@ -59,5 +104,12 @@ object AppIcons {
     val Library: ImageVector by lazy { vec("library", "M4,6H2v14c0,1.1 0.9,2 2,2h14v-2H4V6zM20,2H8C6.9,2 6,2.9 6,4v12c0,1.1 0.9,2 2,2h12c1.1,0 2,-0.9 2,-2V4C22,2.9 21.1,2 20,2zM19,11H9V9h10V11zM15,15H9v-2h6V15zM19,7H9V5h10V7z") }
     val Book: ImageVector by lazy { vec("book", "M21,5c-1.11,-0.35 -2.33,-0.5 -3.5,-0.5c-1.95,0 -4.05,0.4 -5.5,1.5c-1.45,-1.1 -3.55,-1.5 -5.5,-1.5S2.45,4.9 1,6v14.65c0,0.25 0.25,0.5 0.5,0.5c0.1,0 0.15,-0.05 0.25,-0.05C3.1,20.45 5.05,20 6.5,20c1.95,0 4.05,0.4 5.5,1.5c1.35,-0.85 3.8,-1.5 5.5,-1.5c1.65,0 3.35,0.3 4.75,1.05c0.1,0.05 0.15,0.05 0.25,0.05c0.25,0 0.5,-0.25 0.5,-0.5V6c-0.6,-0.45 -1.25,-0.75 -2,-1zM21,18.5c-1.1,-0.35 -2.3,-0.5 -3.5,-0.5c-1.7,0 -4.15,0.65 -5.5,1.5V8c1.35,-0.85 3.8,-1.5 5.5,-1.5c1.2,0 2.4,0.15 3.5,0.5v11.5z") }
     val DoneAll: ImageVector by lazy { vec("done_all", "M18,7l-1.41,-1.41l-6.34,6.34l1.41,1.41L18,7zM22.24,5.59L11.66,16.17L7.48,12l-1.41,1.41L11.66,19l12,-12l-1.42,-1.41zM0.41,13.41L6,19l1.41,-1.41L1.83,12L0.41,13.41z") }
+    val Translate: ImageVector by lazy { vec("translate", "M12.87,15.07l-2.54,-2.51 0.03,-0.03c1.74,-1.94 2.98,-4.17 3.71,-6.53H17V4h-7V2H8v2H1v1.99h11.17C11.5,7.92 10.44,9.75 9,11.35 8.07,10.32 7.3,9.19 6.69,8h-2c0.73,1.63 1.73,3.17 2.98,4.56l-5.09,5.02L4,19l5,-5 3.11,3.11 0.76,-2.04zM18.5,10h-2L12,22h2l1.12,-3h4.75L21,22h2l-4.5,-12zM15.88,17l1.62,-4.33L19.12,17h-3.24z") }
+    val Tune: ImageVector by lazy { vec("tune", "M3,17v2h6v-2H3zM3,5v2h10V5H3zM13,21v-2h8v-2h-8v-2h-2v6h2zM7,9v2H3v2h4v2h2V9H7zM21,13v-2H11v2h10zM15,9h2V7h4V5h-4V3h-2v6z") }
+    val Bookmark: ImageVector by lazy { vec("bookmark", "M17,3H7c-1.1,0 -1.99,0.9 -1.99,2L5,21l7,-3 7,3V5c0,-1.1 -0.9,-2 -2,-2z") }
+    val CloudDownload: ImageVector by lazy { vec("cloud_download", "M19.35,10.04C18.67,6.59 15.64,4 12,4 9.11,4 6.6,5.64 5.35,8.04 2.34,8.36 0,10.91 0,14c0,3.31 2.69,6 6,6h13c2.76,0 5,-2.24 5,-5 0,-2.64 -2.05,-4.78 -4.65,-4.96zM17,13l-5,5 -5,-5h3V9h4v4h3z") }
+    val Storage: ImageVector by lazy { vec("storage", "M2,20h20v-4H2v4zM4,17h2v2H4v-2zM2,4v4h20V4H2zM6,7H4V5h2v2zM2,14h20v-4H2v4zM4,11h2v2H4v-2z") }
+    val Eye: ImageVector by lazy { vec("eye", "M12,4.5C7,4.5 2.73,7.61 1,12c1.73,4.39 6,7.5 11,7.5s9.27,-3.11 11,-7.5c-1.73,-4.39 -6,-7.5 -11,-7.5zM12,17c-2.76,0 -5,-2.24 -5,-5s2.24,-5 5,-5 5,2.24 5,5 -2.24,5 -5,5zM12,9c-1.66,0 -3,1.34 -3,3s1.34,3 3,3 3,-1.34 3,-3 -1.34,-3 -3,-3z") }
+    val Globe: ImageVector by lazy { vec("globe", "M11.99,2C6.47,2 2,6.48 2,12s4.47,10 9.99,10C17.52,22 22,17.52 22,12S17.52,2 11.99,2zM18.92,8h-2.95c-0.32,-1.25 -0.78,-2.45 -1.38,-3.56 1.84,0.63 3.37,1.91 4.33,3.56zM12,4.04c0.83,1.2 1.48,2.53 1.91,3.96h-3.82c0.43,-1.43 1.08,-2.76 1.91,-3.96zM4.26,14C4.1,13.36 4,12.69 4,12s0.1,-1.36 0.26,-2h3.38c-0.08,0.66 -0.14,1.32 -0.14,2 0,0.68 0.06,1.34 0.14,2H4.26zM5.08,16h2.95c0.32,1.25 0.78,2.45 1.38,3.56 -1.84,-0.63 -3.37,-1.9 -4.33,-3.56zM8.03,8H5.08c0.96,-1.66 2.49,-2.93 4.33,-3.56C8.81,5.55 8.35,6.75 8.03,8zM12,19.96c-0.83,-1.2 -1.48,-2.53 -1.91,-3.96h3.82c-0.43,1.43 -1.08,2.76 -1.91,3.96zM14.34,14H9.66c-0.09,-0.66 -0.16,-1.32 -0.16,-2 0,-0.68 0.07,-1.35 0.16,-2h4.68c0.09,0.65 0.16,1.32 0.16,2 0,0.68 -0.07,1.34 -0.16,2zM14.59,19.56c0.6,-1.11 1.06,-2.31 1.38,-3.56h2.95c-0.96,1.65 -2.49,2.93 -4.33,3.56zM16.36,14c0.08,-0.66 0.14,-1.32 0.14,-2 0,-0.68 -0.06,-1.34 -0.14,-2h3.38c0.16,0.64 0.26,1.31 0.26,2s-0.1,1.36 -0.26,2h-3.38z") }
     val Clock: ImageVector by lazy { vec("clock", "M11.99,2C6.47,2 2,6.48 2,12s4.47,10 9.99,10C17.52,22 22,17.52 22,12S17.52,2 11.99,2zM12,20c-4.42,0 -8,-3.58 -8,-8s3.58,-8 8,-8 8,3.58 8,8 -3.58,8 -8,8zM12.5,7H11v6l5.25,3.15 0.75,-1.23 -4.5,-2.67z") }
 }

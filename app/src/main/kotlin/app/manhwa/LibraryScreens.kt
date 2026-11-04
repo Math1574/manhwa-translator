@@ -102,7 +102,7 @@ private fun LibraryHome(graph: AppGraph, onOpenSeries: (String) -> Unit, onHisto
             val last = series.first()
             item {
                 Card(
-                    Modifier.fillMaxWidth().clickable { onOpen(last.lastUrl, resumeAt(last.percent, last.chapters > 0 && lib.progressOf(last.lastUrl)?.done == true)) },
+                    Modifier.fillMaxWidth().glowClickable { onOpen(last.lastUrl, resumeAt(last.percent, last.chapters > 0 && lib.progressOf(last.lastUrl)?.done == true)) },
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                 ) {
                     Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -143,7 +143,7 @@ private fun LibraryHome(graph: AppGraph, onOpenSeries: (String) -> Unit, onHisto
 
 @Composable
 private fun SeriesRow(graph: AppGraph, e: SeriesEntry, now: Long, onClick: () -> Unit) {
-    Card(Modifier.fillMaxWidth().clickable { onClick() }, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+    Card(Modifier.fillMaxWidth().glowClickable { onClick() }, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.width(5.dp).fillMaxHeight().background(seriesColor(e.key)))
             Column(Modifier.weight(1f).padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -236,7 +236,7 @@ private fun SeriesPage(graph: AppGraph, key: String, onBack: () -> Unit, onOpen:
         item { Text("Chapitres (${chapters.size})", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 10.dp)) }
         items(chapters, key = { it.url }) { ch ->
             Card(
-                Modifier.fillMaxWidth().clickable { onOpen(ch.url, resumeAt(ch.percent, ch.done)) },
+                Modifier.fillMaxWidth().glowClickable { onOpen(ch.url, resumeAt(ch.percent, ch.done)) },
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             ) {
                 Row(Modifier.fillMaxWidth().padding(start = 14.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {

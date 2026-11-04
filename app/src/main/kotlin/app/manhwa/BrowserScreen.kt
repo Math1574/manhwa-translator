@@ -84,7 +84,7 @@ private fun prettyAddress(url: String) = url.removePrefix("https://").removePref
 @Composable
 fun BrowserScreen(graph: AppGraph) {
     val c = graph.controller
-    val auto = graph.settingsStore.settings.autoTranslate
+    val st = graph.settingsStore.settings
     val running = c.active && c.done + c.failed < c.total
 
     c.editTarget?.let { et ->
@@ -122,8 +122,8 @@ fun BrowserScreen(graph: AppGraph) {
                         TextButton(onClick = { c.reload() }) { Text("Réessayer") }
                     }
                 }
-                // En lecture automatique, rien n'est affiché tant que tout va bien : seulement une fine barre sur la page.
-                if (c.active && (c.failed > 0 || c.lastError != null || !auto)) {
+                // Rien n'est affiché tant que tout va bien : seulement une fine barre sur la page.
+                if (c.active && (c.failed > 0 || c.lastError != null)) {
                     Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
                         Text(
                             "Traduction : ${c.done}/${c.total}" + (if (c.failed > 0) " · ${c.failed} erreur(s)" else "") +
@@ -148,18 +148,18 @@ fun BrowserScreen(graph: AppGraph) {
                 )
             }
             if (!c.fullscreen) {
-                Column(Modifier.align(Alignment.BottomEnd).padding(16.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    if (c.active) TranslationToggle(translated = c.overlaysVisible) { c.toggleOverlays() }
-                    val nextUrl = if (c.nearBottom) ChapterNav.next(c.currentUrl) else null
-                    if (nextUrl != null) {
-                        ExtendedFloatingActionButton(onClick = { c.load(nextUrl) }, containerColor = MaterialTheme.colorScheme.primary) { Text("Chapitre suivant") }
-                    }
-                    if (!auto) {
-                        ExtendedFloatingActionButton(
-                            onClick = { c.start(force = c.active) },
-                            containerColor = MaterialTheme.colorScheme.secondary,
-                        ) { Text(if (c.active) "Retraduire" else "Traduire") }
-                    }
+                // Bouton Original | Traduit : rond, déplaçable au doigt, rangé au bord de l'écran pour ne pas gêner les boutons des sites.
+                TranslateOrb(
+                    translateOn = c.translateOn, active = c.active, running = running, progress = if (c.total > 0) (c.done + c.failed).toFloat() / c.total else 0f,
+                    right = st.orbRight, yFrac = st.orbY, onTap = { c.onTranslateButton() },
+                    onMoved = { right, y -> graph.settingsStore.update { it.copy(orbRight = right, orbY = y) } },
+                )
+                val nextUrl = if (c.nearBottom) ChapterNav.next(c.currentUrl) else null
+                if (nextUrl != null) {
+                    ExtendedFloatingActionButton(
+                        onClick = { c.load(nextUrl) }, containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 20.dp),
+                    ) { Text("Chapitre suivant") }
                 }
             } else {
                 ReaderOverlay(graph)
@@ -265,6 +265,8 @@ private fun AddressBar(graph: AppGraph) {
         Box {
             IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, "Plus d'actions") }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                DropdownMenuItem(text = { Text(if (c.translateOn && c.active) "Revenir à l'original" else "Traduire cette page") }, onClick = { menu = false; c.onTranslateButton() })
+                if (c.translateOn && c.active) DropdownMenuItem(text = { Text("Retraduire la page") }, onClick = { menu = false; c.start(force = true) })
                 DropdownMenuItem(text = { Text(if (c.loading) "Arrêter le chargement" else "Actualiser") }, onClick = { menu = false; if (c.loading) c.stopLoading() else c.reload() })
                 DropdownMenuItem(text = { Text("Page suivante") }, enabled = c.canGoForward, onClick = { menu = false; c.forward() })
                 DropdownMenuItem(text = { Text("Accueil") }, onClick = { menu = false; c.goHome() })
@@ -302,7 +304,7 @@ private fun androidx.compose.foundation.layout.BoxScope.ReaderOverlay(graph: App
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             TextButton(onClick = { prev?.let { c.load(it) } }, enabled = prev != null) { Text("‹ Précédent", color = if (prev != null) Color.White else Color(0x66FFFFFF)) }
-            if (c.active) TranslationToggle(translated = c.overlaysVisible) { c.toggleOverlays(); c.showReaderBar(true) } else Box(Modifier.height(1.dp))
+            TranslationToggle(translated = c.translateOn && c.active) { c.onTranslateButton(); c.showReaderBar(true) }
             TextButton(onClick = { next?.let { c.load(it) } }, enabled = next != null) { Text("Suivant ›", color = if (next != null) Color.White else Color(0x66FFFFFF)) }
         }
     }

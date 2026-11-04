@@ -43,6 +43,7 @@ object TestHooks {
                 diagnostic = false,
                 enhancedOcr = s("mt_enhanced") != "false",
                 autoTranslate = true,
+                readTranslate = true,
                 mode = QualityMode.FAST,
                 textScale = s("mt_scale")?.toFloatOrNull() ?: st.textScale,
             )

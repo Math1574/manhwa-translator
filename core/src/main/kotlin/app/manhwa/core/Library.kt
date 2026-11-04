@@ -153,6 +153,14 @@ data class BrowsingLibrary(
             return "$host|${title.lowercase()}"
         }
 
+        private val chapterPath = Regex("(?i)(?<![a-z])(?:chapter|chapitre|chap|ch|episode|épisode|ep)[-_ /.]*0*[0-9]+")
+
+        /** L'adresse est celle d'une page de chapitre (…/chapter/8, …/chapitre-12, …/ep3) : sert à ne traduire que les pages où l'on lit, pas les accueils ni les listes d'œuvres. */
+        fun looksLikeChapter(url: String): Boolean {
+            val path = url.substringBefore('#').substringBefore('?').substringAfter("://", url).substringAfter('/', "")
+            return chapterPath.containsMatchIn(path)
+        }
+
         private val chapterRe = Regex("(?i)(?:chapter|chapitre|chap|ch|episode|ep|épisode)[-_ /.]*0*([0-9]+(?:[.][0-9]+)?)")
         fun chapterLabel(url: String, title: String): String? {
             val m = chapterRe.find(url.substringAfter("://", url).substringAfter('/', "")) ?: chapterRe.find(title) ?: return null

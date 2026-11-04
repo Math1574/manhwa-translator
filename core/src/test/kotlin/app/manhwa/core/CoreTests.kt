@@ -1524,4 +1524,21 @@ fun artEraseTests() {
         T.ok(n.suggestions("autre", emptySet()).isEmpty() && n.suggestions(null, emptySet()).isEmpty(), "une autre œuvre n'est pas concernée")
         val one = NameSuggestions(); one.observe("s", "p1", listOf("CHEON CHEON CHEON CHEON"), lex); T.ok(one.suggestions("s", emptySet()).isEmpty(), "une seule page ne suffit pas")
     }
+
+    // ---------- traduction pendant la lecture, bouton flottant, barres ----------
+    T.test("réglages : traduction pendant la lecture désactivée par défaut, position du bouton et barres mémorisées") {
+        val d = AppSettings()
+        T.ok(!d.readTranslate && d.orbRight && d.hideBarsWhileReading, "défauts")
+        val r = AppSettings.parse(AppSettings(readTranslate = true, orbRight = false, orbY = 0.7f, hideBarsWhileReading = false).serialize())
+        T.ok(r.readTranslate && !r.orbRight && !r.hideBarsWhileReading && Math.abs(r.orbY - 0.7f) < 0.001f, "aller-retour")
+        T.ok(AppSettings.parse("orbY=7.5\nschema=2\n").orbY <= 0.96f && AppSettings.parse("orbY=-3\n").orbY >= 0.04f, "position bornée")
+        T.ok(!AppSettings.parse("schema=2\nautoTranslate=true\n").readTranslate, "anciens réglages (traduction automatique) : ne traduisent plus tout seuls")
+    }
+
+    T.test("pages de lecture : les chapitres sont reconnus, pas les accueils, listes ni mots qui contiennent « ch »") {
+        for (u in listOf("https://asurascans.com/comics/the-heavenly-demon-11fe7da3/chapter/8", "https://x.org/series/blue-lock/chapter-12", "https://x.org/manga/foo/chapitre-3/", "https://x.org/read/foo/ep3.html", "http://10.0.2.2:8000/comics/test-series-1a2b3c/chapter/1.html"))
+            T.ok(BrowsingLibrary.looksLikeChapter(u), "chapitre : $u")
+        for (u in listOf("https://asurascans.com/", "https://asurascans.com/comics", "https://asurascans.com/comics/the-heavenly-demon-11fe7da3", "https://x.org/watch/12", "https://x.org/search?q=chapter-8", "https://x.org/coach/5", "https://x.org/page/2"))
+            T.ok(!BrowsingLibrary.looksLikeChapter(u), "pas un chapitre : $u")
+    }
 }
