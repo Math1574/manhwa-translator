@@ -309,7 +309,7 @@ object Erasure {
         // Structure du fond autour du texte : un aplat de zone ou un dégradé lissé ne conviennent qu'à un fond lisse (blanc, couleur unie, dégradé, ombrage, flou). Quand la marge du texte
         // porte des bords francs ou une masse de dessin très différente (contours, cheveux, motifs, panneau sombre), un remplacement de toute la zone abîme le dessin et se voit comme
         // un carré : on n'efface alors que les lettres, et le reste du dessin est conservé. Dans une bulle, seul son intérieur compte (le contour n'est pas une structure du fond).
-        val interiorPre = BubbleMask.interior(px, w, h, textRect, a.bg)
+        val interiorPre: BooleanArray? by lazy { BubbleMask.interior(px, w, h, textRect, a.bg) }   // seulement si une bulle ou l'aplat en a besoin
         val bubbleCtx = container != null || bubble != null
         val structured = run {
             if (a.outlined || (bubbleCtx && interiorPre == null)) return@run false

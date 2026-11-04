@@ -442,27 +442,6 @@ object TextErase {
         for (i in fill.indices) if (grown[i]) fill[i] = true
     }
 
-    /** Retire de [m] les composantes connexes dont la boîte englobante dépasse [maxDim] pixels en largeur ou en hauteur. */
-    private fun dropLarge(m: BooleanArray, w: Int, h: Int, maxDim: Int) {
-        val seen = BooleanArray(w * h); val queue = IntArray(w * h)
-        for (start in 0 until w * h) {
-            if (!m[start] || seen[start]) continue
-            var head = 0; var tail = 0; queue[tail++] = start; seen[start] = true
-            var x0 = w; var x1 = -1; var y0 = h; var y1 = -1
-            while (head < tail) {
-                val i = queue[head++]; val x = i % w; val y = i / w
-                if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y
-                for (dy in -1..1) for (dx in -1..1) {
-                    if (dx == 0 && dy == 0) continue
-                    val nx = x + dx; val ny = y + dy
-                    if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
-                    val j = ny * w + nx
-                    if (m[j] && !seen[j]) { seen[j] = true; queue[tail++] = j }
-                }
-            }
-            if (x1 - x0 + 1 > maxDim || y1 - y0 + 1 > maxDim) for (k in 0 until tail) m[queue[k]] = false
-        }
-    }
 
     /**
      * Reconstruction par plus proche voisin : chaque pixel masqué prend la couleur du pixel non masqué le plus proche, puis un léger lissage (2 passes de 3×3) adoucit les raccords.
@@ -530,8 +509,8 @@ object TextErase {
             levels.add(Level(cw, ch, cr, cg, cb, cs))
         }
         fun relax(l: Level, passes: Int) {
-            val order = ArrayList<Int>(); for (i in 0 until l.w * l.h) if (l.st[i].toInt() == 2) order.add(i)
-            val arr = order.toIntArray()
+            var cnt0 = 0; for (i in 0 until l.w * l.h) if (l.st[i].toInt() == 2) cnt0++
+            val arr = IntArray(cnt0); var fill0 = 0; for (i in 0 until l.w * l.h) if (l.st[i].toInt() == 2) arr[fill0++] = i
             repeat(passes) { pass ->
                 val range = if (pass % 2 == 0) arr.indices else arr.indices.reversed()
                 for (k in range) {
@@ -571,8 +550,13 @@ object TextErase {
      */
     fun structure(pixels: IntArray, w: Int, h: Int, zone: BooleanArray, text: BooleanArray, limit: BooleanArray? = null): FloatArray {
         val n = w * h
-        val lum = IntArray(n) { (r(pixels[it]) * 77 + g(pixels[it]) * 150 + b(pixels[it]) * 29) shr 8 }
-        val band = BooleanArray(n)
+        // boîte de la zone élargie de 11 px : la bande de référence n'en sort pas, inutile de parcourir toute la région
+        var bx0 = w; var bx1 = -1; var by0 = h; var by1 = -1
+        for (i in 0 until n) if (zone[i]) { val x = i % w; val y = i / w; if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < by0) by0 = y; if (y > by1) by1 = y }
+        if (bx1 < 0) return floatArrayOf(0f, 0f, 0f)
+        val rx0 = maxOf(1, bx0 - 11); val rx1 = minOf(w - 2, bx1 + 11); val ry0 = maxOf(1, by0 - 11); val ry1 = minOf(h - 2, by1 + 11)
+        val lum = IntArray(n)
+        for (y in maxOf(0, ry0 - 1)..minOf(h - 1, ry1 + 1)) for (x in maxOf(0, rx0 - 1)..minOf(w - 1, rx1 + 1)) { val c = pixels[y * w + x]; lum[y * w + x] = (r(c) * 77 + g(c) * 150 + b(c) * 29) shr 8 }
         val dm = IntArray(n) { if (zone[it]) 0 else Int.MAX_VALUE }
         val queue = IntArray(n); var head = 0; var tail = 0
         for (i in 0 until n) if (zone[i]) queue[tail++] = i
@@ -588,14 +572,14 @@ object TextErase {
             }
         }
         var tot = 0; var e60 = 0; var e30 = 0
-        val refCols = ArrayList<Int>()
+        var refN = 0; val refColsArr = IntArray(n)
         // dans une bulle, la frange de 3 px au bord de l'intérieur est écartée : son voisin est le contour, dont le bord n'est pas une structure du fond
         val lim = if (limit != null) erode(limit, w, h, 3) else null
-        for (y in 1 until h - 1) for (x in 1 until w - 1) {
+        for (y in ry0..ry1) for (x in rx0..rx1) {
             val i = y * w + x
             val inRef = (zone[i] && !text[i]) || (!zone[i] && dm[i] in 1..10)
             if (!inRef || (lim != null && !lim[i])) continue
-            refCols.add(pixels[i])
+            refColsArr[refN++] = pixels[i]
             // gradient de Sobel ; un voisin appartenant au texte fausserait le bord : on l'ignore
             if (text[i - 1] || text[i + 1] || text[i - w] || text[i + w]) continue
             val gx = -lum[i - w - 1] + lum[i - w + 1] - 2 * lum[i - 1] + 2 * lum[i + 1] - lum[i + w - 1] + lum[i + w + 1]
@@ -603,13 +587,13 @@ object TextErase {
             val mag = kotlin.math.sqrt((gx * gx + gy * gy).toFloat()) / 4f
             tot++; if (mag > 60f) e60++; if (mag > 30f) e30++
         }
-        if (tot < 80 || refCols.size < 80) return floatArrayOf(0f, 0f, 0f)
+        if (tot < 80 || refN < 80) return floatArrayOf(0f, 0f, 0f)
         // masse de pixels très différents de la couleur médiane de référence : un aplat de zone les effacerait (panneau sombre dans une zone claire)
-        fun med(sh: Int): Int { val a = IntArray(refCols.size) { (refCols[it] shr sh) and 0xFF }; a.sort(); return a[a.size / 2] }
+        fun med(sh: Int): Int { val a = IntArray(refN) { (refColsArr[it] shr sh) and 0xFF }; a.sort(); return a[a.size / 2] }
         val mr = med(16); val mg = med(8); val mb = med(0)
         var far = 0
-        for (c in refCols) if (maxOf(abs(((c shr 16) and 0xFF) - mr), abs(((c shr 8) and 0xFF) - mg), abs((c and 0xFF) - mb)) > 50) far++
-        return floatArrayOf(e60.toFloat() / tot, e30.toFloat() / tot, far.toFloat() / refCols.size)
+        for (k in 0 until refN) { val c = refColsArr[k]; if (maxOf(abs(((c shr 16) and 0xFF) - mr), abs(((c shr 8) and 0xFF) - mg), abs((c and 0xFF) - mb)) > 50) far++ }
+        return floatArrayOf(e60.toFloat() / tot, e30.toFloat() / tot, far.toFloat() / refN)
     }
 
     /**
@@ -638,21 +622,25 @@ object TextErase {
         var minX = w; var maxX = -1; var minY = h; var maxY = -1
         for (i in 0 until n) if (mask[i]) { val x = i % w; val y = i / w; if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y }
         val cx = (minX + maxX) / 2; val cy = (minY + maxY) / 2
-        val band = ArrayList<Int>(); val valid = BooleanArray(n)
-        for (i in 0 until n) if (dm[i] in 1..10 && dist(pixels[i], bg) <= 70) { band.add(i); valid[i] = true }
-        if (band.size < 60) return null
-        fun med(l: List<Int>, sh: Int): Int { val a = IntArray(l.size) { (l[it] shr sh) and 0xFF }; a.sort(); return a[a.size / 2] }
-        val cols = band.map { pixels[it] }
-        val mr = med(cols, 16); val mg = med(cols, 8); val mb = med(cols, 0)
-        var madR = IntArray(cols.size) { abs(((cols[it] shr 16) and 0xFF) - mr) }; madR.sort()
-        var madG = IntArray(cols.size) { abs(((cols[it] shr 8) and 0xFF) - mg) }; madG.sort()
-        var madB = IntArray(cols.size) { abs((cols[it] and 0xFF) - mb) }; madB.sort()
-        val mad = maxOf(madR[madR.size / 2], madG[madG.size / 2], madB[madB.size / 2])
+        val bandArr = IntArray(n); var bandN = 0; val valid = BooleanArray(n)
+        for (i in 0 until n) if (dm[i] in 1..10 && dist(pixels[i], bg) <= 70) { bandArr[bandN++] = i; valid[i] = true }
+        if (bandN < 60) return null
+        fun medOf(a: IntArray, cnt: Int, sh: Int): Int { val t = IntArray(cnt) { (a[it] shr sh) and 0xFF }; t.sort(); return t[cnt / 2] }
+        val cols = IntArray(bandN) { pixels[bandArr[it]] }
+        val mr = medOf(cols, bandN, 16); val mg = medOf(cols, bandN, 8); val mb = medOf(cols, bandN, 0)
+        val madR = IntArray(bandN) { abs(((cols[it] shr 16) and 0xFF) - mr) }; madR.sort()
+        val madG = IntArray(bandN) { abs(((cols[it] shr 8) and 0xFF) - mg) }; madG.sort()
+        val madB = IntArray(bandN) { abs((cols[it] and 0xFF) - mb) }; madB.sort()
+        val mad = maxOf(madR[bandN / 2], madG[bandN / 2], madB[bandN / 2])
         // dégradé : médianes des quatre côtés de la zone
-        val quad = Array(4) { ArrayList<Int>() }
-        for (i in band) { val x = i % w; val y = i / w; if (y < minY) quad[0].add(pixels[i]) else if (y > maxY) quad[1].add(pixels[i]) else if (x < minX) quad[2].add(pixels[i]) else if (x > maxX) quad[3].add(pixels[i]) }
+        val quad = Array(4) { IntArray(bandN) }; val quadN = IntArray(4)
+        for (k in 0 until bandN) {
+            val i = bandArr[k]; val x = i % w; val y = i / w
+            val q = if (y < minY) 0 else if (y > maxY) 1 else if (x < minX) 2 else if (x > maxX) 3 else -1
+            if (q >= 0) quad[q][quadN[q]++] = pixels[i]
+        }
         var spread = 0
-        val meds = quad.filter { it.size >= 12 }.map { q -> intArrayOf(med(q, 16), med(q, 8), med(q, 0)) }
+        val meds = (0..3).filter { quadN[it] >= 12 }.map { q -> intArrayOf(medOf(quad[q], quadN[q], 16), medOf(quad[q], quadN[q], 8), medOf(quad[q], quadN[q], 0)) }
         for (c in 0..2) { if (meds.size >= 2) spread = maxOf(spread, meds.maxOf { it[c] } - meds.minOf { it[c] }) }
         val flat = mad <= 3 && spread <= 6
         if (flat) return null
