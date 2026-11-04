@@ -28,6 +28,7 @@ import app.manhwa.core.DebugInfo
 import app.manhwa.core.JunkFilter
 import app.manhwa.core.OcrMerge
 import app.manhwa.core.OcrRepair
+import app.manhwa.core.Onomatopoeia
 import app.manhwa.core.TranslationChecks
 import app.manhwa.core.sha256Hex
 import app.manhwa.core.LlmModels
