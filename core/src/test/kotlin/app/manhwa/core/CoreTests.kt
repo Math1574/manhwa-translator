@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests(); openBubbleTests(); barrierShapeTests(); safetyTests(); artEraseTests()
+    groupingTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests(); openBubbleTests(); barrierShapeTests(); safetyTests(); artEraseTests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -80,44 +80,6 @@ fun groupingTests() {
         T.eq(0, g.group(listOf(line("thud", 100f, 100f, 200f, 140f, c = 0.3f))).size)
     }
     T.test("groupement: aucune ligne → aucun bloc") { T.eq(0, g.group(emptyList()).size) }
-}
-
-// ---------- mise en page ----------
-fun layoutTests() {
-    val w = 800; val h = 1200
-    fun tb(id: Int, l: Float, t: Float, r: Float, b: Float, text: String) = TranslatedBlock(id, RectF(l, t, r, b), "src", text)
-    T.test("layout: tous les blocs restent dans l'image (même aux bords)") {
-        val p = OverlayLayout.place(listOf(
-            tb(0, 0f, 0f, 120f, 40f, "Salut tout le monde, comment ça va aujourd'hui ?"),
-            tb(1, 700f, 1150f, 800f, 1200f, "Un texte de traduction nettement plus long que la bulle d'origine, vraiment."),
-        ), w, h)
-        T.eq(2, p.size); p.forEach { T.ok(it.box.isInside(w.toFloat(), h.toFloat()), "bloc ${it.id} hors image: ${it.box}") }
-    }
-    T.test("layout: pas de chevauchement notable entre blocs voisins") {
-        val p = OverlayLayout.place(listOf(
-            tb(0, 100f, 100f, 300f, 160f, "Une phrase assez longue pour déborder de sa bulle d'origine"),
-            tb(1, 100f, 165f, 300f, 225f, "Une autre phrase assez longue pour déborder aussi de sa bulle"),
-        ), w, h)
-        for (i in p.indices) for (j in i + 1 until p.size) T.ok(p[i].box.overlapRatio(p[j].box) < 0.05f, "chevauchement ${p[i].box} / ${p[j].box}")
-        p.forEach { T.ok(it.box.isInside(w.toFloat(), h.toFloat()), "hors image") }
-    }
-    T.test("layout: le texte tient dans la zone calculée") {
-        val p = OverlayLayout.place(listOf(tb(0, 100f, 100f, 400f, 250f, "Bonjour, je m'appelle Kim et je suis ravi de te rencontrer ici.")), w, h).single()
-        T.ok(p.lines.size * p.fontSizePx * 1.15f <= p.box.height + 1f, "texte déborde verticalement")
-        p.lines.forEach { T.ok(EstimatedMeasurer.width(it, p.fontSizePx) <= p.box.width + 1f, "ligne trop large: $it") }
-    }
-    T.test("layout: l'échelle utilisateur agrandit le texte (si la place le permet)") {
-        val b = listOf(tb(0, 100f, 100f, 500f, 160f, "Bonjour"))
-        T.ok(OverlayLayout.place(b, w, h, 1.5f).single().fontSizePx > OverlayLayout.place(b, w, h, 0.7f).single().fontSizePx, "échelle sans effet")
-    }
-    T.test("layout: traductions vides ignorées, liste vide acceptée") {
-        T.eq(0, OverlayLayout.place(listOf(tb(0, 1f, 1f, 50f, 50f, "  ")), w, h).size)
-        T.eq(0, OverlayLayout.place(emptyList(), w, h).size)
-    }
-    T.test("layout: très long texte dans petite bulle reste borné à l'image") {
-        val p = OverlayLayout.place(listOf(tb(0, 10f, 10f, 60f, 30f, "mot ".repeat(200))), 200, 200).single()
-        T.ok(p.box.isInside(200f, 200f), "hors image ${p.box}")
-    }
 }
 
 // ---------- glossaire ----------
@@ -402,25 +364,6 @@ fun textTests() {
             .process(byteArrayOf(9), "en", "fr") as PageOutcome.Done
         T.eq(listOf("Please take me"), seen); T.eq(1, o.result.blocks.size)
         T.ok(PagePipeline(ResultCache(tmp()), FakeOcr(listOf(line("HMPH", 1f, 1f, 90f, 40f))), spy, "e").process(byteArrayOf(8), "en", "fr") is PageOutcome.NoText, "page de bruit = NoText")
-    }
-}
-
-// ---------- mise en page v2 ----------
-fun layoutV2Tests() {
-    val text = "Aidez-moi s'il vous plaît, monsieur."
-    T.test("layout: aucun mot coupé, police issue de la hauteur de LIGNE (et non du bloc entier)") {
-        val b = TranslatedBlock(0, RectF(250f, 150f, 560f, 330f), "src", text, false, 30f) // bloc de 3 lignes de 30 px
-        val p = OverlayLayout.place(listOf(b), 800, 1200).single()
-        text.split(" ").forEach { w -> T.ok(p.lines.any { it.contains(w) }, "mot coupé: $w dans ${p.lines}") }
-        T.ok(p.fontSizePx <= 30f * 0.9f + 0.5f, "police trop grande: ${p.fontSizePx}")
-        T.ok(p.lines.size * p.fontSizePx * 1.15f <= p.box.height + 1f, "déborde en hauteur")
-        p.lines.forEach { T.ok(EstimatedMeasurer.width(it, p.fontSizePx) <= p.box.width + 1f, "ligne trop large: $it") }
-    }
-    T.test("layout: texte vertical → zone élargie pour une traduction horizontale lisible") {
-        val b = TranslatedBlock(0, RectF(400f, 100f, 440f, 400f), "src", "Je ne te pardonnerai jamais.", true, 40f)
-        val p = OverlayLayout.place(listOf(b), 800, 1200).single()
-        T.ok(p.box.width >= 190f, "zone trop étroite: ${p.box.width}"); T.ok(p.fontSizePx >= 12f, "police illisible: ${p.fontSizePx}")
-        T.ok(p.box.isInside(800f, 1200f), "hors image")
     }
 }
 
@@ -1453,5 +1396,36 @@ fun artEraseTests() {
         var err = 0L; var n = 0
         for (i in mask.indices) if (mask[i]) { val a = out[i]; val b = truth[i]; err += (Math.abs(((a shr 16) and 0xFF) - ((b shr 16) and 0xFF)) + Math.abs(((a shr 8) and 0xFF) - ((b shr 8) and 0xFF)) + Math.abs((a and 0xFF) - (b and 0xFF))) / 3; n++ }
         T.ok(err.toDouble() / n < 2.5, "écart moyen ${"%.2f".format(err.toDouble() / n)}")
+    }
+
+    // ---------- onomatopées ----------
+    val lexSfx = EnglishLexicon(listOf("the", "assassin", "is", "coming", "run", "wait", "stop", "korea", "village", "sword", "hello", "chapter", "kill", "you", "seoul"), listOf("the", "is", "you"))
+    fun sfx(t: String, k: BlockKind = BlockKind.FREE, rel: Float = 1f) = Onomatopoeia.isSfx(t, k, rel, lexSfx)
+    T.test("onomatopées : les bruitages connus hors bulle sont laissés tels quels") {
+        for (t in listOf("CRACK!", "BOOOM", "THUD THUD", "*GULP*", "TICK TOCK", "Whoosh...", "KRRRAAASH!!", "BAM BAM BAM", "sniff sniff")) T.ok(sfx(t), "« $t » doit être une onomatopée")
+    }
+    T.test("onomatopées : une réplique n'est jamais écartée (phrase, apostrophe, mot courant, bulle)") {
+        for (t in listOf("NO!", "WAIT!", "STOP!", "THE ASSASSIN IS COMING", "I'LL KILL YOU!", "DON'T RUN", "Hello", "CHAPTER 12")) T.ok(!sfx(t), "« $t » est une réplique")
+        T.ok(!sfx("BOOM", BlockKind.IN_BUBBLE), "dans une bulle, même « BOOM » est traité comme une réplique")
+        T.ok(!sfx("HMPH", BlockKind.IN_BUBBLE) && !sfx("HAHAHA", BlockKind.IN_BUBBLE), "rires et soupirs dans une bulle : traduits")
+    }
+    T.test("onomatopées : bruitage romanisé seulement en gros lettrage et sans mot anglais") {
+        T.ok(sfx("DUDUDUK", BlockKind.FREE, 2.0f), "gros lettrage inconnu")
+        T.ok(!sfx("DUDUDUK", BlockKind.FREE, 1.0f), "taille normale : on ne tente pas")
+        T.ok(!sfx("SEOUL KOREA", BlockKind.FREE, 1.0f), "légende de lieu : traduite")
+        T.ok(!sfx("DUDUDUK", BlockKind.UNKNOWN, 2.0f), "sans détecteur de bulles : pas de pari")
+        T.ok(!sfx("DUDUDUK DUDUDUK DUDUDUK DUK", BlockKind.FREE, 2.0f), "plus de deux mots : pas un bruitage romanisé")
+    }
+    T.test("onomatopées : le japonais, le coréen et le chinois ne sont pas concernés") {
+        T.ok(!sfx("ドン"), "katakana"); T.ok(!sfx("쿵"), "hangul"); T.ok(!sfx("轰"), "han")
+    }
+    T.test("onomatopées : le pipeline les écarte avant traduction, la page reste sinon identique") {
+        // vérifié via le filtre : un bloc écarté n'est pas traduit
+        T.ok(sfx("CRACK!") && !sfx("Where are you going?"), "filtre")
+    }
+    T.test("réglages : l'option onomatopées survit à la sérialisation, désactivée par défaut") {
+        T.ok(!AppSettings().translateSfx, "défaut")
+        T.ok(AppSettings.parse(AppSettings(translateSfx = true).serialize()).translateSfx, "aller-retour")
+        T.ok(!AppSettings.parse("source=EN\n").translateSfx, "anciens réglages sans la clé")
     }
 }

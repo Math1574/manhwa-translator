@@ -38,6 +38,8 @@ class PagePipeline(
     private val junk: (text: String, relativeHeight: Float, anchored: Boolean) -> Boolean = { _, _, _ -> false },
     /** Répare les erreurs de lecture avant traduction (mots collés, chiffres ou minuscules parasites). */
     private val repair: (String) -> String = { it },
+    /** Onomatopée à laisser telle quelle ? (texte, nature du bloc, hauteur relative à la médiane de la page). */
+    private val isSfx: (text: String, kind: BlockKind, relativeHeight: Float) -> Boolean = { _, _, _ -> false },
     /** Relit les blocs douteux avec un modèle vision-langage (null = désactivé). */
     private val reader: BlockReader? = null,
     /** Part des mots d'une lecture qui sont de vrais mots (0..1) : sert à repérer les blocs douteux et à vérifier les relectures. */
@@ -57,8 +59,9 @@ class PagePipeline(
         // hauteur de ligne relative à la médiane de la page : un gros lettrage (onomatopée, titre) n'est jamais un débris
         val heights = grouped.map { medianLineHeight(it) }.filter { it > 0f }.sorted()
         val medianH = if (heights.isEmpty()) 0f else heights[heights.size / 2]
-        val blocks = grouped.filter { !TextNormalizer.isNoise(it.text) && !junk(it.text, if (medianH > 0f) medianLineHeight(it) / medianH else 1f, it.kind != BlockKind.FREE || it.zone != null) }
-        for (g in grouped) if (g !in blocks) log("écarté « ${g.text.take(40)} » (${if (TextNormalizer.isNoise(g.text)) "bruit" else "débris, filigrane ou répété"}${if (g.kind != BlockKind.IN_BUBBLE && g.zone == null) ", hors zone" else ""})")
+        fun relH(b: TextBlock) = if (medianH > 0f) medianLineHeight(b) / medianH else 1f
+        val blocks = grouped.filter { !TextNormalizer.isNoise(it.text) && !junk(it.text, relH(it), it.kind != BlockKind.FREE || it.zone != null) && !isSfx(it.text, it.kind, relH(it)) }
+        for (g in grouped) if (g !in blocks) log("écarté « ${g.text.take(40)} » (${if (TextNormalizer.isNoise(g.text)) "bruit" else if (isSfx(g.text, g.kind, relH(g))) "onomatopée laissée telle quelle" else "débris, filigrane ou répété"}${if (g.kind != BlockKind.IN_BUBBLE && g.zone == null) ", hors zone" else ""})")
         val clean = blocks.map { repair(it.text) }.toMutableList()
         reportDebug(ocrResult, grouped, blocks, emptySet())
         if (blocks.isEmpty()) return PageOutcome.NoText(ocrResult.imageWidth, ocrResult.imageHeight)

@@ -126,7 +126,6 @@ private class FontChoice(
 object PageRenderer {
     /** Double résolution pour un texte net quand la page est agrandie à l'écran. */
     private const val SUPERSAMPLE = 2f
-    private const val CAP_RATIO = 0.714f   // hauteur des capitales / corps, Noto Sans
 
     private class Prep(
         val block: TranslatedBlock,
@@ -217,12 +216,6 @@ object PageRenderer {
 
     private fun lineHeightOf(b: TranslatedBlock): Float =
         if (b.lineHeight > 0f) b.lineHeight else if (b.vertical) b.box.width else b.box.height
-
-    /** Bulles voisines détectées (celles qui ne contiennent pas ce bloc) : leur contour ne doit pas être entamé par l'effacement. */
-    private fun protectOf(b: TranslatedBlock, all: List<TranslatedBlock>, verified: Map<Int, RectF?>): List<RectF> {
-        val u = b.lineBoxes.ifEmpty { listOf(b.box) }.reduce { x, y -> x.union(y) }
-        return all.filter { it !== b }.mapNotNull { verified[it.id] }.filter { !it.contains(u.centerX, u.centerY) }
-    }
 
     private fun prepare(b: TranslatedBlock, src: PixelSource?, s: Float, iw: Float, ih: Float, medianLine: Float, target: String, others: List<RectF>, blocksAll: List<TranslatedBlock>, verified: Map<Int, RectF?>, isRect: (RectF) -> Boolean): Prep {
         val lineBoxes = b.lineBoxes.ifEmpty { listOf(b.box) }

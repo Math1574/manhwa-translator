@@ -442,6 +442,13 @@ fun SettingsScreen(graph: AppGraph) {
         if (graph.visionTest.summary.isNotEmpty()) Text(graph.visionTest.summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
+                Text("Traduire les onomatopées", style = MaterialTheme.typography.titleMedium)
+                Text("Désactivé (recommandé) : les bruitages (CRACK, BOOM, THUD…) restent tels quels dans l'image. Activez-le pour les traduire comme le reste.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            }
+            Switch(checked = s.translateSfx, onCheckedChange = { v -> store.update { it.copy(translateSfx = v) } })
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
                 Text("Bloquer les publicités", style = MaterialTheme.typography.titleMedium)
                 Text("Filtre les régies publicitaires connues, les fenêtres intempestives et les redirections vers d'autres sites. Désactivez-le si un site de lecture ne s'affiche plus correctement.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             }

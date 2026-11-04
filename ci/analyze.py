@@ -138,9 +138,12 @@ for path in sorted(glob.glob(f"{OUT}/reports/*.json")):
             rc = recall(g["text"], got)
             tb = [b for b in im.get("blocks", []) if inter(box(b), gb, 8)]
             tr = " / ".join(b["tr"] for b in tb)
-            okc += rc >= 0.8; trc += bool(tb)
-            P(f"| {g['kind']}: {g['text']} | {rc*100:.0f} % | {'oui' if tb else '**NON**'} | {tr} |")
-        P(f"\n**Lecture OCR correcte : {okc}/{len(gt)} · éléments traduits : {trc}/{len(gt)}**")
+            # les onomatopées (kind « sfx ») doivent rester telles quelles : « laissée » est le bon résultat, une traduction est l'erreur
+            is_sfx = g["kind"] == "sfx"
+            okc += rc >= 0.8; trc += (not tb) if is_sfx else bool(tb)
+            verdict = ("laissée telle quelle" if not tb else "**traduite à tort**") if is_sfx else ("oui" if tb else "**NON**")
+            P(f"| {g['kind']}: {g['text']} | {rc*100:.0f} % | {verdict} | {tr} |")
+        P(f"\n**Lecture OCR correcte : {okc}/{len(gt)} · éléments traités comme attendu (traduits, onomatopées laissées) : {trc}/{len(gt)}**")
         if okc < len(gt): problems.append(f"{name}: OCR {okc}/{len(gt)}")
         if trc < len(gt): problems.append(f"{name}: traduits {trc}/{len(gt)}")
     else:

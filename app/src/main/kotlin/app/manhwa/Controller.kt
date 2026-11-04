@@ -346,7 +346,9 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val ocrEngine = CombinedOcr(s.source, MlKitOcr(s.source), if (enhanced) graph.paddle else null, Lexicon.get(ctx))
         val rereadOn = spec != null && s.source.code == "en" && graph.blockReader.available
         // « pp2 » : lecture des lignes inclinées sur recadrage redressé ; « rr » : relecture des textes douteux par Gemma (résultats différents, cache à part)
-        val engineId = (if (spec == null) MlKitTranslation.ID else GemmaTranslator.engineId(spec)) + (if (enhanced) "+pp2" else "") + (if (rereadOn) "+rr1" else "")
+        // onomatopées laissées telles quelles (anglais) : clé de cache distincte, pour ne pas reprendre d'anciens résultats où elles étaient traduites
+        val skipSfx = !s.translateSfx && s.source.code != "ja" && s.source.code != "ko" && s.source.code != "zh"
+        val engineId = (if (spec == null) MlKitTranslation.ID else GemmaTranslator.engineId(spec)) + (if (enhanced) "+pp2" else "") + (if (rereadOn) "+rr1" else "") + (if (skipSfx) "+sfx0" else "")
         var debug: DebugInfo? = null
         val lexicon = Lexicon.get(ctx)
         candidatesById[c.id] = c
@@ -359,6 +361,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             // l'anglais est lu par OCR avec beaucoup de bruit : on écarte filigranes et débris, puis on répare mots collés et chiffres parasites
             // un texte libre sans zone du détecteur est écarté s'il ne contient aucun mot reconnu, même en gros lettrage (décor lu comme du texte : « IC », « RIC », « PY »)
             junk = { t, rel, anchored -> s.source.code != "ja" && s.source.code != "ko" && s.source.code != "zh" && (JunkFilter.isWatermark(t) || ((rel < 1.6f || !anchored) && JunkFilter.isDebris(t, lexicon)) || repeatedAcrossPages(t, keysById[c.id]?.imageHash ?: c.id)) },
+            isSfx = { t, kind, rel -> skipSfx && Onomatopoeia.isSfx(t, kind, rel, lexicon) },
             repair = { t -> try { OcrRepair.repair(t, lexicon, graph.gemma.chapterNames()) } catch (e: Throwable) { t } },
             reader = if (rereadOn) graph.blockReader else null,
             // part de vrais mots anglais (noms propres du chapitre compris) : repère les lectures absurdes et vérifie les relectures

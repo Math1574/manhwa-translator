@@ -17,8 +17,6 @@ data class RectF(val left: Float, val top: Float, val right: Float, val bottom: 
         return if (r.isEmpty) null else r
     }
 
-    fun intersects(o: RectF): Boolean = intersection(o) != null
-
     fun contains(x: Float, y: Float): Boolean = x >= left && x <= right && y >= top && y <= bottom
 
     fun union(o: RectF) = RectF(min(left, o.left), min(top, o.top), max(right, o.right), max(bottom, o.bottom))
@@ -34,8 +32,6 @@ data class RectF(val left: Float, val top: Float, val right: Float, val bottom: 
         return if (m <= 0f) 0f else i.area / m
     }
 
-    fun isInside(w: Float, h: Float, eps: Float = 0.01f) =
-        left >= -eps && top >= -eps && right <= w + eps && bottom <= h + eps
 }
 
 /** Ligne de texte reconnue par l'OCR. */

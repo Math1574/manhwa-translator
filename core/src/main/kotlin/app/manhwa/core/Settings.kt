@@ -25,6 +25,8 @@ data class AppSettings(
     val blockAds: Boolean = true,
     /** Relecture automatique des textes douteux par Gemma (modèle de vision) quand elle a été validée par le test. */
     val autoReread: Boolean = true,
+    /** Traduire aussi les onomatopées (bruitages). Désactivé : elles restent telles quelles dans l'image. */
+    val translateSfx: Boolean = false,
 ) {
     /** Ramène les valeurs dans des bornes valides. */
     fun sanitized() = copy(
@@ -37,7 +39,7 @@ data class AppSettings(
         it["source"] = source.name; it["target"] = target.name; it["textScale"] = textScale.toString()
         it["autoTranslate"] = autoTranslate.toString(); it["mode"] = mode.name
         it["maxPrefetchPages"] = maxPrefetchPages.toString(); it["cacheMaxMb"] = cacheMaxMb.toString()
-        it["schema"] = "2"; it["engine"] = engine.name; it["useGpu"] = useGpu.toString(); it["diagnostic"] = diagnostic.toString(); it["enhancedOcr"] = enhancedOcr.toString(); it["refinePass"] = refinePass.toString(); it["blockAds"] = blockAds.toString(); it["autoReread"] = autoReread.toString()
+        it["schema"] = "2"; it["engine"] = engine.name; it["useGpu"] = useGpu.toString(); it["diagnostic"] = diagnostic.toString(); it["enhancedOcr"] = enhancedOcr.toString(); it["refinePass"] = refinePass.toString(); it["blockAds"] = blockAds.toString(); it["autoReread"] = autoReread.toString(); it["translateSfx"] = translateSfx.toString()
     }.let { p -> java.io.StringWriter().also { w -> p.store(w, null) }.toString() }
 
     companion object {
@@ -61,6 +63,7 @@ data class AppSettings(
                 p.getProperty("refinePass")?.toBooleanStrictOrNull() ?: d.refinePass,
                 p.getProperty("blockAds")?.toBooleanStrictOrNull() ?: d.blockAds,
                 p.getProperty("autoReread")?.toBooleanStrictOrNull() ?: d.autoReread,
+                p.getProperty("translateSfx")?.toBooleanStrictOrNull() ?: d.translateSfx,
             ).sanitized()
         }
     }
