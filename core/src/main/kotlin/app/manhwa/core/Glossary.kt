@@ -2,6 +2,9 @@ package app.manhwa.core
 
 data class GlossaryEntry(val source: String, val target: String)
 
+/** Terme propre à une œuvre (clé d'œuvre : site + titre). */
+data class SeriesTerm(val series: String, val source: String, val target: String)
+
 data class Protected(val text: String, val tokens: Map<String, String>)
 
 /**
@@ -12,6 +15,8 @@ data class Protected(val text: String, val tokens: Map<String, String>)
 class Glossary(entries: List<GlossaryEntry> = emptyList(), corrections: Map<String, String> = emptyMap()) {
     private val terms = LinkedHashMap<String, String>()
     private val fixes = LinkedHashMap<String, String>()
+    /** Termes propres à une œuvre : ils s'ajoutent aux termes communs et les remplacent quand le terme d'origine est le même. */
+    private val seriesTerms = LinkedHashMap<String, LinkedHashMap<String, String>>()
 
     init {
         entries.forEach { addTerm(it.source, it.target) }
@@ -23,6 +28,25 @@ class Glossary(entries: List<GlossaryEntry> = emptyList(), corrections: Map<Stri
     }
 
     fun removeTerm(source: String) { terms.remove(source.trim()) }
+
+    fun addSeriesTerm(series: String, source: String, target: String) {
+        if (series.isNotBlank() && source.isNotBlank() && target.isNotBlank()) seriesTerms.getOrPut(series) { LinkedHashMap() }[source.trim()] = target.trim()
+    }
+
+    fun removeSeriesTerm(series: String, source: String) {
+        seriesTerms[series]?.remove(source.trim()); if (seriesTerms[series]?.isEmpty() == true) seriesTerms.remove(series)
+    }
+
+    fun seriesTerms(): List<SeriesTerm> = seriesTerms.flatMap { (k, m) -> m.map { SeriesTerm(k, it.key, it.value) } }
+
+    /** Glossaire à utiliser pour une œuvre : termes communs, puis ceux de l'œuvre ; les corrections de blocs restent communes. Sans œuvre : une copie du glossaire commun. */
+    fun forSeries(series: String?): Glossary {
+        val g = Glossary()
+        terms.forEach { (k, v) -> g.addTerm(k, v) }
+        if (series != null) seriesTerms[series]?.forEach { (k, v) -> g.addTerm(k, v) }
+        fixes.forEach { (k, v) -> g.fixes[k] = v }
+        return g
+    }
     fun addCorrection(sourceBlock: String, translation: String) {
         if (sourceBlock.isNotBlank()) fixes[normalize(sourceBlock)] = translation
     }
@@ -58,6 +82,7 @@ class Glossary(entries: List<GlossaryEntry> = emptyList(), corrections: Map<Stri
     fun serialize(): String = buildString {
         terms.forEach { (k, v) -> append("T\t").append(esc(k)).append('\t').append(esc(v)).append('\n') }
         fixes.forEach { (k, v) -> append("C\t").append(esc(k)).append('\t').append(esc(v)).append('\n') }
+        seriesTerms.forEach { (s, m) -> m.forEach { (k, v) -> append("S\t").append(esc(s)).append('\t').append(esc(k)).append('\t').append(esc(v)).append('\n') } }
     }
 
     private fun normalize(s: String) = s.filter { !it.isWhitespace() }
@@ -67,10 +92,10 @@ class Glossary(entries: List<GlossaryEntry> = emptyList(), corrections: Map<Stri
             val g = Glossary()
             for (line in data.lines()) {
                 val p = line.split('\t')
-                if (p.size != 3) continue
-                when (p[0]) {
-                    "T" -> g.addTerm(unesc(p[1]), unesc(p[2]))
-                    "C" -> g.fixes[unesc(p[1])] = unesc(p[2])
+                when {
+                    p.size == 3 && p[0] == "T" -> g.addTerm(unesc(p[1]), unesc(p[2]))
+                    p.size == 3 && p[0] == "C" -> g.fixes[unesc(p[1])] = unesc(p[2])
+                    p.size == 4 && p[0] == "S" -> g.addSeriesTerm(unesc(p[1]), unesc(p[2]), unesc(p[3]))
                 }
             }
             return g

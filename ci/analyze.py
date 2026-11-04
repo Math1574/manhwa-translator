@@ -155,6 +155,18 @@ for path in sorted(glob.glob(f"{OUT}/reports/*.json")):
                 if shown < 14: P(f"| {b['src'][:110]} | {b['tr'][:140]} |"); shown += 1
     P("")
 
+# interface (scénario ui) : une ligne « vérification<TAB>0 ou 1 » par contrôle fait sur l'export de l'écran de l'émulateur
+uit = f"{OUT}/reports/ui.tsv"
+if os.path.exists(uit):
+    rows = [l.rstrip("\n").split("\t") for l in open(uit, encoding="utf8") if "\t" in l]
+    P("\n## Interface (émulateur)\n\n| vérification | résultat |\n|---|---|")
+    for k, v in rows: P(f"| {k} | {'oui' if v.strip() == '1' else '**NON**'} |")
+    bad = [k for k, v in rows if v.strip() != "1"]
+    P(f"\n**Interface : {len(rows) - len(bad)}/{len(rows)} vérifications réussies**")
+    for k in bad: problems.append(f"interface : {k}")
+else:
+    P("\n## Interface (émulateur)\n\n(scénario non exécuté)")
+
 P("\n# Problèmes détectés\n" + ("\n".join(f"- {p}" for p in problems) if problems else "aucun"))
 open(f"{OUT}/summary.md", "w").write("\n".join(lines))
 print("\n".join(lines[-40:]))

@@ -40,6 +40,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -204,27 +205,64 @@ private fun GemmaCard(spec: ModelSpec, llm: LlmModelsManager, onAskDownload: () 
 
 // ---------------- Glossaire ----------------
 
+private data class GlossaryRow(val series: String?, val source: String, val target: String)
+
 @Composable
 fun GlossaryScreen(graph: AppGraph) {
     val g = graph.glossary
+    val c = graph.controller
+    val series = c.currentSeriesKey
+    val seriesName = if (series != null) (app.manhwa.core.SeriesHint.fromUrl(c.currentUrl) ?: series) else null
+    var scopeSeries by remember { mutableStateOf(series != null) }
     var src by remember { mutableStateOf("") }
     var dst by remember { mutableStateOf("") }
+    var tick by remember { mutableStateOf(0) }
+    val forSeries = scopeSeries && series != null
+    val known = remember(tick, g.terms.size, g.seriesTerms.size) {
+        (g.terms.map { it.source.lowercase() } + g.seriesTerms.filter { it.series == series }.map { it.source.lowercase() }).toSet()
+    }
+    val suggestions = remember(tick, series, known) { if (forSeries) graph.names.suggestions(series, known) else emptyList() }
+    val rows = (if (forSeries) g.seriesTerms.filter { it.series == series }.map { GlossaryRow(it.series, it.source, it.target) } else emptyList()) +
+        g.terms.map { GlossaryRow(null, it.source, it.target) }
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Glossaire", style = MaterialTheme.typography.headlineSmall)
         Text(
-            "Noms de personnages et termes récurrents : le terme d'origine est remplacé par votre traduction. Les données restent sur le téléphone. " +
-                "Effacez le cache puis retraduisez pour appliquer un nouveau terme aux pages déjà traduites.",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            "Noms de personnages et termes récurrents : le terme d'origine est remplacé par votre traduction. Un terme d'œuvre ne s'applique qu'à cette œuvre. " +
+                "Effacez le cache puis retraduisez pour l'appliquer aux pages déjà traduites.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
         )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = !forSeries, onClick = { scopeSeries = false }, label = { Text("Toutes les œuvres") })
+            FilterChip(selected = forSeries, onClick = { scopeSeries = true }, enabled = series != null, label = { Text(if (seriesName != null) "Cette œuvre : $seriesName" else "Cette œuvre (ouvrez-en une)") })
+        }
+        if (suggestions.isNotEmpty()) {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("Noms qui reviennent souvent", style = MaterialTheme.typography.titleSmall)
+                    Text("Gardés tels quels, ils ne seront plus traduits de travers.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    suggestions.forEach { name ->
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Text(name, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                            TextButton(onClick = { g.addForSeries(series!!, name, name); tick++ }) { Text("Garder tel quel") }
+                            TextButton(onClick = { graph.names.ignore(name); tick++ }) { Text("Ignorer") }
+                        }
+                    }
+                }
+            }
+        }
         OutlinedTextField(src, { src = it }, Modifier.fillMaxWidth(), label = { Text("Terme d'origine (ex. 성진우)") }, singleLine = true)
         OutlinedTextField(dst, { dst = it }, Modifier.fillMaxWidth(), label = { Text("Traduction (ex. Sung Jin-Woo)") }, singleLine = true)
-        Button(onClick = { g.add(src, dst); src = ""; dst = "" }, enabled = src.isNotBlank() && dst.isNotBlank()) { Text("Ajouter") }
+        Button(onClick = { if (forSeries) g.addForSeries(series!!, src, dst) else g.add(src, dst); src = ""; dst = "" }, enabled = src.isNotBlank() && dst.isNotBlank()) {
+            Text(if (forSeries) "Ajouter à cette œuvre" else "Ajouter pour toutes les œuvres")
+        }
         HorizontalDivider()
         LazyColumn(Modifier.weight(1f)) {
-            items(g.terms.toList()) { e ->
+            items(rows, key = { (it.series ?: "*") + "|" + it.source }) { e ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("${e.source}  →  ${e.target}", Modifier.weight(1f))
-                    TextButton(onClick = { g.remove(e.source) }) { Text("Retirer") }
+                    Column(Modifier.weight(1f)) {
+                        Text("${e.source}  →  ${e.target}")
+                        if (e.series != null) Text("Cette œuvre", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                    }
+                    TextButton(onClick = { if (e.series != null) g.removeForSeries(e.series, e.source) else g.remove(e.source) }) { Text("Retirer") }
                 }
             }
         }

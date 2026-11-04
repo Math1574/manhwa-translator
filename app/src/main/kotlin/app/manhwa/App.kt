@@ -11,6 +11,8 @@ import app.manhwa.core.AppSettings
 import app.manhwa.core.BrowsingLibrary
 import app.manhwa.core.Glossary
 import app.manhwa.core.GlossaryEntry
+import app.manhwa.core.NameSuggestions
+import app.manhwa.core.SeriesTerm
 import app.manhwa.core.ResultCache
 import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.common.model.DownloadConditions
@@ -48,6 +50,8 @@ class AppGraph(ctx: Context) {
     val gpuTest = GpuTester(ctx, this)
     val blockReader = GemmaBlockReader(gemma) { settingsStore.settings }
     val visionTest = VisionTester(ctx, gemma)
+    /** Noms propres probables repérés pendant la lecture (propositions du glossaire) ; remis à zéro quand l'application redémarre. */
+    val names = NameSuggestions()
     val controller = TranslationController(ctx, this)
 }
 
@@ -111,11 +115,16 @@ class GlossaryStore(private val file: File) {
     private var glossary = if (file.exists()) Glossary.parse(file.readText()) else Glossary()
     @Volatile private var snapshot: Glossary = Glossary.parse(glossary.serialize())
     val terms = mutableStateListOf<GlossaryEntry>().apply { addAll(glossary.terms()) }
+    /** Termes propres à une œuvre (clé d'œuvre : site + titre). */
+    val seriesTerms = mutableStateListOf<SeriesTerm>().apply { addAll(glossary.seriesTerms()) }
 
-    fun current(): Glossary = snapshot
+    /** Glossaire à utiliser pour une œuvre : termes communs puis termes de l'œuvre ([series] null : termes communs seuls). */
+    fun current(series: String? = null): Glossary = snapshot.forSeries(series)
 
     fun add(source: String, target: String) { glossary.addTerm(source, target); commit() }
     fun remove(source: String) { glossary.removeTerm(source); commit() }
+    fun addForSeries(series: String, source: String, target: String) { glossary.addSeriesTerm(series, source, target); commit() }
+    fun removeForSeries(series: String, source: String) { glossary.removeSeriesTerm(series, source); commit() }
 
     /** Correction manuelle d'une bulle : cette traduction sera reprise telle quelle chaque fois que ce texte apparaît. */
     fun addCorrection(sourceBlock: String, translation: String) { glossary.addCorrection(sourceBlock, translation); commit() }
@@ -125,6 +134,7 @@ class GlossaryStore(private val file: File) {
         file.writeText(data)
         snapshot = Glossary.parse(data)
         terms.clear(); terms.addAll(glossary.terms())
+        seriesTerms.clear(); seriesTerms.addAll(glossary.seriesTerms())
     }
 }
 

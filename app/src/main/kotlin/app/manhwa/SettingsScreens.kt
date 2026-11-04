@@ -160,7 +160,8 @@ private fun SettingsHome(graph: AppGraph, open: (SettingsPage) -> Unit) {
             HorizontalDivider()
             Text("Pages préparées en avance : ${s.maxPrefetchPages}", style = MaterialTheme.typography.titleMedium)
             Slider(value = s.maxPrefetchPages.toFloat(), onValueChange = { v -> store.update { it.copy(maxPrefetchPages = v.toInt()) } }, valueRange = 0f..10f, steps = 9)
-            Text("Plus la valeur est basse, moins le téléphone est sollicité (et moins il chauffe).", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            Text("Plus la valeur est basse, moins le téléphone est sollicité (et moins il chauffe). Si le téléphone chauffe, la préparation en avance se suspend toute seule.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            if (graph.controller.thermalHot) Text("Le téléphone est chaud : préparation en avance suspendue pour l'instant.", color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.bodySmall)
             HorizontalDivider()
             SwitchRow("Bloquer les publicités", "Filtre les régies publicitaires connues, les fenêtres intempestives et les redirections. Désactivez-le si un site de lecture ne s'affiche plus correctement.", s.blockAds) { v -> store.update { it.copy(blockAds = v) } }
         }

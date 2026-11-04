@@ -5,7 +5,7 @@ package app.manhwa.core
  * police de remplacement l'abîme, et sa « traduction » n'apporte rien. Règle volontairement prudente, pour ne jamais écarter une réplique :
  *  - seuls les textes hors bulle comptent (un « HMPH » ou un « HAHAHA » dans une bulle est une réplique : traduit) ;
  *  - un bloc de trois mots au plus, dont chaque mot est un bruitage connu (« CRACK ! », « BOOOM », « TICK TOCK », « *GULP* ») ;
- *  - ou un gros lettrage de deux mots au plus, dont aucun n'est un mot anglais (bruitages romanisés : « DUDUDUK », « KRAAAK »).
+ *  - ou un gros lettrage de deux mots au plus, dont aucun n'est un mot anglais (bruitages romanisés : « DUDUDUK », « KRAAAK ») ; seuil plus strict quand on ne sait pas si le texte est dans une bulle.
  * Anglais seulement : le japonais, le coréen et le chinois ne sont pas concernés.
  */
 object Onomatopoeia {
@@ -40,8 +40,9 @@ object Onomatopoeia {
         val toks = word.findAll(text).map { it.value }.toList()
         if (toks.isEmpty() || toks.size > 3) return false
         if (toks.all { squash(it) in sfx }) return true
-        // bruitage romanisé en gros lettrage : deux mots au plus, aucun n'est un mot anglais (sans détecteur de bulles, on ne tente pas)
-        if (kind == BlockKind.FREE && lex != null && toks.size <= 2 && relativeHeight >= 1.3f && toks.all { it.length >= 3 && !lex.known(it) }) return true
+        // bruitage romanisé en gros lettrage : deux mots au plus, aucun n'est un mot anglais. Sans détecteur de bulles (nature inconnue), seuil plus strict.
+        val big = if (kind == BlockKind.FREE) relativeHeight >= 1.3f else relativeHeight >= 1.6f
+        if (lex != null && toks.size <= 2 && big && toks.all { it.length >= 3 && !lex.known(it) }) return true
         return false
     }
 }

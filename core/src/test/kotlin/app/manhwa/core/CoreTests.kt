@@ -1414,7 +1414,7 @@ fun artEraseTests() {
         T.ok(sfx("DUDUDUK", BlockKind.FREE, 2.0f), "gros lettrage inconnu")
         T.ok(!sfx("DUDUDUK", BlockKind.FREE, 1.0f), "taille normale : on ne tente pas")
         T.ok(!sfx("SEOUL KOREA", BlockKind.FREE, 1.0f), "légende de lieu : traduite")
-        T.ok(!sfx("DUDUDUK", BlockKind.UNKNOWN, 2.0f), "sans détecteur de bulles : pas de pari")
+        T.ok(sfx("DUDUDUK", BlockKind.UNKNOWN, 2.0f) && !sfx("DUDUDUK", BlockKind.UNKNOWN, 1.4f), "sans détecteur de bulles : seulement en très gros lettrage")
         T.ok(!sfx("DUDUDUK DUDUDUK DUDUDUK DUK", BlockKind.FREE, 2.0f), "plus de deux mots : pas un bruitage romanisé")
     }
     T.test("onomatopées : le japonais, le coréen et le chinois ne sont pas concernés") {
@@ -1492,5 +1492,36 @@ fun artEraseTests() {
         T.eq(l, r)
         val old = "H\thttps://a.org/comics/x-series-1/chapter/1\tT\t5\t1\nF\thttps://a.org/\tA\t4\nZ\tinconnu\n"
         val o = BrowsingLibrary.parse(old); T.eq(1, o.history.size); T.eq(1, o.favorites.size); T.eq(0, o.progress.size)
+    }
+
+    // ---------- glossaire par œuvre et noms récurrents ----------
+    T.test("glossaire par œuvre : les termes de l'œuvre s'ajoutent aux termes communs et les remplacent") {
+        val g = Glossary(); g.addTerm("Cheon", "Cheon"); g.addTerm("Master", "Maître")
+        g.addSeriesTerm("site|demon", "Master", "Seigneur"); g.addSeriesTerm("site|demon", "Jin-Woo", "Jin-Woo")
+        val d = g.forSeries("site|demon"); val o = g.forSeries("site|autre"); val none = g.forSeries(null)
+        T.eq(listOf("Cheon", "Master", "Jin-Woo"), d.terms().map { it.source }); T.eq("Seigneur", d.terms().first { it.source == "Master" }.target)
+        T.eq(listOf("Cheon", "Master"), o.terms().map { it.source }); T.eq("Maître", o.terms().first { it.source == "Master" }.target)
+        T.eq(2, none.terms().size)
+        g.removeSeriesTerm("site|demon", "Master"); T.eq("Maître", g.forSeries("site|demon").terms().first { it.source == "Master" }.target)
+    }
+    T.test("glossaire par œuvre : sérialisation, ancien format lisible, corrections communes") {
+        val g = Glossary(); g.addTerm("A", "B"); g.addSeriesTerm("k|x", "Kim", "Kim"); g.addCorrection("Hello there", "Salut")
+        val r = Glossary.parse(g.serialize())
+        T.eq(g.terms(), r.terms()); T.eq(g.seriesTerms(), r.seriesTerms()); T.eq("Salut", r.correctionFor("Hello there"))
+        T.eq("Salut", r.forSeries("k|x").correctionFor("Hello there"))
+        val old = Glossary.parse("T\tA\tB\nC\tx\ty\nS\tseulement\ttrois\n"); T.eq(1, old.terms().size); T.eq(0, old.seriesTerms().size)
+    }
+    T.test("noms récurrents : un mot inconnu qui revient sur plusieurs pages est proposé, pas un bruitage ni un mot connu") {
+        val lex = EnglishLexicon(listOf("the", "master", "is", "here", "please", "wait"), listOf("the", "is"))
+        val n = NameSuggestions()
+        for (p in 1..3) n.observe("s", "p$p", listOf("THE MASTER IS HERE, CHEON!", "PLEASE WAIT, SUNG JIN-WOO"), lex)
+        n.observe("s", "p1", listOf("KRAAAK!"), lex); n.observe("s", "p2", listOf("KRAAAK!"), lex); n.observe("s", "p3", listOf("KRAAAK!"), lex)
+        val s1 = n.suggestions("s", emptySet())
+        T.ok(s1.any { it.equals("cheon", true) } && s1.any { it.equals("sung", true) } && s1.any { it.equals("jin-woo", true) }, "noms proposés : $s1")
+        T.ok(s1.none { it.equals("kraaak", true) } && s1.none { it.equals("master", true) }, "bruitage et mot connu écartés : $s1")
+        T.ok(n.suggestions("s", setOf("cheon")).none { it.equals("cheon", true) }, "déjà au glossaire : non reproposé")
+        n.ignore("sung"); T.ok(n.suggestions("s", emptySet()).none { it.equals("sung", true) }, "ignoré")
+        T.ok(n.suggestions("autre", emptySet()).isEmpty() && n.suggestions(null, emptySet()).isEmpty(), "une autre œuvre n'est pas concernée")
+        val one = NameSuggestions(); one.observe("s", "p1", listOf("CHEON CHEON CHEON CHEON"), lex); T.ok(one.suggestions("s", emptySet()).isEmpty(), "une seule page ne suffit pas")
     }
 }

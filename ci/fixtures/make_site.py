@@ -36,5 +36,12 @@ if os.path.exists(f"{S}/synth/layouts_0.png"): page("synth_layouts", "Mises en p
 if os.path.exists(f"{S}/synth/en_variety.jpg"): page("synth_en_variety", "Synthétique en_variety (JPEG)", ["synth/en_variety.jpg"])
 for n in ("en_caps", "en_mixed", "en_fancy", "ko", "zh", "ja_vertical"):
     if os.path.exists(f"{S}/synth/{n}.png"): page(f"synth_{n}", f"Synthétique {n}", [f"synth/{n}.png"])
+# œuvre fictive (adresse de type /comics/<titre>-<identifiant>/chapter/<n>.html) : sert à vérifier la bibliothèque par œuvre, la reprise et le plein écran
+if os.path.exists(f"{S}/synth/en_mixed.png"):
+    d = f"{S}/comics/test-series-1a2b3c/chapter"
+    os.makedirs(d, exist_ok=True)
+    for n in (1, 2, 3):
+        open(f"{d}/{n}.html", "w").write(HEAD % f"Test Series - Chapter {n}" + f"<h3 style='padding:8px'>Test Series - Chapter {n}</h3>"
+            + '<img src="/synth/en_mixed.png" style="display:block;width:100%;margin:0">' * 2 + "</body></html>")
 open(f"{S}/index.html", "w").write(HEAD % "Tests" + "".join(f'<p><a style="color:#8af" href="{os.path.basename(p)}">{os.path.basename(p)}</a></p>' for p in sorted(glob.glob(f"{S}/*.html")) if not p.endswith("index.html")) + "</body></html>")
 print(sorted(os.listdir(S)))

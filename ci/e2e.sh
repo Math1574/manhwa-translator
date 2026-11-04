@@ -101,18 +101,37 @@ run synth_ja_vert_mlkit  synth_ja_vertical.html MLKIT JA FR "ja,fr" 300
 run synth_zh_mlkit       synth_zh.html       MLKIT ZH_HANS FR "zh,fr" 300
 run pc_ja_mlkit          pc_ja.html          MLKIT JA FR "ja,fr"   300
 
-# --- plein écran : bouton discret masqué, réapparition par triple appui ---
-say "=== plein écran"
+# --- interface : plein écran d'un appui, onglets, bibliothèque par œuvre, réglages ---
+say "=== interface"
+UI=$OUT/reports/ui.tsv; : > $UI
+uidump() { adb shell uiautomator dump /sdcard/ui_$1.xml >/dev/null 2>&1; adb exec-out cat /sdcard/ui_$1.xml > "$OUT/reports/ui_$1.xml" 2>/dev/null; }
+has() { if grep -q -- "$2" "$OUT/reports/ui_$1.xml" 2>/dev/null; then echo 1; else echo 0; fi; }
+hasnot() { if grep -q -- "$2" "$OUT/reports/ui_$1.xml" 2>/dev/null; then echo 0; else echo 1; fi; }
+chk() { printf '%s\t%s\n' "$1" "$2" >> $UI; }
+tapt() { local xy; xy=$(python3 ci/ui_tap.py "$OUT/reports/ui_$1.xml" "$2" ${3:-1}) && adb shell input tap $xy; }
 adb shell am force-stop $PKG
-adb shell "run-as $PKG rm -f files/fs.json"
-adb shell am start -n $PKG/app.manhwa.MainActivity --es mt_url "http://10.0.2.2:8000/pc_en.html" --es mt_engine MLKIT --es mt_source EN \
-   --es mt_target FR --es mt_models "fr" --es mt_timeout 200 --es mt_report fs.json --es mt_fullscreen true >/dev/null
-for i in $(seq 1 40); do sleep 6; adb shell "run-as $PKG ls files/fs.json" 2>/dev/null | grep -q fs.json && break; done
-adb exec-out "run-as $PKG cat files/fs.json" > $OUT/reports/fs.json
-sleep 5; shot fullscreen 0
-adb shell "input tap 540 1200; input tap 540 1200; input tap 540 1200"; shot fullscreen 1
-sleep 5; shot fullscreen 2
+adb shell "run-as $PKG rm -f files/ui.json"
+adb shell am start -n $PKG/app.manhwa.MainActivity --es mt_url "http://10.0.2.2:8000/comics/test-series-1a2b3c/chapter/1.html" --es mt_engine MLKIT --es mt_source EN \
+   --es mt_target FR --es mt_models "fr" --es mt_timeout 200 --es mt_report ui.json --es mt_fullscreen true >/dev/null
+for i in $(seq 1 40); do sleep 6; adb shell "run-as $PKG ls files/ui.json" 2>/dev/null | grep -q ui.json && break; done
+adb exec-out "run-as $PKG cat files/ui.json" > $OUT/reports/fs.json
+sleep 5; shot ui 0
+uidump fs0; chk "plein écran : rien d'affiché au repos" $(hasnot fs0 'Quitter le plein')
+adb shell input tap 540 1200; sleep 2; uidump fs1; chk "plein écran : un appui ouvre le menu de lecture" $(has fs1 'Quitter le plein'); shot ui 1
+adb shell input tap 540 1200; sleep 2; uidump fs2; chk "plein écran : un second appui le referme" $(hasnot fs2 'Quitter le plein')
+adb shell input tap 540 1200; sleep 2; uidump fs3; tapt fs3 "Quitter le plein"; sleep 2; uidump nav
+chk "plein écran : le bouton du menu le quitte (onglets de retour)" $([ "$(has nav 'Biblioth')" = 1 ] && echo 1 || echo 0)
+chk "onglets : Lire, Bibliothèque, Réglages" $([ "$(has nav 'Lire')" = 1 ] && [ "$(has nav 'Biblioth')" = 1 ] && [ "$(has nav 'glages')" = 1 ] && echo 1 || echo 0)
 adb shell dumpsys window | grep -E "mCurrentFocus|isStatusBarVisible|statusBar.*visible" | head -3 | tee -a $OUT/run.log
+tapt nav "Biblioth"; sleep 2; uidump lib; shot ui 2
+chk "bibliothèque : l'œuvre est listée avec « Continuer la lecture »" $([ "$(has lib 'Test Series')" = 1 ] && [ "$(has lib 'Continuer la lecture')" = 1 ] && echo 1 || echo 0)
+tapt lib "Test Series" 2; sleep 2; uidump series; shot ui 3
+chk "fiche d'une œuvre : liste des chapitres" $(has series 'Chapitres')
+chk "fiche d'une œuvre : page de l'œuvre et reprise proposées" $([ "$(has series 'Page de l')" = 1 ] && [ "$(has series 'Continuer')$(has series 'Reprendre')" != "00" ] && echo 1 || echo 0)
+adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump lib2
+chk "retour de la fiche vers la bibliothèque" $(has lib2 'Historique')
+tapt lib2 "glages"; sleep 2; uidump set; shot ui 4
+chk "réglages : sections Traduction, Lecture, options onomatopées" $([ "$(has set 'onomatop')" = 1 ] && [ "$(has set 'Lecture')" = 1 ] && echo 1 || echo 0)
 
 fi # fin des scénarios web (absents de la suite lab)
 

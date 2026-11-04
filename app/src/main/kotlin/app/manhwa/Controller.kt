@@ -92,6 +92,11 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     var lastError by mutableStateOf<String?>(null)
 
     var editTarget by mutableStateOf<EditTarget?>(null)
+    /** Le téléphone chauffe (état thermique « modéré » ou pire) : plus aucune page n'est préparée en avance, seule la page lue est traitée. */
+    var thermalHot by mutableStateOf(false)
+    /** Œuvre de la page ouverte (clé site + titre), null si l'adresse n'en désigne pas. */
+    val currentSeriesKey: String? get() = BrowsingLibrary.seriesKey(currentUrl)
+    private var thermalWatching = false
     /** Traduction dont on regarde l'original (appui long) : l'interface propose de la corriger pendant quelques secondes. */
     var peekTarget by mutableStateOf<EditTarget?>(null)
     private val clearPeek = Runnable { peekTarget = null }
@@ -163,15 +168,24 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         if (show) main.postDelayed(hideReaderBar, 5000)
     }
 
-    /** Appui simple sur la page : en plein écran il ouvre ou ferme le menu de lecture, sinon il montre ou masque la barre d'adresse. */
-    private fun onPageTap() {
-        if (fullscreen) showReaderBar(!readerBar) else barsHidden = !barsHidden
+    private var lastBarChange = 0L
+    private fun setBarsHidden(hide: Boolean) {
+        if (barsHidden != hide) { barsHidden = hide; lastBarChange = android.os.SystemClock.uptimeMillis() }
     }
 
-    /** Défilement vers le bas : la barre d'adresse se masque ; vers le haut : elle revient. */
+    /** Appui simple sur la page : en plein écran il ouvre ou ferme le menu de lecture, sinon il montre ou masque la barre d'adresse. */
+    private fun onPageTap() {
+        if (fullscreen) showReaderBar(!readerBar) else setBarsHidden(!barsHidden)
+    }
+
+    /**
+     * Défilement vers le bas : la barre d'adresse se masque ; vers le haut : elle revient. Le changement de hauteur de la page qu'elle provoque peut lui-même
+     * produire un défilement : on ignore le sens pendant une demi-seconde après chaque changement, pour ne pas la faire clignoter.
+     */
     private fun onScrollDirection(down: Boolean) {
         if (fullscreen) { if (down && readerBar) showReaderBar(false); return }
-        barsHidden = down
+        if (android.os.SystemClock.uptimeMillis() - lastBarChange < 500) return
+        setBarsHidden(down)
     }
 
     private fun onProgressReported(percent: Int) {
@@ -262,7 +276,20 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         }
         webView = wv
         goHome()
+        watchThermal()
         return wv
+    }
+
+    /** Protection contre la chauffe (Android 10 et plus) : on suit l'état thermique du téléphone et on suspend la préparation en avance quand il chauffe. */
+    private fun watchThermal() {
+        if (thermalWatching || android.os.Build.VERSION.SDK_INT < 29) return
+        thermalWatching = true
+        try {
+            val pm = ctx.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+            fun apply(status: Int) { val hot = status >= android.os.PowerManager.THERMAL_STATUS_MODERATE; if (hot != thermalHot) { thermalHot = hot; pump() } }
+            apply(pm.currentThermalStatus)
+            pm.addThermalStatusListener(ctx.mainExecutor) { status -> apply(status) }
+        } catch (_: Throwable) { thermalWatching = false }
     }
 
     fun load(url: String, resumeAt: Int = 0) {
@@ -354,7 +381,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
     private fun pump() {
         synchronized(backlog) {
-            queue.maxPending = graph.settingsStore.settings.maxPrefetchPages + 1
+            queue.maxPending = if (thermalHot) 1 else graph.settingsStore.settings.maxPrefetchPages + 1
             while (backlog.isNotEmpty()) {
                 val c = backlog.first()
                 if (queue.submit(PageJob(c.id, c.priority) { cancelled -> process(c, cancelled) })) backlog.removeAt(0) else break
@@ -364,6 +391,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
     private fun process(c: Candidate, cancelled: () -> Boolean): PageOutcome {
         val pageUrl = currentUrl
+        val pageSeries = BrowsingLibrary.seriesKey(pageUrl)
         val bytes = try { fetch(c, pageUrl) } catch (e: Exception) {
             val f = PageOutcome.Failed("image", e.message ?: "téléchargement impossible")
             if (testing) logForTest(c, f, null, null, 0)
@@ -387,7 +415,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         keysById[c.id] = CacheKey(sha256Hex(bytes), s.source.code, s.target.code, engineId)
         val pipeline = PagePipeline(
             graph.cache, ocrEngine, translator, engineId,
-            glossary = { graph.glossary.current() },
+            glossary = { graph.glossary.current(pageSeries) },
             useCache = !s.diagnostic && !testing, // en diagnostic on veut voir la détection réelle, pas un résultat en cache
             debugSink = { debug = it },
             // l'anglais est lu par OCR avec beaucoup de bruit : on écarte filigranes et débris, puis on répare mots collés et chiffres parasites
@@ -401,6 +429,10 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             log = { msg -> OcrDebug.note = (OcrDebug.note + " [" + msg + "]").takeLast(1500); android.util.Log.i("MT", msg) },
         )
         val out = pipeline.process(bytes, s.source.code, s.target.code)
+        // noms qui reviennent d'une page à l'autre : proposés dans le glossaire de l'œuvre (anglais seulement, le lexique est anglais)
+        if (out is PageOutcome.Done && s.source.code != "ja" && s.source.code != "ko" && s.source.code != "zh") {
+            try { graph.names.observe(pageSeries, c.id, out.result.blocks.map { it.source }, lexicon) } catch (_: Throwable) {}
+        }
         var overlayForLog: JSONObject? = null
         if (out is PageOutcome.Done && !out.fromCache) journalPage(c, pageUrl, engineId, s.target.code, out, System.currentTimeMillis() - t0)
         if (!cancelled()) {
