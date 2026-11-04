@@ -1366,4 +1366,92 @@ fun artEraseTests() {
         if (plan != null) for (i in plan.mask.indices) if (plan.mask[i]) { val x = plan.x0 + i % plan.w; val y = plan.y0 + i / plan.w; val ex = (x - 350).toDouble() / 230; val ey = (y - 280).toDouble() / 170; if (Math.sqrt(ex * ex + ey * ey) in 0.98..1.02) outline++; total++ }
         T.ok(plan != null && outline < 40, "pixels du contour effacés : $outline (masque $total)")
     }
+
+    // ---------- effacement adapté au fond : uni = aplat exact, lisse = suit le fond, avec dessin = lettres seules ----------
+    fun packRgb(r: Int, g: Int, b: Int) = (0xFF shl 24) or (r.coerceIn(0, 255) shl 16) or (g.coerceIn(0, 255) shl 8) or b.coerceIn(0, 255)
+    fun composite(px: IntArray, plan: Erasure.Plan, W: Int): IntArray {
+        val out = px.copyOf()
+        for (i in plan.layer.indices) {
+            val c = plan.layer[i]; val a = (c ushr 24) and 0xFF; if (a == 0) continue
+            val x = plan.x0 + i % plan.w; val y = plan.y0 + i / plan.w; val base = out[y * W + x]
+            fun mix(sh: Int) = ((((base shr sh) and 0xFF) * (255 - a) + ((c shr sh) and 0xFF) * a) / 255)
+            out[y * W + x] = packRgb(mix(16), mix(8), mix(0))
+        }
+        return out
+    }
+    fun blockLetters(px: IntArray, W: Int, x0: Int, x1: Int, y0: Int, y1: Int, col: Int) {
+        for (y in y0 until y1) for (x in x0 until x1) if ((x / 14) % 2 == 0 || y in (y0 + y1) / 2 - 3 until (y0 + y1) / 2 + 3) px[y * W + x] = col
+    }
+    T.test("fond uni : l'effacement d'un texte libre reste un aplat exact (aucun pixel de fond modifié)") {
+        val W = 500; val H = 300; val white = 0xFFFFFFFF.toInt(); val black = 0xFF000000.toInt()
+        val px = IntArray(W * H) { white }; blockLetters(px, W, 120, 380, 110, 146, black); blockLetters(px, W, 120, 380, 170, 206, black)
+        val plan = Erasure.plan(ArraySrc(W, H, px), 1f, listOf(RectF(120f, 110f, 380f, 146f), RectF(120f, 170f, 380f, 206f)), 36f, W.toFloat(), H.toFloat(), emptyList(), null, free = true, extra = listOf(RectF(116f, 106f, 384f, 210f)))
+        T.ok(plan != null, "plan")
+        val out = composite(px, plan!!, W)
+        T.ok(out.all { it == white }, "tout doit redevenir exactement blanc : ${out.count { it != white }} pixels différents")
+    }
+    T.test("fond en dégradé : le remplissage suit le dégradé (pas un aplat d'une autre teinte)") {
+        val W = 500; val H = 300
+        val truth = IntArray(W * H) { val y = it / W; packRgb(255 - y * 90 / H, 250 - y * 110 / H, 235 - y * 60 / H) }
+        val px = truth.copyOf(); val black = 0xFF000000.toInt()
+        blockLetters(px, W, 120, 380, 110, 146, black); blockLetters(px, W, 120, 380, 170, 206, black)
+        val plan = Erasure.plan(ArraySrc(W, H, px), 1f, listOf(RectF(120f, 110f, 380f, 146f), RectF(120f, 170f, 380f, 206f)), 36f, W.toFloat(), H.toFloat(), emptyList(), null, free = true, extra = listOf(RectF(116f, 106f, 384f, 210f)))
+        T.ok(plan != null, "plan")
+        val out = composite(px, plan!!, W)
+        var err = 0L; var n = 0; var worst = 0
+        for (y in 100 until 216) for (x in 110 until 390) {
+            val a = out[y * W + x]; val b = truth[y * W + x]
+            val d = (Math.abs(((a shr 16) and 0xFF) - ((b shr 16) and 0xFF)) + Math.abs(((a shr 8) and 0xFF) - ((b shr 8) and 0xFF)) + Math.abs((a and 0xFF) - (b and 0xFF))) / 3
+            err += d; n++; if (d > worst) worst = d
+        }
+        T.ok(err.toDouble() / n < 2.0 && worst < 14, "écart moyen ${"%.2f".format(err.toDouble() / n)}, pire $worst (un aplat donnerait plus de 10 sur les bords de la zone)")
+    }
+    T.test("texte à cheval sur un panneau sombre voisin : le panneau n'est pas recouvert") {
+        val W = 500; val H = 300; val white = 0xFFFFFFFF.toInt(); val black = 0xFF000000.toInt(); val dark = packRgb(30, 30, 34)
+        val px = IntArray(W * H) { if (it % W >= 272) dark else white }
+        blockLetters(px, W, 120, 262, 110, 146, black); blockLetters(px, W, 120, 262, 170, 206, black)
+        val plan = Erasure.plan(ArraySrc(W, H, px), 1f, listOf(RectF(120f, 110f, 262f, 146f), RectF(120f, 170f, 262f, 206f)), 36f, W.toFloat(), H.toFloat(), emptyList(), null, free = true, extra = listOf(RectF(116f, 106f, 266f, 210f)))
+        T.ok(plan != null, "plan")
+        val out = composite(px, plan!!, W)
+        var darkLost = 0; for (y in 100 until 216) for (x in 280 until 330) if (out[y * W + x] != dark) darkLost++
+        var lettersLeft = 0; for (y in 110 until 206) for (x in 120 until 262) if (px[y * W + x] == black && out[y * W + x] != white) lettersLeft++
+        T.ok(darkLost < 60, "pixels du panneau modifiés : $darkLost")
+        T.ok(lettersLeft < 200, "lettres restantes : $lettersLeft")
+    }
+    T.test("lettres à côté d'un trait noir sur page blanche : le remplissage reste blanc (pas de fantôme gris)") {
+        val W = 500; val H = 300; val white = 0xFFFFFFFF.toInt(); val black = 0xFF000000.toInt()
+        val px = IntArray(W * H) { white }
+        for (y in 60 until 104) for (x in 0 until W) px[y * W + x] = black                 // trait noir épais collé au-dessus du texte
+        blockLetters(px, W, 120, 380, 106, 150, black)
+        val plan = Erasure.plan(ArraySrc(W, H, px), 1f, listOf(RectF(120f, 106f, 380f, 150f)), 44f, W.toFloat(), H.toFloat(), emptyList(), null, free = true, extra = listOf(RectF(116f, 104f, 384f, 154f)))
+        T.ok(plan != null, "plan")
+        val out = composite(px, plan!!, W)
+        var grey = 0; var total = 0
+        for (y in 112 until 150) for (x in 130 until 370) if (px[y * W + x] == black) { total++; val c = out[y * W + x]; if (((c shr 16) and 0xFF) < 240) grey++ }
+        T.ok(total > 1000 && grey < total / 20, "pixels de lettres non redevenus blancs : $grey sur $total")
+        var stroke = 0; for (y in 60 until 100) for (x in 0 until W) if (out[y * W + x] == black) stroke++
+        T.ok(stroke > 40 * W * 0.97, "le trait noir doit rester : $stroke pixels sur ${40 * W}")
+    }
+    T.test("structure du fond : nulle sur un aplat ou un dégradé, nette sur un contour") {
+        val W = 400; val H = 240
+        val zone = BooleanArray(W * H) { val x = it % W; val y = it / W; x in 100 until 300 && y in 80 until 160 }
+        val text = BooleanArray(W * H) { val x = it % W; val y = it / W; x in 130 until 270 && y in 100 until 140 }
+        val flat = IntArray(W * H) { packRgb(200, 200, 200) }
+        val grad = IntArray(W * H) { packRgb(255 - it / W / 2, 240 - it / W / 3, 230) }
+        val edge = IntArray(W * H) { if (it % W >= 286) packRgb(20, 20, 20) else packRgb(235, 235, 235) }
+        val sf = TextErase.structure(flat, W, H, zone, text); val sg = TextErase.structure(grad, W, H, zone, text); val se = TextErase.structure(edge, W, H, zone, text)
+        T.ok(sf[0] == 0f && sf[2] == 0f, "aplat : ${sf.toList()}")
+        T.ok(sg[0] == 0f && sg[2] == 0f, "dégradé : ${sg.toList()}")
+        T.ok(se[0] > 0.012f || se[2] > 0.10f, "bord net : ${se.toList()}")
+    }
+    T.test("reconstruction multi-échelle : un grand trou dans un dégradé est comblé sans écart visible") {
+        val W = 300; val H = 200
+        val truth = IntArray(W * H) { val x = it % W; val y = it / W; packRgb(255 - y * 100 / H - x / 6, 240 - y * 60 / H, 200 + x / 10) }
+        val mask = BooleanArray(W * H) { val x = it % W; val y = it / W; x in 60 until 240 && y in 70 until 130 }
+        val px = truth.copyOf(); for (i in px.indices) if (mask[i]) px[i] = 0xFF000000.toInt()
+        val out = TextErase.inpaintSmooth(px, W, H, mask)
+        var err = 0L; var n = 0
+        for (i in mask.indices) if (mask[i]) { val a = out[i]; val b = truth[i]; err += (Math.abs(((a shr 16) and 0xFF) - ((b shr 16) and 0xFF)) + Math.abs(((a shr 8) and 0xFF) - ((b shr 8) and 0xFF)) + Math.abs((a and 0xFF) - (b and 0xFF))) / 3; n++ }
+        T.ok(err.toDouble() / n < 2.5, "écart moyen ${"%.2f".format(err.toDouble() / n)}")
+    }
 }

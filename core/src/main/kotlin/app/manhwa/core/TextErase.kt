@@ -11,7 +11,7 @@ object TextErase {
     private fun r(c: Int) = (c shr 16) and 0xFF
     private fun g(c: Int) = (c shr 8) and 0xFF
     private fun b(c: Int) = c and 0xFF
-    private fun dist(a: Int, c: Int) = maxOf(abs(r(a) - r(c)), abs(g(a) - g(c)), abs(b(a) - b(c)))
+    fun dist(a: Int, c: Int) = maxOf(abs(r(a) - r(c)), abs(g(a) - g(c)), abs(b(a) - b(c)))
     private fun pack(rr: Int, gg: Int, bb: Int) = (0xFF shl 24) or (rr.coerceIn(0, 255) shl 16) or (gg.coerceIn(0, 255) shl 8) or bb.coerceIn(0, 255)
 
     class Analysis(
@@ -499,6 +499,167 @@ object TextErase {
         return out
     }
 
+    /**
+     * Reconstruction lisse d'une zone : initialisation par la couleur du plus proche pixel valide, puis relaxation (moyenne des 4 voisins) qui lisse les raccords. Contrairement à
+     * [inpaint], dont l'initialisation est la moyenne de toute la région et qui ne converge pas sur une grande zone (d'où une teinte de « carré » différente du fond), le résultat
+     * suit le dégradé du fond autour de la zone. Seuls les pixels [valid] (non masqués) servent de sources : un contour ou un dessin voisin ne salit pas le remplissage.
+     */
+    fun inpaintSmooth(pixels: IntArray, w: Int, h: Int, mask: BooleanArray, valid: BooleanArray? = null, iters: Int = 24): IntArray {
+        val n = w * h
+        // états : 0 exclu (ni source ni inconnue : contour, autre texte), 1 connu, 2 inconnu (à reconstruire)
+        val st0 = ByteArray(n) { if (mask[it]) 2 else if (valid == null || valid[it]) 1 else 0 }
+        var anyKnown = false; for (v in st0) if (v.toInt() == 1) { anyKnown = true; break }
+        if (!anyKnown) return pixels.copyOf()
+        class Level(val w: Int, val h: Int, val r: FloatArray, val g: FloatArray, val b: FloatArray, val st: ByteArray)
+        val levels = ArrayList<Level>()
+        levels.add(Level(w, h, FloatArray(n) { r(pixels[it]).toFloat() }, FloatArray(n) { g(pixels[it]).toFloat() }, FloatArray(n) { b(pixels[it]).toFloat() }, st0))
+        // pyramide : un pixel grossier est connu s'il a un enfant connu (moyenne des enfants connus), inconnu s'il n'a que des enfants inconnus, exclu sinon
+        while (levels.last().w > 12 && levels.last().h > 12) {
+            val f = levels.last(); val cw = (f.w + 1) / 2; val ch = (f.h + 1) / 2
+            val cr = FloatArray(cw * ch); val cg = FloatArray(cw * ch); val cb = FloatArray(cw * ch); val cs = ByteArray(cw * ch)
+            for (y in 0 until ch) for (x in 0 until cw) {
+                var kn = 0; var un = 0; var sr = 0f; var sg = 0f; var sb = 0f
+                for (dy in 0..1) for (dx in 0..1) {
+                    val fx = 2 * x + dx; val fy = 2 * y + dy; if (fx >= f.w || fy >= f.h) continue
+                    val i = fy * f.w + fx
+                    when (f.st[i].toInt()) { 1 -> { kn++; sr += f.r[i]; sg += f.g[i]; sb += f.b[i] }; 2 -> un++ }
+                }
+                val ci = y * cw + x
+                if (kn > 0) { cs[ci] = 1; cr[ci] = sr / kn; cg[ci] = sg / kn; cb[ci] = sb / kn } else if (un > 0) cs[ci] = 2
+            }
+            levels.add(Level(cw, ch, cr, cg, cb, cs))
+        }
+        fun relax(l: Level, passes: Int) {
+            val order = ArrayList<Int>(); for (i in 0 until l.w * l.h) if (l.st[i].toInt() == 2) order.add(i)
+            val arr = order.toIntArray()
+            repeat(passes) { pass ->
+                val range = if (pass % 2 == 0) arr.indices else arr.indices.reversed()
+                for (k in range) {
+                    val i = arr[k]; val x = i % l.w; val y = i / l.w
+                    var cnt = 0; var ar = 0f; var ag = 0f; var ab = 0f
+                    if (x > 0 && l.st[i - 1].toInt() != 0) { ar += l.r[i - 1]; ag += l.g[i - 1]; ab += l.b[i - 1]; cnt++ }
+                    if (x < l.w - 1 && l.st[i + 1].toInt() != 0) { ar += l.r[i + 1]; ag += l.g[i + 1]; ab += l.b[i + 1]; cnt++ }
+                    if (y > 0 && l.st[i - l.w].toInt() != 0) { ar += l.r[i - l.w]; ag += l.g[i - l.w]; ab += l.b[i - l.w]; cnt++ }
+                    if (y < l.h - 1 && l.st[i + l.w].toInt() != 0) { ar += l.r[i + l.w]; ag += l.g[i + l.w]; ab += l.b[i + l.w]; cnt++ }
+                    if (cnt > 0) { l.r[i] = ar / cnt; l.g[i] = ag / cnt; l.b[i] = ab / cnt }
+                }
+            }
+        }
+        // résolution du plus grossier au plus fin : l'inconnue de chaque niveau est initialisée par le niveau grossier, puis relaxée
+        val top = levels.last()
+        run { var sr = 0f; var sg = 0f; var sb = 0f; var c = 0; for (i in 0 until top.w * top.h) if (top.st[i].toInt() == 1) { sr += top.r[i]; sg += top.g[i]; sb += top.b[i]; c++ }
+            if (c > 0) for (i in 0 until top.w * top.h) if (top.st[i].toInt() == 2) { top.r[i] = sr / c; top.g[i] = sg / c; top.b[i] = sb / c } }
+        relax(top, 120)
+        for (li in levels.size - 2 downTo 0) {
+            val fine = levels[li]; val coarse = levels[li + 1]
+            for (i in 0 until fine.w * fine.h) if (fine.st[i].toInt() == 2) {
+                val x = i % fine.w; val y = i / fine.w
+                val cx = (x / 2).coerceAtMost(coarse.w - 1); val cy = (y / 2).coerceAtMost(coarse.h - 1); val ci = cy * coarse.w + cx
+                fine.r[i] = coarse.r[ci]; fine.g[i] = coarse.g[ci]; fine.b[i] = coarse.b[ci]
+            }
+            relax(fine, if (li == 0) iters else 14)
+        }
+        val out = pixels.copyOf(); val f0 = levels[0]
+        for (i in 0 until n) if (f0.st[i].toInt() == 2) out[i] = pack(f0.r[i].toInt().coerceIn(0, 255), f0.g[i].toInt().coerceIn(0, 255), f0.b[i].toInt().coerceIn(0, 255))
+        return out
+    }
+
+    /**
+     * Structure du fond autour du texte : part des pixels de référence (marge de la zone hors texte, et bande de 10 px autour de la zone) qui portent un bord franc
+     * (gradient de luminance > 60, puis > 30). Un dégradé, un ombrage, un fond flou ou bruité ont une part quasi nulle ; un dessin (contours, cheveux, motifs) en a une nette.
+     * [text] : le texte lu (boîtes des lignes un peu élargies), dont les propres bords ne comptent pas. [limit] : restreint les pixels de référence (intérieur d'une bulle).
+     */
+    fun structure(pixels: IntArray, w: Int, h: Int, zone: BooleanArray, text: BooleanArray, limit: BooleanArray? = null): FloatArray {
+        val n = w * h
+        val lum = IntArray(n) { (r(pixels[it]) * 77 + g(pixels[it]) * 150 + b(pixels[it]) * 29) shr 8 }
+        val band = BooleanArray(n)
+        val dm = IntArray(n) { if (zone[it]) 0 else Int.MAX_VALUE }
+        val queue = IntArray(n); var head = 0; var tail = 0
+        for (i in 0 until n) if (zone[i]) queue[tail++] = i
+        while (head < tail) {
+            val i = queue[head++]; val d = dm[i]; if (d >= 10) continue
+            val x = i % w; val y = i / w
+            for (dy in -1..1) for (dx in -1..1) {
+                if (dx == 0 && dy == 0) continue
+                val nx = x + dx; val ny = y + dy
+                if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
+                val j = ny * w + nx
+                if (dm[j] == Int.MAX_VALUE) { dm[j] = d + 1; queue[tail++] = j }
+            }
+        }
+        var tot = 0; var e60 = 0; var e30 = 0
+        val refCols = ArrayList<Int>()
+        // dans une bulle, la frange de 3 px au bord de l'intérieur est écartée : son voisin est le contour, dont le bord n'est pas une structure du fond
+        val lim = if (limit != null) erode(limit, w, h, 3) else null
+        for (y in 1 until h - 1) for (x in 1 until w - 1) {
+            val i = y * w + x
+            val inRef = (zone[i] && !text[i]) || (!zone[i] && dm[i] in 1..10)
+            if (!inRef || (lim != null && !lim[i])) continue
+            refCols.add(pixels[i])
+            // gradient de Sobel ; un voisin appartenant au texte fausserait le bord : on l'ignore
+            if (text[i - 1] || text[i + 1] || text[i - w] || text[i + w]) continue
+            val gx = -lum[i - w - 1] + lum[i - w + 1] - 2 * lum[i - 1] + 2 * lum[i + 1] - lum[i + w - 1] + lum[i + w + 1]
+            val gy = -lum[i - w - 1] - 2 * lum[i - w] - lum[i - w + 1] + lum[i + w - 1] + 2 * lum[i + w] + lum[i + w + 1]
+            val mag = kotlin.math.sqrt((gx * gx + gy * gy).toFloat()) / 4f
+            tot++; if (mag > 60f) e60++; if (mag > 30f) e30++
+        }
+        if (tot < 80 || refCols.size < 80) return floatArrayOf(0f, 0f, 0f)
+        // masse de pixels très différents de la couleur médiane de référence : un aplat de zone les effacerait (panneau sombre dans une zone claire)
+        fun med(sh: Int): Int { val a = IntArray(refCols.size) { (refCols[it] shr sh) and 0xFF }; a.sort(); return a[a.size / 2] }
+        val mr = med(16); val mg = med(8); val mb = med(0)
+        var far = 0
+        for (c in refCols) if (maxOf(abs(((c shr 16) and 0xFF) - mr), abs(((c shr 8) and 0xFF) - mg), abs((c and 0xFF) - mb)) > 50) far++
+        return floatArrayOf(e60.toFloat() / tot, e30.toFloat() / tot, far.toFloat() / refCols.size)
+    }
+
+    /**
+     * Remplissage d'une zone effacée. Si le fond autour est vraiment uni (couleur médiane des pixels voisins, écart faible et pas de dégradé d'un côté à l'autre), renvoie null :
+     * l'aplat de couleur unie est exact et reste le comportement d'origine. Sinon (dégradé, ombrage, léger bruit, fond coloré non uni) renvoie une reconstruction qui suit le
+     * fond autour de la zone, avec le grain du fond : l'aplat, lui, se verrait comme un carré d'une autre teinte.
+     */
+    fun zoneFill(pixels: IntArray, w: Int, h: Int, mask: BooleanArray, bg: Int): IntArray? {
+        val n = w * h
+        // bande de pixels voisins hors zone (jusqu'à 10 px) et proches du fond
+        val dm = IntArray(n) { if (mask[it]) 0 else Int.MAX_VALUE }
+        val queue = IntArray(n); var head = 0; var tail = 0
+        for (i in 0 until n) if (mask[i]) queue[tail++] = i
+        if (tail == 0 || tail == n) return null
+        while (head < tail) {
+            val i = queue[head++]; val d = dm[i]; if (d >= 10) continue
+            val x = i % w; val y = i / w
+            for (dy in -1..1) for (dx in -1..1) {
+                if (dx == 0 && dy == 0) continue
+                val nx = x + dx; val ny = y + dy
+                if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
+                val j = ny * w + nx
+                if (dm[j] == Int.MAX_VALUE) { dm[j] = d + 1; queue[tail++] = j }
+            }
+        }
+        var minX = w; var maxX = -1; var minY = h; var maxY = -1
+        for (i in 0 until n) if (mask[i]) { val x = i % w; val y = i / w; if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y }
+        val cx = (minX + maxX) / 2; val cy = (minY + maxY) / 2
+        val band = ArrayList<Int>(); val valid = BooleanArray(n)
+        for (i in 0 until n) if (dm[i] in 1..10 && dist(pixels[i], bg) <= 70) { band.add(i); valid[i] = true }
+        if (band.size < 60) return null
+        fun med(l: List<Int>, sh: Int): Int { val a = IntArray(l.size) { (l[it] shr sh) and 0xFF }; a.sort(); return a[a.size / 2] }
+        val cols = band.map { pixels[it] }
+        val mr = med(cols, 16); val mg = med(cols, 8); val mb = med(cols, 0)
+        var madR = IntArray(cols.size) { abs(((cols[it] shr 16) and 0xFF) - mr) }; madR.sort()
+        var madG = IntArray(cols.size) { abs(((cols[it] shr 8) and 0xFF) - mg) }; madG.sort()
+        var madB = IntArray(cols.size) { abs((cols[it] and 0xFF) - mb) }; madB.sort()
+        val mad = maxOf(madR[madR.size / 2], madG[madG.size / 2], madB[madB.size / 2])
+        // dégradé : médianes des quatre côtés de la zone
+        val quad = Array(4) { ArrayList<Int>() }
+        for (i in band) { val x = i % w; val y = i / w; if (y < minY) quad[0].add(pixels[i]) else if (y > maxY) quad[1].add(pixels[i]) else if (x < minX) quad[2].add(pixels[i]) else if (x > maxX) quad[3].add(pixels[i]) }
+        var spread = 0
+        val meds = quad.filter { it.size >= 12 }.map { q -> intArrayOf(med(q, 16), med(q, 8), med(q, 0)) }
+        for (c in 0..2) { if (meds.size >= 2) spread = maxOf(spread, meds.maxOf { it[c] } - meds.minOf { it[c] }) }
+        val flat = mad <= 3 && spread <= 6
+        if (flat) return null
+        val smooth = inpaintSmooth(pixels, w, h, mask, valid)
+        return addGrain(smooth, pixels, w, h, mask)
+    }
+
     /** Remplace les pixels masqués par une reconstruction lisse du fond (diffusion multi-échelle depuis les pixels voisins non masqués). */
     fun inpaint(pixels: IntArray, w: Int, h: Int, mask: BooleanArray, flatColor: Int? = null): IntArray {
         val out = pixels.copyOf()
@@ -689,21 +850,27 @@ object TextErase {
                 if (avg < bestCost) { bestCost = avg; bdx = dx; bdy = dy }
             }
             if (bestCost <= 38.0) {
-                // raccord de luminosité : écart moyen entre l'anneau du trou et l'anneau correspondant de la source
-                var sr = 0L; var sg = 0L; var sb = 0L; var n = 0
+                // raccord de luminosité : écart MÉDIAN entre l'anneau du trou et l'anneau correspondant de la source. La moyenne était tirée par un trait sombre voisin du trou
+                // et assombrissait toute la copie (une page blanche reconstruite en gris)
+                val dR = ArrayList<Int>(); val dG = ArrayList<Int>(); val dB = ArrayList<Int>()
                 for (q in bandIdx) {
                     val sx = q % w + bdx; val sy = q / w + bdy
                     if (sx < 0 || sy < 0 || sx >= w || sy >= h || remaining[sy * w + sx] || gm[sy * w + sx]) continue
                     val a = cur[q]; val b2 = cur[sy * w + sx]
-                    sr += ch(a, 16) - ch(b2, 16); sg += ch(a, 8) - ch(b2, 8); sb += ch(a, 0) - ch(b2, 0); n++
+                    dR.add(ch(a, 16) - ch(b2, 16)); dG.add(ch(a, 8) - ch(b2, 8)); dB.add(ch(a, 0) - ch(b2, 0))
                 }
-                val orr = if (n > 0) (sr / n).toInt() else 0; val og = if (n > 0) (sg / n).toInt() else 0; val ob = if (n > 0) (sb / n).toInt() else 0
+                fun med(l: ArrayList<Int>): Int { if (l.isEmpty()) return 0; l.sort(); return l[l.size / 2] }
+                val orr = med(dR); val og = med(dG); val ob = med(dB)
                 for (i in gm.indices) {
                     if (!gm[i]) continue
                     val sx = i % w + bdx; val sy = i / w + bdy
                     if (sx < 0 || sy < 0 || sx >= w || sy >= h || remaining[sy * w + sx] || gm[sy * w + sx]) continue
                     val c = cur[sy * w + sx]
-                    out[i] = pack(ch(c, 16) + orr, ch(c, 8) + og, ch(c, 0) + ob)
+                    val cand = pack(ch(c, 16) + orr, ch(c, 8) + og, ch(c, 0) + ob)
+                    // une copie très différente du remplissage de base (un bout de trait sombre dans un fond clair, par exemple) n'est pas de la texture : on garde le remplissage de base
+                    val dd = diffused[i]
+                    if (abs(ch(cand, 16) - ch(dd, 16)) > 70 || abs(ch(cand, 8) - ch(dd, 8)) > 70 || abs(ch(cand, 0) - ch(dd, 0)) > 70) continue
+                    out[i] = cand
                 }
             }
             for (i in gm.indices) if (gm[i]) { remaining[i] = false; cur[i] = out[i] }
