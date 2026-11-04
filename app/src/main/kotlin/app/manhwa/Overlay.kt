@@ -121,9 +121,10 @@ object PageScript {
   window.addEventListener('scroll', function(){ if (!nbTick) { nbTick = true; setTimeout(nbCheck, 300); } }, {passive:true});
   setTimeout(nbCheck, 800);
 
-  // appui long sur une traduction : ouvre l'édition (correction manuelle)
+  // appui long sur une traduction : tant que le doigt reste posé, la traduction s'efface et l'original réapparaît dessous (aperçu) ; l'application propose alors de la corriger
   var LP = {x:0, y:0, timer:null};
-  function hit(x, y){
+  var PK = {el:null};
+  function peek(x, y){
     var best = null, bestArea = 1e18, bestId = null;
     for (var id in S.entries){
       var kids = S.entries[id].div.children;
@@ -133,19 +134,81 @@ object PageScript {
         if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom && r.width * r.height < bestArea) { best = k; bestArea = r.width * r.height; bestId = id; }
       }
     }
-    if (best) { try { AndroidMT.onEdit(bestId, best.getAttribute('data-bid'), best.getAttribute('data-src'), best.getAttribute('data-tr')); } catch(e) {} }
+    if (best) {
+      best.style.visibility = 'hidden'; PK.el = best;
+      try { AndroidMT.onPeek(bestId, best.getAttribute('data-bid'), best.getAttribute('data-src'), best.getAttribute('data-tr')); } catch(e) {}
+    }
   }
+  function unpeek(){ if (PK.el) { PK.el.style.visibility = ''; PK.el = null; } }
   document.addEventListener('touchstart', function(e){
-    if (e.touches.length !== 1) { clearTimeout(LP.timer); return; }
+    if (e.touches.length !== 1) { clearTimeout(LP.timer); unpeek(); return; }
     LP.x = e.touches[0].clientX; LP.y = e.touches[0].clientY; clearTimeout(LP.timer);
-    LP.timer = setTimeout(function(){ hit(LP.x, LP.y); }, 700);
+    LP.timer = setTimeout(function(){ peek(LP.x, LP.y); }, 450);
   }, {passive:true, capture:true});
   document.addEventListener('touchmove', function(e){
     if (!e.touches.length) return;
-    if (Math.abs(e.touches[0].clientX - LP.x) > 12 || Math.abs(e.touches[0].clientY - LP.y) > 12) clearTimeout(LP.timer);
+    if (Math.abs(e.touches[0].clientX - LP.x) > 12 || Math.abs(e.touches[0].clientY - LP.y) > 12) { clearTimeout(LP.timer); unpeek(); }
   }, {passive:true, capture:true});
-  ['touchend','touchcancel'].forEach(function(n){ document.addEventListener(n, function(){ clearTimeout(LP.timer); }, {passive:true, capture:true}); });
-  window.__mt = {collect:collect, apply:apply, setVisible:setVisible, clear:clear, getB64:getB64};
+  ['touchend','touchcancel'].forEach(function(n){ document.addEventListener(n, function(){ clearTimeout(LP.timer); unpeek(); }, {passive:true, capture:true}); });
+
+  // sens du défilement (barre d'adresse qui se masque) et avancement de lecture
+  var sc = {y: window.scrollY, acc: 0, dir: 0, t: null, sent: -1};
+  function onMove(){
+    var y = window.scrollY, dy = y - sc.y; sc.y = y;
+    if (dy !== 0) {
+      if ((dy > 0) !== (sc.acc > 0)) sc.acc = 0;
+      sc.acc += dy;
+      if (Math.abs(sc.acc) >= 28) { var d = sc.acc > 0 ? 1 : -1; if (d !== sc.dir) { sc.dir = d; try { AndroidMT.onScrollDir(d > 0); } catch(e) {} } sc.acc = 0; }
+    }
+    if (!sc.t) sc.t = setTimeout(function(){
+      sc.t = null;
+      var h = document.documentElement.scrollHeight - window.innerHeight;
+      var p = h <= 0 ? 100 : Math.max(0, Math.min(100, Math.round(100 * window.scrollY / h)));
+      if (p !== sc.sent) { sc.sent = p; try { AndroidMT.onProgress(p); } catch(e) {} }
+    }, 1000);
+  }
+  window.addEventListener('scroll', onMove, {passive:true});
+  setTimeout(onMove, 1500);
+
+  // appui simple sur la page (ni défilement, ni lien, ni double appui) : ouvre le menu de lecture en plein écran, montre ou masque la barre d'adresse sinon
+  var tp = {x:0, y:0, t:0, moved:false, timer:null, last:0};
+  document.addEventListener('touchstart', function(e){
+    if (e.touches.length !== 1) { tp.moved = true; return; }
+    tp.x = e.touches[0].clientX; tp.y = e.touches[0].clientY; tp.t = Date.now(); tp.moved = false;
+  }, {passive:true, capture:true});
+  document.addEventListener('touchmove', function(e){
+    if (!e.touches.length) return;
+    if (Math.abs(e.touches[0].clientX - tp.x) > 10 || Math.abs(e.touches[0].clientY - tp.y) > 10) tp.moved = true;
+  }, {passive:true, capture:true});
+  document.addEventListener('touchend', function(e){
+    if (tp.moved || Date.now() - tp.t > 300 || e.changedTouches.length !== 1) return;
+    var el = e.target;
+    while (el && el !== document.body && el !== document.documentElement) {
+      var tn = el.tagName;
+      if (tn === 'A' || tn === 'BUTTON' || tn === 'INPUT' || tn === 'TEXTAREA' || tn === 'SELECT' || tn === 'VIDEO' || tn === 'LABEL' || el.onclick) return;
+      el = el.parentElement;
+    }
+    var now = Date.now();
+    clearTimeout(tp.timer);
+    if (now - tp.last < 320) { tp.last = 0; return; }
+    tp.last = now;
+    tp.timer = setTimeout(function(){ tp.last = 0; try { AndroidMT.onTap(); } catch(e) {} }, 330);
+  }, {passive:true, capture:true});
+
+  // reprise de lecture : on attend que la hauteur de la page se stabilise (images qui se chargent), puis on se place ; un toucher de l'utilisateur annule
+  function resumeTo(pct){
+    var tries = 0, lastH = -1, stable = 0, stopped = false;
+    document.addEventListener('touchstart', function(){ stopped = true; }, {once:true, passive:true, capture:true});
+    (function tick(){
+      if (stopped) return;
+      var h = document.documentElement.scrollHeight;
+      if (h === lastH) stable++; else { stable = 0; lastH = h; }
+      tries++;
+      if (stable >= 3 || tries > 25) { window.scrollTo(0, Math.round((h - window.innerHeight) * pct / 100)); return; }
+      setTimeout(tick, 400);
+    })();
+  }
+  window.__mt = {collect:collect, apply:apply, setVisible:setVisible, clear:clear, getB64:getB64, resumeTo:resumeTo};
 })();
 """
 }

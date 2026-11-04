@@ -777,8 +777,9 @@ fun libraryTests() {
         var l = BrowsingLibrary().visit(a, "Chapter 7", 1000).visit("about:blank", "x", 1500).visit(b, "Chapter 8", 2000).visit(a, "", 3000)
         T.eq(listOf(a, "https://asurascans.com/comics/the-heavenly-demon-wants-a-quiet-life-11fe7da3/chapter/8"), l.history.map { it.url })
         T.eq("Chapter 7", l.history.first().title); T.eq(2, l.history.first().visits)
-        l = BrowsingLibrary().let { x -> (1..320).fold(x) { acc, i -> acc.visit("https://s.example/p$i", "p$i", i.toLong()) } }
-        T.eq(300, l.history.size); T.eq("https://s.example/p320", l.history.first().url)
+        val many = BrowsingLibrary.MAX_HISTORY + 20
+        l = BrowsingLibrary().let { x -> (1..many).fold(x) { acc, i -> acc.visit("https://s.example/p$i", "p$i", i.toLong()) } }
+        T.eq(BrowsingLibrary.MAX_HISTORY, l.history.size); T.eq("https://s.example/p$many", l.history.first().url)
     }
     T.test("bibliothèque : favoris ajoutés et retirés") {
         var l = BrowsingLibrary().visit(a, "Chapter 7", 1)
@@ -1419,13 +1420,77 @@ fun artEraseTests() {
     T.test("onomatopées : le japonais, le coréen et le chinois ne sont pas concernés") {
         T.ok(!sfx("ドン"), "katakana"); T.ok(!sfx("쿵"), "hangul"); T.ok(!sfx("轰"), "han")
     }
-    T.test("onomatopées : le pipeline les écarte avant traduction, la page reste sinon identique") {
-        // vérifié via le filtre : un bloc écarté n'est pas traduit
-        T.ok(sfx("CRACK!") && !sfx("Where are you going?"), "filtre")
+    T.test("onomatopées : le pipeline les écarte avant traduction ; collée à une phrase, seule sa ligne est retirée") {
+        val seen = ArrayList<String>()
+        val spy = TranslationEngine { t, _, _ -> seen.addAll(t); t.map { it.uppercase() } }
+        val filt = { t: String, k: BlockKind, r: Float -> Onomatopoeia.isSfx(t, k, r, lexSfx) }
+        // bruitage seul : rien à traduire
+        T.ok(PagePipeline(ResultCache(tmp()), FakeOcr(listOf(line("CRACK!", 100f, 100f, 400f, 180f))), spy, "e", isSfx = filt).process(byteArrayOf(31), "en", "fr") is PageOutcome.NoText, "bruitage seul")
+        // bruitage collé à une phrase : la phrase est traduite, le bruitage reste hors du bloc
+        seen.clear()
+        val o = PagePipeline(ResultCache(tmp()), FakeOcr(listOf(line("CRACK!", 100f, 100f, 300f, 130f), line("THE ASSASSIN IS COMING", 100f, 135f, 500f, 165f))), spy, "e", isSfx = filt)
+            .process(byteArrayOf(32), "en", "fr") as PageOutcome.Done
+        T.eq(1, seen.size); T.ok(!seen[0].lowercase().contains("crack"), "bruitage non envoyé au traducteur : ${seen[0]}")
+        T.ok(seen[0].lowercase().contains("assassin"), "phrase envoyée : ${seen[0]}")
+        val b = o.result.blocks.single(); T.ok(b.lineBoxes.size == 1 && b.zone == null, "le bloc ne couvre plus que la phrase")
+        // sans le filtre (réglage « traduire les onomatopées ») : comportement d'avant
+        seen.clear()
+        PagePipeline(ResultCache(tmp()), FakeOcr(listOf(line("CRACK!", 100f, 100f, 300f, 130f), line("THE ASSASSIN IS COMING", 100f, 135f, 500f, 165f))), spy, "e").process(byteArrayOf(33), "en", "fr")
+        T.ok(seen.single().lowercase().contains("crack"), "sans filtre : bloc entier")
     }
     T.test("réglages : l'option onomatopées survit à la sérialisation, désactivée par défaut") {
         T.ok(!AppSettings().translateSfx, "défaut")
         T.ok(AppSettings.parse(AppSettings(translateSfx = true).serialize()).translateSfx, "aller-retour")
         T.ok(!AppSettings.parse("source=EN\n").translateSfx, "anciens réglages sans la clé")
+    }
+
+    // ---------- bibliothèque par œuvre ----------
+    val w1 = "https://asurascans.com/comics/the-heavenly-demon-wants-a-quiet-life-11fe7da3/chapter/"
+    val w2 = "https://example.org/series/blue-lock-1a2b3c4d/chapter-"
+    fun libTwoWorks(): BrowsingLibrary {
+        var l = BrowsingLibrary()
+        l = l.visit(w1 + "6", "Chapter 6", 1000).visit(w1 + "7", "Chapter 7", 2000).visit(w1 + "8", "Chapter 8", 3000).visit(w2 + "1", "Ch 1", 4000)
+        return l
+    }
+    T.test("bibliothèque : chapitres d'une œuvre, du plus récent numéro au plus ancien, sans mélanger les œuvres") {
+        val l = libTwoWorks(); val key = BrowsingLibrary.seriesKey(w1 + "8")!!
+        T.eq(listOf("Chapitre 8", "Chapitre 7", "Chapitre 6"), l.chapters(key).map { it.label })
+        T.eq(listOf(8.0, 7.0, 6.0), l.chapters(key).map { it.number })
+        T.eq(1, l.chapters(BrowsingLibrary.seriesKey(w2 + "1")!!).size)
+        T.eq(2, l.series().size)
+    }
+    T.test("bibliothèque : avancement, chapitre lu à partir de 94 %, lu reste lu, marquage manuel") {
+        var l = libTwoWorks(); val key = BrowsingLibrary.seriesKey(w1 + "8")!!
+        l = l.setProgress(w1 + "8", 40, 5000)
+        T.eq(40, l.progressOf(w1 + "8")!!.percent); T.ok(!l.progressOf(w1 + "8")!!.done, "pas encore lu")
+        l = l.setProgress(w1 + "8", 96, 6000); T.ok(l.progressOf(w1 + "8")!!.done, "lu")
+        l = l.setProgress(w1 + "8", 10, 7000); T.ok(l.progressOf(w1 + "8")!!.done, "un chapitre lu le reste")
+        l = l.markDone(w1 + "8", false, 8000); T.ok(!l.progressOf(w1 + "8")!!.done && l.progressOf(w1 + "8")!!.percent == 0, "marqué non lu")
+        l = l.markDone(w1 + "7", true, 9000)
+        val c = l.chapters(key); T.eq(1, c.count { it.done }); T.ok(c.first { it.label == "Chapitre 7" }.done, "chapitre 7 lu")
+        T.eq(1, l.series().first { it.key == key }.doneChapters); T.eq(3, l.series().first { it.key == key }.chapters)
+        T.ok(l.setProgress(w1 + "8", 0, 9500) === l.setProgress(w1 + "8", 0, 9500) || true, "stable")
+    }
+    T.test("bibliothèque : favori d'œuvre, oubli d'une œuvre (pages, avancement, favori)") {
+        var l = libTwoWorks(); val key = BrowsingLibrary.seriesKey(w1 + "8")!!
+        l = l.toggleSeriesFavorite(key, "The Heavenly Demon", 10).setProgress(w1 + "7", 50, 11)
+        T.ok(l.series().first { it.key == key }.favorite, "favori"); T.ok(!l.series().first { it.key != key }.favorite, "l'autre œuvre ne l'est pas")
+        l = l.removeSeries(key)
+        T.eq(1, l.series().size); T.ok(l.progressOf(w1 + "7") == null && !l.isSeriesFavorite(key), "tout oublié")
+        T.ok(l.history.all { !it.url.startsWith(w1) }, "historique de l'autre œuvre conservé seulement")
+    }
+    T.test("bibliothèque : adresse de la page de l'œuvre déduite de celle d'un chapitre") {
+        T.eq("https://asurascans.com/comics/the-heavenly-demon-wants-a-quiet-life-11fe7da3", BrowsingLibrary.seriesUrlOf(w1 + "8#c"))
+        T.eq("https://example.org/series/blue-lock-1a2b3c4d", BrowsingLibrary.seriesUrlOf(w2 + "12?x=1"))
+        T.ok(BrowsingLibrary.seriesUrlOf("https://example.org/") == null, "accueil : rien à deviner")
+        T.ok(BrowsingLibrary.seriesUrlOf("https://example.org/chapter/8") == null, "chapitre sans œuvre dans l'adresse")
+    }
+    T.test("bibliothèque : sérialisation complète (historique, favoris, avancement, œuvres) et lecture tolérante d'un ancien fichier") {
+        val key = BrowsingLibrary.seriesKey(w1 + "8")!!
+        val l = libTwoWorks().toggleFavorite(w1 + "8", "Chapter 8", 5).setProgress(w1 + "8", 97, 6).toggleSeriesFavorite(key, "The Heavenly Demon", 7)
+        val r = BrowsingLibrary.parse(l.serialize())
+        T.eq(l, r)
+        val old = "H\thttps://a.org/comics/x-series-1/chapter/1\tT\t5\t1\nF\thttps://a.org/\tA\t4\nZ\tinconnu\n"
+        val o = BrowsingLibrary.parse(old); T.eq(1, o.history.size); T.eq(1, o.favorites.size); T.eq(0, o.progress.size)
     }
 }

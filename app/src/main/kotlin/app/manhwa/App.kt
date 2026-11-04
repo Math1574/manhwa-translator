@@ -51,21 +51,48 @@ class AppGraph(ctx: Context) {
     val controller = TranslationController(ctx, this)
 }
 
-/** Historique de lecture et favoris, conservés sur le téléphone (fichier texte). */
+/** Historique de lecture, avancement par chapitre et favoris, conservés sur le téléphone (fichier texte). */
 class LibraryStore(private val file: File) {
     var library by mutableStateOf(BrowsingLibrary.parse(try { if (file.exists()) file.readText() else null } catch (e: Throwable) { null }))
         private set
+    private var dirty = false
+    private var lastWrite = 0L
 
-    private fun commit(f: (BrowsingLibrary) -> BrowsingLibrary) {
-        library = f(library)
-        try { file.writeText(library.serialize()) } catch (_: Throwable) {}
+    private fun write() {
+        try { file.writeText(library.serialize()); dirty = false; lastWrite = System.currentTimeMillis() } catch (_: Throwable) {}
     }
+
+    private fun commit(f: (BrowsingLibrary) -> BrowsingLibrary) { library = f(library); write() }
 
     fun visit(url: String, title: String) = commit { it.visit(url, title, System.currentTimeMillis()) }
     fun toggleFavorite(url: String, title: String) = commit { it.toggleFavorite(url, title, System.currentTimeMillis()) }
     fun removeHistory(url: String) = commit { it.removeHistory(url) }
     fun removeFavorite(url: String) = commit { it.removeFavorite(url) }
     fun clearHistory() = commit { it.clearHistory() }
+    fun markDone(url: String, done: Boolean) = commit { it.markDone(url, done, System.currentTimeMillis()) }
+    fun toggleSeriesFavorite(key: String, title: String) = commit { it.toggleSeriesFavorite(key, title, System.currentTimeMillis()) }
+    fun removeSeries(key: String) = commit { it.removeSeries(key) }
+
+    /** Avancement de la page ouverte : l'état est mis à jour tout de suite, le fichier au plus toutes les 4 s ([flush] à la fermeture). */
+    fun progress(url: String, percent: Int) {
+        val next = library.setProgress(url, percent, System.currentTimeMillis())
+        if (next === library) return
+        library = next; dirty = true
+        if (System.currentTimeMillis() - lastWrite > 4000) write()
+    }
+
+    fun flush() { if (dirty) write() }
+
+    /** Cœur du navigateur : l'œuvre quand l'adresse en désigne une, sinon la page elle-même. */
+    fun isHeart(url: String): Boolean {
+        val key = BrowsingLibrary.seriesKey(url)
+        return if (key != null) library.isSeriesFavorite(key) else library.isFavorite(url)
+    }
+
+    fun toggleHeart(url: String, title: String) {
+        val key = BrowsingLibrary.seriesKey(url)
+        if (key != null) toggleSeriesFavorite(key, app.manhwa.core.SeriesHint.fromUrl(url) ?: title) else toggleFavorite(url, title)
+    }
 }
 
 class SettingsStore(ctx: Context) {

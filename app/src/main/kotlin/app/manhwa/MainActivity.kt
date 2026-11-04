@@ -20,6 +20,9 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
@@ -30,24 +33,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 
-private val ManhwaColors = darkColorScheme(
-    primary = Color(0xFF8FA8FF),
-    onPrimary = Color(0xFF0A1040),
-    secondary = Color(0xFFB388FF),
-    onSecondary = Color(0xFF200A40),
-    background = Color(0xFF0E0F1A),
-    onBackground = Color(0xFFE3E4F4),
-    surface = Color(0xFF161828),
-    onSurface = Color(0xFFE3E4F4),
-    surfaceVariant = Color(0xFF22253A),
-    onSurfaceVariant = Color(0xFFB9BCD8),
-    error = Color(0xFFFF8A80),
-)
-
 class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         TestHooks.maybeRun(applicationContext, (application as App).graph, intent)
+    }
+
+    /** L'avancement de lecture n'est écrit qu'à intervalles espacés : on le range quand l'application quitte l'écran. */
+    override fun onStop() {
+        super.onStop()
+        (application as App).graph.library.flush()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -55,7 +50,7 @@ class MainActivity : ComponentActivity() {
         val graph = (application as App).graph
         TestHooks.maybeRun(applicationContext, graph, intent)
         setContent {
-            MaterialTheme(colorScheme = ManhwaColors) { Root(graph) }
+            ManhwaTheme { Root(graph) }
         }
     }
 }
@@ -63,10 +58,10 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun Root(graph: AppGraph) {
     var tab by remember { mutableIntStateOf(0) }
-    val titles = listOf("Navigateur", "Bibliothèque", "Modèles", "Glossaire", "Réglages")
     val c = graph.controller
+    val tabs = listOf("Lire" to AppIcons.Book, "Bibliothèque" to AppIcons.Library, "Réglages" to Icons.Filled.Settings)
 
-    // Retour : historique du navigateur, sinon retour à l'onglet navigateur, sinon sortie.
+    // Retour : plein écran, puis onglet courant, puis historique du navigateur, sinon sortie.
     BackHandler(enabled = c.fullscreen || tab != 0 || c.canGoBack) {
         if (c.fullscreen) c.exitFullscreen() else if (tab != 0) tab = 0 else c.back()
     }
@@ -93,8 +88,8 @@ private fun Root(graph: AppGraph) {
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             if (!c.fullscreen) NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                titles.forEachIndexed { i, t ->
-                    NavigationBarItem(selected = tab == i, onClick = { tab = i }, icon = {}, label = { Text(t) }, alwaysShowLabel = true)
+                tabs.forEachIndexed { i, (label, icon) ->
+                    NavigationBarItem(selected = tab == i, onClick = { tab = i }, icon = { Icon(icon, label) }, label = { Text(label) }, alwaysShowLabel = true)
                 }
             }
         },
@@ -105,10 +100,8 @@ private fun Root(graph: AppGraph) {
             if (tab != 0) {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     when (tab) {
-                        1 -> LibraryScreen(graph) { url -> c.load(url); tab = 0 }
-                        2 -> ModelsScreen(graph)
-                        3 -> GlossaryScreen(graph)
-                        else -> SettingsScreen(graph)
+                        1 -> LibraryScreen(graph) { url, resumeAt -> c.load(url, resumeAt); tab = 0 }
+                        else -> SettingsRoot(graph)
                     }
                 }
             }

@@ -55,11 +55,13 @@ class PagePipeline(
         val ocrResult = try { ocr.recognize(imageBytes) } catch (e: Exception) {
             return PageOutcome.Failed("ocr", e.message ?: e.javaClass.simpleName)
         }
-        val grouped = grouper.group(ocrResult.lines, ocrResult.detections)
+        val grouped0 = grouper.group(ocrResult.lines, ocrResult.detections)
         // hauteur de ligne relative à la médiane de la page : un gros lettrage (onomatopée, titre) n'est jamais un débris
-        val heights = grouped.map { medianLineHeight(it) }.filter { it > 0f }.sorted()
+        val heights = grouped0.map { medianLineHeight(it) }.filter { it > 0f }.sorted()
         val medianH = if (heights.isEmpty()) 0f else heights[heights.size / 2]
         fun relH(b: TextBlock) = if (medianH > 0f) medianLineHeight(b) / medianH else 1f
+        // une onomatopée collée à une phrase voisine (même bloc) : sa ligne est retirée du bloc, qui garde le reste ; l'image n'y touche pas
+        val grouped = grouped0.mapNotNull { b -> withoutSfxLines(b, medianH) }
         val blocks = grouped.filter { !TextNormalizer.isNoise(it.text) && !junk(it.text, relH(it), it.kind != BlockKind.FREE || it.zone != null) && !isSfx(it.text, it.kind, relH(it)) }
         for (g in grouped) if (g !in blocks) log("écarté « ${g.text.take(40)} » (${if (TextNormalizer.isNoise(g.text)) "bruit" else if (isSfx(g.text, g.kind, relH(g))) "onomatopée laissée telle quelle" else "débris, filigrane ou répété"}${if (g.kind != BlockKind.IN_BUBBLE && g.zone == null) ", hors zone" else ""})")
         val clean = blocks.map { repair(it.text) }.toMutableList()
@@ -146,6 +148,16 @@ class PagePipeline(
         sink(DebugInfo(ocr.imageWidth, ocr.imageHeight, ocr.lines.map { l ->
             DebugLine(l.box, l.text, l.confidence, grouper.dropReason(l)?.let { "rejetée : $it" } ?: keptLines[l] ?: "doublon")
         }))
+    }
+
+    /** Retire d'un bloc de plusieurs lignes celles qui sont des onomatopées seules ; le bloc garde le reste (sans zone : la zone recouvre aussi le bruitage). */
+    private fun withoutSfxLines(b: TextBlock, medianH: Float): TextBlock? {
+        if (b.lines.size < 2 || b.kind == BlockKind.IN_BUBBLE) return b
+        val keep = b.lines.filter { l -> !isSfx(l.text, b.kind, if (medianH > 0f) (if (b.vertical) l.box.width else l.lineHeight) / medianH else 1f) }
+        if (keep.size == b.lines.size) return b
+        if (keep.isEmpty()) return null
+        val box = keep.map { it.box }.reduce { x, y -> x.union(y) }
+        return b.copy(lines = keep, box = box, text = keep.joinToString(" ") { it.text }, zone = null)
     }
 
     private fun medianLineHeight(b: TextBlock): Float {

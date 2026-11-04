@@ -6,8 +6,6 @@ import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
 import android.util.Base64
-import android.view.MotionEvent
-import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
@@ -23,6 +21,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import app.manhwa.core.AdBlocker
+import app.manhwa.core.BrowsingLibrary
 import app.manhwa.core.CacheKey
 import app.manhwa.core.DebugInfo
 import app.manhwa.core.JunkFilter
@@ -79,7 +78,12 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     var canGoForward by mutableStateOf(false)
     var active by mutableStateOf(false)
     var fullscreen by mutableStateOf(false)
-    var fsButtonVisible by mutableStateOf(false)
+    /** Barre d'adresse masquée parce qu'on lit en descendant ; elle revient en remontant ou en touchant la page. */
+    var barsHidden by mutableStateOf(false)
+    /** En plein écran : menu de lecture (quitter, chapitres, original/traduit) affiché après un appui sur la page. */
+    var readerBar by mutableStateOf(false)
+    /** Part de la page parcourue (0..100). */
+    var pageProgress by mutableIntStateOf(0)
     var overlaysVisible by mutableStateOf(true)
     var total by mutableIntStateOf(0)
     var done by mutableIntStateOf(0)
@@ -88,6 +92,14 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     var lastError by mutableStateOf<String?>(null)
 
     var editTarget by mutableStateOf<EditTarget?>(null)
+    /** Traduction dont on regarde l'original (appui long) : l'interface propose de la corriger pendant quelques secondes. */
+    var peekTarget by mutableStateOf<EditTarget?>(null)
+    private val clearPeek = Runnable { peekTarget = null }
+    /** Avancement à reprendre à l'ouverture de la page demandée (0 = aucun). */
+    private var resumeTarget = 0
+    private var resumeUrl = ""
+    /** Chapitre commencé ouvert sans passer par la bibliothèque : proposition « Reprendre à X % ». */
+    var resumeOffer by mutableIntStateOf(0)
     private val candidatesById = ConcurrentHashMap<String, Candidate>()
     private val keysById = ConcurrentHashMap<String, CacheKey>()
 
@@ -137,34 +149,34 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         override fun onCancelled(id: String) { main.post { pump() } }
     })
 
-    // ---------- plein écran ----------
+    // ---------- plein écran et lecture ----------
 
-    private val hideFsButton = Runnable { fsButtonVisible = false }
-    private val tapTimes = ArrayDeque<Long>()
-    private var downX = 0f
-    private var downY = 0f
-    private var downT = 0L
+    private val hideReaderBar = Runnable { readerBar = false }
 
-    fun enterFullscreen() { fullscreen = true; showFsButton() }
-    fun exitFullscreen() { fullscreen = false; fsButtonVisible = false; main.removeCallbacks(hideFsButton) }
-    fun showFsButton() { fsButtonVisible = true; main.removeCallbacks(hideFsButton); main.postDelayed(hideFsButton, 3500) }
+    fun enterFullscreen() { fullscreen = true; readerBar = false }
+    fun exitFullscreen() { fullscreen = false; readerBar = false; barsHidden = false; main.removeCallbacks(hideReaderBar) }
 
-    /** Trois appuis brefs en moins de 1,2 s font réapparaître le bouton discret. Le toucher reste transmis à la page. */
-    private fun onTouch(c: Context, ev: MotionEvent) {
-        when (ev.actionMasked) {
-            MotionEvent.ACTION_DOWN -> { downX = ev.x; downY = ev.y; downT = ev.eventTime }
-            MotionEvent.ACTION_UP -> {
-                val slop = ViewConfiguration.get(c).scaledTouchSlop
-                if (kotlin.math.abs(ev.x - downX) < slop && kotlin.math.abs(ev.y - downY) < slop && ev.eventTime - downT < 350) {
-                    tapTimes.addLast(ev.eventTime)
-                    while (tapTimes.size > 3) tapTimes.removeFirst()
-                    if (tapTimes.size == 3 && tapTimes.last() - tapTimes.first() < 1200) {
-                        tapTimes.clear()
-                        if (fullscreen) main.post { showFsButton() }
-                    }
-                }
-            }
-        }
+    /** Menu de lecture du plein écran : il se referme seul après quelques secondes sans toucher. */
+    fun showReaderBar(show: Boolean) {
+        readerBar = show
+        main.removeCallbacks(hideReaderBar)
+        if (show) main.postDelayed(hideReaderBar, 5000)
+    }
+
+    /** Appui simple sur la page : en plein écran il ouvre ou ferme le menu de lecture, sinon il montre ou masque la barre d'adresse. */
+    private fun onPageTap() {
+        if (fullscreen) showReaderBar(!readerBar) else barsHidden = !barsHidden
+    }
+
+    /** Défilement vers le bas : la barre d'adresse se masque ; vers le haut : elle revient. */
+    private fun onScrollDirection(down: Boolean) {
+        if (fullscreen) { if (down && readerBar) showReaderBar(false); return }
+        barsHidden = down
+    }
+
+    private fun onProgressReported(percent: Int) {
+        pageProgress = percent
+        if (currentUrl.startsWith("http")) graph.library.progress(currentUrl, percent)
     }
 
     // ---------- navigateur ----------
@@ -187,8 +199,6 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         }
         CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
         wv.addJavascriptInterface(Bridge(), "AndroidMT")
-        @Suppress("ClickableViewAccessibility")
-        wv.setOnTouchListener { _, ev -> onTouch(c, ev); false }
         wv.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val scheme = request.url.scheme?.lowercase()
@@ -212,6 +222,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                 graph.gemma.seriesTitle = if (url.startsWith("http")) app.manhwa.core.SeriesHint.fromUrl(url) else null
                 loading = true
                 nearBottom = false
+                barsHidden = false; pageProgress = 0; showReaderBar(false); resumeOffer = 0; peekTarget = null
                 pageError = null
                 resetSession()
                 view.evaluateJavascript(PageScript.INJECT, null)
@@ -221,6 +232,14 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                 loading = false
                 if (url.startsWith("http")) graph.library.visit(url, view.title ?: "")
                 view.evaluateJavascript(PageScript.INJECT, null)
+                if (url.startsWith("http")) {
+                    if (resumeTarget > 0 && BrowsingLibrary.normalize(url) == resumeUrl) {
+                        view.evaluateJavascript("window.__mt&&window.__mt.resumeTo($resumeTarget)", null); resumeTarget = 0; resumeOffer = 0
+                    } else {
+                        val p = graph.library.library.progressOf(url)
+                        resumeOffer = if (p != null && !p.done && p.percent in 5..93) p.percent else 0
+                    }
+                }
                 if (graph.settingsStore.settings.blockAds) view.evaluateJavascript("(function(){var s=document.createElement('style');s.textContent='ins.adsbygoogle,[id^=\"google_ads_iframe\"],iframe[src*=\"doubleclick.net\"],iframe[src*=\"googlesyndication.com\"]{display:none!important}';(document.head||document.documentElement).appendChild(s)})()", null)
                 if (graph.settingsStore.settings.autoTranslate && url.startsWith("http")) start(false)
             }
@@ -246,7 +265,19 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         return wv
     }
 
-    fun load(url: String) { if (url.isNotEmpty()) { pageError = null; webView?.loadUrl(url) } }
+    fun load(url: String, resumeAt: Int = 0) {
+        if (url.isNotEmpty()) { pageError = null; resumeTarget = resumeAt; resumeUrl = BrowsingLibrary.normalize(url) ?: url; webView?.loadUrl(url) }
+    }
+
+    /** Se replace dans le chapitre là où la lecture s'était arrêtée. */
+    fun resumeNow() {
+        val p = resumeOffer; resumeOffer = 0
+        if (p > 0) webView?.evaluateJavascript("window.__mt&&window.__mt.resumeTo($p)", null)
+    }
+    fun dismissResumeOffer() { resumeOffer = 0 }
+
+    /** Ouvre la correction de la traduction dont on vient de regarder l'original. */
+    fun openPeekEdit() { peekTarget?.let { editTarget = it }; peekTarget = null; main.removeCallbacks(clearPeek) }
     fun goHome() {
         val lib = graph.library.library
         fun esc(t: String) = android.text.Html.escapeHtml(t)
@@ -535,6 +566,12 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
     private inner class Bridge {
         @JavascriptInterface fun onBottom(nb: Boolean) { main.post { nearBottom = nb } }
+        @JavascriptInterface fun onScrollDir(down: Boolean) { main.post { onScrollDirection(down) } }
+        @JavascriptInterface fun onProgress(percent: Int) { main.post { onProgressReported(percent) } }
+        @JavascriptInterface fun onTap() { main.post { onPageTap() } }
+        @JavascriptInterface fun onPeek(id: String, bid: String, src: String, tr: String) {
+            main.post { peekTarget = EditTarget(id, bid.toIntOrNull() ?: -1, src, tr); main.removeCallbacks(clearPeek); main.postDelayed(clearPeek, 7000) }
+        }
         @JavascriptInterface fun onImagesChanged() { main.post { if (active) start(false) } }
         @JavascriptInterface fun onB64(id: String, data: String) { b64Waiters[id]?.complete(data) }
         @JavascriptInterface fun onEdit(id: String, bid: String, src: String, tr: String) { main.post { editTarget = EditTarget(id, bid.toIntOrNull() ?: -1, src, tr) } }

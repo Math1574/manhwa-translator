@@ -78,7 +78,7 @@ def vertical_bubble(img, d, box, text, font, gt, lang="ja"):
         x -= cw
     gt.append({"kind": "vertical", "lang": lang, "text": text, "box": [int(v) for v in tb]})
 
-def free_text(img, text, font, xy, gt, lang="en", glow=True):
+def free_text(img, text, font, xy, gt, lang="en", glow=True, kind="free"):
     layer = Image.new("RGBA", img.size, (0, 0, 0, 0)); ld = ImageDraw.Draw(layer)
     if glow:
         ld.text(xy, text, font=font, fill=(255, 40, 40, 255), stroke_width=7, stroke_fill=(255, 40, 40, 255))
@@ -86,7 +86,7 @@ def free_text(img, text, font, xy, gt, lang="en", glow=True):
     ld.text(xy, text, font=font, fill=(255, 255, 255, 255), stroke_width=3, stroke_fill=(90, 0, 0, 255))
     img.paste(layer, (0, 0), layer)
     d = ImageDraw.Draw(img); l, t, r, b = d.textbbox(xy, text, font=font)
-    gt.append({"kind": "free", "lang": lang, "text": text, "box": [int(l), int(t), int(r), int(b)], "lines": [[int(l), int(t), int(r), int(b)]]})
+    gt.append({"kind": kind, "lang": lang, "text": text, "box": [int(l), int(t), int(r), int(b)], "lines": [[int(l), int(t), int(r), int(b)]]})
 
 PAGES = {
   "en_caps": ("en", True, COMIC, 0, [
@@ -113,7 +113,7 @@ for name, (lang, caps, fpath, idx, texts, free, sfx) in PAGES.items():
     while ImageDraw.Draw(img).textlength(free, font=ff) > 700 and size > 20:
         size -= 2; ff = F(fpath, size, idx)
     free_text(img, free, ff, (50, 1250), gt, lang)
-    free_text(img, sfx, F(fpath, 64, idx), (520, 600), gt, lang, glow=False)
+    free_text(img, sfx, F(fpath, 64, idx), (520, 600), gt, lang, glow=False, kind="sfx" if lang == "en" else "free")   # onomatopée anglaise : laissée telle quelle
     img.save(f"{OUT}/{name}.png"); json.dump(gt, open(f"{OUT}/{name}.json", "w"), ensure_ascii=False, indent=1)
 
 img = background(7); d = ImageDraw.Draw(img); gt = []
