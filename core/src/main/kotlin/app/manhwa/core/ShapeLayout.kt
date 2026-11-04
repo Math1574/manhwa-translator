@@ -44,6 +44,26 @@ class RowShape(val top: Float, val rowH: Float, val left: FloatArray, val right:
         return if (valid == 0) null else RowShape(t, 1f, l, r)
     }
 
+    /** Réunion de deux formes (mêmes coordonnées image) : rangées d'un pixel sur l'étendue verticale totale ; une rangée présente dans une seule forme est conservée. */
+    fun union(o: RowShape): RowShape {
+        val t = min(top, o.top); val b = max(bottom, o.bottom)
+        val n = max(1, (b - t).toInt())
+        val l = FloatArray(n); val r = FloatArray(n)
+        for (i in 0 until n) {
+            val y = t + i + 0.5f
+            val a = if (y >= top && y < bottom) ((y - top) / rowH).toInt().coerceIn(0, rows - 1) else -1
+            val c = if (y >= o.top && y < o.bottom) ((y - o.top) / o.rowH).toInt().coerceIn(0, o.rows - 1) else -1
+            val va = a >= 0 && left[a] <= right[a]; val vc = c >= 0 && o.left[c] <= o.right[c]
+            when {
+                va && vc -> { l[i] = min(left[a], o.left[c]); r[i] = max(right[a], o.right[c]) }
+                va -> { l[i] = left[a]; r[i] = right[a] }
+                vc -> { l[i] = o.left[c]; r[i] = o.right[c] }
+                else -> { l[i] = 1f; r[i] = 0f }
+            }
+        }
+        return RowShape(t, 1f, l, r)
+    }
+
     companion object {
         /**
          * Rectangle dont on retire l'intérieur de bulles voisines (ellipses inscrites dans [avoid], agrandies de [margin]) : un texte hors bulle posé

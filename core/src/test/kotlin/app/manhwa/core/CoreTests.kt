@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests(); openBubbleTests(); barrierShapeTests(); safetyTests()
+    groupingTests(); layoutTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); layoutV2Tests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests(); openBubbleTests(); barrierShapeTests(); safetyTests(); artEraseTests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -1279,5 +1279,91 @@ fun safetyTests() {
         // une page blanche sans aucun contour n'est pas une bulle
         val blank = ArraySrc(W, H, IntArray(W * H) { white })
         T.ok(!BubbleVerifier.verify(blank, 1f, RectF(120f, 110f, 580f, 450f), RectF(280f, 250f, 420f, 300f), W.toFloat(), H.toFloat()), "page blanche non confirmée")
+    }
+}
+
+fun artEraseTests() {
+    val white = 0xFFFFFFFF.toInt(); val black = 0xFF000000.toInt()
+    fun box(px: IntArray, w: Int, x0: Int, y0: Int, x1: Int, y1: Int, c: Int) { for (y in y0 until y1) for (x in x0 until x1) px[y * w + x] = c }
+    T.test("effacement sur dessin : une grande surface blanche voisine (bas d'une bulle) n'est pas prise pour des lettres") {
+        val w = 400; val h = 300; val px = IntArray(w * h) { 0xFF1C1624.toInt() }              // fond sombre
+        box(px, w, 0, 0, 400, 90, white)                                                          // bas de la bulle : surface blanche qui sort de la région
+        box(px, w, 120, 130, 140, 190, white); box(px, w, 160, 130, 180, 190, white)              // deux lettres blanches, cernées de noir
+        for (y in 126 until 194) for (x in 116 until 184) if (px[y * w + x] != white) px[y * w + x] = black
+        box(px, w, 120, 130, 140, 190, white); box(px, w, 160, 130, 180, 190, white)
+        val zone = TextErase.rectMask(w, h, listOf(intArrayOf(100, 110, 200, 210)), 40)
+        val tight = TextErase.rectMask(w, h, listOf(intArrayOf(100, 110, 200, 210)), 3)
+        val m = TextErase.artMask(px, w, h, zone, white, 2, Int.MAX_VALUE, tight, 6)
+        var bubble = 0; var letters = 0
+        for (y in 0 until h) for (x in 0 until w) if (m[y * w + x]) { if (y < 90) bubble++ else letters++ }
+        T.ok(letters > 1500, "lettres masquées : $letters")
+        T.ok(bubble < 300, "la bulle blanche n'est pas masquée : $bubble px")
+    }
+    T.test("effacement sur dessin : un texte noir cerné de blanc est reconnu cerné et son contour est effacé en entier") {
+        val w = 300; val h = 200; val gray = 0xFFB8B4B0.toInt()
+        val px = IntArray(w * h) { gray }
+        box(px, w, 90, 70, 210, 130, white)                      // contour blanc de 6 px
+        box(px, w, 96, 76, 204, 124, black)                      // lettres noires
+        val zone = TextErase.rectMask(w, h, listOf(intArrayOf(96, 76, 204, 124)), 30)
+        val info = TextErase.artMaskInfo(px, w, h, zone, black, 1)
+        T.ok(info.outlined, "contour reconnu")
+        var left = 0; for (y in 70 until 130) for (x in 90 until 96) if (!info.mask[y * w + x]) left++
+        T.ok(left < 30, "contour blanc non effacé : $left px")
+    }
+    T.test("remplissage par plus proche voisin : un bord net traversé par un trou reste net (pas de gris intermédiaire)") {
+        val w = 60; val h = 40; val px = IntArray(w * h) { i -> if (i % w < 30) white else black }
+        val mask = BooleanArray(w * h) { i -> val x = i % w; val y = i / w; x in 24..35 && y in 10..30 }
+        val out = TextErase.inpaintNearest(px, w, h, mask)
+        val lum = { c: Int -> (c shr 8) and 0xFF }
+        val grayCols = (10..30).maxOf { y -> (24..35).count { x -> lum(out[y * w + x]) in 70..185 } }
+        T.ok(lum(out[20 * w + 25]) > 180 && lum(out[20 * w + 34]) < 70, "blanc à gauche, noir à droite : ${lum(out[20 * w + 25])} / ${lum(out[20 * w + 34])}")
+        T.ok(grayCols <= 4, "transition de $grayCols colonnes au plus (la diffusion en laisserait 12)")
+    }
+    T.test("réunion de formes : l'emprise d'origine s'ajoute à la forme relevée sans la rétrécir") {
+        val a = RowShape.ellipse(100f, 100f, 300f, 200f); val r = RowShape.rect(90f, 130f, 310f, 170f)
+        val u = a.union(r)
+        T.ok(u.span(139f, 141f)!![0] <= 90.5f && u.span(139f, 141f)!![1] >= 309.5f, "rangée du milieu élargie au rectangle")
+        T.ok(u.span(104f, 106f)!!.let { it[1] - it[0] } <= a.span(104f, 106f)!!.let { it[1] - it[0] } + 1f, "haut de l'ellipse inchangé")
+    }
+    T.test("gros lettrage qui touche le contour d'une bulle : les lettres sont effacées, le contour et la queue restent") {
+        val W = 640; val H = 520; val px = IntArray(W * H) { white }
+        for (y in 0 until H) for (x in 0 until W) {
+            val ex = (x - 320).toDouble() / 250; val ey = (y - 280).toDouble() / 190; val d = Math.sqrt(ex * ex + ey * ey)
+            if (d in 0.985..1.015) px[y * W + x] = black                                           // contour de 6 px
+        }
+        for (y in 60 until 130) { px[y * W + 300 + (y - 60) / 6] = black; px[y * W + 301 + (y - 60) / 6] = black; px[y * W + 302 + (y - 60) / 6] = black }   // queue (traits fins)
+        // gros lettres épaisses (traits de 26 px) dont l'une touche le contour à gauche
+        for (y in 230 until 330) for (x in 76 until 112) px[y * W + x] = black                      // lettre soudée au contour (x≈70 : contour)
+        for (y in 230 until 330) for (x in 150 until 176) px[y * W + x] = black
+        for (y in 230 until 330) for (x in 214 until 240) px[y * W + x] = black
+        for (y in 230 until 330) for (x in 330 until 356) px[y * W + x] = black
+        for (y in 230 until 330) for (x in 400 until 426) px[y * W + x] = black
+        for (y in 230 until 330) for (x in 470 until 496) px[y * W + x] = black
+        val src = ArraySrc(W, H, px)
+        // boîte de lecture énorme (comme celle d'un gros lettrage) : elle recouvre presque toute la bulle
+        val plan = Erasure.plan(src, 1f, listOf(RectF(74f, 226f, 500f, 334f)), 120f, W.toFloat(), H.toFloat(), emptyList(), null, free = false, extra = listOf(RectF(76f, 228f, 498f, 332f)))
+        var ring = 0; var ringErased = 0; var letters = 0; var lettersErased = 0
+        if (plan != null) for (y in 0 until H) for (x in 0 until W) {
+            val i = (y - plan.y0) * plan.w + (x - plan.x0); if (x < plan.x0 || y < plan.y0 || x >= plan.x0 + plan.w || y >= plan.y0 + plan.h) continue
+            val ex = (x - 320).toDouble() / 250; val ey = (y - 280).toDouble() / 190; val d = Math.sqrt(ex * ex + ey * ey)
+            if (d in 0.99..1.01 && px[y * W + x] == black && (y < 225 || y > 335)) { ring++; if (plan.mask[i]) ringErased++ }     // contour loin des lettres
+            if (px[y * W + x] == black && x in 150 until 176 && y in 230 until 330) { letters++; if (plan.mask[i]) lettersErased++ }
+        }
+        T.ok(plan != null, "plan")
+        T.ok(ring > 500 && ringErased < ring / 10, "contour effacé : $ringErased sur $ring")
+        T.ok(letters > 1000 && lettersErased > letters * 9 / 10, "lettre isolée effacée : $lettersErased sur $letters")
+    }
+    T.test("effacement d'un texte libre dans une bulle non confirmée : son contour n'est pas effacé") {
+        val W = 700; val H = 560; val px = IntArray(W * H) { white }
+        for (y in 0 until H) for (x in 0 until W) {
+            val ex = (x - 350).toDouble() / 230; val ey = (y - 280).toDouble() / 170; val d = Math.sqrt(ex * ex + ey * ey)
+            if (d in 0.985..1.015) px[y * W + x] = black
+        }
+        for (y in 360 until 420) for (x in 280 until 420) if ((x + y) % 9 < 3) px[y * W + x] = black   // gros texte bas dans la bulle, près du contour
+        val src = ArraySrc(W, H, px)
+        val plan = Erasure.plan(src, 1f, listOf(RectF(280f, 360f, 420f, 420f)), 60f, W.toFloat(), H.toFloat(), emptyList(), null, free = true, confine = RectF(120f, 110f, 580f, 450f))
+        var outline = 0; var total = 0
+        if (plan != null) for (i in plan.mask.indices) if (plan.mask[i]) { val x = plan.x0 + i % plan.w; val y = plan.y0 + i / plan.w; val ex = (x - 350).toDouble() / 230; val ey = (y - 280).toDouble() / 170; if (Math.sqrt(ex * ex + ey * ey) in 0.98..1.02) outline++; total++ }
+        T.ok(plan != null && outline < 40, "pixels du contour effacés : $outline (masque $total)")
     }
 }

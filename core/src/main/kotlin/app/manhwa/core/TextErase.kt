@@ -66,6 +66,29 @@ object TextErase {
         return out
     }
 
+    /** Garde les composantes connexes de [src] dont la boîte englobante tient dans [maxW] × [maxH] : une lettre ou un mot, pas un contour de bulle qui l'entoure. */
+    fun limitSize(src: BooleanArray, w: Int, h: Int, maxW: Int, maxH: Int): BooleanArray {
+        val seen = BooleanArray(w * h); val out = BooleanArray(w * h); val queue = IntArray(w * h)
+        for (start in 0 until w * h) {
+            if (!src[start] || seen[start]) continue
+            var head = 0; var tail = 0; queue[tail++] = start; seen[start] = true
+            var x0 = w; var x1 = -1; var y0 = h; var y1 = -1
+            while (head < tail) {
+                val i = queue[head++]; val x = i % w; val y = i / w
+                if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y
+                for (dy in -1..1) for (dx in -1..1) {
+                    if (dx == 0 && dy == 0) continue
+                    val nx = x + dx; val ny = y + dy
+                    if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
+                    val j = ny * w + nx
+                    if (src[j] && !seen[j]) { seen[j] = true; queue[tail++] = j }
+                }
+            }
+            if (x1 - x0 + 1 <= maxW && y1 - y0 + 1 <= maxH) for (k in 0 until tail) out[queue[k]] = true
+        }
+        return out
+    }
+
     /** Pixels dont la couleur s'écarte de plus de [thr] du fond [bg]. */
     fun farMask(pixels: IntArray, bg: Int, thr: Int): BooleanArray = BooleanArray(pixels.size) { dist(pixels[it], bg) > thr }
 
@@ -91,6 +114,21 @@ object TextErase {
             }
             far
         }
+    }
+
+    /** Érosion (4 voisins) : retire [times] fois les pixels qui ont un voisin hors du masque (ou hors de l'image). */
+    fun erode(src: BooleanArray, w: Int, h: Int, times: Int): BooleanArray {
+        var cur = src
+        repeat(times) {
+            val nx = cur.copyOf()
+            for (y in 0 until h) for (x in 0 until w) {
+                val i = y * w + x
+                if (!cur[i]) continue
+                if (x == 0 || y == 0 || x == w - 1 || y == h - 1 || !cur[i - 1] || !cur[i + 1] || !cur[i - w] || !cur[i + w]) nx[i] = false
+            }
+            cur = nx
+        }
+        return cur
     }
 
     fun dilate(src: BooleanArray, w: Int, h: Int, times: Int, limit: BooleanArray? = null): BooleanArray {
@@ -177,22 +215,29 @@ object TextErase {
      */
     fun textComponents(
         pixels: IntArray, w: Int, h: Int, bg: Int, thr: Int, allowed: BooleanArray, grow: Int,
-        interior: BooleanArray? = null, core: BooleanArray? = null,
+        interior: BooleanArray? = null, core: BooleanArray? = null, thin: BooleanArray? = null, smallDim: Int = Int.MAX_VALUE,
     ): BooleanArray {
         val raw = BooleanArray(w * h) { dist(pixels[it], bg) > thr }
         val seen = BooleanArray(w * h)
         val keep = BooleanArray(w * h)
         val queue = IntArray(w * h)
         val maxArea = w * h / 2
+        // boîte englobante du cœur du texte : une composante qui la dépasse largement n'est pas du texte seul (contour de bulle soudé aux lettres)
+        var cx0 = w; var cx1 = -1; var cy0 = h; var cy1 = -1
+        if (core != null) for (i in 0 until w * h) if (core[i]) { val x = i % w; val y = i / w; if (x < cx0) cx0 = x; if (x > cx1) cx1 = x; if (y < cy0) cy0 = y; if (y > cy1) cy1 = y }
+        val coreW = cx1 - cx0 + 1; val coreH = cy1 - cy0 + 1
         for (start in 0 until w * h) {
             if (!raw[start] || seen[start]) continue
             var head = 0; var tail = 0
             queue[tail++] = start; seen[start] = true
-            var touchesBorder = false; var inAllowed = false; var inInterior = 0
+            var touchesBorder = false; var inAllowed = false; var inInterior = 0; var allowedN = 0; var outsideCore = 0; var inCoreN = 0
+            var bx0 = w; var bx1 = -1; var by0 = h; var by1 = -1
             while (head < tail) {
                 val i = queue[head++]; val x = i % w; val y = i / w
+                if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < by0) by0 = y; if (y > by1) by1 = y
                 if (x == 0 || y == 0 || x == w - 1 || y == h - 1) touchesBorder = true
-                if (allowed[i]) inAllowed = true
+                if (allowed[i]) { inAllowed = true; allowedN++ }
+                if (core != null) { if (core[i]) inCoreN++ else outsideCore++ }
                 if (interior != null && interior[i]) inInterior++
                 for (dy in -1..1) for (dx in -1..1) {
                     if (dx == 0 && dy == 0) continue
@@ -202,12 +247,33 @@ object TextErase {
                     if (raw[j] && !seen[j]) { seen[j] = true; queue[tail++] = j }
                 }
             }
-            val enclosed = !touchesBorder && tail < maxArea
+            // une vraie lettre (ou un mot) est pour l'essentiel dans la zone du texte ; une composante dont la majeure partie est hors de la zone est un contour de bulle
+            // (ou un dessin) auquel des lettres se touchent : on n'en efface que le cœur des lignes de texte, jamais le contour entier
+            val mostlyInZone = allowedN * 100 >= tail * 55
+            val enclosed = !touchesBorder && tail < maxArea && (mostlyInZone || inInterior * 2 >= tail && allowedN > 0 && tail < 4 * allowedN)
+            // composante qui déborde largement du cœur du texte : lettres épaisses soudées à un contour de bulle (fin). On sépare par ouverture morphologique : ce qui est plus
+            // fin que le trait des lettres (le contour, la queue) n'est jamais du texte à effacer ; les lettres gardent leur forme.
+            // un arc de contour de bulle (coupé par le seuil de détection) n'est pas du texte, même si la zone de lecture, élargie, le recouvre : une composante n'est du texte
+            // que si elle touche vraiment le cœur des lignes, ou si elle est petite (ponctuation, accent)
+            if (core != null && coreW > 0) {
+                val small = (bx1 - bx0 + 1) <= smallDim && (by1 - by0 + 1) <= smallDim
+                if (inCoreN * 100 < tail * 15 && !small) { if (thin != null) for (k in 0 until tail) thin[queue[k]] = true; continue }
+            }
+            val beyondCore = core != null && coreW > 0 && ((bx1 - bx0 + 1) > coreW * 1.25f + 6 || (by1 - by0 + 1) > coreH * 1.25f + 6)
+            if (core != null && tail >= 400 && beyondCore && outsideCore * 100 >= tail * 35) {
+                val comp = BooleanArray(w * h); val inCore = BooleanArray(w * h)
+                for (k in 0 until tail) { val q = queue[k]; comp[q] = true; if (core[q]) inCore[q] = true }
+                val sw = strokeWidth(inCore, w, h).let { if (it < 3f) strokeWidth(comp, w, h) else it }
+                val r = (sw * 0.3f).toInt().coerceIn(2, 8)
+                val opened = dilate(erode(comp, w, h, r), w, h, r, comp)
+                for (k in 0 until tail) { val q = queue[k]; if (opened[q]) keep[q] = true else thin?.set(q, true) }
+                continue
+            }
             when {
                 // lettre isolée : effacée entièrement, même si elle dépasse la boîte de l'OCR (mot omis, lettre débordante)
                 enclosed && (inAllowed || inInterior * 2 >= tail) -> for (k in 0 until tail) keep[queue[k]] = true
-                // composante reliée au bord (contour de la bulle, lettre collée au contour) : seulement le cœur des lignes de texte
-                touchesBorder && inAllowed && core != null -> for (k in 0 until tail) if (core[queue[k]]) keep[queue[k]] = true
+                // composante reliée au bord ou à un contour (lettre collée au contour) : seulement le cœur des lignes de texte
+                inAllowed && core != null -> for (k in 0 until tail) if (core[queue[k]]) keep[queue[k]] = true
             }
         }
         return dilate(keep, w, h, grow)
@@ -250,16 +316,187 @@ object TextErase {
      * pixels voisins du remplissage), légèrement dilatés. Contrairement à un rectangle, on n'efface que les lettres : le dessin
      * autour est conservé, et une éventuelle lueur diffuse reste (la traduction est redessinée par-dessus avec son propre contour).
      */
-    fun artMask(pixels: IntArray, w: Int, h: Int, allowed: BooleanArray, textColor: Int, grow: Int): BooleanArray {
-        // lettres = composantes isolées : une grande surface de couleur proche (fond d'un encadré voisin) touche le bord et est ignorée
-        val fill = enclosedOnly(BooleanArray(w * h) { allowed[it] && dist(pixels[it], textColor) <= 70 }, w, h)
-        val near = dilate(fill, w, h, 4)
-        val ring = ArrayList<Int>()
-        for (i in pixels.indices) if (near[i] && !fill[i] && allowed[i]) ring.add(pixels[i])
-        val stroke = if (ring.isEmpty()) textColor else ColorMath.median(ring.toIntArray())
-        val strokeSame = dist(stroke, textColor) < 50
-        val mask = BooleanArray(w * h) { fill[it] || (!strokeSame && near[it] && allowed[it] && dist(pixels[it], stroke) <= 45) }
-        return dilate(mask, w, h, grow, allowed)
+    fun artMask(pixels: IntArray, w: Int, h: Int, allowed: BooleanArray, textColor: Int, grow: Int, maxDim: Int = Int.MAX_VALUE, tight: BooleanArray? = null, maxReach: Int = 6): BooleanArray =
+        artMaskInfo(pixels, w, h, allowed, textColor, grow, maxDim, tight, maxReach).mask
+
+    /** Masque du texte sur un dessin et résultat de la mesure du contour (le texte est-il cerné d'un trait contrasté ?). */
+    class ArtMask(val mask: BooleanArray, val outlined: Boolean)
+
+    fun artMaskInfo(pixels: IntArray, w: Int, h: Int, allowed: BooleanArray, textColor: Int, grow: Int, maxDim: Int = Int.MAX_VALUE, tight: BooleanArray? = null, maxReach: Int = 6): ArtMask {
+        // lettres = composantes isolées : une grande surface de couleur proche (fond d'un encadré voisin, bas d'une bulle, cheveux blancs) n'est pas une lettre.
+        // L'isolement se juge sur toute la région (et non sur la seule zone autorisée, dont le bord coupe ces grandes surfaces et les ferait paraître isolées),
+        // puis on écarte toute composante plus grande qu'une lettre ([maxDim] : quelques hauteurs de ligne).
+        val color = BooleanArray(w * h) { dist(pixels[it], textColor) <= 70 }
+        val fill = enclosedMostlyIn(color, allowed, w, h, 0.7f)
+        // lettres dont le remplissage touche une grande surface de même couleur (texte posé sur le bord d'une bulle blanche) : écartées ci-dessus avec la bulle. On les
+        // récupère par leur contour : un pixel clair entouré de pixels sombres (contour noir de la lettre) est un pixel de lettre, un pixel de bulle ne l'est pas.
+        rescueOutlined(color, fill, tight ?: allowed, pixels, w, h, textColor)
+        // épaisseur du contour mesurée : couleur médiane à chaque distance du remplissage, comparée à celle du fond lointain. Un contour (blanc autour de lettres noires,
+        // noir autour de lettres blanches) a une couleur stable sur quelques pixels puis rejoint le fond ; sans contour, on n'efface que le lissage des bords
+        val dmax = 12
+        val dm = IntArray(w * h) { if (fill[it]) 0 else Int.MAX_VALUE }
+        run {
+            val queue = IntArray(w * h); var head = 0; var tail = 0
+            for (i in dm.indices) if (dm[i] == 0) queue[tail++] = i
+            while (head < tail) {
+                val i = queue[head++]; val d = dm[i]; if (d >= dmax) continue
+                val x = i % w; val y = i / w
+                for (dy in -1..1) for (dx in -1..1) {
+                    if (dx == 0 && dy == 0) continue
+                    val nx = x + dx; val ny = y + dy
+                    if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
+                    val j = ny * w + nx
+                    if (dm[j] == Int.MAX_VALUE) { dm[j] = d + 1; queue[tail++] = j }
+                }
+            }
+        }
+        val byD = Array(dmax + 1) { ArrayList<Int>() }
+        for (i in pixels.indices) { val d = dm[i]; if (d in 1..dmax && allowed[i] && !color[i]) byD[d].add(pixels[i]) }
+        // profil de luminance du contour : pour un texte sombre le contour est clair (et inversement). On compare le percentile « côté contour » de chaque couronne à la
+        // luminance médiane du fond lointain ; le contour est l'ensemble des couronnes qui gardent au moins la moitié du contraste maximal
+        val lightOutline = lum(textColor) < 0.5f
+        fun prof(d: Int): Float? {
+            val l = byD[d]; if (l.size < 12) return null
+            val v = FloatArray(l.size) { lum(l[it]) }; v.sort()
+            return v[((if (lightOutline) 0.85f else 0.15f) * (v.size - 1)).toInt()]
+        }
+        val farL = run {
+            val v = ArrayList<Float>(); for (d in dmax - 2..dmax) for (c in byD[d]) v.add(lum(c))
+            if (v.size < 12) null else { v.sort(); v[v.size / 2] }
+        }
+        val peak = if (farL == null) null else (2..4).mapNotNull { prof(it) }.let { if (lightOutline) it.maxOrNull() else it.minOrNull() }
+        val contrast = if (peak == null || farL == null) 0f else abs(peak - farL)
+        val outlined = contrast > 0.11f
+        var thick = 1
+        if (outlined && farL != null) { for (d in 2..dmax - 3) { val v = prof(d) ?: break; if (abs(v - farL) >= 0.5f * contrast) thick = d else break } }
+        val reach = if (outlined) min(thick + 1, maxReach) else 2
+        // pixels d'une couronne retenus : le lissage des bords (distance 1) toujours, puis ceux dont la luminance est du côté du contour (pas le fond du dessin)
+        val thr = if (outlined && farL != null && peak != null) farL + 0.4f * (peak - farL) else 0f
+        val mask = BooleanArray(w * h) { i ->
+            fill[i] || (allowed[i] && dm[i] <= reach && (dm[i] <= 2 || (outlined && (if (lightOutline) lum(pixels[i]) >= thr else lum(pixels[i]) <= thr))))
+        }
+        // halo de lissage (bords adoucis par le redimensionnement ou la compression) : les pixels voisins du masque qui s'écartent nettement du fond lointain sont absorbés,
+        // sur 3 pixels au plus. Sans cela, la reconstruction reprend ces gris clairs en bordure et laisse un fantôme clair des lettres.
+        val farRgb: Int? = run {
+            val l = ArrayList<Int>(); for (d in dmax - 2..dmax) l.addAll(byD[d])
+            if (l.size < 12) null else ColorMath.median(l.toIntArray())
+        }
+        var grown = mask
+        if (farRgb != null) {
+            repeat(3) {
+                val nxt = grown.copyOf()
+                for (y in 1 until h - 1) for (x in 1 until w - 1) {
+                    val i = y * w + x
+                    if (grown[i] || !allowed[i] || dist(pixels[i], farRgb) <= 28) continue
+                    if (grown[i - 1] || grown[i + 1] || grown[i - w] || grown[i + w] || grown[i - w - 1] || grown[i - w + 1] || grown[i + w - 1] || grown[i + w + 1]) nxt[i] = true
+                }
+                grown = nxt
+            }
+        }
+        return ArtMask(dilate(grown, w, h, grow, allowed), outlined)
+    }
+
+    /**
+     * Composantes connexes de [src] (calculées sur toute la région) qui ne touchent pas le bord, n'en occupent pas plus de la moitié et sont pour au moins [ratio]
+     * de leurs pixels dans [zone]. Une lettre est entièrement dans la zone du texte ; une grande surface (bas d'une bulle, cheveux blancs) la dépasse largement.
+     */
+    private fun enclosedMostlyIn(src: BooleanArray, zone: BooleanArray, w: Int, h: Int, ratio: Float): BooleanArray {
+        val seen = BooleanArray(w * h); val out = BooleanArray(w * h); val queue = IntArray(w * h)
+        for (start in 0 until w * h) {
+            if (!src[start] || seen[start]) continue
+            var head = 0; var tail = 0; queue[tail++] = start; seen[start] = true; var border = false; var inside = 0
+            while (head < tail) {
+                val i = queue[head++]; val x = i % w; val y = i / w
+                if (zone[i]) inside++
+                if (x == 0 || y == 0 || x == w - 1 || y == h - 1) border = true
+                for (dy in -1..1) for (dx in -1..1) {
+                    if (dx == 0 && dy == 0) continue
+                    val nx = x + dx; val ny = y + dy
+                    if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
+                    val j = ny * w + nx
+                    if (src[j] && !seen[j]) { seen[j] = true; queue[tail++] = j }
+                }
+            }
+            if (!border && tail < w * h / 2 && inside >= ratio * tail) for (k in 0 until tail) if (zone[queue[k]]) out[queue[k]] = true
+        }
+        return out
+    }
+
+    private fun rescueOutlined(color: BooleanArray, fill: BooleanArray, allowed: BooleanArray, pixels: IntArray, w: Int, h: Int, textColor: Int) {
+        // contour sombre autour du remplissage : on ne cherche que si le texte est clair (cerné d'un trait plus sombre)
+        val tl = lum(textColor)
+        if (tl < 0.6f) return
+        val dark = BooleanArray(w * h) { lum(pixels[it]) < 0.30f }
+        // image intégrale des pixels sombres : part de sombre dans une fenêtre 9×9
+        val integ = IntArray((w + 1) * (h + 1))
+        for (y in 0 until h) { var row = 0; for (x in 0 until w) { row += if (dark[y * w + x]) 1 else 0; integ[(y + 1) * (w + 1) + x + 1] = integ[y * (w + 1) + x + 1] + row } }
+        val extra = BooleanArray(w * h)
+        for (y in 4 until h - 4) for (x in 4 until w - 4) {
+            val i = y * w + x
+            if (!allowed[i] || fill[i] || !color[i]) continue
+            val sum = integ[(y + 5) * (w + 1) + x + 5] - integ[(y - 4) * (w + 1) + x + 5] - integ[(y + 5) * (w + 1) + x - 4] + integ[(y - 4) * (w + 1) + x - 4]
+            if (sum >= 22) extra[i] = true           // plus de 27 % de sombre autour (contour de lettre)
+        }
+        // le cœur d'un trait épais est à plus de 4 px du contour : on prolonge de 5 px, dans la couleur du texte et la zone seulement
+        val grown = dilate(extra, w, h, 5, BooleanArray(w * h) { color[it] && allowed[it] })
+        for (i in fill.indices) if (grown[i]) fill[i] = true
+    }
+
+    /** Retire de [m] les composantes connexes dont la boîte englobante dépasse [maxDim] pixels en largeur ou en hauteur. */
+    private fun dropLarge(m: BooleanArray, w: Int, h: Int, maxDim: Int) {
+        val seen = BooleanArray(w * h); val queue = IntArray(w * h)
+        for (start in 0 until w * h) {
+            if (!m[start] || seen[start]) continue
+            var head = 0; var tail = 0; queue[tail++] = start; seen[start] = true
+            var x0 = w; var x1 = -1; var y0 = h; var y1 = -1
+            while (head < tail) {
+                val i = queue[head++]; val x = i % w; val y = i / w
+                if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y
+                for (dy in -1..1) for (dx in -1..1) {
+                    if (dx == 0 && dy == 0) continue
+                    val nx = x + dx; val ny = y + dy
+                    if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
+                    val j = ny * w + nx
+                    if (m[j] && !seen[j]) { seen[j] = true; queue[tail++] = j }
+                }
+            }
+            if (x1 - x0 + 1 > maxDim || y1 - y0 + 1 > maxDim) for (k in 0 until tail) m[queue[k]] = false
+        }
+    }
+
+    /**
+     * Reconstruction par plus proche voisin : chaque pixel masqué prend la couleur du pixel non masqué le plus proche, puis un léger lissage (2 passes de 3×3) adoucit les raccords.
+     * Contrairement à la diffusion, qui mélange le blanc d'une bulle et le fond sombre d'un dessin en un gris voilé, un bord net reste net (à l'épaisseur d'un trait près).
+     */
+    fun inpaintNearest(pixels: IntArray, w: Int, h: Int, mask: BooleanArray): IntArray {
+        val out = pixels.copyOf()
+        val n = w * h
+        val src = IntArray(n) { -1 }
+        val queue = IntArray(n); var head = 0; var tail = 0
+        for (i in 0 until n) if (!mask[i]) { src[i] = i; queue[tail++] = i }
+        if (tail == 0 || tail == n) return out
+        while (head < tail) {
+            val i = queue[head++]; val x = i % w; val y = i / w
+            for (dy in -1..1) for (dx in -1..1) {
+                if (dx == 0 && dy == 0) continue
+                val nx = x + dx; val ny = y + dy
+                if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
+                val j = ny * w + nx
+                if (src[j] < 0) { src[j] = src[i]; queue[tail++] = j }
+            }
+        }
+        for (i in 0 until n) if (mask[i] && src[i] >= 0) out[i] = pixels[src[i]]
+        repeat(2) {
+            val cur = out.copyOf()
+            for (y in 1 until h - 1) for (x in 1 until w - 1) {
+                val i = y * w + x
+                if (!mask[i]) continue
+                var sr = 0; var sg = 0; var sb = 0
+                for (dy in -1..1) for (dx in -1..1) { val c = cur[(y + dy) * w + x + dx]; sr += r(c); sg += g(c); sb += b(c) }
+                out[i] = pack(sr / 9, sg / 9, sb / 9)
+            }
+        }
+        return out
     }
 
     /** Remplace les pixels masqués par une reconstruction lisse du fond (diffusion multi-échelle depuis les pixels voisins non masqués). */
@@ -371,16 +608,18 @@ object TextErase {
         }
         // abords : pixels hors masque à moins de ~40 px du masque et sans gros contour (le grain, pas les bords de dessin)
         val near = dilate(mask, w, h, 40)
-        var acc = 0.0; var cnt = 0
+        val devs = ArrayList<Float>()
         for (y in 2 until h - 2) for (x in 2 until w - 2) {
             val i = y * w + x
             if (mask[i] || !near[i]) continue
             val d = abs(gray[i] - blur(x, y))
-            if (d < 40) { acc += d * d; cnt++ }
+            if (d < 40) devs.add(d.toFloat())
         }
-        if (cnt < 300) return fill
-        val sigma = kotlin.math.sqrt(acc / cnt)
-        if (sigma < 4.0) return fill
+        if (devs.size < 300) return fill
+        // écart absolu médian (robuste) : les bords de dessin, rares, ne gonflent plus le grain mesuré ; un fond lisse (dégradé sombre) donne un grain nul
+        devs.sort()
+        val sigma = devs[devs.size / 2] * 1.4826 / 0.67      // l'écart au flou 5×5 sous-estime le bruit : correction empirique
+        if (sigma < 3.0) return fill
         val rnd = java.util.Random(seed); val out = fill.copyOf()
         val amp = sigma * 0.9
         for (i in 0 until n) if (mask[i]) {

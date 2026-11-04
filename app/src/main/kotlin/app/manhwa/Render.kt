@@ -239,7 +239,7 @@ object PageRenderer {
         val neighborAll = blocksAll.filter { it !== b }.mapNotNull { verified[it.id] ?: it.bubble }.distinct()
         val neighborBubbles = neighborAll.filter { nb -> !containsMe(nb) || bubble == null }
         val outside = neighborAll.filter { nb -> !containsMe(nb) }
-        val plan = if (src != null) try { Erasure.plan(src, s, lineBoxes, lineH, iw, ih, others, bubble, outside.filter { isRect(it) }, free = bubble == null, outlines = if (bubble == null) neighborBubbles else emptyList(), extra = listOfNotNull(zone), protectRound = outside.filter { !isRect(it) }) } catch (e: Throwable) { null } else null
+        val plan = if (src != null) try { Erasure.plan(src, s, lineBoxes, lineH, iw, ih, others, bubble, outside.filter { isRect(it) }, free = bubble == null, outlines = if (bubble == null) neighborBubbles else emptyList(), extra = listOfNotNull(zone), protectRound = outside.filter { !isRect(it) }, confine = if (bubble == null) b.bubble?.takeIf { it.area >= 1.6f * lineBoxes.reduce { x, y -> x.union(y) }.area } else null, confineRect = b.bubble?.let { isRect(it) } ?: false) } catch (e: Throwable) { null } else null
         val flat = plan?.mode == Erasure.Mode.FLAT
         val rectangular = flat && plan?.shape == null && union.width > 2.2f * union.height && lineBoxes.size <= 2
         // hauteur de ligne pour le choix du style : mesurée sur les lettres (les boîtes d'une ligne inclinée sont gonflées)
@@ -248,7 +248,9 @@ object PageRenderer {
         val style = TextErase.chooseFont(b.source, lineHStyle, medianLine, flat, plan?.outlined ?: false, rectangular)
         val text = if (target == "fr") Typography.french(b.translated) else b.translated
         val obstacles = blocksAll.filter { it !== b }.map { o -> o.lineBoxes.ifEmpty { listOf(o.box) }.reduce { x, y -> x.union(y) } }
-        val container = if (bubble == null) b.bubble else null
+        // boîte de bulle non confirmée : retenue seulement si elle laisse de la marge autour du texte. Un texte libre que le détecteur a aussi marqué « bulle » a une boîte qui
+        // épouse son texte : l'ellipse inscrite le rognerait et le réduirait
+        val container = if (bubble == null) b.bubble?.takeIf { it.area >= 1.6f * union.area } else null
         return Prep(b, plan, style, text, bubble, obstacles, neighborBubbles, emptyList(), (bubble ?: container)?.let { isRect(it) } ?: false, container)
     }
 
@@ -308,7 +310,7 @@ object PageRenderer {
     }
 
     /** Résultat de la mise en page d'un bloc : police, pinceau de mesure, lignes placées. */
-    private class Laid(val font: FontChoice, val paint: Paint, val fit: ShapeFit, val art: Boolean, val allCaps: Boolean, val em: Float, val stepRatio: Float) {
+    private class Laid(val font: FontChoice, val paint: Paint, val fit: ShapeFit, val art: Boolean, val allCaps: Boolean, val em: Float, val stepRatio: Float, val lay: String = "") {
         /** Rectangle de chaque ligne placée : sert à ne pas recouvrir le texte d'un autre bloc avec un aplat d'effacement. */
         fun lineRects(margin: Float): List<RectF> = fit.lines.map { ln -> RectF(ln.cx - ln.width / 2f - margin, ln.top - margin, ln.cx + ln.width / 2f + margin, ln.top + fit.lineStep + margin) }
 
@@ -336,7 +338,7 @@ object PageRenderer {
         // la hauteur de ligne mesurée dans l'axe du texte borne la hauteur d'encre (lettres collées à un contour ou à une autre ligne)
         val capLimit = if (!b.vertical && lineH > 0f) lineH / 1.12f else Float.MAX_VALUE
         val baseH = if (inkH > 0f) min(inkH, capLimit) else lineH * 0.8f
-        val em = (if (allCaps && !b.vertical) baseH / cap else if (b.vertical) baseH / 0.95f else baseH / 0.85f) * userScale.coerceIn(0.5f, 2f)
+        val emInk = (if (allCaps && !b.vertical) baseH / cap else if (b.vertical) baseH / 0.95f else baseH / 0.85f) * userScale.coerceIn(0.5f, 2f)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG or Paint.LINEAR_TEXT_FLAG).apply {
             typeface = font.typeface; letterSpacing = font.letterSpacing; textScaleX = font.scaleX; textSkewX = font.skew
         }
@@ -359,11 +361,21 @@ object PageRenderer {
             val inset = RectF(c.left + c.width * k, c.top + c.height * k, c.right - c.width * k, c.bottom - c.height * k)
             if (p.bubbleRect) RowShape.rect(inset.left, inset.top, inset.right, inset.bottom) else RowShape.ellipse(inset.left, inset.top, inset.right, inset.bottom)
         }
-        val margin = max(4f, em * 0.14f)
         // majuscules accentuées : l'accent d'une ligne ne doit pas toucher la ligne du dessus
         val accents = TextNormalizer.isAllCaps(p.text) && p.text.any { it in "ÀÂÄÉÈÊËÎÏÔÖÙÛÜÇŒŸ" }
         val step = if (accents) max(stepRatio, 1.14f) else stepRatio
         val centerY = (union.top + union.bottom) / 2f
+        // Taille : la traduction doit ressembler au texte d'origine par la taille et l'emplacement. Deux estimations indépendantes : la hauteur des lettres mesurée sur l'encre
+        // (fragile : contours, texte incliné, graisse) et la taille à laquelle la traduction TIENT dans l'emprise d'origine (un peu agrandie). On retient la première, bornée
+        // entre 85 % et 110 % de la seconde, et jamais plus haute que la ligne d'origine : plus d'agrandissement de la zone pour garder des lettres hautes, plus de texte minuscule.
+        val origPadX = union.width * 0.05f + 4f; val origPadY = union.height * 0.08f + 4f
+        val origRect = RowShape.rect(union.left - origPadX, union.top - origPadY, union.right + origPadX, union.bottom + origPadY)
+        val marginInk = max(4f, emInk * 0.14f)
+        val fpFit = if (b.vertical) null else ShapeLayout.fit(origRect, centerY, p.text, measurer, emInk * 3f, max(5f, emInk * 0.3f), step, marginInk)
+        val sFp = if (fpFit != null && fpFit.fits && fpFit.lines.isNotEmpty()) fpFit.size else 0f
+        val lineCap = 1.05f * max(max(lineH, pitch), 1f)
+        val em = if (sFp > 0f) min(min(max(emInk, 0.85f * sFp), 1.1f * sFp), lineCap).coerceAtLeast(5f) else emInk
+        val margin = max(4f, em * 0.14f)
         val fixedShape = plan?.shape ?: bubbleShape
         // garde-fou indépendant de la détection : forme relevée sur les pixels (premier trait sombre de chaque côté du texte), pour les fonds unis. Le texte n'est jamais
         // posé sur un contour ou un dessin, même si la bulle n'a pas été reconnue ou si le remplissage de la bulle a fui par un trou du contour.
@@ -380,16 +392,20 @@ object PageRenderer {
         // bulle ronde confirmée : jamais au-delà de son ellipse (un contour ouvert laisse la forme relevée déborder sur la page)
         val ellipseLimit: RowShape? = limitBox?.takeIf { !p.bubbleRect }?.let { c -> RowShape.ellipse(c.left + c.width * 0.015f, c.top + c.height * 0.015f, c.right - c.width * 0.015f, c.bottom - c.height * 0.015f) }
         val fit: ShapeFit = if (fixedShape != null) {
-            val base = ShapeLayout.fit(fixedShape, centerY, p.text, measurer, em, max(5f, em * 0.4f), step, margin)
-            var constrained: RowShape? = fixedShape
+            // l'emprise d'origine reste toujours disponible dans la bulle (le texte d'origine y tenait), bornée par l'ellipse un peu élargie : la forme relevée, parfois trop
+            // étroite (bords en dégradé, lueur), ne doit pas imposer un texte plus petit que l'original
+            val origInBubble = limitBox?.takeIf { !p.bubbleRect }?.let { c -> origRect.intersect(RowShape.ellipse(c.left - c.width * 0.06f, c.top - c.height * 0.06f, c.right + c.width * 0.06f, c.bottom + c.height * 0.06f)) } ?: origRect
+            val widened = fixedShape.union(origInBubble)
+            val base = ShapeLayout.fit(widened, centerY, p.text, measurer, em, max(5f, em * 0.4f), step, margin)
+            var constrained: RowShape? = widened
             if (ellipseLimit != null) constrained = constrained?.intersect(ellipseLimit)
             if (guard != null) constrained = constrained?.intersect(guard)
-            val alt = if (constrained != null && constrained !== fixedShape) ShapeLayout.fit(constrained, centerY, p.text, measurer, em, max(5f, em * 0.4f), step, margin) else null
+            val alt = if (constrained != null && constrained !== widened) ShapeLayout.fit(constrained, centerY, p.text, measurer, em, max(5f, em * 0.4f), step, margin) else null
             // on garde la mise en page contrainte si elle tient (ou si l'autre ne tenait pas) sans rétrécir le texte de plus de moitié
             if (alt != null && alt.lines.isNotEmpty() && (alt.fits || !base.fits) && alt.size >= 0.55f * base.size) alt else base
         } else {
             var best: ShapeFit? = null
-            for (g in floatArrayOf(if (art) 0.12f else 0.06f, 0.3f, 0.55f, 0.9f)) {
+            for (g in floatArrayOf(if (art) 0.08f else 0.05f, 0.16f, 0.3f, 0.55f)) {
                 val area = LayoutArea.expand(union, g, p.obstacles, iw, ih, p.hardObstacles)
                 val near = p.neighborBubbles.filter { nb -> nb.left < area.right && nb.right > area.left && nb.top < area.bottom && nb.bottom > area.top }
                 // contre une bulle voisine : lignes réparties autour de l'ellipse (forme par rangées) OU bloc compact au-dessous / à côté de la bulle
@@ -409,17 +425,18 @@ object PageRenderer {
                     if (cur == null || (cand.fits && !cur.fits) || (cand.fits == cur.fits && cand.size > cur.size * 1.02f)) best = cand
                 }
                 val bestNow = best
-                if (bestNow != null && bestNow.fits && bestNow.size >= em * 0.92f) break
+                if (bestNow != null && bestNow.fits && bestNow.size >= em * 0.72f) break
             }
             best ?: ShapeLayout.fit(RowShape.rect(union.left, union.top, union.right, union.bottom), centerY, p.text, measurer, em, max(5f, em * 0.4f), step, margin)
         }
         if (fit.lines.isEmpty()) return null
-        return Laid(font, paint, fit, art, allCaps, em, stepRatio)
+        val lay = "encre=%.0f emprise=%.0f ligne=%.0f pas=%.0f cible=%.0f taille=%.0f forme=%s".format(emInk, sFp, lineH, pitch, em, fit.size, if (fixedShape == null) "libre" else if (plan?.shape != null) "relevée" else "ellipse")
+        return Laid(font, paint, fit, art, allCaps, em, stepRatio, lay)
     }
 
     private fun paintBlock(s: Float, p: Prep, laid: Laid, iw: Float, ih: Float, othersPlaced: List<RectF> = emptyList()): Pair<JSONObject, JSONObject>? {
         val b = p.block; val plan = p.plan
-        val font = laid.font; val paint = laid.paint; val fit = laid.fit; val art = laid.art; val allCaps = laid.allCaps; val em = laid.em; val stepRatio = laid.stepRatio
+        val font = laid.font; val paint = laid.paint; val fit = laid.fit; val art = laid.art; val allCaps = laid.allCaps; val em = laid.em; val stepRatio = laid.stepRatio; val lay = laid.lay
 
         // zone du patch : région effacée + toutes les lignes placées
         var l = Float.MAX_VALUE; var t = Float.MAX_VALUE; var r = -Float.MAX_VALUE; var bt = -Float.MAX_VALUE
@@ -496,7 +513,7 @@ object PageRenderer {
                 .put("fg", "#%06x".format(fg and 0xFFFFFF)).put("fillMean", "#%06x".format((plan?.fillMean ?: 0) and 0xFFFFFF)).put("planBg", "#%06x".format((plan?.bg ?: 0) and 0xFFFFFF))
                 .put("mode", plan?.mode?.name ?: "NONE").put("outlined", plan?.outlined ?: false)
                 .put("fits", fit.fits).put("lines", fit.lines.size).put("shape", plan?.shape != null)
-                .put("kind", b.kind).put("bubbleOk", p.bubble != null).put("rectBubble", p.bubbleRect)
+                .put("kind", b.kind).put("bubbleOk", p.bubble != null).put("rectBubble", p.bubbleRect).put("lay", lay)
                 .put("erase", plan?.let { pl -> var n = 0; for (m in pl.mask) if (m) n++; Math.round(n / (s * s)) } ?: 0)
                 .put("orig", JSONArray(b.lineBoxes.ifEmpty { listOf(b.box) }.reduce { a, c -> a.union(c) }.let { u -> listOf(u.left, u.top, u.right, u.bottom).map { v -> Math.round(v) } }))
                 .put("cont", b.bubble?.let { c -> JSONArray(listOf(c.left, c.top, c.right, c.bottom).map { v -> Math.round(v) }) } ?: JSONObject.NULL)
