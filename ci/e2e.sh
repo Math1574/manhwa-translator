@@ -144,7 +144,7 @@ chk "retour de la fiche vers la bibliothèque" $(has lib2 'Historique')
 tapt lib2 "=Réglages" 1; sleep 2; uidump set; shot ui 4
 chk "réglages : une carte par thème" $([ "$(has set 'Reconnaissance du texte')" = 1 ] && [ "$(has set 'Navigation')" = 1 ] && [ "$(has set 'Donn')" = 1 ] && [ "$(has set 'Glossaire')" = 1 ] && echo 1 || echo 0)
 tapt set "=Traduction" 1 top; sleep 2; uidump settr
-chk "réglages : la carte Traduction ouvre ses options (onomatopées)" $(has settr 'onomatop')
+chk "réglages : la carte Traduction ouvre ses options (langues, moteur)" $([ "$(has settr 'Langue du texte')" = 1 ] && [ "$(has settr 'Moteur de traduction')" = 1 ] && echo 1 || echo 0)
 adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump set2
 tapt set2 "=Lecture" 1 top; sleep 2; uidump setrd; shot ui 6
 chk "réglages : la carte Lecture ouvre ses options (bouton, barres)" $([ "$(has setrd 'Masquer les barres')" = 1 ] && echo 1 || echo 0)

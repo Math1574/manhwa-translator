@@ -32,9 +32,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -68,7 +70,10 @@ fun AppBackground(modifier: Modifier = Modifier, content: @Composable BoxScope.(
         val c = Offset(size.width * 0.82f, size.height * 0.05f); val r = size.width * 0.95f
         drawCircle(Brush.radialGradient(listOf(Color.hsv((h + 12f) % 360f, 0.40f, 1f).copy(alpha = 0.17f), Color.Transparent), center = c, radius = r), radius = r, center = c)
     } else Modifier
-    Box(modifier.then(base).then(moon), content = content)
+    // couleur de texte et d'icônes par défaut : sans surface Material autour, elle serait noire (illisible sur ce fond sombre)
+    CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onBackground) {
+        Box(modifier.then(base).then(moon), content = content)
+    }
 }
 
 /** Carte « verre » : voile blanc translucide, liseré lumineux dégradé, et petit rebond quand on la touche. */

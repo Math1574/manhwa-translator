@@ -121,7 +121,7 @@ private fun Root(graph: AppGraph) {
 
     AppBackground(Modifier.fillMaxSize()) {
     Scaffold(
-        containerColor = Color.Transparent,
+        containerColor = Color.Transparent, contentColor = MaterialTheme.colorScheme.onBackground,
         bottomBar = {
             AnimatedVisibility(visible = !c.fullscreen && !readingFree, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                 GlowNavBar(tabs, tab) { tab = it }
