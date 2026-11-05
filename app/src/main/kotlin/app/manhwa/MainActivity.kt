@@ -40,11 +40,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 
 class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
+        handleResume(intent)
         TestHooks.maybeRun(applicationContext, (application as App).graph, intent)
+    }
+
+    /** Ouverture par le raccourci « Reprendre la lecture » de l'icône. */
+    private fun handleResume(intent: android.content.Intent?) {
+        val url = intent?.getStringExtra(ResumeShortcut.EXTRA_URL) ?: return
+        val pct = intent.getIntExtra(ResumeShortcut.EXTRA_PCT, 0)
+        intent.removeExtra(ResumeShortcut.EXTRA_URL)
+        (application as App).graph.controller.openFromShortcut(url, pct)
     }
 
     /** L'avancement de lecture n'est écrit qu'à intervalles espacés : on le range quand l'application quitte l'écran. */
@@ -56,9 +66,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val graph = (application as App).graph
+        handleResume(intent)
         TestHooks.maybeRun(applicationContext, graph, intent)
         setContent {
-            ManhwaTheme { Root(graph) }
+            ManhwaTheme(graph.settingsStore.settings) { Root(graph) }
         }
     }
 }
@@ -73,6 +84,15 @@ private fun Root(graph: AppGraph) {
     BackHandler(enabled = c.fullscreen || tab != 0 || c.canGoBack) {
         if (c.fullscreen) c.exitFullscreen() else if (tab != 0) tab = 0 else c.back()
     }
+
+    // ouverture par le raccourci de l'icône : retour sur l'onglet Lecture
+    LaunchedEffect(c.readingTick) { if (c.readingTick > 0) tab = 0 }
+
+    // couleur des barres système : celle du fond choisi dans les réglages d'apparence
+    val look = LocalLook.current
+    val bgColor = if (look.background == "noir") Color.Black else androidx.compose.ui.graphics.Color.hsv(look.hue, 0.78f, 0.075f)
+    val barActivity = LocalContext.current as? Activity
+    SideEffect { barActivity?.window?.let { it.statusBarColor = bgColor.toArgb(); it.navigationBarColor = bgColor.toArgb() } }
 
     // Plein écran : barres système masquées (réapparition par balayage depuis le bord), contenu jusque dans l'encoche.
     val view = LocalView.current
@@ -99,8 +119,9 @@ private fun Root(graph: AppGraph) {
     val shownTab = if (tab != 0) tab else lastOther
     SideEffect { if (tab != 0) lastOther = tab }
 
+    AppBackground(Modifier.fillMaxSize()) {
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = Color.Transparent,
         bottomBar = {
             AnimatedVisibility(visible = !c.fullscreen && !readingFree, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                 GlowNavBar(tabs, tab) { tab = it }
@@ -112,10 +133,10 @@ private fun Root(graph: AppGraph) {
             BrowserScreen(graph)
             AnimatedVisibility(
                 visible = tab != 0,
-                enter = fadeIn(tween(170)) + slideInVertically(tween(230)) { it / 28 },
-                exit = fadeOut(tween(120)),
+                enter = fadeIn(tween(190)) + slideInVertically(tween(260)) { it / 28 },
+                exit = fadeOut(tween(130)),
             ) {
-                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                AppBackground(Modifier.fillMaxSize()) {
                     when (shownTab) {
                         1 -> LibraryScreen(graph) { url, resumeAt -> c.load(url, resumeAt); tab = 0 }
                         else -> SettingsRoot(graph)
@@ -123,5 +144,6 @@ private fun Root(graph: AppGraph) {
                 }
             }
         }
+    }
     }
 }

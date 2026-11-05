@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
@@ -26,8 +28,6 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -35,7 +35,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -46,6 +45,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.manhwa.core.BrowsingLibrary
@@ -76,77 +78,100 @@ fun LibraryScreen(graph: AppGraph, onOpen: (url: String, resumeAt: Int) -> Unit)
 @Composable
 private fun LibraryHome(graph: AppGraph, onOpenSeries: (String) -> Unit, onHistory: () -> Unit, onOpen: (String, Int) -> Unit) {
     val lib = graph.library.library
+    val cs = MaterialTheme.colorScheme
     val now = System.currentTimeMillis()
     val series = remember(lib) { lib.series() }
     var onlyFav by remember { mutableStateOf(false) }
     val shown = if (onlyFav) series.filter { it.favorite } else series
-    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    val seen = remember { HashSet<Any>() }
+    val read = series.sumOf { it.doneChapters }
+    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
-            Row(Modifier.fillMaxWidth().padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Bibliothèque", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
-                TextButton(onClick = onHistory) {
-                    Icon(AppIcons.Clock, null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Historique")
-                }
-            }
+            ScreenHeader(
+                "Bibliothèque",
+                if (series.isEmpty()) "Vos lectures apparaîtront ici" else "${series.size} œuvre${if (series.size > 1) "s" else ""} · $read chapitre${if (read > 1) "s" else ""} lu${if (read > 1) "s" else ""}",
+            )
         }
         if (series.isEmpty()) {
             item {
-                Text(
-                    "Les œuvres que vous lisez apparaîtront ici, avec leurs chapitres et l'endroit où vous vous êtes arrêté. Ouvrez un chapitre dans l'onglet Lire pour commencer.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium,
-                )
+                GlassCard(Modifier.fillMaxWidth(), contentPadding = 22.dp) {
+                    Text("Rien à reprendre pour l'instant", style = MaterialTheme.typography.titleLarge)
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Ouvrez un chapitre dans l'onglet Lecture : l'œuvre, ses chapitres et l'endroit où vous vous êtes arrêté s'ajouteront ici tout seuls.",
+                        color = cs.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
             }
         } else {
             val last = series.first()
             item {
-                Card(
-                    Modifier.fillMaxWidth().glowClickable { onOpen(last.lastUrl, resumeAt(last.percent, last.chapters > 0 && lib.progressOf(last.lastUrl)?.done == true)) },
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                ) {
-                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("Continuer la lecture", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                        Text(last.title, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimaryContainer, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Text(
-                            listOfNotNull(last.chapter, if (last.percent > 0) "${last.percent} %" else null, RelativeTime.fr(now, last.lastVisited)).joinToString(" · "),
-                            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
-                        if (last.percent > 0) LinearProgressIndicator(progress = { last.percent / 100f }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                Entrance("resume", 0, seen) {
+                    Box(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp))
+                            .background(Brush.linearGradient(listOf(cs.primaryContainer, cs.secondaryContainer)))
+                            .clickable { onOpen(last.lastUrl, resumeAt(last.percent, lib.progressOf(last.lastUrl)?.done == true)) }
+                            .padding(20.dp),
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("CONTINUER LA LECTURE", style = MaterialTheme.typography.labelMedium, color = cs.onPrimaryContainer.copy(alpha = 0.75f))
+                            Text(last.title, style = MaterialTheme.typography.headlineSmall, color = cs.onPrimaryContainer, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(
+                                listOfNotNull(last.chapter, if (last.percent > 0) "${last.percent} %" else null, RelativeTime.fr(now, last.lastVisited)).joinToString(" · "),
+                                style = MaterialTheme.typography.bodyMedium, color = cs.onPrimaryContainer.copy(alpha = 0.85f),
+                            )
+                            if (last.percent > 0) {
+                                LinearProgressIndicator(
+                                    progress = { last.percent / 100f }, color = cs.tertiary, trackColor = Color.White.copy(alpha = 0.18f),
+                                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(6.dp).clip(CircleShape),
+                                )
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            GradientButton("Reprendre", { onOpen(last.lastUrl, resumeAt(last.percent, lib.progressOf(last.lastUrl)?.done == true)) })
+                        }
                     }
                 }
             }
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
                     FilterChip(selected = !onlyFav, onClick = { onlyFav = false }, label = { Text("Toutes (${series.size})") })
                     FilterChip(selected = onlyFav, onClick = { onlyFav = true }, label = { Text("Favoris (${series.count { it.favorite }})") })
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = onHistory) {
+                        Icon(AppIcons.Clock, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Historique")
+                    }
                 }
             }
-            if (shown.isEmpty()) item { Text("Aucun favori : touchez le cœur dans la barre de lecture ou dans la fiche d'une œuvre.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
-            items(shown, key = { it.key }) { e -> SeriesRow(graph, e, now) { onOpenSeries(e.key) } }
+            if (shown.isEmpty()) item { Text("Aucun favori : touchez le cœur dans la barre de lecture ou dans la fiche d'une œuvre.", color = cs.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
+            items(shown.withIndex().toList(), key = { it.value.key }) { (i, e) -> Entrance(e.key, i + 1, seen) { SeriesRow(graph, e, now) { onOpenSeries(e.key) } } }
         }
         if (lib.favorites.isNotEmpty()) {
-            item { Text("Pages enregistrées", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 10.dp)) }
+            item { SectionLabel("Pages enregistrées") }
             items(lib.favorites, key = { "f" + it.url }) { f ->
-                Row(Modifier.fillMaxWidth().clickable { onOpen(f.url, 0) }, verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f).padding(vertical = 4.dp)) {
-                        Text(f.title.ifEmpty { f.url }, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(f.url.substringAfter("://").substringBefore('/'), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                GlassCard(Modifier.fillMaxWidth(), onClick = { onOpen(f.url, 0) }, contentPadding = 14.dp) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(f.title.ifEmpty { f.url }, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(f.url.substringAfter("://").substringBefore('/'), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1)
+                        }
+                        IconButton(onClick = { graph.library.removeFavorite(f.url) }) { Icon(Icons.Filled.Delete, "Retirer") }
                     }
-                    IconButton(onClick = { graph.library.removeFavorite(f.url) }) { Icon(Icons.Filled.Delete, "Retirer") }
                 }
             }
         }
-        item { Spacer(Modifier.height(16.dp)) }
+        item { Spacer(Modifier.height(24.dp)) }
     }
 }
 
 @Composable
 private fun SeriesRow(graph: AppGraph, e: SeriesEntry, now: Long, onClick: () -> Unit) {
-    Card(Modifier.fillMaxWidth().glowClickable { onClick() }, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+    val cs = MaterialTheme.colorScheme
+    GlassCard(Modifier.fillMaxWidth(), onClick = onClick, contentPadding = 0.dp) {
         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.width(5.dp).fillMaxHeight().background(seriesColor(e.key)))
-            Column(Modifier.weight(1f).padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Box(Modifier.width(6.dp).fillMaxHeight().background(Brush.verticalGradient(listOf(seriesColor(e.key), seriesColor(e.key + "·").copy(alpha = 0.55f)))))
+            Column(Modifier.weight(1f).padding(horizontal = 14.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(e.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(
                     listOfNotNull(
@@ -154,14 +179,19 @@ private fun SeriesRow(graph: AppGraph, e: SeriesEntry, now: Long, onClick: () ->
                         if (e.doneChapters > 0) "${e.doneChapters} lu${if (e.doneChapters > 1) "s" else ""}" else null,
                         RelativeTime.fr(now, e.lastVisited),
                     ).joinToString(" · "),
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
                 )
-                Text(e.host, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                if (e.chapters > 0 && e.doneChapters > 0) {
+                    LinearProgressIndicator(
+                        progress = { (e.doneChapters.toFloat() / e.chapters).coerceIn(0f, 1f) }, color = cs.primary, trackColor = Color.White.copy(alpha = 0.10f),
+                        modifier = Modifier.fillMaxWidth(0.7f).padding(top = 4.dp).height(4.dp).clip(CircleShape),
+                    )
+                }
             }
             IconButton(onClick = { graph.library.toggleSeriesFavorite(e.key, e.title) }) {
                 Icon(
                     if (e.favorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, if (e.favorite) "Retirer des favoris" else "Ajouter aux favoris",
-                    tint = if (e.favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = if (e.favorite) cs.secondary else cs.onSurfaceVariant,
                 )
             }
         }
@@ -172,11 +202,13 @@ private fun SeriesRow(graph: AppGraph, e: SeriesEntry, now: Long, onClick: () ->
 @Composable
 private fun SeriesPage(graph: AppGraph, key: String, onBack: () -> Unit, onOpen: (String, Int) -> Unit) {
     val lib = graph.library.library
+    val cs = MaterialTheme.colorScheme
     val now = System.currentTimeMillis()
     val entry = remember(lib, key) { lib.series().firstOrNull { it.key == key } }
     val chapters = remember(lib, key) { lib.chapters(key) }
     var menu by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf(false) }
+    val seen = remember { HashSet<Any>() }
     if (entry == null) return
     if (confirm) {
         AlertDialog(
@@ -191,15 +223,15 @@ private fun SeriesPage(graph: AppGraph, key: String, onBack: () -> Unit, onOpen:
     val resume = resumeAt(entry.percent, lastDone)
     val nextUrl = if (lastDone) ChapterNav.next(entry.lastUrl) else null
     val seriesUrl = BrowsingLibrary.seriesUrlOf(entry.lastUrl)
-    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
-            Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Retour") }
                 Spacer(Modifier.weight(1f))
                 IconButton(onClick = { graph.library.toggleSeriesFavorite(key, entry.title) }) {
                     Icon(
                         if (entry.favorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, if (entry.favorite) "Retirer des favoris" else "Ajouter aux favoris",
-                        tint = if (entry.favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = if (entry.favorite) cs.secondary else cs.onSurfaceVariant,
                     )
                 }
                 Box {
@@ -211,53 +243,63 @@ private fun SeriesPage(graph: AppGraph, key: String, onBack: () -> Unit, onOpen:
             }
         }
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.width(5.dp).height(34.dp).background(seriesColor(key)))
-                    Spacer(Modifier.width(10.dp))
+            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.width(6.dp).fillMaxHeight().clip(CircleShape).background(Brush.verticalGradient(listOf(seriesColor(key), seriesColor(key + "·")))))
+                Spacer(Modifier.width(12.dp))
+                Column {
                     Text(entry.title, style = MaterialTheme.typography.headlineSmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    Text(entry.host, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 }
-                Text(entry.host, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 15.dp))
             }
         }
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
                 if (nextUrl != null) {
-                    Button(onClick = { onOpen(nextUrl, 0) }, modifier = Modifier.fillMaxWidth()) { Text("Lire le chapitre suivant") }
-                    OutlinedButton(onClick = { onOpen(entry.lastUrl, 0) }, modifier = Modifier.fillMaxWidth()) { Text("Relire · ${entry.chapter ?: "dernière page"}") }
+                    GradientButton("Lire le chapitre suivant", { onOpen(nextUrl, 0) }, Modifier.fillMaxWidth())
+                    GhostButton("Relire · ${entry.chapter ?: "dernière page"}", { onOpen(entry.lastUrl, 0) }, Modifier.fillMaxWidth())
                 } else {
-                    Button(onClick = { onOpen(entry.lastUrl, resume) }, modifier = Modifier.fillMaxWidth()) {
-                        Text(if (resume > 0) "Reprendre · ${entry.chapter ?: "dernière page"} ($resume %)" else "Continuer · ${entry.chapter ?: "dernière page"}")
-                    }
+                    GradientButton(
+                        if (resume > 0) "Reprendre · ${entry.chapter ?: "dernière page"} ($resume %)" else "Continuer · ${entry.chapter ?: "dernière page"}",
+                        { onOpen(entry.lastUrl, resume) }, Modifier.fillMaxWidth(),
+                    )
                 }
-                if (seriesUrl != null) OutlinedButton(onClick = { onOpen(seriesUrl, 0) }, modifier = Modifier.fillMaxWidth()) { Text("Page de l'œuvre sur le site") }
+                if (seriesUrl != null) GhostButton("Page de l'œuvre sur le site", { onOpen(seriesUrl, 0) }, Modifier.fillMaxWidth())
             }
         }
-        item { Text("Chapitres (${chapters.size})", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 10.dp)) }
-        items(chapters, key = { it.url }) { ch ->
-            Card(
-                Modifier.fillMaxWidth().glowClickable { onOpen(ch.url, resumeAt(ch.percent, ch.done)) },
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            ) {
-                Row(Modifier.fillMaxWidth().padding(start = 14.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
-                        Text(ch.label, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(
-                            (if (ch.done) "Lu" else if (ch.percent > 0) "En cours · ${ch.percent} %" else "Ouvert") + " · " + RelativeTime.fr(now, ch.lastVisited),
-                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        if (!ch.done && ch.percent > 0) LinearProgressIndicator(progress = { ch.percent / 100f }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp, end = 12.dp))
-                    }
-                    IconButton(onClick = { graph.library.markDone(ch.url, !ch.done) }) {
-                        Icon(
-                            AppIcons.DoneAll, if (ch.done) "Marquer comme non lu" else "Marquer comme lu",
-                            tint = if (ch.done) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
-                        )
+        item { SectionLabel("Chapitres (${chapters.size})") }
+        items(chapters.withIndex().toList(), key = { it.value.url }) { (i, ch) ->
+            Entrance(ch.url, i, seen) {
+                GlassCard(Modifier.fillMaxWidth(), onClick = { onOpen(ch.url, resumeAt(ch.percent, ch.done)) }, contentPadding = 0.dp) {
+                    Row(Modifier.fillMaxWidth().padding(start = 16.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
+                            Text(ch.label, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                val chipColor = if (ch.done) cs.primary else if (ch.percent > 0) cs.tertiary else cs.onSurfaceVariant
+                                Text(
+                                    if (ch.done) "Lu" else if (ch.percent > 0) "En cours · ${ch.percent} %" else "Ouvert",
+                                    style = MaterialTheme.typography.labelMedium, color = chipColor,
+                                    modifier = Modifier.clip(CircleShape).background(chipColor.copy(alpha = 0.14f)).padding(horizontal = 9.dp, vertical = 2.dp),
+                                )
+                                Text(RelativeTime.fr(now, ch.lastVisited), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                            }
+                            if (!ch.done && ch.percent > 0) {
+                                LinearProgressIndicator(
+                                    progress = { ch.percent / 100f }, color = cs.tertiary, trackColor = Color.White.copy(alpha = 0.10f),
+                                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp, end = 14.dp).height(4.dp).clip(CircleShape),
+                                )
+                            }
+                        }
+                        IconButton(onClick = { graph.library.markDone(ch.url, !ch.done) }) {
+                            Icon(
+                                AppIcons.DoneAll, if (ch.done) "Marquer comme non lu" else "Marquer comme lu",
+                                tint = if (ch.done) cs.primary else cs.onSurfaceVariant.copy(alpha = 0.45f),
+                            )
+                        }
                     }
                 }
             }
         }
-        item { Spacer(Modifier.height(16.dp)) }
+        item { Spacer(Modifier.height(24.dp)) }
     }
 }
 
@@ -265,25 +307,28 @@ private fun SeriesPage(graph: AppGraph, key: String, onBack: () -> Unit, onOpen:
 @Composable
 private fun HistoryPage(graph: AppGraph, onBack: () -> Unit, onOpen: (String) -> Unit) {
     val lib = graph.library.library
+    val cs = MaterialTheme.colorScheme
     val now = System.currentTimeMillis()
-    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
-            Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Retour") }
                 Text("Historique", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
                 TextButton(onClick = { graph.library.clearHistory() }, enabled = lib.history.isNotEmpty()) { Text("Tout effacer") }
             }
         }
-        if (lib.history.isEmpty()) item { Text("Aucune page ouverte pour l'instant.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp)) }
+        if (lib.history.isEmpty()) item { Text("Aucune page ouverte pour l'instant.", color = cs.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp)) }
         items(lib.history.take(200), key = { "h" + it.url }) { h ->
-            Row(Modifier.fillMaxWidth().clickable { onOpen(h.url) }, verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
-                    Text(h.title.ifEmpty { h.url }, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(RelativeTime.fr(now, h.visitedAt) + " · " + h.url.substringAfter("://").substringBefore('/'), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            GlassCard(Modifier.fillMaxWidth(), onClick = { onOpen(h.url) }, contentPadding = 0.dp) {
+                Row(Modifier.fillMaxWidth().padding(start = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f).padding(vertical = 10.dp)) {
+                        Text(h.title.ifEmpty { h.url }, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(RelativeTime.fr(now, h.visitedAt) + " · " + h.url.substringAfter("://").substringBefore('/'), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1)
+                    }
+                    IconButton(onClick = { graph.library.removeHistory(h.url) }) { Icon(Icons.Filled.Delete, "Supprimer") }
                 }
-                IconButton(onClick = { graph.library.removeHistory(h.url) }) { Icon(Icons.Filled.Delete, "Supprimer") }
             }
         }
-        item { Spacer(Modifier.height(16.dp)) }
+        item { Spacer(Modifier.height(24.dp)) }
     }
 }

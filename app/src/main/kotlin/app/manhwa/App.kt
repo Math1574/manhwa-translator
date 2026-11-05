@@ -35,6 +35,10 @@ class AppGraph(ctx: Context) {
     val models = TranslationModels(ctx)
     val library = LibraryStore(File(ctx.filesDir, "library.tsv"))
     val journal = TranslationJournal(File(ctx.filesDir, "journal.jsonl"))
+    init {
+        library.onChanged = { ResumeShortcut.update(ctx, it) }
+        ResumeShortcut.update(ctx, library.library)
+    }
     val llm = LlmModelsManager(ctx)
     val paddleModels = PaddleModels(ctx)
     val paddle = PaddleOcr(paddleModels)
@@ -61,9 +65,12 @@ class LibraryStore(private val file: File) {
         private set
     private var dirty = false
     private var lastWrite = 0L
+    /** Appelé après chaque enregistrement (le raccourci « Reprendre la lecture » de l'icône s'y met à jour). */
+    var onChanged: ((BrowsingLibrary) -> Unit)? = null
 
     private fun write() {
         try { file.writeText(library.serialize()); dirty = false; lastWrite = System.currentTimeMillis() } catch (_: Throwable) {}
+        try { onChanged?.invoke(library) } catch (_: Throwable) {}
     }
 
     private fun commit(f: (BrowsingLibrary) -> BrowsingLibrary) { library = f(library); write() }

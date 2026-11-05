@@ -10,6 +10,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -113,7 +114,7 @@ fun BrowserScreen(graph: AppGraph) {
     Column(Modifier.fillMaxSize()) {
         // Barre d'adresse : visible à l'arrêt, se masque quand on lit en descendant et revient en remontant ou en touchant la page.
         AnimatedVisibility(visible = !c.fullscreen && !c.barsHidden, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-            Column(Modifier.fillMaxWidth()) {
+            Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background.copy(alpha = 0.97f))) {
                 AddressBar(graph)
                 if (c.loading) LinearProgressIndicator(progress = { c.progress / 100f }, modifier = Modifier.fillMaxWidth())
                 c.pageError?.let {
@@ -181,7 +182,7 @@ fun BrowserScreen(graph: AppGraph) {
 @Composable
 private fun Pill(text: String, onClick: () -> Unit, onClose: (() -> Unit)? = null) {
     Row(
-        Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer).clickable { onClick() }.padding(horizontal = 18.dp, vertical = 10.dp),
+        Modifier.clip(CircleShape).background(Brush.horizontalGradient(listOf(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.secondaryContainer))).clickable { onClick() }.padding(horizontal = 18.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(text, color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.labelLarge)
@@ -200,14 +201,14 @@ private fun TranslationToggle(translated: Boolean, modifier: Modifier = Modifier
         Text(
             label,
             modifier = Modifier.clip(CircleShape)
-                .background(if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+                .background(if (selected) Brush.horizontalGradient(listOf(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.secondaryContainer)) else SolidColor(Color.Transparent))
                 .clickable(enabled = !selected) { onToggle() }
                 .padding(horizontal = 14.dp, vertical = 8.dp),
             color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.labelLarge,
         )
     }
-    Row(modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)).padding(3.dp)) {
+    Row(modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)).border(1.dp, Color.White.copy(alpha = 0.12f), CircleShape).padding(3.dp)) {
         Seg("Original", !translated)
         Seg("Traduit", translated)
     }
@@ -230,7 +231,7 @@ private fun AddressBar(graph: AppGraph) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = { c.back() }, enabled = c.canGoBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Retour") }
         Box(
-            Modifier.weight(1f).height(42.dp).clip(RoundedCornerShape(21.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(horizontal = 16.dp),
+            Modifier.weight(1f).height(42.dp).clip(RoundedCornerShape(21.dp)).background(Color.White.copy(alpha = 0.08f)).border(1.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(21.dp)).padding(horizontal = 16.dp),
             contentAlignment = Alignment.CenterStart,
         ) {
             if (!editing) {

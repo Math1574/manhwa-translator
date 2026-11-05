@@ -14,6 +14,15 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.Typography
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import app.manhwa.core.AppSettings
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
@@ -25,39 +34,89 @@ import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-private val ManhwaColors = darkColorScheme(
-    primary = Color(0xFFB69CFF),
-    onPrimary = Color(0xFF1E0B50),
-    primaryContainer = Color(0xFF4A2CA6),
-    onPrimaryContainer = Color(0xFFE9DFFF),
-    secondary = Color(0xFFE2A8FF),
-    onSecondary = Color(0xFF3A0B5A),
-    secondaryContainer = Color(0xFF5B2B7E),
-    onSecondaryContainer = Color(0xFFF4DDFF),
-    tertiary = Color(0xFF8EDCFF),
-    background = Color(0xFF0F0A1F),
-    onBackground = Color(0xFFECE6FF),
-    surface = Color(0xFF181133),
-    onSurface = Color(0xFFECE6FF),
-    surfaceVariant = Color(0xFF291C4C),
-    onSurfaceVariant = Color(0xFFC6BAE8),
-    outline = Color(0xFF6B5A9E),
-    outlineVariant = Color(0xFF3A2D63),
-    error = Color(0xFFFF8A9B),
+// ---------- direction artistique « crépuscule » : palettes dérivées d'un accent, polices rondes, fond en dégradé ----------
+
+private class Accent(val hue: Float, val primary: Color, val onPrimary: Color, val container: Color, val onContainer: Color, val secondary: Color, val onSecondary: Color, val secContainer: Color, val onSecContainer: Color, val tertiary: Color)
+
+private fun accentOf(name: String): Accent = when (name) {
+    "indigo" -> Accent(228f, Color(0xFF9DB4FF), Color(0xFF0B1650), Color(0xFF2D3F9E), Color(0xFFDDE4FF), Color(0xFF7FD6FF), Color(0xFF00324A), Color(0xFF0B5575), Color(0xFFD3F0FF), Color(0xFFFFC56B))
+    "rose" -> Accent(330f, Color(0xFFFF9EC7), Color(0xFF50002B), Color(0xFF8A2A5E), Color(0xFFFFE0EE), Color(0xFFC9A6FF), Color(0xFF2E0F5A), Color(0xFF52318A), Color(0xFFEADDFF), Color(0xFFFFD08A))
+    "emeraude" -> Accent(165f, Color(0xFF7EE3C0), Color(0xFF00382B), Color(0xFF0F6B58), Color(0xFFCFFBEA), Color(0xFF9CCBFF), Color(0xFF00305B), Color(0xFF1F4D8A), Color(0xFFD7E8FF), Color(0xFFFFD08A))
+    "ambre" -> Accent(32f, Color(0xFFFFC56B), Color(0xFF4A2A00), Color(0xFF8A5300), Color(0xFFFFE8C2), Color(0xFFFF9E7A), Color(0xFF560F00), Color(0xFF8A3A22), Color(0xFFFFE0D5), Color(0xFFB79CFF))
+    else -> Accent(262f, Color(0xFFB69CFF), Color(0xFF1E0B50), Color(0xFF4A2CA6), Color(0xFFE9DFFF), Color(0xFFF0A6FF), Color(0xFF3F0A52), Color(0xFF6A2A86), Color(0xFFFBDDFF), Color(0xFFFFC56B))
+}
+
+/** Réglages visuels exposés aux écrans : fond choisi, mascotte, animations réduites, teinte de l'accent. */
+class Look(val background: String, val mascot: Boolean, val reducedMotion: Boolean, val hue: Float)
+
+val LocalLook = compositionLocalOf { Look("crepuscule", true, false, 262f) }
+
+private fun schemeFor(accent: Accent, background: String): ColorScheme {
+    val h = accent.hue
+    val noir = background == "noir"
+    val bg = if (noir) Color.Black else Color.hsv(h, 0.62f, if (background == "nuit") 0.085f else 0.095f)
+    val surface = Color.hsv(h, if (noir) 0.40f else 0.52f, if (noir) 0.075f else 0.155f)
+    val variant = Color.hsv(h, if (noir) 0.34f else 0.44f, if (noir) 0.13f else 0.24f)
+    val high = Color.hsv(h, if (noir) 0.34f else 0.42f, if (noir) 0.17f else 0.28f)
+    return darkColorScheme(
+        primary = accent.primary, onPrimary = accent.onPrimary, primaryContainer = accent.container, onPrimaryContainer = accent.onContainer,
+        secondary = accent.secondary, onSecondary = accent.onSecondary, secondaryContainer = accent.secContainer, onSecondaryContainer = accent.onSecContainer,
+        tertiary = accent.tertiary, background = bg, onBackground = Color.hsv(h, 0.06f, 0.96f),
+        surface = surface, onSurface = Color.hsv(h, 0.06f, 0.96f), surfaceVariant = variant, onSurfaceVariant = Color.hsv(h, 0.16f, 0.84f),
+        surfaceContainerLowest = bg, surfaceContainerLow = surface, surfaceContainer = surface, surfaceContainerHigh = high, surfaceContainerHighest = high,
+        outline = Color.hsv(h, 0.32f, 0.50f), outlineVariant = Color.hsv(h, 0.38f, 0.30f), error = Color(0xFFFF8A9B),
+    )
+}
+
+private val Heading = FontFamily(Font(R.font.fredoka_medium, FontWeight.Medium), Font(R.font.fredoka_semibold, FontWeight.SemiBold), Font(R.font.fredoka_bold, FontWeight.Bold))
+private val Body = FontFamily(
+    Font(R.font.nunito_regular, FontWeight.Normal), Font(R.font.nunito_semibold, FontWeight.Medium), Font(R.font.nunito_semibold, FontWeight.SemiBold), Font(R.font.nunito_extrabold, FontWeight.Bold),
 )
 
+private fun appTypography(): Typography {
+    val b = Typography()
+    return b.copy(
+        displayLarge = b.displayLarge.copy(fontFamily = Heading, fontWeight = FontWeight.SemiBold),
+        displayMedium = b.displayMedium.copy(fontFamily = Heading, fontWeight = FontWeight.SemiBold),
+        displaySmall = b.displaySmall.copy(fontFamily = Heading, fontWeight = FontWeight.SemiBold),
+        headlineLarge = b.headlineLarge.copy(fontFamily = Heading, fontWeight = FontWeight.SemiBold),
+        headlineMedium = b.headlineMedium.copy(fontFamily = Heading, fontWeight = FontWeight.SemiBold, fontSize = 29.sp, lineHeight = 34.sp),
+        headlineSmall = b.headlineSmall.copy(fontFamily = Heading, fontWeight = FontWeight.SemiBold, fontSize = 24.sp, lineHeight = 29.sp),
+        titleLarge = b.titleLarge.copy(fontFamily = Heading, fontWeight = FontWeight.SemiBold, fontSize = 21.sp),
+        titleMedium = b.titleMedium.copy(fontFamily = Body, fontWeight = FontWeight.Bold, fontSize = 16.sp),
+        titleSmall = b.titleSmall.copy(fontFamily = Heading, fontWeight = FontWeight.Medium, fontSize = 14.sp, letterSpacing = 0.4.sp),
+        bodyLarge = b.bodyLarge.copy(fontFamily = Body, fontWeight = FontWeight.Normal),
+        bodyMedium = b.bodyMedium.copy(fontFamily = Body, fontWeight = FontWeight.Normal),
+        bodySmall = b.bodySmall.copy(fontFamily = Body, fontWeight = FontWeight.Normal),
+        labelLarge = b.labelLarge.copy(fontFamily = Body, fontWeight = FontWeight.Bold),
+        labelMedium = b.labelMedium.copy(fontFamily = Body, fontWeight = FontWeight.SemiBold),
+        labelSmall = b.labelSmall.copy(fontFamily = Body, fontWeight = FontWeight.SemiBold),
+    )
+}
+
 private val ManhwaShapes = Shapes(
-    extraSmall = RoundedCornerShape(8.dp),
-    small = RoundedCornerShape(12.dp),
-    medium = RoundedCornerShape(16.dp),
-    large = RoundedCornerShape(22.dp),
-    extraLarge = RoundedCornerShape(28.dp),
+    extraSmall = RoundedCornerShape(10.dp),
+    small = RoundedCornerShape(14.dp),
+    medium = RoundedCornerShape(20.dp),
+    large = RoundedCornerShape(26.dp),
+    extraLarge = RoundedCornerShape(32.dp),
 )
 
 @Composable
-fun ManhwaTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = ManhwaColors, shapes = ManhwaShapes, content = content)
+fun ManhwaTheme(settings: AppSettings, content: @Composable () -> Unit) {
+    val accent = accentOf(settings.themeAccent)
+    val look = Look(settings.themeBackground, settings.showMascot, settings.reducedMotion, accent.hue)
+    val scheme = remember(settings.themeAccent, settings.themeBackground) { schemeFor(accent, settings.themeBackground) }
+    CompositionLocalProvider(LocalLook provides look) {
+        MaterialTheme(colorScheme = scheme, shapes = ManhwaShapes, typography = remember { appTypography() }, content = content)
+    }
 }
+
+/** Teinte de fond associée à un accent (aperçus des fonds dans les réglages). */
+fun accentHueOf(name: String): Float = accentOf(name).hue
+
+/** Couleurs de l'aperçu d'un accent dans les réglages (pastille). */
+fun accentSwatch(name: String): Pair<Color, Color> = accentOf(name).let { it.primary to it.secondary }
 
 /**
  * Lueur violette douce autour de l'élément quand [active] (on le touche, il est sélectionné) : trois halos de plus en plus larges et transparents, qui s'allument vite et
@@ -109,6 +168,7 @@ object AppIcons {
     val Bookmark: ImageVector by lazy { vec("bookmark", "M17,3H7c-1.1,0 -1.99,0.9 -1.99,2L5,21l7,-3 7,3V5c0,-1.1 -0.9,-2 -2,-2z") }
     val CloudDownload: ImageVector by lazy { vec("cloud_download", "M19.35,10.04C18.67,6.59 15.64,4 12,4 9.11,4 6.6,5.64 5.35,8.04 2.34,8.36 0,10.91 0,14c0,3.31 2.69,6 6,6h13c2.76,0 5,-2.24 5,-5 0,-2.64 -2.05,-4.78 -4.65,-4.96zM17,13l-5,5 -5,-5h3V9h4v4h3z") }
     val Storage: ImageVector by lazy { vec("storage", "M2,20h20v-4H2v4zM4,17h2v2H4v-2zM2,4v4h20V4H2zM6,7H4V5h2v2zM2,14h20v-4H2v4zM4,11h2v2H4v-2z") }
+    val Palette: ImageVector by lazy { vec("palette", "M12,3c-4.97,0 -9,4.03 -9,9s4.03,9 9,9c0.83,0 1.5,-0.67 1.5,-1.5 0,-0.39 -0.15,-0.74 -0.39,-1.01 -0.23,-0.26 -0.38,-0.61 -0.38,-0.99 0,-0.83 0.67,-1.5 1.5,-1.5H16c2.76,0 5,-2.24 5,-5 0,-4.42 -4.03,-8 -9,-8zM6.5,12c-0.83,0 -1.5,-0.67 -1.5,-1.5S5.67,9 6.5,9 8,9.67 8,10.5 7.33,12 6.5,12zM9.5,8C8.67,8 8,7.33 8,6.5S8.67,5 9.5,5s1.5,0.67 1.5,1.5S10.33,8 9.5,8zM14.5,8c-0.83,0 -1.5,-0.67 -1.5,-1.5S13.67,5 14.5,5s1.5,0.67 1.5,1.5S15.33,8 14.5,8zM17.5,12c-0.83,0 -1.5,-0.67 -1.5,-1.5S16.67,9 17.5,9s1.5,0.67 1.5,1.5S18.33,12 17.5,12z") }
     val Eye: ImageVector by lazy { vec("eye", "M12,4.5C7,4.5 2.73,7.61 1,12c1.73,4.39 6,7.5 11,7.5s9.27,-3.11 11,-7.5c-1.73,-4.39 -6,-7.5 -11,-7.5zM12,17c-2.76,0 -5,-2.24 -5,-5s2.24,-5 5,-5 5,2.24 5,5 -2.24,5 -5,5zM12,9c-1.66,0 -3,1.34 -3,3s1.34,3 3,3 3,-1.34 3,-3 -1.34,-3 -3,-3z") }
     val Globe: ImageVector by lazy { vec("globe", "M11.99,2C6.47,2 2,6.48 2,12s4.47,10 9.99,10C17.52,22 22,17.52 22,12S17.52,2 11.99,2zM18.92,8h-2.95c-0.32,-1.25 -0.78,-2.45 -1.38,-3.56 1.84,0.63 3.37,1.91 4.33,3.56zM12,4.04c0.83,1.2 1.48,2.53 1.91,3.96h-3.82c0.43,-1.43 1.08,-2.76 1.91,-3.96zM4.26,14C4.1,13.36 4,12.69 4,12s0.1,-1.36 0.26,-2h3.38c-0.08,0.66 -0.14,1.32 -0.14,2 0,0.68 0.06,1.34 0.14,2H4.26zM5.08,16h2.95c0.32,1.25 0.78,2.45 1.38,3.56 -1.84,-0.63 -3.37,-1.9 -4.33,-3.56zM8.03,8H5.08c0.96,-1.66 2.49,-2.93 4.33,-3.56C8.81,5.55 8.35,6.75 8.03,8zM12,19.96c-0.83,-1.2 -1.48,-2.53 -1.91,-3.96h3.82c-0.43,1.43 -1.08,2.76 -1.91,3.96zM14.34,14H9.66c-0.09,-0.66 -0.16,-1.32 -0.16,-2 0,-0.68 0.07,-1.35 0.16,-2h4.68c0.09,0.65 0.16,1.32 0.16,2 0,0.68 -0.07,1.34 -0.16,2zM14.59,19.56c0.6,-1.11 1.06,-2.31 1.38,-3.56h2.95c-0.96,1.65 -2.49,2.93 -4.33,3.56zM16.36,14c0.08,-0.66 0.14,-1.32 0.14,-2 0,-0.68 -0.06,-1.34 -0.14,-2h3.38c0.16,0.64 0.26,1.31 0.26,2s-0.1,1.36 -0.26,2h-3.38z") }
     val Clock: ImageVector by lazy { vec("clock", "M11.99,2C6.47,2 2,6.48 2,12s4.47,10 9.99,10C17.52,22 22,17.52 22,12S17.52,2 11.99,2zM12,20c-4.42,0 -8,-3.58 -8,-8s3.58,-8 8,-8 8,3.58 8,8 -3.58,8 -8,8zM12.5,7H11v6l5.25,3.15 0.75,-1.23 -4.5,-2.67z") }

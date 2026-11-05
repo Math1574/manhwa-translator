@@ -5,6 +5,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,10 +19,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
@@ -45,16 +48,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import app.manhwa.core.LlmModels
 import app.manhwa.core.SourceLang
 import app.manhwa.core.TargetLang
+import app.manhwa.core.ThemeChoices
 import app.manhwa.core.TranslationEngineChoice
 import java.util.Locale
 
-private enum class SettingsPage { HOME, TRANSLATION, READING, OCR, BROWSING, DATA, MODELS, GLOSSARY }
+private enum class SettingsPage { HOME, TRANSLATION, READING, APPEARANCE, OCR, BROWSING, DATA, MODELS, GLOSSARY }
 
 /** Onglet Réglages : une carte par thème ; chacune ouvre la page de ses options. */
 @Composable
@@ -67,6 +73,7 @@ fun SettingsRoot(graph: AppGraph) {
             SettingsPage.HOME -> SettingsHome(graph) { page = it }
             SettingsPage.TRANSLATION -> SubPageBody("Traduction", back) { TranslationSettings(graph) { page = it } }
             SettingsPage.READING -> SubPageBody("Lecture", back) { ReadingSettings(graph) }
+            SettingsPage.APPEARANCE -> SubPageBody("Apparence", back) { AppearanceSettings(graph) }
             SettingsPage.OCR -> SubPageBody("Reconnaissance du texte", back) { OcrSettings(graph) }
             SettingsPage.BROWSING -> SubPageBody("Navigation", back) { BrowsingSettings(graph) }
             SettingsPage.DATA -> SubPageBody("Données et diagnostic", back) { DataSettings(graph) }
@@ -81,7 +88,7 @@ private fun SubPageBody(title: String, onBack: () -> Unit, content: @Composable 
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Retour") }
-            Text(title, style = MaterialTheme.typography.titleLarge)
+            Text(title, style = MaterialTheme.typography.headlineSmall)
         }
         Box(Modifier.weight(1f).fillMaxWidth()) { content() }
     }
@@ -91,9 +98,7 @@ private fun SubPageBody(title: String, onBack: () -> Unit, content: @Composable 
 
 @Composable
 private fun SettingsCard(content: @Composable () -> Unit) {
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) { content() }
-    }
+    GlassCard(Modifier.fillMaxWidth()) { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { content() } }
 }
 
 @Composable
@@ -151,9 +156,10 @@ private fun SettingsHome(graph: AppGraph, open: (SettingsPage) -> Unit) {
     val engine = when (s.engine) { TranslationEngineChoice.MLKIT -> "ML Kit"; TranslationEngineChoice.GEMMA_E2B -> "Gemma 4 E2B"; TranslationEngineChoice.GEMMA_E4B -> "Gemma 4 E4B" }
     val readyModels = listOf(LlmModels.E2B, LlmModels.E4B).count { graph.llm.ready[it.id] == true }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Réglages", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(top = 6.dp, bottom = 4.dp))
+        ScreenHeader("Réglages", "Lecture, traduction et apparence")
         SectionRow(AppIcons.Translate, "Traduction", "${sourceNames.getValue(s.source)} → ${targetNames.getValue(s.target)} · $engine") { open(SettingsPage.TRANSLATION) }
         SectionRow(AppIcons.Eye, "Lecture", "Texte ×${String.format(Locale.FRANCE, "%.1f", s.textScale)} · ${s.maxPrefetchPages} page(s) en avance" + if (s.hideBarsWhileReading) " · barres masquées" else "") { open(SettingsPage.READING) }
+        SectionRow(AppIcons.Palette, "Apparence", "Accent ${accentName(s.themeAccent)} · fond ${backgroundName(s.themeBackground)}" + if (s.reducedMotion) " · animations réduites" else "") { open(SettingsPage.APPEARANCE) }
         SectionRow(Icons.Filled.Search, "Reconnaissance du texte", (if (s.enhancedOcr && graph.paddleModels.available) "Lecture renforcée" else "Lecture standard") + (if (s.autoReread) " · relecture Gemma" else "")) { open(SettingsPage.OCR) }
         SectionRow(AppIcons.Globe, "Navigation", if (s.blockAds) "Publicités bloquées" else "Publicités autorisées") { open(SettingsPage.BROWSING) }
         SectionRow(AppIcons.Bookmark, "Glossaire", "${graph.glossary.terms.size + graph.glossary.seriesTerms.size} terme(s)") { open(SettingsPage.GLOSSARY) }
@@ -165,21 +171,25 @@ private fun SettingsHome(graph: AppGraph, open: (SettingsPage) -> Unit) {
 
 @Composable
 private fun SectionRow(icon: ImageVector, title: String, summary: String, onClick: () -> Unit) {
-    Card(Modifier.fillMaxWidth().glowClickable(onClick = onClick), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+    val cs = MaterialTheme.colorScheme
+    GlassCard(Modifier.fillMaxWidth(), onClick = onClick, contentPadding = 14.dp) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Box(
-                Modifier.size(42.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.primaryContainer),
+                Modifier.size(44.dp).clip(RoundedCornerShape(15.dp)).background(Brush.linearGradient(listOf(cs.primaryContainer, cs.secondaryContainer))),
                 contentAlignment = Alignment.Center,
-            ) { Icon(icon, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer) }
+            ) { Icon(icon, null, Modifier.size(23.dp), tint = cs.onPrimaryContainer) }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.titleMedium)
-                Text(summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
+                Text(summary, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 2)
             }
-            Icon(Icons.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(Icons.Filled.KeyboardArrowRight, null, tint = cs.onSurfaceVariant)
         }
     }
 }
+
+private fun accentName(a: String) = when (a) { "indigo" -> "indigo"; "rose" -> "rose"; "emeraude" -> "émeraude"; "ambre" -> "ambre"; else -> "violet" }
+private fun backgroundName(b: String) = when (b) { "nuit" -> "nuit"; "noir" -> "noir pur"; else -> "crépuscule" }
 
 // ---------- pages ----------
 
@@ -219,6 +229,61 @@ private fun TranslationSettings(graph: AppGraph, open: (SettingsPage) -> Unit) {
 }
 
 @Composable
+private fun AppearanceSettings(graph: AppGraph) {
+    val store = graph.settingsStore
+    val s = store.settings
+    val cs = MaterialTheme.colorScheme
+    PageScroll {
+        SettingsCard {
+            Text("Couleur d'accent", style = MaterialTheme.typography.titleMedium)
+            Text("Elle teinte les boutons, les barres de progression et tout le fond de l'application.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                ThemeChoices.accents.forEach { name ->
+                    val (c1, c2) = accentSwatch(name)
+                    val sel = s.themeAccent == name
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable { store.update { it.copy(themeAccent = name) } }) {
+                        Box(
+                            Modifier.size(46.dp).clip(CircleShape).background(Brush.linearGradient(listOf(c1, c2)))
+                                .then(if (sel) Modifier.border(3.dp, Color.White, CircleShape) else Modifier.border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)),
+                            contentAlignment = Alignment.Center,
+                        ) { if (sel) Icon(Icons.Filled.Check, null, tint = Color.White, modifier = Modifier.size(22.dp)) }
+                        Text(accentName(name).replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.labelSmall, color = if (sel) cs.primary else cs.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+                    }
+                }
+            }
+        }
+        SettingsCard {
+            Text("Fond", style = MaterialTheme.typography.titleMedium)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                listOf("crepuscule" to "Crépuscule", "nuit" to "Nuit", "noir" to "Noir pur").forEach { (id, label) ->
+                    val sel = s.themeBackground == id
+                    val h = accentHueOf(s.themeAccent)
+                    val preview = when (id) {
+                        "noir" -> Brush.verticalGradient(listOf(Color.Black, Color.Black))
+                        "nuit" -> Brush.verticalGradient(listOf(Color.hsv(h, 0.62f, 0.095f), Color.hsv(h, 0.62f, 0.095f)))
+                        else -> Brush.verticalGradient(listOf(Color.hsv(h, 0.78f, 0.075f), Color.hsv((h + 8f) % 360f, 0.66f, 0.22f)))
+                    }
+                    Column(Modifier.weight(1f).clickable { store.update { it.copy(themeBackground = id) } }, horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(
+                            Modifier.fillMaxWidth().height(64.dp).clip(RoundedCornerShape(16.dp)).background(preview)
+                                .border(if (sel) 2.5.dp else 1.dp, if (sel) cs.primary else Color.White.copy(alpha = 0.16f), RoundedCornerShape(16.dp)),
+                            contentAlignment = Alignment.Center,
+                        ) { if (sel) Icon(Icons.Filled.Check, null, tint = cs.primary) }
+                        Text(label, style = MaterialTheme.typography.labelMedium, color = if (sel) cs.primary else cs.onSurfaceVariant, modifier = Modifier.padding(top = 5.dp))
+                    }
+                }
+            }
+            Text("Le noir pur éteint complètement les pixels sur un écran OLED : sobre et économe en batterie.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+        }
+        SettingsCard {
+            SwitchRow("Animations réduites", "Supprime les rebonds, les arrivées en glissant et le flottement de la mascotte. Plus sobre, un peu plus économe.", s.reducedMotion) { v -> store.update { it.copy(reducedMotion = v) } }
+            HorizontalDivider()
+            SwitchRow("Afficher la mascotte", "Les illustrations de la petite créature en haut des écrans.", s.showMascot) { v -> store.update { it.copy(showMascot = v) } }
+        }
+    }
+}
+
+@Composable
 private fun ReadingSettings(graph: AppGraph) {
     val store = graph.settingsStore
     val s = store.settings
@@ -230,7 +295,7 @@ private fun ReadingSettings(graph: AppGraph) {
                     "Glissez le bouton pour l'écarter des boutons du site.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            OutlinedButton(onClick = { store.update { it.copy(orbRight = true, orbY = 0.42f) } }) { Text("Replacer le bouton") }
+            GhostButton("Replacer le bouton", { store.update { it.copy(orbRight = true, orbY = 0.42f) } })
         }
         SettingsCard {
             SwitchRow("Masquer les barres en lisant", "La barre d'adresse et la barre d'onglets se rangent quand vous descendez dans la page ; elles reviennent en remontant ou d'un appui sur la page.", s.hideBarsWhileReading) { v -> store.update { it.copy(hideBarsWhileReading = v) } }
@@ -265,7 +330,7 @@ private fun OcrSettings(graph: AppGraph) {
         SettingsCard {
             SwitchRow("Relecture des textes difficiles (Gemma)", "Quand une lecture paraît incomplète ou absurde (lettrage manuscrit, incliné, traversé par un contour), Gemma relit la zone sur l'image avant la traduction. Appuyez une fois sur « Tester » ; ensuite c'est automatique.", s.autoReread) { v -> store.update { it.copy(autoReread = v) } }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedButton(onClick = { graph.visionTest.run() }, enabled = !graph.visionTest.running) { Text("Tester la relecture") }
+                GhostButton("Tester la relecture", { graph.visionTest.run() }, enabled = !graph.visionTest.running)
                 if (graph.visionTest.running) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
             }
             if (graph.visionTest.summary.isNotEmpty()) Text(graph.visionTest.summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -273,7 +338,7 @@ private fun OcrSettings(graph: AppGraph) {
         SettingsCard {
             SwitchRow("Accélération GPU (expérimental)", "Plus rapide pour Gemma, mais peut échouer selon le téléphone (repli automatique sur le processeur).", s.useGpu) { v -> store.update { it.copy(useGpu = v) } }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedButton(onClick = { graph.gpuTest.run() }, enabled = !graph.gpuTest.running) { Text("Tester CPU / GPU") }
+                GhostButton("Tester CPU / GPU", { graph.gpuTest.run() }, enabled = !graph.gpuTest.running)
                 if (graph.gpuTest.running) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
             }
             if (graph.gpuTest.summary.isNotEmpty()) Text(graph.gpuTest.summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -303,10 +368,10 @@ private fun DataSettings(graph: AppGraph) {
             Text("Cache de traductions : ${String.format(Locale.FRANCE, "%.1f", cacheBytes / 1_048_576.0)} Mo", style = MaterialTheme.typography.bodyMedium)
             Text("Stockage de l'application : ${String.format(Locale.FRANCE, "%.1f", ctx.filesDir.walkTopDown().sumOf { if (it.isFile) it.length() else 0L } / 1_048_576.0)} Mo", style = MaterialTheme.typography.bodyMedium)
             Text("Modèles Gemma stockés : ${String.format(Locale.FRANCE, "%.2f", graph.llm.usedBytes() / 1_000_000_000.0)} Go", style = MaterialTheme.typography.bodyMedium)
-            OutlinedButton(onClick = {
+            GhostButton("Vider le cache", {
                 graph.cache.clear(); graph.controller.clearOverlays(); cacheBytes = graph.cache.diskBytes()
                 Toast.makeText(ctx, "Cache vidé", Toast.LENGTH_SHORT).show()
-            }) { Text("Vider le cache") }
+            })
         }
         SettingsCard {
             SwitchRow("Diagnostic de la détection", "Encadre le texte repéré par l'OCR (vert : utilisé, rouge : rejeté, avec la confiance). Désactive le cache. Utile pour signaler un problème.", s.diagnostic) { v -> store.update { it.copy(diagnostic = v) } }
@@ -321,8 +386,8 @@ private fun DataSettings(graph: AppGraph) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { graph.journal.share(ctx) }, enabled = entries > 0) { Text("Exporter") }
-                OutlinedButton(onClick = { graph.journal.clear(); journalTick++ }, enabled = entries > 0) { Text("Effacer") }
+                GradientButton("Exporter", { graph.journal.share(ctx) }, enabled = entries > 0)
+                GhostButton("Effacer", { graph.journal.clear(); journalTick++ }, enabled = entries > 0)
             }
         }
     }

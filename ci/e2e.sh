@@ -105,8 +105,8 @@ run pc_ja_mlkit          pc_ja.html          MLKIT JA FR "ja,fr"   300
 say "=== interface"
 UI=$OUT/reports/ui.tsv; : > $UI
 uidump() { adb shell uiautomator dump /sdcard/ui_$1.xml >/dev/null 2>&1; adb exec-out cat /sdcard/ui_$1.xml > "$OUT/reports/ui_$1.xml" 2>/dev/null; }
-has() { if grep -q -- "$2" "$OUT/reports/ui_$1.xml" 2>/dev/null; then echo 1; else echo 0; fi; }
-hasnot() { if grep -q -- "$2" "$OUT/reports/ui_$1.xml" 2>/dev/null; then echo 0; else echo 1; fi; }
+has() { if grep -qi -- "$2" "$OUT/reports/ui_$1.xml" 2>/dev/null; then echo 1; else echo 0; fi; }
+hasnot() { if grep -qi -- "$2" "$OUT/reports/ui_$1.xml" 2>/dev/null; then echo 0; else echo 1; fi; }
 chk() { printf '%s\t%s\n' "$1" "$2" >> $UI; }
 tapt() { local xy; xy=$(python3 ci/ui_tap.py "$OUT/reports/ui_$1.xml" "$2" ${3:-1}) && adb shell input tap $xy; }
 # l'émulateur affiche parfois « Pixel Launcher ne répond plus » : cette fenêtre absorbe le premier appui, on la ferme avant de commencer
@@ -148,6 +148,12 @@ chk "réglages : la carte Traduction ouvre ses options (onomatopées)" $(has set
 adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump set2
 tapt set2 "=Lecture" 1 top; sleep 2; uidump setrd; shot ui 6
 chk "réglages : la carte Lecture ouvre ses options (bouton, barres)" $([ "$(has setrd 'Masquer les barres')" = 1 ] && echo 1 || echo 0)
+adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump set3
+tapt set3 "=Apparence" 1 top; sleep 2; uidump setap; shot ui 7
+chk "réglages : la carte Apparence propose accent, fond et animations" $([ "$(has setap 'Couleur d')" = 1 ] && [ "$(has setap 'Animations r')" = 1 ] && echo 1 || echo 0)
+# raccourci « Reprendre la lecture » de l'icône : publié d'après la dernière œuvre lue
+adb shell dumpsys shortcut > $OUT/reports/shortcut.txt 2>/dev/null
+chk "raccourci : « Reprendre la lecture » publié pour l'œuvre lue" $([ "$(grep -c 'id=resume' $OUT/reports/shortcut.txt)" -gt 0 ] && grep -q 'Test Series' $OUT/reports/shortcut.txt && echo 1 || echo 0)
 
 fi # fin des scénarios web (absents de la suite lab)
 

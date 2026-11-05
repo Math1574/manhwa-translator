@@ -6,6 +6,12 @@ enum class SourceLang(val code: String) { AUTO("auto"), JA("ja"), KO("ko"), ZH_H
 enum class TargetLang(val code: String) { FR("fr"), EN("en"), ES("es"), DE("de") }
 enum class QualityMode { FAST, ENHANCED }
 
+/** Valeurs permises pour l'apparence (une valeur inconnue retombe sur la valeur par défaut). */
+object ThemeChoices {
+    val accents = listOf("violet", "indigo", "rose", "emeraude", "ambre")
+    val backgrounds = listOf("crepuscule", "nuit", "noir")
+}
+
 data class AppSettings(
     val source: SourceLang = SourceLang.AUTO,
     val target: TargetLang = TargetLang.FR,
@@ -37,6 +43,11 @@ data class AppSettings(
     val orbY: Float = 0.42f,
     /** Masque la barre d'adresse et la barre d'onglets quand on lit en descendant ; elles reviennent en remontant ou d'un appui sur la page. */
     val hideBarsWhileReading: Boolean = true,
+    /** Apparence : couleur d'accent (violet, indigo, rose, emeraude, ambre), fond (crepuscule, nuit, noir) ; animations réduites ; illustrations de la mascotte. */
+    val themeAccent: String = "violet",
+    val themeBackground: String = "crepuscule",
+    val reducedMotion: Boolean = false,
+    val showMascot: Boolean = true,
 ) {
     /** Ramène les valeurs dans des bornes valides. */
     fun sanitized() = copy(
@@ -51,6 +62,7 @@ data class AppSettings(
         it["autoTranslate"] = autoTranslate.toString(); it["mode"] = mode.name
         it["maxPrefetchPages"] = maxPrefetchPages.toString(); it["cacheMaxMb"] = cacheMaxMb.toString()
         it["schema"] = "2"; it["engine"] = engine.name; it["useGpu"] = useGpu.toString(); it["diagnostic"] = diagnostic.toString(); it["enhancedOcr"] = enhancedOcr.toString(); it["refinePass"] = refinePass.toString(); it["blockAds"] = blockAds.toString(); it["autoReread"] = autoReread.toString(); it["translateSfx"] = translateSfx.toString()
+        it["themeAccent"] = themeAccent; it["themeBackground"] = themeBackground; it["reducedMotion"] = reducedMotion.toString(); it["showMascot"] = showMascot.toString()
         it["readTranslate"] = readTranslate.toString(); it["orbRight"] = orbRight.toString(); it["orbY"] = orbY.toString(); it["hideBarsWhileReading"] = hideBarsWhileReading.toString()
     }.let { p -> java.io.StringWriter().also { w -> p.store(w, null) }.toString() }
 
@@ -80,6 +92,10 @@ data class AppSettings(
                 p.getProperty("orbRight")?.toBooleanStrictOrNull() ?: d.orbRight,
                 p.getProperty("orbY")?.toFloatOrNull() ?: d.orbY,
                 p.getProperty("hideBarsWhileReading")?.toBooleanStrictOrNull() ?: d.hideBarsWhileReading,
+                p.getProperty("themeAccent")?.takeIf { it in ThemeChoices.accents } ?: d.themeAccent,
+                p.getProperty("themeBackground")?.takeIf { it in ThemeChoices.backgrounds } ?: d.themeBackground,
+                p.getProperty("reducedMotion")?.toBooleanStrictOrNull() ?: d.reducedMotion,
+                p.getProperty("showMascot")?.toBooleanStrictOrNull() ?: d.showMascot,
             ).sanitized()
         }
     }

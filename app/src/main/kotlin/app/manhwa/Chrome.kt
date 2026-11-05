@@ -1,12 +1,12 @@
 package app.manhwa
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -16,14 +16,16 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -38,10 +40,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -50,53 +53,48 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 
 class NavTab(val label: String, val icon: ImageVector)
 
-/** Barre d'onglets : la pastille de l'onglet choisi est entourée d'une lueur violette qui s'allume au toucher, avec un léger retour haptique. */
+/**
+ * Barre d'onglets flottante : une pastille de verre arrondie ; l'onglet choisi s'élargit en douceur (ressort) et affiche son nom sur une pastille à dégradé d'accent.
+ * Petit retour haptique au changement d'onglet.
+ */
 @Composable
 fun GlowNavBar(tabs: List<NavTab>, selected: Int, onSelect: (Int) -> Unit) {
     val haptic = LocalHapticFeedback.current
     val cs = MaterialTheme.colorScheme
-    Row(
-        Modifier.fillMaxWidth()
-            .background(Brush.verticalGradient(listOf(cs.surface, cs.background)))
-            .drawBehind { drawLine(color = cs.outlineVariant, start = Offset(0f, 0f), end = Offset(size.width, 0f), strokeWidth = 1.dp.toPx()) }
-            .navigationBarsPadding().padding(horizontal = 8.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-    ) {
-        tabs.forEachIndexed { i, t ->
-            val sel = i == selected
-            val src = remember { MutableInteractionSource() }
-            val pressed by src.collectIsPressedAsState()
-            val glowA by animateFloatAsState(if (sel) 1f else if (pressed) 0.8f else 0f, tween(260), label = "tabGlow")
-            val pill by animateFloatAsState(if (sel) 1f else 0f, tween(220), label = "tabPill")
-            val scale by animateFloatAsState(if (pressed) 0.9f else 1f, tween(110), label = "tabScale")
-            Column(
-                Modifier.weight(1f).clip(RoundedCornerShape(16.dp))
-                    .clickable(interactionSource = src, indication = null) { if (!sel) { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onSelect(i) } }
-                    .padding(vertical = 4.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Box(
-                    Modifier.size(width = 60.dp, height = 32.dp)
-                        .graphicsLayer { scaleX = scale; scaleY = scale }
-                        .drawBehind {
-                            if (glowA > 0.01f) {
-                                val r = size.width * 0.8f
-                                drawCircle(brush = Brush.radialGradient(listOf(cs.primary.copy(alpha = 0.5f * glowA), Color.Transparent), radius = r), radius = r)
-                            }
-                        }
-                        .clip(RoundedCornerShape(16.dp)).background(cs.primaryContainer.copy(alpha = pill)),
-                    contentAlignment = Alignment.Center,
+    val look = LocalLook.current
+    val shape = RoundedCornerShape(34.dp)
+    Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 20.dp, vertical = 10.dp)) {
+        Row(
+            Modifier.fillMaxWidth().shadow(16.dp, shape, clip = false, ambientColor = Color.Black, spotColor = cs.primary)
+                .clip(shape)
+                .background(Brush.verticalGradient(listOf(cs.surfaceVariant.copy(alpha = 0.96f), cs.surface.copy(alpha = 0.98f))))
+                .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.20f), Color.White.copy(alpha = 0.05f))), shape)
+                .padding(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            tabs.forEachIndexed { i, t ->
+                val sel = i == selected
+                val src = remember { MutableInteractionSource() }
+                val pressed by src.collectIsPressedAsState()
+                val weight by animateFloatAsState(if (sel) 1.75f else 1f, if (look.reducedMotion) spring(stiffness = 3000f) else spring(dampingRatio = 0.78f, stiffness = 380f), label = "tabWeight")
+                val scale by animateFloatAsState(if (pressed) 0.93f else 1f, spring(dampingRatio = 0.55f, stiffness = 650f), label = "tabScale")
+                Row(
+                    Modifier.weight(weight).height(50.dp).graphicsLayer { scaleX = scale; scaleY = scale }.clip(CircleShape)
+                        .background(if (sel) Brush.horizontalGradient(listOf(cs.primaryContainer, cs.secondaryContainer)) else SolidColor(Color.Transparent))
+                        .clickable(interactionSource = src, indication = null) { if (!sel) { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onSelect(i) } },
+                    horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(t.icon, t.label, tint = if (sel) cs.onPrimaryContainer else cs.onSurfaceVariant, modifier = Modifier.size(24.dp))
+                    AnimatedVisibility(visible = sel, enter = fadeIn() + expandHorizontally(), exit = fadeOut() + shrinkHorizontally()) {
+                        Row { Spacer(Modifier.width(8.dp)); Text(t.label, style = MaterialTheme.typography.labelLarge, color = cs.onPrimaryContainer, maxLines = 1) }
+                    }
                 }
-                Text(t.label, style = MaterialTheme.typography.labelMedium, color = if (sel) cs.primary else cs.onSurfaceVariant, fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal)
             }
         }
     }
@@ -104,7 +102,8 @@ fun GlowNavBar(tabs: List<NavTab>, selected: Int, onSelect: (Int) -> Unit) {
 
 /**
  * Bouton rond Original | Traduit, posé au bord de l'écran et déplaçable au doigt (il se range sur le bord le plus proche et mémorise sa place) : on peut l'écarter des boutons du site.
- * Éteint : traduction désactivée ; entouré : activée mais cette page n'est pas un chapitre ; allumé et pulsant : cette page est traduite.
+ * Sobre pour la lecture, sans halo : verre quand la traduction est éteinte, contour d'accent quand elle est activée mais que cette page n'est pas un chapitre,
+ * pastille à dégradé quand la page est traduite ; un anneau fin montre l'avancement du travail.
  */
 @Composable
 fun TranslateOrb(
@@ -116,25 +115,19 @@ fun TranslateOrb(
     val haptic = LocalHapticFeedback.current
     BoxWithConstraints(modifier.fillMaxSize()) {
         val density = LocalDensity.current
-        val orb = 50.dp
+        val orb = 46.dp
         val orbPx = with(density) { orb.toPx() }; val marginPx = with(density) { 6.dp.toPx() }
         val w = constraints.maxWidth.toFloat(); val h = constraints.maxHeight.toFloat()
         var drag by remember { mutableStateOf<Offset?>(null) }
         val baseX = if (right) w - orbPx - marginPx else marginPx
         val baseY = ((h - orbPx) * yFrac).coerceAtLeast(0f)
         val pos = drag ?: Offset(baseX, baseY)
-        val pulse = if (active) rememberInfiniteTransition(label = "orbPulse").animateFloat(0.4f, 1f, infiniteRepeatable(tween(1500, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "pulse").value else 0f
-        val glowLevel = if (active) 0.25f + 0.35f * pulse else if (translateOn) 0.22f else 0f
         val desc = if (active) "Traduction activée : toucher pour revenir à l'original" else if (translateOn) "Traduire cette page" else "Traduire"
+        val idleAlpha = if (active || drag != null) 1f else 0.88f
         Box(
             Modifier.offset { IntOffset(pos.x.roundToInt(), pos.y.roundToInt()) }.size(orb)
                 .semantics { contentDescription = desc }
-                .drawBehind {
-                    if (glowLevel > 0.01f) {
-                        val r = size.width * 0.95f
-                        drawCircle(brush = Brush.radialGradient(listOf(cs.primary.copy(alpha = glowLevel), cs.secondary.copy(alpha = glowLevel * 0.35f), Color.Transparent), radius = r), radius = r)
-                    }
-                }
+                .graphicsLayer { alpha = idleAlpha }
                 .pointerInput(w, h, right, yFrac) {
                     detectDragGestures(
                         onDragStart = { drag = Offset(baseX, baseY) },
@@ -147,13 +140,14 @@ fun TranslateOrb(
                         },
                     )
                 }
+                .shadow(7.dp, CircleShape)
                 .clip(CircleShape)
-                .background(if (active) Brush.linearGradient(listOf(cs.primary, cs.secondary)) else Brush.linearGradient(listOf(cs.surface.copy(alpha = 0.92f), cs.surfaceVariant.copy(alpha = 0.92f))))
+                .background(if (active) Brush.linearGradient(listOf(cs.primary, cs.secondary)) else Brush.linearGradient(listOf(cs.surfaceVariant.copy(alpha = 0.94f), cs.surface.copy(alpha = 0.94f))))
                 .then(if (active) Modifier else Modifier.border(1.5.dp, if (translateOn) cs.primary else cs.outline, CircleShape))
                 .clickable { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onTap() },
             contentAlignment = Alignment.Center,
         ) {
-            Icon(AppIcons.Translate, null, Modifier.size(26.dp), tint = if (active) cs.onPrimary else if (translateOn) cs.primary else cs.onSurfaceVariant)
+            Icon(AppIcons.Translate, null, Modifier.size(24.dp), tint = if (active) cs.onPrimary else if (translateOn) cs.primary else cs.onSurfaceVariant)
             if (running) CircularProgressIndicator(progress = { progress.coerceIn(0.03f, 1f) }, modifier = Modifier.fillMaxSize(), strokeWidth = 2.5.dp, color = cs.tertiary, trackColor = Color.Transparent)
         }
     }

@@ -94,6 +94,10 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     var editTarget by mutableStateOf<EditTarget?>(null)
     /** Le téléphone chauffe (état thermique « modéré » ou pire) : plus aucune page n'est préparée en avance, seule la page lue est traitée. */
     var thermalHot by mutableStateOf(false)
+    /** Ouverture demandée par le raccourci de l'icône avant que le navigateur existe : adresse et avancement à reprendre. */
+    private var pendingOpen: Pair<String, Int>? = null
+    /** Incrémenté à chaque ouverture par le raccourci : l'interface revient sur l'onglet Lecture. */
+    var readingTick by mutableIntStateOf(0)
     /** Œuvre de la page ouverte (clé site + titre), null si l'adresse n'en désigne pas. */
     val currentSeriesKey: String? get() = BrowsingLibrary.seriesKey(currentUrl)
     private var thermalWatching = false
@@ -277,7 +281,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             override fun onProgressChanged(view: WebView, newProgress: Int) { progress = newProgress }
         }
         webView = wv
-        goHome()
+        val pending = pendingOpen
+        if (pending != null) { pendingOpen = null; load(pending.first, pending.second) } else goHome()
         watchThermal()
         return wv
     }
@@ -292,6 +297,12 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             apply(pm.currentThermalStatus)
             pm.addThermalStatusListener(ctx.mainExecutor) { status -> apply(status) }
         } catch (_: Throwable) { thermalWatching = false }
+    }
+
+    /** Raccourci « Reprendre la lecture » de l'icône : ouvre le chapitre et se replace là où la lecture s'était arrêtée. */
+    fun openFromShortcut(url: String, percent: Int) {
+        readingTick++
+        if (webView != null) load(url, percent) else pendingOpen = url to percent
     }
 
     fun load(url: String, resumeAt: Int = 0) {

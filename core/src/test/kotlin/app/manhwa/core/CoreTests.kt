@@ -1541,4 +1541,11 @@ fun artEraseTests() {
         for (u in listOf("https://asurascans.com/", "https://asurascans.com/comics", "https://asurascans.com/comics/the-heavenly-demon-11fe7da3", "https://x.org/watch/12", "https://x.org/search?q=chapter-8", "https://x.org/coach/5", "https://x.org/page/2"))
             T.ok(!BrowsingLibrary.looksLikeChapter(u), "pas un chapitre : $u")
     }
+
+    T.test("réglages : apparence mémorisée, valeurs inconnues ramenées aux valeurs par défaut") {
+        val d = AppSettings(); T.ok(d.themeAccent == "violet" && d.themeBackground == "crepuscule" && !d.reducedMotion && d.showMascot, "défauts")
+        val r = AppSettings.parse(AppSettings(themeAccent = "rose", themeBackground = "noir", reducedMotion = true, showMascot = false).serialize())
+        T.ok(r.themeAccent == "rose" && r.themeBackground == "noir" && r.reducedMotion && !r.showMascot, "aller-retour")
+        val bad = AppSettings.parse("themeAccent=fluo\nthemeBackground=arc-en-ciel\n"); T.ok(bad.themeAccent == "violet" && bad.themeBackground == "crepuscule", "inconnu : défaut")
+    }
 }
