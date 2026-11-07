@@ -27,6 +27,10 @@ import androidx.compose.runtime.setValue
 import app.manhwa.core.AdBlocker
 import app.manhwa.core.AdVerdict
 import app.manhwa.core.CdpClient
+import app.manhwa.core.OcrEngine
+import app.manhwa.core.TranslationEngine
+import app.manhwa.core.GlossaryEntry
+import app.manhwa.core.SourceLang
 import app.manhwa.core.NavDecision
 import app.manhwa.core.NavigationPolicy
 import app.manhwa.core.RequestTypes
@@ -80,7 +84,9 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Map<String, String>>) = size > 400
     }
     /** Image → (comment ses octets ont été obtenus, durée en ms) : pour le journal de diagnostic. */
-    private val fetchInfo = ConcurrentHashMap<String, Pair<String, Long>>()
+    private val fetchInfo = ConcurrentHashMap<String, Triple<String, Long, String>>()
+    /** Image → durées en ms de la lecture du texte, de la traduction et de l'affichage (journal de diagnostic : où passe le temps). */
+    private val stageInfo = ConcurrentHashMap<String, LongArray>()
     /** Relit les images déjà chargées par la page dans la WebView elle-même (mêmes cookies, mêmes protections, aucun second téléchargement). */
     private val devTools = CdpClient({ ms -> openDevToolsSocket(ms) }, { currentUrl.ifEmpty { null } })
 
@@ -352,6 +358,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                 currentUrl = if (url.startsWith("http")) url else ""
                 pageUrl = if (url.startsWith("http")) url else null
                 graph.adFilters.log.newPage()
+                if (translateOn && url.startsWith("http") && (testing || BrowsingLibrary.looksLikeChapter(url))) warmUp()   // les modèles se chargent pendant que la page arrive
                 try { view.settings.setSupportMultipleWindows(blockerOn(url)) } catch (_: Throwable) {}   // bloqueur éteint : comportement normal du navigateur
                 if (!guardAtDocumentStart) view.evaluateJavascript(AdGuardScript.JS, null)
                 graph.gemma.seriesTitle = if (url.startsWith("http")) app.manhwa.core.SeriesHint.fromUrl(url) else null
@@ -482,6 +489,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         if (currentUrl.isEmpty()) return
         if (force) { stopWork(); resetCounters() }
         active = true
+        warmUp()
         wv.evaluateJavascript(PageScript.INJECT, null)
         wv.evaluateJavascript("window.__mt.collect($force)") { r -> onCandidates(r) }
     }
@@ -567,7 +575,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val spec = LlmModels.specFor(s.engine)
         val translator = if (spec == null) MlKitTranslation(graph.models) else graph.gemma
         val enhanced = s.enhancedOcr && graph.paddleModels.available
-        val ocrEngine = CombinedOcr(s.source, MlKitOcr(s.source), if (enhanced) graph.paddle else null, Lexicon.get(ctx))
+        val ocrEngine = CombinedOcr(s.source, MlKitOcr(s.source), if (enhanced) graph.paddle else null, Lexicon.get(ctx), parallel = !thermalHot)
         val rereadOn = spec != null && s.source.code == "en" && graph.blockReader.available
         // « pp2 » : lecture des lignes inclinées sur recadrage redressé ; « rr » : relecture des textes douteux par Gemma (résultats différents, cache à part)
         // onomatopées laissées telles quelles (anglais) : clé de cache distincte, pour ne pas reprendre d'anciens résultats où elles étaient traduites
@@ -577,8 +585,13 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val lexicon = Lexicon.get(ctx)
         candidatesById[c.id] = c
         keysById[c.id] = CacheKey(sha256Hex(bytes), s.source.code, s.target.code, engineId)
+        // durées mesurées pour le journal : lecture du texte, traduction (le rendu est mesuré plus bas)
+        val stages = LongArray(3)
+        stageInfo[c.id] = stages
+        val timedOcr = OcrEngine { b -> val t = SystemClock.uptimeMillis(); try { ocrEngine.recognize(b) } finally { stages[0] += SystemClock.uptimeMillis() - t } }
+        val timedTr = TimedTranslator(translator) { stages[1] += it }
         val pipeline = PagePipeline(
-            graph.cache, ocrEngine, translator, engineId,
+            graph.cache, timedOcr, timedTr, engineId,
             glossary = { graph.glossary.current(pageSeries) },
             useCache = !s.diagnostic && !testing, // en diagnostic on veut voir la détection réelle, pas un résultat en cache
             debugSink = { debug = it },
@@ -600,11 +613,13 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         var overlayForLog: JSONObject? = null
         if (out is PageOutcome.Done && !out.fromCache) journalPage(c, pageUrl, engineId, s.target.code, out, System.currentTimeMillis() - t0)
         if (!cancelled()) {
+            val tRender = SystemClock.uptimeMillis()
             val json = when {
                 out is PageOutcome.Done -> PageRenderer.render(fonts, bytes, out.result, s, debug)
                 s.diagnostic && debug != null -> OverlayBuilder.debugOnly(debug!!)
                 else -> null
             }
+            stages[2] = SystemClock.uptimeMillis() - tRender
             if (json != null) sendOverlay(c.id, json)
             overlayForLog = json
             if (json != null && out is PageOutcome.Done) journalLayout(c, pageUrl, out, json)
@@ -631,7 +646,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                         .put("out", JSONArray(listOf("x", "y", "w", "h").map { k -> Math.round(r.optDouble(k)) })),
                 )
             }
-            graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "layout").put("url", pageUrl).put("img", c.id).put("w", out.result.imageWidth).put("h", out.result.imageHeight).put("skipped", json.optInt("skipped")).put("blocks", blocks))
+            graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "layout").put("url", pageUrl).put("img", c.id).put("renderMs", stageInfo[c.id]?.get(2) ?: 0L).put("w", out.result.imageWidth).put("h", out.result.imageHeight).put("skipped", json.optInt("skipped")).put("blocks", blocks))
         } catch (_: Throwable) {}
     }
 
@@ -647,7 +662,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         graph.journal.add(
             JSONObject().put("t", System.currentTimeMillis()).put("type", "page").put("url", pageUrl).put("series", graph.gemma.seriesTitle ?: "")
                 .put("engine", engineId).put("img", c.id).put("w", out.result.imageWidth).put("h", out.result.imageHeight).put("ms", ms)
-                .put("fetch", fetchInfo[c.id]?.first ?: "").put("fetchMs", fetchInfo[c.id]?.second ?: 0L).put("dbg", OcrDebug.note.take(1500)).put("blocks", blocks),
+                .put("fetch", fetchInfo[c.id]?.first ?: "").put("fetchMs", fetchInfo[c.id]?.second ?: 0L).put("fetchWhy", fetchInfo[c.id]?.third ?: "")
+                .put("ocrMs", stageInfo[c.id]?.get(0) ?: 0L).put("trMs", stageInfo[c.id]?.get(1) ?: 0L).put("ocrT", OcrDebug.timing).put("dbg", OcrDebug.note.take(1500)).put("blocks", blocks),
         )
     }
 
@@ -694,7 +710,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     }
 
     private fun logForTest(c: Candidate, out: PageOutcome, debug: DebugInfo?, overlay: JSONObject?, ms: Long) {
-        val e = JSONObject().put("id", c.id).put("src", c.src).put("ms", ms).put("fetch", fetchInfo[c.id]?.first ?: "").put("fetchMs", fetchInfo[c.id]?.second ?: 0L)
+        val e = JSONObject().put("id", c.id).put("src", c.src).put("ms", ms).put("fetch", fetchInfo[c.id]?.first ?: "").put("fetchMs", fetchInfo[c.id]?.second ?: 0L).put("fetchWhy", fetchInfo[c.id]?.third ?: "")
+            .put("ocrMs", stageInfo[c.id]?.get(0) ?: 0L).put("trMs", stageInfo[c.id]?.get(1) ?: 0L).put("renderMs", stageInfo[c.id]?.get(2) ?: 0L).put("ocrT", OcrDebug.timing)
         when (out) {
             is PageOutcome.Done -> {
                 e.put("outcome", if (out.fromCache) "done-cache" else "done").put("w", out.result.imageWidth).put("h", out.result.imageHeight)
@@ -731,7 +748,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             sock.connect(android.net.LocalSocketAddress("webview_devtools_remote_" + android.os.Process.myPid(), android.net.LocalSocketAddress.Namespace.ABSTRACT))
             sock.soTimeout = readTimeoutMs
         } catch (e: Throwable) { try { sock.close() } catch (_: Throwable) {}; throw e }
-        return CdpClient.Conn(sock.inputStream, sock.outputStream) {
+        return CdpClient.Conn(sock.inputStream, sock.outputStream, { ms -> try { sock.soTimeout = ms } catch (_: Throwable) {} }) {
             try { sock.shutdownInput() } catch (_: Throwable) {}
             try { sock.shutdownOutput() } catch (_: Throwable) {}
             try { sock.close() } catch (_: Throwable) {}
@@ -795,12 +812,14 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
      */
     private fun fetch(c: Candidate, pageUrl: String): ByteArray {
         val t0 = SystemClock.uptimeMillis()
-        fun got(b: ByteArray, how: String): ByteArray { fetchInfo[c.id] = how to (SystemClock.uptimeMillis() - t0); return b }
+        fetchInfo.remove(c.id); stageInfo.remove(c.id)
+        var why = ""
+        fun got(b: ByteArray, how: String): ByteArray { fetchInfo[c.id] = Triple(how, SystemClock.uptimeMillis() - t0, why); return b }
         if (c.src == "js:") return got(fetchViaPage(c.id), "page (blob)")
         val scheme = c.src.substringBefore(':').lowercase()
         if (scheme != "http" && scheme != "https") throw IOException("Adresse d'image non prise en charge")
         if (!testNoDevTools) devTools.imageBytes(c.src, MAX_IMAGE_BYTES)?.let { return got(it, "page") }
-        val why = if (testNoDevTools) "lecture par la WebView coupée (test)" else devTools.lastReason
+        why = if (testNoDevTools) "lecture par la WebView coupée (test)" else devTools.lastReason
         var code = 0
         var failure: String? = null
         for (headers in downloadAttempts(c, pageUrl)) {
@@ -859,6 +878,36 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         if (now - lastPopupPill < 2500) return
         lastPopupPill = now
         showNavBlocked(NavBlock(url, "Pop-up bloqué", true))
+    }
+
+    /** Enveloppe qui mesure le temps passé dans le moteur de traduction (somme des appels de la page). */
+    private class TimedTranslator(private val inner: TranslationEngine, private val add: (Long) -> Unit) : TranslationEngine {
+        private inline fun <T> timed(f: () -> T): T { val t = SystemClock.uptimeMillis(); try { return f() } finally { add(SystemClock.uptimeMillis() - t) } }
+        override fun translate(texts: List<String>, source: String, target: String): List<String> = timed { inner.translate(texts, source, target) }
+        override fun usesGlossaryPrompt(): Boolean = inner.usesGlossaryPrompt()
+        override fun translateWithGlossary(texts: List<String>, source: String, target: String, glossary: List<GlossaryEntry>): List<String> = timed { inner.translateWithGlossary(texts, source, target, glossary) }
+    }
+
+    // ---------- préchargement des modèles ----------
+    private val warming = java.util.concurrent.atomic.AtomicBoolean(false)
+    @Volatile private var lastWarm = 0L
+
+    /**
+     * Charge à l'avance, en tâche de fond, les modèles de lecture (ML Kit, PaddleOCR, détecteur de bulles) et de traduction (Gemma met 10 à 30 s à se charger) :
+     * la première page d'un chapitre ne paie plus ces chargements. Sans effet s'ils sont déjà chargés.
+     */
+    fun warmUp() {
+        val now = SystemClock.uptimeMillis()
+        if (now - lastWarm < 60_000 || !warming.compareAndSet(false, true)) return
+        lastWarm = now
+        Thread({
+            try {
+                val st = graph.settingsStore.settings
+                try { Recognizers.warmUp(st.source) } catch (_: Throwable) {}
+                if (st.enhancedOcr && graph.paddleModels.available) try { graph.paddleModels.warmUp(when (st.source) { SourceLang.JA -> "ja"; SourceLang.KO -> "ko"; SourceLang.ZH_HANS, SourceLang.ZH_HANT -> "zh"; else -> "en" }) } catch (_: Throwable) {}
+                if (LlmModels.specFor(st.engine) != null) try { graph.gemma.warmUp() } catch (_: Throwable) {}
+            } finally { warming.set(false) }
+        }, "warm-up").also { it.isDaemon = true; it.priority = Thread.NORM_PRIORITY - 1 }.start()
     }
 
     companion object { const val MAX_IMAGE_BYTES = 30 * 1024 * 1024 }

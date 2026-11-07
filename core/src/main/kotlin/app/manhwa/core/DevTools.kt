@@ -153,7 +153,8 @@ object MiniJson {
  * protection : on ne lit que ce que la page a elle-même chargé et affiche.
  */
 class CdpClient(private val open: (readTimeoutMs: Int) -> Conn, private val pageHint: () -> String? = { null }) {
-    class Conn(val input: InputStream, val output: OutputStream, val close: () -> Unit)
+    /** [setReadTimeout] : change le délai de lecture de la connexion (0 = aucun) ; [close] la ferme. */
+    class Conn(val input: InputStream, val output: OutputStream, val setReadTimeout: (Int) -> Unit = {}, val close: () -> Unit)
 
     /** Dernier motif d'échec (pour le journal de diagnostic). */
     @Volatile var lastReason: String = ""; private set
@@ -161,6 +162,8 @@ class CdpClient(private val open: (readTimeoutMs: Int) -> Conn, private val page
     private val lock = Any()
     private var session: Session? = null
     private var failedAt = 0L
+    /** Attente avant de réessayer après un échec : double à chaque échec (5 s, 10 s… 2 min), remise à 5 s dès qu'une connexion réussit. */
+    private var backoffMs = BACKOFF_START_MS
     private val frames = HashMap<String, String>()
     private var treeAt = 0L
 
@@ -196,15 +199,41 @@ class CdpClient(private val open: (readTimeoutMs: Int) -> Conn, private val page
         return sb.toString()
     }
 
+    private fun readExactly(input: InputStream, n: Int): ByteArray {
+        val b = ByteArray(n); var o = 0
+        while (o < n) { val r = input.read(b, o, n - o); if (r < 0) throw IOException("réponse tronquée"); o += r }
+        return b
+    }
+
+    private fun readChunked(input: InputStream): ByteArray {
+        val body = ByteArrayOutputStream()
+        while (true) {
+            val line = StringBuilder()
+            while (!line.endsWith("\r\n")) { val b = input.read(); if (b < 0) throw IOException("réponse tronquée"); line.append(b.toChar()); if (line.length > 64) throw IOException("taille de morceau illisible") }
+            val size = line.toString().trim().substringBefore(';').toIntOrNull(16) ?: throw IOException("taille de morceau illisible")
+            if (size == 0) { readExactly(input, 2); return body.toByteArray() }
+            body.write(readExactly(input, size)); readExactly(input, 2)
+            if (body.size() > MAX_LIST_BYTES) throw IOException("liste des cibles trop longue")
+        }
+    }
+
+    /**
+     * GET sur le serveur de débogage. Chrome garde la connexion ouverte après sa réponse (même avec « Connection: close ») : on lit exactement la longueur annoncée
+     * au lieu d'attendre la fermeture, qui n'arrive jamais et ferait patienter jusqu'au délai de lecture à chaque appel.
+     */
     private fun httpGet(path: String): String {
-        val c = open(8000)
+        val c = open(HTTP_TIMEOUT_MS)
         try {
             c.output.write("GET $path HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nAccept: application/json\r\n\r\n".toByteArray()); c.output.flush()
             val head = readHeaders(c.input)
             if (!head.startsWith("HTTP/1.1 200") && !head.startsWith("HTTP/1.0 200")) throw IOException("réponse ${head.lineSequence().first()}")
-            val body = ByteArrayOutputStream(); val buf = ByteArray(8192)
-            while (true) { val n = c.input.read(buf); if (n < 0) break; body.write(buf, 0, n); if (body.size() > 4_000_000) throw IOException("liste des cibles trop longue") }
-            return body.toString("UTF-8")
+            val len = Regex("(?i)content-length:\\s*(\\d+)").find(head)?.groupValues?.get(1)?.toIntOrNull()
+            val body = when {
+                len != null -> { if (len > MAX_LIST_BYTES) throw IOException("liste des cibles trop longue"); readExactly(c.input, len) }
+                head.contains("transfer-encoding: chunked", ignoreCase = true) -> readChunked(c.input)
+                else -> { val out = ByteArrayOutputStream(); val buf = ByteArray(8192); while (true) { val n = c.input.read(buf); if (n < 0) break; out.write(buf, 0, n); if (out.size() > MAX_LIST_BYTES) throw IOException("liste des cibles trop longue") }; out.toByteArray() }
+            }
+            return String(body, Charsets.UTF_8)
         } finally { try { c.close() } catch (_: Throwable) {} }
     }
 
@@ -216,12 +245,13 @@ class CdpClient(private val open: (readTimeoutMs: Int) -> Conn, private val page
             val hint = pageHint()
             val target = pages.firstOrNull { hint != null && (it["url"] as? String)?.substringBefore('#') == hint.substringBefore('#') } ?: pages.firstOrNull() ?: throw IOException("aucune page à déboguer")
             val wsPath = java.net.URI(target["webSocketDebuggerUrl"] as String).rawPath
-            val c = open(0)
+            val c = open(HANDSHAKE_TIMEOUT_MS)
             try {
                 val key = java.util.Base64.getEncoder().encodeToString(ByteArray(16).also { SecureRandom().nextBytes(it) })
                 c.output.write("GET $wsPath HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: $key\r\nSec-WebSocket-Version: 13\r\n\r\n".toByteArray()); c.output.flush()
                 val head = readHeaders(c.input)
                 if (!head.contains(" 101 ")) throw IOException("poignée de main refusée : ${head.lineSequence().first()}")
+                c.setReadTimeout(0)
             } catch (e: Throwable) { try { c.close() } catch (_: Throwable) {}; throw e }
             val s = Session(c)
             s.start()
@@ -235,11 +265,12 @@ class CdpClient(private val open: (readTimeoutMs: Int) -> Conn, private val page
     private fun ensure(): Session? = synchronized(lock) {
         session?.let { if (it.alive) return it }
         session = null
-        if (System.currentTimeMillis() - failedAt < 8000) return null           // on ne retente pas à chaque image
-        val s = connect()
-        if (s == null) { failedAt = System.currentTimeMillis(); return null }
+        if (System.currentTimeMillis() - failedAt < backoffMs) return null          // on ne retente pas à chaque image
+        fun failed(): Session? { failedAt = System.currentTimeMillis(); backoffMs = minOf(backoffMs * 2, BACKOFF_MAX_MS); return null }
+        val s = connect() ?: return failed()
         session = s
-        call(s, "Page.enable", null, 5000) ?: run { dropLocked(s); failedAt = System.currentTimeMillis(); return null }
+        call(s, "Page.enable", null, ENABLE_TIMEOUT_MS) ?: run { dropLocked(s); return failed() }
+        backoffMs = BACKOFF_START_MS
         s
     }
 
@@ -269,7 +300,7 @@ class CdpClient(private val open: (readTimeoutMs: Int) -> Conn, private val page
 
     @Suppress("UNCHECKED_CAST")
     private fun refreshTree(s: Session): Boolean {
-        val raw = call(s, "Page.getResourceTree", null, 8000) ?: return false
+        val raw = call(s, "Page.getResourceTree", null, TREE_TIMEOUT_MS) ?: return false
         val tree = try { MiniJson.parse(raw) as? Map<String, Any?> } catch (e: Throwable) { lastReason = "arbre des ressources illisible"; return false } ?: return false
         val ft = ((tree["result"] as? Map<String, Any?>)?.get("frameTree")) as? Map<String, Any?> ?: run { lastReason = "arbre des ressources vide"; return false }
         val fresh = HashMap<String, String>()
@@ -297,7 +328,7 @@ class CdpClient(private val open: (readTimeoutMs: Int) -> Conn, private val page
         val frame = frameOf(s, url) ?: run { if (lastReason.isEmpty() || lastReason.startsWith("débogage")) lastReason = "image absente des ressources de la page"; return null }
         var attempt = 0
         while (true) {
-            val raw = call(s, "Page.getResourceContent", "{\"frameId\":${quote(frame)},\"url\":${quote(url)}}", 20000) ?: return null
+            val raw = call(s, "Page.getResourceContent", "{\"frameId\":${quote(frame)},\"url\":${quote(url)}}", CONTENT_TIMEOUT_MS) ?: return null
             val k = raw.indexOf("\"content\":\"")
             if (k >= 0 && raw.indexOf("\"base64Encoded\":true") >= 0) {
                 val start = k + 11; val end = raw.indexOf('"', start)
@@ -314,4 +345,15 @@ class CdpClient(private val open: (readTimeoutMs: Int) -> Conn, private val page
     }
 
     fun close() = synchronized(lock) { session?.let { dropLocked(it) } }
+
+    private companion object {
+        const val HTTP_TIMEOUT_MS = 2500
+        const val HANDSHAKE_TIMEOUT_MS = 3000
+        const val ENABLE_TIMEOUT_MS = 3000L
+        const val TREE_TIMEOUT_MS = 5000L
+        const val CONTENT_TIMEOUT_MS = 10000L
+        const val BACKOFF_START_MS = 5000L
+        const val BACKOFF_MAX_MS = 120_000L
+        const val MAX_LIST_BYTES = 4_000_000
+    }
 }

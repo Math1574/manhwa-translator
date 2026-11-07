@@ -139,6 +139,16 @@ class GemmaTranslator(
         }
     }
 
+    /** Charge le moteur à l'avance (tâche de fond) : la première traduction ne paie plus les 10 à 30 s de chargement du modèle. */
+    @Synchronized fun warmUp() {
+        val s = settings()
+        val spec = LlmModels.specFor(s.engine) ?: return
+        if (!models.isReady(spec)) return
+        main.removeCallbacks(releaseTask)
+        try { ensureEngine(spec, s.useGpu, vision = visionReady && s.autoReread) } catch (_: Throwable) {}
+        finally { main.postDelayed(releaseTask, IDLE_RELEASE_MS) }
+    }
+
     /** Seconde passe : un « éditeur » corrige les contresens et le style littéral du brouillon. En cas de réponse invalide, le brouillon est conservé. */
     private fun refineDraft(eng: Engine, texts: List<String>, draft: List<String>, glossary: List<GlossaryEntry>): List<String> {
         return try {
@@ -397,7 +407,8 @@ class GemmaTranslator(
 
     companion object {
         const val HISTORY_SIZE = 10
-        const val IDLE_RELEASE_MS = 3 * 60 * 1000L
+        /** Délai d'inactivité avant de décharger le modèle (plusieurs Go) : assez long pour qu'une pause de lecture ne force pas un rechargement de 10 à 30 s. */
+        const val IDLE_RELEASE_MS = 10 * 60 * 1000L
         const val GENERATION_TIMEOUT_MS = 5 * 60 * 1000L
         fun engineId(spec: ModelSpec) = "${spec.id}-ctx1"
     }

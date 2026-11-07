@@ -116,6 +116,14 @@ for path in sorted(glob.glob(f"{OUT}/reports/*.json")):
         srcs[k] = srcs.get(k, 0) + 1
     if srcs and any(k != "?" for k in srcs):
         P("- origine des octets des images : " + ", ".join(f"{k} × {v}" for k, v in sorted(srcs.items())) + " · durée moyenne d'obtention " + str(round(sum(im.get("fetchMs", 0) for im in imgs) / max(1, len(imgs)))) + " ms")
+    timed = [im for im in imgs if im.get("ocrMs") is not None and im.get("outcome", "").startswith("done")]
+    if timed:
+        avg = lambda k: round(sum(im.get(k, 0) for im in timed) / len(timed))
+        P(f"- durées moyennes par image ({len(timed)}) : obtention {avg('fetchMs')} ms · lecture du texte {avg('ocrMs')} ms · traduction {avg('trMs')} ms · affichage {avg('renderMs')} ms")
+        ot = [im.get("ocrT") for im in timed if im.get("ocrT")]
+        if ot: P(f"- détail de la lecture (dernière image) : {ot[-1]}")
+        why = sorted({im.get("fetchWhy") for im in imgs if im.get("fetchWhy")})
+        if why: P("- lecture dans la WebView impossible, motif : " + " ; ".join(why)[:300])
     if name.startswith("pc_en_once"):
         if c.get("done", 0) < c.get("total", 1) or c.get("total", 0) == 0: problems.append(f"{name}: images à usage unique non traduites ({c.get('done')}/{c.get('total')}) : la lecture par la WebView ne fonctionne pas")
         if srcs.get("page", 0) < 1: problems.append(f"{name}: aucune image lue dans la page ({srcs})")

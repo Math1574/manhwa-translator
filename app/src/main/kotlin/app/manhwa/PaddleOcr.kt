@@ -8,7 +8,9 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.BitmapRegionDecoder
 import android.graphics.Rect
+import android.os.SystemClock
 import android.util.Log
+import java.util.concurrent.Callable
 import app.manhwa.core.Ctc
 import app.manhwa.core.DbPost
 import app.manhwa.core.OcrEngine
@@ -29,6 +31,8 @@ import kotlin.math.min
 /** Dernières statistiques de lecture (pour le rapport des tests) : colonnes verticales vues, lues par manga-ocr, première erreur. */
 object OcrDebug {
     @Volatile var note: String = ""
+    /** Durées de la dernière lecture : chaque moteur, et si les trois ont tourné en parallèle ou l'un après l'autre. */
+    @Volatile var timing: String = ""
 }
 
 class PaddleModels(private val ctx: Context) {
@@ -60,6 +64,15 @@ class PaddleModels(private val ctx: Context) {
     private fun lines(asset: String): List<String> = ctx.assets.open(asset).bufferedReader(Charsets.UTF_8).readLines()
 
     @Synchronized fun detector(): OrtSession = det ?: session("ocr/ch_PP-OCRv4_det_infer.onnx").also { det = it }
+
+    /** Charge à l'avance les modèles utilisés pour cette écriture (détection de lignes, lecteurs, détecteur de bulles) : la première page ne paie plus leur chargement. */
+    fun warmUp(lang: String) {
+        if (!available) return
+        try { detector() } catch (_: Throwable) {}
+        try { recognizer(lang) } catch (_: Throwable) {}
+        try { altRecognizer(lang) } catch (_: Throwable) {}
+        try { this.detector.warmUp() } catch (_: Throwable) {}
+    }
 
     @Synchronized fun recognizer(lang: String): Rec = recs.getOrPut(lang) {
         when (lang) {
@@ -276,33 +289,69 @@ class PaddleOcr(private val models: PaddleModels) {
     }
 }
 
-/** ML Kit + PaddleOCR : tout texte repéré par l'un ou l'autre est conservé, la lecture la plus sûre l'emporte. */
+/**
+ * ML Kit + PaddleOCR + détecteur de bulles : tout texte repéré par l'un ou l'autre est conservé, la lecture la plus sûre l'emporte.
+ * Les trois lectures sont indépendantes : elles tournent en parallèle ([parallel]), au lieu de s'additionner l'une après l'autre
+ * (une image de webtoon de 14 000 px passait plus de 10 s en lecture). Le téléphone qui chauffe repasse en séquence.
+ */
 class CombinedOcr(
     private val source: SourceLang,
     private val mlkit: MlKitOcr,
     private val paddle: PaddleOcr?,
     private val lexicon: app.manhwa.core.EnglishLexicon? = null,
+    private val parallel: Boolean = true,
 ) : OcrEngine {
 
     override fun recognize(imageBytes: ByteArray): OcrResult {
-        val ml: OcrResult? = try { mlkit.recognize(imageBytes) } catch (e: Throwable) {
-            if (paddle == null) throw e
-            Log.w("MT", "ML Kit a échoué : $e"); null
-        }
-        if (paddle == null) return ml!!
+        if (paddle == null) return mlkit.recognize(imageBytes)
         OcrDebug.note = ""
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size, bounds)
-        val w = ml?.imageWidth ?: bounds.outWidth; val h = ml?.imageHeight ?: bounds.outHeight
-        val script = scriptFor(ml?.lines ?: emptyList())
-        val pp = try { paddle.recognize(imageBytes, script, w, h) } catch (e: Throwable) {
-            Log.w("MT", "PaddleOCR a échoué : $e"); emptyList()
+        val bw = bounds.outWidth; val bh = bounds.outHeight
+        val t0 = SystemClock.uptimeMillis()
+        val ms = LongArray(3)   // ML Kit, Paddle, détecteur
+
+        val mlTask = Callable<OcrResult?> {
+            val t = SystemClock.uptimeMillis()
+            try { mlkit.recognize(imageBytes) } catch (e: Throwable) { Log.w("MT", "ML Kit a échoué : $e"); null } finally { ms[0] = SystemClock.uptimeMillis() - t }
         }
-        val dets = try { paddle.detectRegions(imageBytes, w, h) } catch (e: Throwable) {
-            Log.w("MT", "détecteur de bulles : $e"); OcrDebug.note += " [détecteur : ${(e.javaClass.simpleName + ": " + (e.message ?: "")).take(120)}]"; emptyList()
+        val detTask = Callable<List<app.manhwa.core.Detection>> {
+            val t = SystemClock.uptimeMillis()
+            try { paddle.detectRegions(imageBytes, bw, bh) } catch (e: Throwable) {
+                Log.w("MT", "détecteur de bulles : $e"); OcrDebug.note += " [détecteur : ${(e.javaClass.simpleName + ": " + (e.message ?: "")).take(120)}]"; emptyList()
+            } finally { ms[2] = SystemClock.uptimeMillis() - t }
         }
-        OcrDebug.note = (OcrDebug.note + " [zones : bulles=${dets.count { it.cls == app.manhwa.core.RegionClass.BUBBLE }} texte_bulle=${dets.count { it.cls == app.manhwa.core.RegionClass.TEXT_BUBBLE }} texte_libre=${dets.count { it.cls == app.manhwa.core.RegionClass.TEXT_FREE }}]").takeLast(600)
+        fun ppTask(script: String) = Callable<List<OcrLine>> {
+            val t = SystemClock.uptimeMillis()
+            try { paddle.recognize(imageBytes, script, bw, bh) } catch (e: Throwable) { Log.w("MT", "PaddleOCR a échoué : $e"); emptyList() } finally { ms[1] = SystemClock.uptimeMillis() - t }
+        }
+        val fixed: String? = when (source) {
+            SourceLang.JA -> "ja"; SourceLang.KO -> "ko"; SourceLang.ZH_HANS, SourceLang.ZH_HANT -> "zh"; SourceLang.EN -> "en"; SourceLang.AUTO -> null
+        }
+
+        val ml: OcrResult?; val pp: List<OcrLine>; val dets: List<app.manhwa.core.Detection>; val script: String
+        if (parallel) {
+            val mlF = POOL.submit(mlTask); val detF = POOL.submit(detTask)
+            val ppF = if (fixed != null) POOL.submit(ppTask(fixed)) else null
+            ml = mlF.get()
+            script = fixed ?: scriptFor(ml?.lines ?: emptyList())      // écriture « auto » : on attend ML Kit pour la connaître
+            pp = (ppF ?: POOL.submit(ppTask(script))).get()
+            dets = detF.get()
+        } else {
+            ml = mlTask.call()
+            script = fixed ?: scriptFor(ml?.lines ?: emptyList())
+            pp = ppTask(script).call()
+            dets = detTask.call()
+        }
+        val w = ml?.imageWidth ?: bw; val h = ml?.imageHeight ?: bh
+        OcrDebug.timing = "ML Kit ${ms[0]} ms · Paddle ${ms[1]} ms · détecteur ${ms[2]} ms · total ${SystemClock.uptimeMillis() - t0} ms (${if (parallel) "en parallèle" else "en séquence"})"
+        OcrDebug.note = (OcrDebug.note + " [zones : bulles=${dets.count { it.cls == app.manhwa.core.RegionClass.BUBBLE }} texte_bulle=${dets.count { it.cls == app.manhwa.core.RegionClass.TEXT_BUBBLE }} texte_libre=${dets.count { it.cls == app.manhwa.core.RegionClass.TEXT_FREE }}]").takeLast(500)
         return OcrResult(w, h, OcrMerge.merge(ml?.lines ?: emptyList(), pp, script, lexicon), dets)
+    }
+
+    private companion object {
+        /** Trois fils : un par lecteur (ML Kit, PaddleOCR, détecteur) ; ils restent en vie entre les pages. */
+        val POOL: java.util.concurrent.ExecutorService = java.util.concurrent.Executors.newFixedThreadPool(3) { r -> Thread(r, "lecture-ocr").also { it.isDaemon = true } }
     }
 
     private fun scriptFor(mlLines: List<OcrLine>): String = when (source) {

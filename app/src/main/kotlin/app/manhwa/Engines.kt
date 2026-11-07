@@ -31,6 +31,15 @@ object Recognizers {
     val japanese: TextRecognizer by lazy { TextRecognition.getClient(JapaneseTextRecognizerOptions.Builder().build()) }
     val korean: TextRecognizer by lazy { TextRecognition.getClient(KoreanTextRecognizerOptions.Builder().build()) }
     val chinese: TextRecognizer by lazy { TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build()) }
+
+    /** Fait charger à ML Kit le modèle de cette écriture (lecture d'une minuscule image) : la première page ne paie plus ce chargement. */
+    fun warmUp(source: SourceLang) {
+        val rec = when (source) {
+            SourceLang.JA, SourceLang.AUTO -> japanese; SourceLang.KO -> korean; SourceLang.ZH_HANS, SourceLang.ZH_HANT -> chinese; SourceLang.EN -> latin
+        }
+        val bmp = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
+        try { Tasks.await(rec.process(InputImage.fromBitmap(bmp, 0)), 30, TimeUnit.SECONDS) } finally { bmp.recycle() }
+    }
 }
 
 /**

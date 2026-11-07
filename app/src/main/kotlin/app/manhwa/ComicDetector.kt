@@ -34,6 +34,9 @@ class ComicDetector(private val ctx: Context, private val env: OrtEnvironment) {
         env.createSession(bytes, OrtSession.SessionOptions().apply { setIntraOpNumThreads(4) }).also { session = it }
     }
 
+    /** Charge le modèle à l'avance (la première page ne paie plus ce chargement). */
+    fun warmUp() { if (available) load() }
+
     /** Détections sur toute l'image (pixels de l'image d'origine), doublons des recouvrements de tuiles supprimés. */
     fun detect(imageBytes: ByteArray, imageW: Int, imageH: Int): List<Detection> {
         @Suppress("DEPRECATION")

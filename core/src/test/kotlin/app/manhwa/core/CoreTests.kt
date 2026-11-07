@@ -1710,8 +1710,10 @@ fun artEraseTests() {
         val small = byteArrayOf(1, 2, 3, 4, 5, 6, 7, 8, 9)
         val fake = FakeDevTools(mapOf("http://cdn.test/p1.jpg?t=a/b" to big, "http://cdn.test/p2.webp" to small), childUrls = setOf("http://cdn.test/p2.webp"))
         try {
-            val c = CdpClient({ _ -> fake.connect() }, { "http://site.test/ch1" })
+            val c = CdpClient({ ms -> fake.connect().also { it.setReadTimeout(ms) } }, { "http://site.test/ch1" })
+            val t0 = System.currentTimeMillis()
             val b1 = c.imageBytes("http://cdn.test/p1.jpg?t=a/b", 30_000_000)
+            T.ok(System.currentTimeMillis() - t0 < 2000, "connexion et lecture rapides même si le serveur garde la connexion ouverte après sa réponse (${System.currentTimeMillis() - t0} ms)")
             T.ok(b1 != null && b1.contentEquals(big), "image de 300 Ko lue sans altération (message fragmenté, ping et événements au milieu) : ${c.lastReason}")
             val b2 = c.imageBytes("http://cdn.test/p2.webp", 30_000_000)
             T.ok(b2 != null && b2.contentEquals(small), "image d'un cadre enfant retrouvée par l'arbre des ressources")
@@ -1724,8 +1726,19 @@ fun artEraseTests() {
             T.ok(b3 != null && b3.contentEquals(small), "après une coupure : reconnexion automatique (${c.lastReason})")
             c.close()
         } finally { fake.close() }
-        val dead = CdpClient({ _ -> throw java.io.IOException("connexion refusée") })
+        var opens = 0
+        val dead = CdpClient({ _ -> opens++; throw java.io.IOException("connexion refusée") })
         T.ok(dead.imageBytes("http://a/b.png", 1000) == null && dead.lastReason.contains("indisponible"), "serveur de débogage absent : null sans exception (${dead.lastReason})")
+        val t1 = System.currentTimeMillis()
+        for (i in 1..20) dead.imageBytes("http://a/b$i.png", 1000)
+        T.ok(opens == 1 && System.currentTimeMillis() - t1 < 200, "après un échec : pas de nouvelle tentative pendant la période d'attente ($opens connexion(s), ${System.currentTimeMillis() - t1} ms pour 20 images)")
+        // serveur qui ne répond jamais : l'échec doit rester borné par le délai de lecture, jamais bloquer longtemps
+        val mute = java.net.ServerSocket(0)
+        try {
+            val silent = CdpClient({ ms -> val s = java.net.Socket("127.0.0.1", mute.localPort); s.soTimeout = ms; CdpClient.Conn(s.getInputStream(), s.getOutputStream(), { x -> s.soTimeout = x }) { try { s.close() } catch (_: Exception) {} } })
+            val t2 = System.currentTimeMillis()
+            T.ok(silent.imageBytes("http://a/b.png", 1000) == null && System.currentTimeMillis() - t2 < 4500, "serveur muet : échec en moins de 4,5 s (${System.currentTimeMillis() - t2} ms) : ${silent.lastReason}")
+        } finally { mute.close() }
     }
 }
 
@@ -1740,7 +1753,7 @@ class FakeDevTools(private val images: Map<String, ByteArray>, private val child
     init { Thread { while (!server.isClosed) { val s = try { server.accept() } catch (e: Exception) { break }; sockets.add(s); Thread { serve(s) }.also { it.isDaemon = true }.start() } }.also { it.isDaemon = true }.start() }
 
     /** Connexion en mémoire vers ce serveur (comme la prise locale de la WebView). */
-    fun connect(): CdpClient.Conn { val s = java.net.Socket("127.0.0.1", port); return CdpClient.Conn(s.getInputStream(), s.getOutputStream()) { try { s.close() } catch (_: Exception) {} } }
+    fun connect(): CdpClient.Conn { val s = java.net.Socket("127.0.0.1", port); return CdpClient.Conn(s.getInputStream(), s.getOutputStream(), { ms -> try { s.soTimeout = ms } catch (_: Exception) {} }) { try { s.close() } catch (_: Exception) {} } }
     fun dropConnections() { for (s in sockets) try { s.close() } catch (_: Exception) {}; sockets.clear() }
     override fun close() { dropConnections(); try { server.close() } catch (_: Exception) {} }
 
@@ -1758,7 +1771,9 @@ class FakeDevTools(private val images: Map<String, ByteArray>, private val child
             val head = sb.toString(); val path = head.lineSequence().first().split(' ')[1]
             if (path == "/json/list") {
                 val body = """[{"id":"X","type":"service_worker","url":"http://site.test/sw.js","webSocketDebuggerUrl":"ws://localhost/devtools/page/X"},{"id":"P1","type":"page","url":"http://site.test/ch1","webSocketDebuggerUrl":"ws://localhost:$port/devtools/page/P1"}]"""
-                out.write("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: ${body.toByteArray().size}\r\nConnection: close\r\n\r\n$body".toByteArray()); out.flush(); return
+                out.write("HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=UTF-8\r\nContent-Length: ${body.toByteArray().size}\r\n\r\n$body".toByteArray()); out.flush()
+                while (inp.read() >= 0) { }     // comme Chrome : la connexion reste ouverte tant que le client ne la ferme pas
+                return
             }
             if (path != "/devtools/page/P1") { out.write("HTTP/1.1 404 Not Found\r\n\r\n".toByteArray()); return }
             val key = Regex("Sec-WebSocket-Key: (.*)\r\n", RegexOption.IGNORE_CASE).find(head)!!.groupValues[1].trim()
