@@ -14,6 +14,9 @@ DEFS = '''<defs>
  <linearGradient id="pageL" x1="1" y1="0" x2="0" y2="0"><stop offset="0" stop-color="#FFFBE6"/><stop offset="0.6" stop-color="#FFEBB5"/><stop offset="1" stop-color="#F7CF86"/></linearGradient>
  <linearGradient id="pageR" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#FFFBE6"/><stop offset="0.6" stop-color="#FFEBB5"/><stop offset="1" stop-color="#F7CF86"/></linearGradient>
  <linearGradient id="cover" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5A3FC0"/><stop offset="1" stop-color="#2D1C78"/></linearGradient>
+ <linearGradient id="coverL" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7656E6"/><stop offset="1" stop-color="#2B1A74"/></linearGradient>
+ <linearGradient id="coverR" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7656E6"/><stop offset="1" stop-color="#2B1A74"/></linearGradient>
+ <linearGradient id="rimTop" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE3A0" stop-opacity="0.85"/><stop offset="1" stop-color="#FFE3A0" stop-opacity="0"/></linearGradient>
 </defs>'''
 
 def _svg(inner, size):
@@ -53,14 +56,16 @@ BODY = '''
 '''
 
 PAGES = '''
-<path d="M24,82 C35,78 44,79 50,85 C56,79 65,78 76,82 L75,88 C65,84 56,86 50,92 C44,86 35,84 25,88Z" fill="url(#cover)"/>
-<path d="M26,67 C36,63 45,64 50,69 L50,86 C45,81 36,80 26,83Z" fill="url(#pageL)"/>
-<path d="M74,67 C64,63 55,64 50,69 L50,86 C55,81 64,80 74,83Z" fill="url(#pageR)"/>
-<path d="M50,69 L50,86" stroke="#E2B66A" stroke-width="0.8"/>
-<g stroke="#C79B52" stroke-width="0.7" stroke-linecap="round" opacity="0.7" fill="none">
- <path d="M30,70.5 C35,68.6 40,68.8 46,71.6"/><path d="M30,74 C35,72 40,72.2 46,75"/><path d="M30,77.5 C35,75.5 40,75.7 46,78.5"/>
- <path d="M70,70.5 C65,68.6 60,68.8 54,71.6"/><path d="M70,74 C65,72 60,72.2 54,75"/><path d="M70,77.5 C65,75.5 60,75.7 54,78.5"/>
-</g>
+<!-- livre tenu ouvert devant le ventre, vu de dos : la couverture nous fait face, les pages (et la lumière) sont tournées vers le chat -->
+<path d="M25,71 C35,66.6 44,66.6 50,69 L50,91 C44,88.4 35,88.4 26,92Z" fill="url(#coverL)"/>
+<path d="M75,71 C65,66.6 56,66.6 50,69 L50,91 C56,88.4 65,88.4 74,92Z" fill="url(#coverR)"/>
+<path d="M25,71 C35,66.6 44,66.6 50,69 L50,76 C44,73.6 35,73.6 26,77Z" fill="url(#rimTop)"/>
+<path d="M75,71 C65,66.6 56,66.6 50,69 L50,76 C56,73.6 65,73.6 74,77Z" fill="url(#rimTop)"/>
+<path d="M26.5,91.6 C35,88 44,88 50,90.4 C56,88 65,88 73.5,91.6" stroke="#E9C46A" stroke-width="0.9" fill="none" stroke-linecap="round" opacity="0.85"/>
+<path d="M50,69.4 L50,90.6" stroke="#CDB9FF" stroke-width="1.3" opacity="0.75"/>
+<!-- tranche des pages, éclairée par la lumière du livre : un liseré lumineux au bord haut -->
+<path d="M24.4,70.4 C35,65.2 44,65 50,67.8 C56,65 65,65.2 75.6,70.4" stroke="#FFEFB8" stroke-width="2.8" fill="none" stroke-linecap="round"/>
+<path d="M24.4,70.4 C35,65.2 44,65 50,67.8 C56,65 65,65.2 75.6,70.4" stroke="#FFFFFF" stroke-width="1.1" fill="none" stroke-linecap="round" opacity="0.95"/>
 '''
 
 PAWS = '''

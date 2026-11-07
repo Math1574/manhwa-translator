@@ -26,7 +26,7 @@ size = int(S * SCALE); off = (int(S * CX - size / 2), int(S * CY - size / 2))
 holes_inner = '''<rect x="-8" y="-8" width="116" height="116" fill="black"/>
 <g fill="white"><ellipse cx="38.5" cy="40" rx="3.6" ry="3.8"/><ellipse cx="61.5" cy="40" rx="3.6" ry="3.8"/><path d="M47.4,43.4 C49,42.2 51,42.2 52.6,43.4 C51.6,46 48.4,46 47.4,43.4Z"/></g>
 <g stroke="white" fill="none" stroke-linecap="round"><path d="M50,46 L50,48.2 M50,48.2 C48.2,50.2 45.6,49.8 45,48.6 M50,48.2 C51.8,50.2 54.4,49.8 55,48.6" stroke-width="1.2"/>
-<path d="M50,69 L50,86" stroke-width="1.4"/><path d="M27,80 C36,76 44,77 50,83" stroke-width="1.2"/><path d="M73,80 C64,76 56,77 50,83" stroke-width="1.2"/>
+<path d="M50,69.4 L50,90.6" stroke-width="1.5"/><path d="M26,77 C35,73.6 44,73.6 50,76" stroke-width="1.1"/><path d="M74,77 C65,73.6 56,73.6 50,76" stroke-width="1.1"/>
 <path d="M27,40 C26,17 74,17 73,40" stroke-width="1.5"/></g>'''
 h = Image.open(io.BytesIO(cairosvg.svg2png(bytestring=_svg(holes_inner, size).encode()))).convert("L")
 hole = Image.new("L", (S, S), 0); hole.paste(h, off)

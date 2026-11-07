@@ -98,16 +98,13 @@ DRAGON = '''<svg xmlns="http://www.w3.org/2000/svg" width="SIZE" height="SIZE" v
 <path d="M18,40 C8,38 6,30 8,24 C14,28 20,32 22,38Z" fill="url(#wing)"/><path d="M82,40 C92,38 94,30 92,24 C86,28 80,32 78,38Z" fill="url(#wing)"/>
 <!-- tête -->
 <path d="M50,18 C74,18 86,32 86,48 C86,64 72,72 50,72 C28,72 14,64 14,48 C14,32 26,18 50,18Z" fill="url(#red)"/>
-<ellipse cx="50" cy="58" rx="19" ry="12.5" fill="#FF9E8E"/><ellipse cx="50" cy="59" rx="16.5" ry="10.2" fill="#FFB8A8"/>
-<ellipse cx="44" cy="56" rx="1.8" ry="1.3" fill="#8F2440"/><ellipse cx="56" cy="56" rx="1.8" ry="1.3" fill="#8F2440"/>
+<path d="M45.2,57 C46,55.6 47.6,55.8 48,57" stroke="#8F2440" stroke-width="1.3" fill="none" stroke-linecap="round"/><path d="M52,57 C52.4,55.8 54,55.6 54.8,57" stroke="#8F2440" stroke-width="1.3" fill="none" stroke-linecap="round"/>
 <ellipse cx="27" cy="58" rx="7.5" ry="4.8" fill="url(#blush)"/><ellipse cx="73" cy="58" rx="7.5" ry="4.8" fill="url(#blush)"/>
 <!-- yeux et sourcils : sourire malicieux -->
 <ellipse cx="35" cy="45" rx="8.2" ry="9" fill="#FFF7EE"/><ellipse cx="65" cy="45" rx="8.2" ry="9" fill="#FFF7EE"/>
 <ellipse cx="36" cy="46.4" rx="6" ry="6.8" fill="url(#eyeI)"/><ellipse cx="64" cy="46.4" rx="6" ry="6.8" fill="url(#eyeI)"/>
 <ellipse cx="36.6" cy="47" rx="3.3" ry="4.4" fill="#1A0F33"/><ellipse cx="63.4" cy="47" rx="3.3" ry="4.4" fill="#1A0F33"/>
 <circle cx="34.4" cy="43.8" r="2" fill="#FFFFFF"/><circle cx="62" cy="43.8" r="2" fill="#FFFFFF"/><circle cx="38.4" cy="49.6" r="0.9" fill="#FFFFFF" opacity="0.9"/><circle cx="65.6" cy="49.6" r="0.9" fill="#FFFFFF" opacity="0.9"/>
-<path d="M26.6,45 C27.4,37 43,36.6 43.4,44.6 C39.6,42.4 31,42.6 26.6,45Z" fill="url(#red)"/>
-<path d="M26.6,45 C31,42.6 39.6,42.4 43.4,44.6" stroke="#7A1E3C" stroke-width="1.1" fill="none" stroke-linecap="round"/>
 <path d="M26,35.4 C30,32.6 36,32.4 42,34" stroke="#7A1E3C" stroke-width="1.7" fill="none" stroke-linecap="round"/><path d="M57,31.6 C63,28.4 70,29.2 74,33" stroke="#7A1E3C" stroke-width="1.7" fill="none" stroke-linecap="round"/>
 <path d="M40,64 C45,69 55,69 61,62.6" stroke="#7A1E3C" stroke-width="1.5" fill="none" stroke-linecap="round"/><path d="M44.5,66.2 L46.2,69.8 L48.2,67.4Z" fill="#FFFFFF" stroke="#7A1E3C" stroke-width="0.5" stroke-linejoin="round"/>
 <!-- petite flamme dans la patte -->

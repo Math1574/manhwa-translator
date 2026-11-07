@@ -125,7 +125,10 @@ for k in 1 2 3; do
 done
 shot ui 0
 uidump fs0; chk "plein écran : rien d'affiché au repos" $(hasnot fs0 'Quitter le plein')
-adb shell input tap 540 1200; sleep 2; uidump fs1; chk "plein écran : un appui ouvre le menu de lecture" $(has fs1 'Quitter le plein'); shot ui 1
+# diagnostic : quelle fenêtre a le focus, et quelle activité est au premier plan, avant le premier appui
+adb shell dumpsys window | grep -E "mCurrentFocus" | head -2 | sed 's/^/  [avant appui] /' | tee -a $OUT/run.log
+adb shell dumpsys activity activities | grep -E "ResumedActivity" | head -2 | sed 's/^/  [avant appui] /' | tee -a $OUT/run.log
+adb shell input tap 540 1200; sleep 2; adb shell dumpsys window | grep -E "mCurrentFocus" | head -1 | sed 's/^/  [après appui] /' | tee -a $OUT/run.log; uidump fs1; chk "plein écran : un appui ouvre le menu de lecture" $(has fs1 'Quitter le plein'); shot ui 1
 chk "plein écran : le menu propose Original | Traduit et les chapitres" $([ "$(has fs1 'Original')" = 1 ] && [ "$(has fs1 'Traduit')" = 1 ] && [ "$(has fs1 'Suivant')" = 1 ] && echo 1 || echo 0)
 adb shell input tap 540 1200; sleep 2; uidump fs2; chk "plein écran : un second appui le referme" $(hasnot fs2 'Quitter le plein')
 adb shell input tap 540 1200; sleep 2; uidump fs3; tapt fs3 "Quitter le plein"; sleep 2; uidump nav
@@ -153,6 +156,9 @@ tapt set3 "=Apparence" 1 top; sleep 2; uidump setap; shot ui 7
 chk "réglages : la carte Apparence propose mascotte, accent et fond" $([ "$(has setap 'Mascotte')" = 1 ] && [ "$(has setap 'Couleur d')" = 1 ] && echo 1 || echo 0)
 tapt setap "=Hibou savant" 1; sleep 1.5; uidump setap2; shot ui 8
 chk "réglages : choisir une autre mascotte met à jour sa présentation" $(has setap2 'Hibou savant : il relit')
+# diagnostic : plantages ou blocages système pendant le scénario
+adb logcat -d -v brief 2>/dev/null | grep -iE "ANR in|Application Not Responding|FATAL EXCEPTION|AndroidRuntime|Process .* has died|am_crash|am_anr" | tail -30 > $OUT/reports/ui_logcat.txt
+echo "  [journal système] $(wc -l < $OUT/reports/ui_logcat.txt) ligne(s) d'ANR ou de plantage" | tee -a $OUT/run.log
 # raccourci « Reprendre la lecture » de l'icône : publié d'après la dernière œuvre lue
 adb shell dumpsys shortcut > $OUT/reports/shortcut.txt 2>/dev/null
 chk "raccourci : « Reprendre la lecture » publié pour l'œuvre lue" $([ "$(grep -c 'id=resume' $OUT/reports/shortcut.txt)" -gt 0 ] && grep -q 'Test Series' $OUT/reports/shortcut.txt && echo 1 || echo 0)
