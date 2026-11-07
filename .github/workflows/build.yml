@@ -25,7 +25,7 @@ jobs:
       - run: gradle :core:test --no-daemon
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
-      - name: Script de garde du bloqueur (JavaScript) : syntaxe et comportements dans un navigateur simulé
+      - name: "Script de garde du bloqueur (JavaScript), syntaxe et comportements dans un navigateur simulé"
         run: |
           cd tools/adblock
           npm init -y >/dev/null 2>&1
