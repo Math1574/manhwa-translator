@@ -22,9 +22,10 @@ object RequestTypes {
             "object", "embed" -> return ResType.OBJECT
         }
         val a = accept?.lowercase() ?: ""
+        // la navigation d'un cadre (« text/html,application/xhtml+xml,…,image/avif,image/webp,… ») cite aussi des formats d'image : on la reconnaît d'abord
+        if (a.startsWith("text/html") || a.contains("application/xhtml+xml")) return ResType.SUBDOCUMENT
         if (a.startsWith("image/") || a.contains("image/avif") || a.contains("image/webp") || a.contains("image/apng")) return ResType.IMAGE
         if (a.contains("text/css")) return ResType.STYLESHEET
-        if (a.startsWith("text/html") || a.contains("application/xhtml+xml")) return ResType.SUBDOCUMENT
         val ext = extensionOf(url)
         if (ext == "js" || ext == "mjs") return ResType.SCRIPT
         if (ext == "css") return ResType.STYLESHEET

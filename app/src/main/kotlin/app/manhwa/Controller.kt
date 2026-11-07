@@ -336,15 +336,20 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             }
 
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
-                if (request.isForMainFrame) return testProxy(request)
+                if (request.isForMainFrame) {
+                    // la page demandée devient la page courante dès maintenant : ses premières sous-requêtes peuvent partir avant onPageStarted
+                    if (request.url.scheme?.startsWith("http") == true) pageUrl = request.url.toString()
+                    return testProxy(request)
+                }
                 request.requestHeaders.let { h ->
                     val accept = (h["Accept"] ?: "").lowercase()
                     if (h["Sec-Fetch-Dest"] == "image" || accept.startsWith("image/") || accept.contains("image/avif") || accept.contains("image/webp")) rememberImageHeaders(request.url.toString(), h)
                 }
-                val page = pageUrl
+                val h = request.requestHeaders
+                // page inconnue (aucune page encore chargée) : le Referer de la requête désigne la page qui l'a émise
+                val page = pageUrl ?: h["Referer"]?.takeIf { it.startsWith("http") }
                 if (!blockerOn(page)) return testProxy(request)
                 val url = request.url.toString()
-                val h = request.requestHeaders
                 val type = RequestTypes.infer(false, h["Accept"], url, request.method, h["X-Requested-With"], h["Sec-Fetch-Dest"])
                 graph.adFilters.awaitEngine(10_000)
                 val eng = graph.adFilters.engine

@@ -1590,6 +1590,16 @@ fun artEraseTests() {
         T.ok(e.check("https://pub-reseau.com/a", page, ResType.AMBIGUOUS).blocked, "nature incertaine : règle sans type applicable")
         T.ok(!e.check("data:text/plain,abc", page, ResType.SCRIPT).blocked, "adresse sans hôte")
     }
+    T.test("filtres : un cadre publicitaire est reconnu comme cadre, même avec l'Accept de navigation de Chrome") {
+        val e = FilterEngine.build(listOf("||cadre-pub.example/slot^\$subdocument", "||autre-pub.example^\$3p,subdocument"))
+        val page = "https://lecteur.com/ch1"
+        val chromeNav = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
+        val ty = RequestTypes.infer(false, chromeNav, "https://cadre-pub.example/slot?id=3", "GET", null, null)
+        T.ok(ty == ResType.SUBDOCUMENT, "type déduit : cadre")
+        T.ok(e.check("https://cadre-pub.example/slot?id=3", page, ty).blocked, "règle \$subdocument appliquée au cadre")
+        T.ok(!e.check("https://cadre-pub.example/slot?id=3", page, ResType.SCRIPT).blocked, "la même adresse chargée comme script n'est pas concernée")
+        T.ok(e.check("https://autre-pub.example/x", page, RequestTypes.infer(false, chromeNav, "https://autre-pub.example/x", "GET", null, null)).blocked, "cadre tiers visé par \$3p,subdocument")
+    }
     T.test("filtres : options abrégées $3p et $1p en première position") {
         val e = FilterEngine.build(listOf("||regie-tierce.com^\$3p", "||interne.net/ads/\$1p", "/promo-tierce/\$3p,script"))
         val page = "https://lecteur.com/ch1"
@@ -1659,6 +1669,8 @@ fun artEraseTests() {
         T.ok(t(accept = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8", url = "https://a.com/i?id=3") == ResType.IMAGE, "Accept d'image")
         T.ok(t(accept = "text/css,*/*;q=0.1") == ResType.STYLESHEET, "feuille de style")
         T.ok(t(accept = "text/html,application/xhtml+xml,application/xml;q=0.9") == ResType.SUBDOCUMENT, "cadre")
+        T.ok(t(accept = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7") == ResType.SUBDOCUMENT, "cadre : l'Accept de Chrome cite aussi image/avif et image/webp")
+        T.ok(t(accept = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8") == ResType.IMAGE, "image : l'Accept d'une image reste une image")
         T.ok(t(url = "https://a.com/lib/app.min.js?v=3") == ResType.SCRIPT, "extension .js malgré la chaîne de requête")
         T.ok(t(url = "https://a.com/f/x.woff2") == ResType.FONT && t(url = "https://a.com/v/x.mp4") == ResType.MEDIA, "police, média")
         T.ok(t(xhr = "XMLHttpRequest", url = "https://a.com/api") == ResType.XHR && t(method = "POST", url = "https://a.com/api") == ResType.XHR, "XHR")
