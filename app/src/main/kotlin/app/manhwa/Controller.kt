@@ -26,6 +26,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import app.manhwa.core.AdBlocker
 import app.manhwa.core.AdVerdict
+import app.manhwa.core.CdpClient
 import app.manhwa.core.NavDecision
 import app.manhwa.core.NavigationPolicy
 import app.manhwa.core.RequestTypes
@@ -74,6 +75,14 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     /** Lu une fois sur le thread principal : la WebView ne doit pas être appelée depuis les threads de traitement. */
     @Volatile private var userAgent: String = "Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Chrome/130 Mobile Safari/537.36"
     private val b64Waiters = ConcurrentHashMap<String, CompletableFuture<String>>()
+    /** En-têtes que la WebView a elle-même envoyés pour chaque image (adresse → en-têtes) : le téléchargement séparé de secours les rejoue. */
+    private val seenImageHeaders = object : LinkedHashMap<String, Map<String, String>>(256, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Map<String, String>>) = size > 400
+    }
+    /** Image → (comment ses octets ont été obtenus, durée en ms) : pour le journal de diagnostic. */
+    private val fetchInfo = ConcurrentHashMap<String, Pair<String, Long>>()
+    /** Relit les images déjà chargées par la page dans la WebView elle-même (mêmes cookies, mêmes protections, aucun second téléchargement). */
+    private val devTools = CdpClient({ ms -> openDevToolsSocket(ms) }, { currentUrl.ifEmpty { null } })
 
     // État observé par l'interface
     var currentUrl by mutableStateOf("")
@@ -210,6 +219,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
     // Tests automatiques (builds debug) : journal détaillé de chaque image traitée
     @Volatile var testing = false
+    /** Tests automatiques : coupe la lecture des images par la WebView pour essayer le téléchargement séparé seul. */
+    @Volatile var testNoDevTools = false
     val testLog = ConcurrentLinkedQueue<JSONObject>()
     fun isReady(): Boolean = webView != null
 
@@ -281,6 +292,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     @SuppressLint("SetJavaScriptEnabled")
     fun obtainWebView(c: Context): WebView {
         webView?.let { (it.parent as? ViewGroup)?.removeView(it); return it }
+        // sert uniquement à relire les images que la page a chargées (prise locale réservée à cette application) ; voir CdpClient
+        WebView.setWebContentsDebuggingEnabled(true)
         val wv = WebView(c)
         userAgent = wv.settings.userAgentString
         wv.settings.apply {
@@ -318,11 +331,16 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                 if (request.isForMainFrame) return testProxy(request)
+                request.requestHeaders.let { h ->
+                    val accept = (h["Accept"] ?: "").lowercase()
+                    if (h["Sec-Fetch-Dest"] == "image" || accept.startsWith("image/") || accept.contains("image/avif") || accept.contains("image/webp")) rememberImageHeaders(request.url.toString(), h)
+                }
                 val page = pageUrl
                 if (!blockerOn(page)) return testProxy(request)
                 val url = request.url.toString()
                 val h = request.requestHeaders
                 val type = RequestTypes.infer(false, h["Accept"], url, request.method, h["X-Requested-With"], h["Sec-Fetch-Dest"])
+                graph.adFilters.awaitEngine(3000)
                 val eng = graph.adFilters.engine
                 val v = if (eng != null) eng.check(url, page, type) else legacyVerdict(url, type, page)
                 if (!v.blocked) return testProxy(request)
@@ -628,7 +646,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         }
         graph.journal.add(
             JSONObject().put("t", System.currentTimeMillis()).put("type", "page").put("url", pageUrl).put("series", graph.gemma.seriesTitle ?: "")
-                .put("engine", engineId).put("img", c.id).put("w", out.result.imageWidth).put("h", out.result.imageHeight).put("ms", ms).put("dbg", OcrDebug.note.take(1500)).put("blocks", blocks),
+                .put("engine", engineId).put("img", c.id).put("w", out.result.imageWidth).put("h", out.result.imageHeight).put("ms", ms)
+                .put("fetch", fetchInfo[c.id]?.first ?: "").put("fetchMs", fetchInfo[c.id]?.second ?: 0L).put("dbg", OcrDebug.note.take(1500)).put("blocks", blocks),
         )
     }
 
@@ -675,7 +694,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     }
 
     private fun logForTest(c: Candidate, out: PageOutcome, debug: DebugInfo?, overlay: JSONObject?, ms: Long) {
-        val e = JSONObject().put("id", c.id).put("src", c.src).put("ms", ms)
+        val e = JSONObject().put("id", c.id).put("src", c.src).put("ms", ms).put("fetch", fetchInfo[c.id]?.first ?: "").put("fetchMs", fetchInfo[c.id]?.second ?: 0L)
         when (out) {
             is PageOutcome.Done -> {
                 e.put("outcome", if (out.fromCache) "done-cache" else "done").put("w", out.result.imageWidth).put("h", out.result.imageHeight)
@@ -698,20 +717,59 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         testLog.add(e)
     }
 
-    /** Récupère l'image comme le ferait le navigateur (mêmes cookies, même Referer), sans contourner aucune protection. */
-    private fun fetch(c: Candidate, pageUrl: String): ByteArray {
-        if (c.src == "js:") return fetchViaPage(c.id)
-        val scheme = c.src.substringBefore(':').lowercase()
-        if (scheme != "http" && scheme != "https") throw IOException("Adresse d'image non prise en charge")
-        val conn = URL(c.src).openConnection() as HttpURLConnection
+    private val replayedHeaders = setOf("referer", "accept", "user-agent", "accept-language", "sec-ch-ua", "sec-ch-ua-mobile", "sec-ch-ua-platform", "sec-fetch-dest", "sec-fetch-mode", "sec-fetch-site")
+
+    private fun rememberImageHeaders(url: String, h: Map<String, String>) {
+        val keep = HashMap<String, String>()
+        for ((k, v) in h) if (k.lowercase() in replayedHeaders) keep[k] = v
+        if (keep.isNotEmpty()) synchronized(seenImageHeaders) { seenImageHeaders[url] = keep }
+    }
+
+    private fun openDevToolsSocket(readTimeoutMs: Int): CdpClient.Conn {
+        val sock = android.net.LocalSocket()
+        try {
+            sock.connect(android.net.LocalSocketAddress("webview_devtools_remote_" + android.os.Process.myPid(), android.net.LocalSocketAddress.Namespace.ABSTRACT))
+            sock.soTimeout = readTimeoutMs
+        } catch (e: Throwable) { try { sock.close() } catch (_: Throwable) {}; throw e }
+        return CdpClient.Conn(sock.inputStream, sock.outputStream) {
+            try { sock.shutdownInput() } catch (_: Throwable) {}
+            try { sock.shutdownOutput() } catch (_: Throwable) {}
+            try { sock.close() } catch (_: Throwable) {}
+        }
+    }
+
+    private fun originOf(url: String): String? = try { java.net.URI(url).let { if (it.scheme != null && it.authority != null) "${it.scheme}://${it.authority}" else null } } catch (_: Throwable) { null }
+
+    /** Séries d'en-têtes à essayer pour un téléchargement séparé : d'abord exactement ceux que la WebView a envoyés, puis des variantes du Referer (origine seule, adresse complète, aucun). */
+    private fun downloadAttempts(c: Candidate, pageUrl: String): List<Map<String, String>> {
+        val seen = synchronized(seenImageHeaders) { seenImageHeaders[c.src] }
+        val origin = originOf(pageUrl)
+        val sameOrigin = origin != null && originOf(c.src) == origin
+        val site = if (sameOrigin) "same-origin" else if (Sites.sameSite(Sites.hostOf(c.src), Sites.hostOf(pageUrl))) "same-site" else "cross-site"
+        fun base() = java.util.TreeMap<String, String>(String.CASE_INSENSITIVE_ORDER).also {
+            it["User-Agent"] = userAgent
+            it["Accept"] = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
+            it["Accept-Language"] = java.util.Locale.getDefault().toLanguageTag() + ",en;q=0.8"
+            it["Sec-Fetch-Dest"] = "image"; it["Sec-Fetch-Mode"] = "no-cors"; it["Sec-Fetch-Site"] = site
+        }
+        val list = ArrayList<Map<String, String>>()
+        if (seen != null) list.add(base().also { m -> for ((k, v) in seen) m[k] = v })
+        list.add(base().also { if (pageUrl.isNotEmpty()) it["Referer"] = if (sameOrigin) pageUrl else (origin ?: pageUrl) + "/" })
+        if (pageUrl.isNotEmpty()) list.add(base().also { it["Referer"] = pageUrl })
+        list.add(base())
+        return list.distinct()
+    }
+
+    /** Téléchargement séparé : code HTTP et, si 200, les octets. */
+    private fun download(src: String, headers: Map<String, String>): Pair<Int, ByteArray?> {
+        val conn = URL(src).openConnection() as HttpURLConnection
         try {
             conn.connectTimeout = 15_000
             conn.readTimeout = 30_000
-            conn.setRequestProperty("User-Agent", userAgent)
-            conn.setRequestProperty("Accept", "image/avif,image/webp,image/*,*/*;q=0.8")
-            if (pageUrl.isNotEmpty()) conn.setRequestProperty("Referer", pageUrl)
-            CookieManager.getInstance().getCookie(c.src)?.let { conn.setRequestProperty("Cookie", it) }
-            if (conn.responseCode != 200) throw IOException("HTTP ${conn.responseCode}")
+            for ((k, v) in headers) conn.setRequestProperty(k, v)
+            CookieManager.getInstance().getCookie(src)?.let { conn.setRequestProperty("Cookie", it) }
+            val code = conn.responseCode
+            if (code != 200) return code to null
             val out = ByteArrayOutputStream()
             conn.inputStream.use { input ->
                 val buf = ByteArray(64 * 1024)
@@ -722,10 +780,39 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                     if (out.size() > MAX_IMAGE_BYTES) throw IOException("Image trop volumineuse")
                 }
             }
-            return out.toByteArray()
+            return 200 to out.toByteArray()
         } finally {
             conn.disconnect()
         }
+    }
+
+    /**
+     * Récupère l'image à traduire, du plus fidèle au plus fragile :
+     *  1. les octets que la page a déjà chargés, lus dans la WebView (mêmes cookies, mêmes protections anti-copie, aucun second téléchargement) ;
+     *  2. un téléchargement séparé avec les en-têtes que la WebView a elle-même envoyés (puis variantes du Referer) ;
+     *  3. un fetch dans la page (marche si le serveur d'images autorise la lecture inter-sites).
+     * Aucune protection n'est contournée : on ne lit que ce que la page a elle-même chargé et affiche.
+     */
+    private fun fetch(c: Candidate, pageUrl: String): ByteArray {
+        val t0 = SystemClock.uptimeMillis()
+        fun got(b: ByteArray, how: String): ByteArray { fetchInfo[c.id] = how to (SystemClock.uptimeMillis() - t0); return b }
+        if (c.src == "js:") return got(fetchViaPage(c.id), "page (blob)")
+        val scheme = c.src.substringBefore(':').lowercase()
+        if (scheme != "http" && scheme != "https") throw IOException("Adresse d'image non prise en charge")
+        if (!testNoDevTools) devTools.imageBytes(c.src, MAX_IMAGE_BYTES)?.let { return got(it, "page") }
+        val why = if (testNoDevTools) "lecture par la WebView coupée (test)" else devTools.lastReason
+        var code = 0
+        var failure: String? = null
+        for (headers in downloadAttempts(c, pageUrl)) {
+            try {
+                val r = download(c.src, headers)
+                if (r.first == 200 && r.second != null) return got(r.second!!, "réseau")
+                code = r.first
+                if (code != 401 && code != 403) break
+            } catch (e: IOException) { failure = e.message; break }
+        }
+        try { return got(fetchViaPage(c.id), "page (fetch)") } catch (_: Exception) {}
+        throw IOException(if (code != 0) "HTTP $code : le site refuse le téléchargement séparé de l'image, et la page ne l'a pas fournie ($why)" else (failure ?: "téléchargement impossible"))
     }
 
     /** Images blob: ou data: : le script de la page renvoie les octets en base64. */

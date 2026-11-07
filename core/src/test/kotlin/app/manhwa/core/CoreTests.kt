@@ -1673,4 +1673,128 @@ fun artEraseTests() {
         val r = AppSettings.parse(st.serialize()); T.ok(r.adAllowSites == st.adAllowSites && r.adAllowTargets == "x.net", "aller-retour")
         T.ok(AppSettings().adAllowSiteSet.isEmpty() && AppSettings().blockAds, "défauts : bloqueur actif, aucun site exclu")
     }
+
+    // ---------- relecture des images par le protocole de débogage de la WebView ----------
+    T.test("WebSocket : trames émises et reçues, longueurs étendues, fragments et ping") {
+        for (n in listOf(0, 5, 125, 126, 300, 65535, 65536, 200_000)) {
+            val payload = ByteArray(n) { (it * 7 + 3).toByte() }
+            val frame = WebSocketFrames.clientFrame(1, payload)
+            val back = WebSocketFrames.readMessage(java.io.ByteArrayInputStream(frame), {})
+            T.ok(back != null && back.contentEquals(payload), "aller-retour de $n octets (trame masquée)")
+        }
+        fun srv(op: Int, fin: Boolean, p: ByteArray): ByteArray = java.io.ByteArrayOutputStream().also { o ->
+            o.write((if (fin) 0x80 else 0) or op); o.write(p.size); o.write(p)
+        }.toByteArray()
+        val pongs = ArrayList<String>()
+        val stream = srv(1, false, "abc".toByteArray()) + srv(9, true, "?".toByteArray()) + srv(0, false, "def".toByteArray()) + srv(0, true, "ghi".toByteArray()) + srv(1, true, "suite".toByteArray())
+        val inp = java.io.ByteArrayInputStream(stream)
+        T.ok(String(WebSocketFrames.readMessage(inp, { pongs.add(String(it)) })!!) == "abcdefghi" && pongs == listOf("?"), "fragments recollés, ping sans perdre le message")
+        T.ok(String(WebSocketFrames.readMessage(inp, {})!!) == "suite" && WebSocketFrames.readMessage(inp, {}) == null, "message suivant puis fin du flux")
+        T.ok(WebSocketFrames.readMessage(java.io.ByteArrayInputStream(srv(8, true, ByteArray(0))), {}) == null, "fermeture par l'autre côté")
+        var tooBig = false; try { WebSocketFrames.readMessage(java.io.ByteArrayInputStream(WebSocketFrames.clientFrame(1, ByteArray(500))), {}, 100) } catch (e: java.io.IOException) { tooBig = true }
+        T.ok(tooBig, "message plus gros que la limite refusé")
+    }
+    T.test("JSON minimal : objets, tableaux, échappements, nombres") {
+        @Suppress("UNCHECKED_CAST")
+        val m = MiniJson.parse("""{"id":12,"result":{"a":[1,2.5,-3e2,true,false,null,"x\"y\\z\u00e9\/"],"b":{}},"s":"é"}""") as Map<String, Any?>
+        T.ok((m["id"] as Double) == 12.0, "nombre")
+        @Suppress("UNCHECKED_CAST") val r = m["result"] as Map<String, Any?>
+        @Suppress("UNCHECKED_CAST") val a = r["a"] as List<Any?>
+        T.ok(a.size == 7 && a[1] == 2.5 && a[2] == -300.0 && a[3] == true && a[5] == null && a[6] == "x\"y\\zé/", "tableau et chaîne échappée : ${a[6]}")
+        T.ok((r["b"] as Map<*, *>).isEmpty() && m["s"] == "é", "objet vide, texte accentué")
+        var bad = 0; for (x in listOf("{", "[1,", "{\"a\" 1}", "tru", "[1] 2")) try { MiniJson.parse(x) } catch (e: Throwable) { bad++ }
+        T.ok(bad == 5, "textes invalides refusés ($bad/5)")
+    }
+    T.test("débogage de la WebView : relecture des octets d'une image déjà chargée (faux serveur)") {
+        val big = ByteArray(300_000) { ((it * 31) xor (it ushr 8)).toByte() }
+        val small = byteArrayOf(1, 2, 3, 4, 5, 6, 7, 8, 9)
+        val fake = FakeDevTools(mapOf("http://cdn.test/p1.jpg?t=a/b" to big, "http://cdn.test/p2.webp" to small), childUrls = setOf("http://cdn.test/p2.webp"))
+        try {
+            val c = CdpClient({ _ -> fake.connect() }, { "http://site.test/ch1" })
+            val b1 = c.imageBytes("http://cdn.test/p1.jpg?t=a/b", 30_000_000)
+            T.ok(b1 != null && b1.contentEquals(big), "image de 300 Ko lue sans altération (message fragmenté, ping et événements au milieu) : ${c.lastReason}")
+            val b2 = c.imageBytes("http://cdn.test/p2.webp", 30_000_000)
+            T.ok(b2 != null && b2.contentEquals(small), "image d'un cadre enfant retrouvée par l'arbre des ressources")
+            T.ok(c.imageBytes("http://cdn.test/inconnue.png", 30_000_000) == null && c.lastReason.contains("absente"), "image absente des ressources de la page : null et motif « ${c.lastReason} »")
+            T.ok(c.imageBytes("http://cdn.test/p1.jpg?t=a/b", 1000) == null && c.lastReason.contains("volumineuse"), "limite de taille respectée")
+            T.ok(fake.methods.count { it == "Page.enable" } == 1, "Page.enable une seule fois (${fake.methods})")
+            fake.dropConnections()
+            Thread.sleep(150)
+            val b3 = c.imageBytes("http://cdn.test/p2.webp", 30_000_000)
+            T.ok(b3 != null && b3.contentEquals(small), "après une coupure : reconnexion automatique (${c.lastReason})")
+            c.close()
+        } finally { fake.close() }
+        val dead = CdpClient({ _ -> throw java.io.IOException("connexion refusée") })
+        T.ok(dead.imageBytes("http://a/b.png", 1000) == null && dead.lastReason.contains("indisponible"), "serveur de débogage absent : null sans exception (${dead.lastReason})")
+    }
+}
+
+
+/** Faux serveur de débogage de Chrome pour les tests : /json/list, poignée de main WebSocket, Page.enable, Page.getResourceTree et Page.getResourceContent. */
+class FakeDevTools(private val images: Map<String, ByteArray>, private val childUrls: Set<String> = emptySet()) : AutoCloseable {
+    private val server = java.net.ServerSocket(0)
+    private val sockets = java.util.concurrent.CopyOnWriteArrayList<java.net.Socket>()
+    val methods = java.util.concurrent.CopyOnWriteArrayList<String>()
+    private val port get() = server.localPort
+
+    init { Thread { while (!server.isClosed) { val s = try { server.accept() } catch (e: Exception) { break }; sockets.add(s); Thread { serve(s) }.also { it.isDaemon = true }.start() } }.also { it.isDaemon = true }.start() }
+
+    /** Connexion en mémoire vers ce serveur (comme la prise locale de la WebView). */
+    fun connect(): CdpClient.Conn { val s = java.net.Socket("127.0.0.1", port); return CdpClient.Conn(s.getInputStream(), s.getOutputStream()) { try { s.close() } catch (_: Exception) {} } }
+    fun dropConnections() { for (s in sockets) try { s.close() } catch (_: Exception) {}; sockets.clear() }
+    override fun close() { dropConnections(); try { server.close() } catch (_: Exception) {} }
+
+    private fun frame(op: Int, fin: Boolean, p: ByteArray): ByteArray {
+        val o = java.io.ByteArrayOutputStream()
+        o.write((if (fin) 0x80 else 0) or op)
+        when { p.size < 126 -> o.write(p.size); p.size < 65536 -> { o.write(126); o.write(p.size ushr 8); o.write(p.size and 255) }; else -> { o.write(127); for (i in 7 downTo 0) o.write(((p.size.toLong() ushr (8 * i)) and 255).toInt()) } }
+        o.write(p); return o.toByteArray()
+    }
+
+    private fun serve(s: java.net.Socket) {
+        try {
+            val inp = s.getInputStream(); val out = s.getOutputStream()
+            val sb = StringBuilder(); while (!sb.endsWith("\r\n\r\n")) { val b = inp.read(); if (b < 0) return; sb.append(b.toChar()) }
+            val head = sb.toString(); val path = head.lineSequence().first().split(' ')[1]
+            if (path == "/json/list") {
+                val body = """[{"id":"X","type":"service_worker","url":"http://site.test/sw.js","webSocketDebuggerUrl":"ws://localhost/devtools/page/X"},{"id":"P1","type":"page","url":"http://site.test/ch1","webSocketDebuggerUrl":"ws://localhost:$port/devtools/page/P1"}]"""
+                out.write("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: ${body.toByteArray().size}\r\nConnection: close\r\n\r\n$body".toByteArray()); out.flush(); return
+            }
+            if (path != "/devtools/page/P1") { out.write("HTTP/1.1 404 Not Found\r\n\r\n".toByteArray()); return }
+            val key = Regex("Sec-WebSocket-Key: (.*)\r\n", RegexOption.IGNORE_CASE).find(head)!!.groupValues[1].trim()
+            val accept = java.util.Base64.getEncoder().encodeToString(java.security.MessageDigest.getInstance("SHA-1").digest((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").toByteArray()))
+            out.write("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: $accept\r\n\r\n".toByteArray()); out.flush()
+            while (true) {
+                val m = WebSocketFrames.readMessage(inp, {}) ?: break
+                val text = String(m, Charsets.UTF_8)
+                val id = Regex("\"id\":(\\d+)").find(text)!!.groupValues[1]
+                val method = Regex("\"method\":\"([^\"]+)\"").find(text)!!.groupValues[1]
+                methods.add(method)
+                out.write(frame(1, true, "{\"method\":\"Page.frameStartedLoading\",\"params\":{\"frameId\":\"F0\"}}".toByteArray()))     // du bruit : un événement sans « id »
+                when (method) {
+                    "Page.enable" -> out.write(frame(1, true, "{\"id\":$id,\"result\":{}}".toByteArray()))
+                    "Page.getResourceTree" -> {
+                        fun res(u: String) = "{\"url\":\"${u.replace("\"", "\\\"")}\",\"type\":\"Image\",\"mimeType\":\"image/jpeg\",\"contentSize\":${images[u]?.size ?: 0}}"
+                        val mainRes = images.keys.filter { it !in childUrls }.joinToString(",") { res(it) }
+                        val childRes = images.keys.filter { it in childUrls }.joinToString(",") { res(it) }
+                        out.write(frame(1, true, ("{\"id\":$id,\"result\":{\"frameTree\":{\"frame\":{\"id\":\"F0\",\"url\":\"http://site.test/ch1\"},\"childFrames\":[{\"frame\":{\"id\":\"F1\",\"url\":\"http://ads.test/\"},\"resources\":[$childRes]}],\"resources\":[$mainRes]}}}").toByteArray()))
+                    }
+                    "Page.getResourceContent" -> {
+                        val url = Regex("\"url\":\"((?:[^\"\\\\]|\\\\.)*)\"").find(text)!!.groupValues[1].replace("\\\"", "\"").replace("\\\\", "\\")
+                        val frameId = Regex("\"frameId\":\"([^\"]+)\"").find(text)!!.groupValues[1]
+                        val data = images[url]
+                        val okFrame = if (url in childUrls) frameId == "F1" else frameId == "F0"
+                        if (data == null || !okFrame) out.write(frame(1, true, "{\"id\":$id,\"error\":{\"code\":-32000,\"message\":\"No resource with given URL found\"}}".toByteArray()))
+                        else {
+                            val body = ("{\"id\":$id,\"result\":{\"content\":\"" + java.util.Base64.getEncoder().encodeToString(data) + "\",\"base64Encoded\":true}}").toByteArray()
+                            if (body.size < 100_000) out.write(frame(1, true, body))
+                            else { val a = body.size / 3; out.write(frame(1, false, body.copyOfRange(0, a))); out.write(frame(9, true, "ping".toByteArray())); out.write(frame(0, false, body.copyOfRange(a, 2 * a))); out.write(frame(0, true, body.copyOfRange(2 * a, body.size))) }
+                        }
+                    }
+                    else -> out.write(frame(1, true, "{\"id\":$id,\"error\":{\"code\":-32601,\"message\":\"méthode inconnue\"}}".toByteArray()))
+                }
+                out.flush()
+            }
+        } catch (_: Exception) {} finally { try { s.close() } catch (_: Exception) {} }
+    }
 }

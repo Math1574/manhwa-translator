@@ -96,6 +96,12 @@ run synth_en_fancy_mlkitonly synth_en_fancy.html MLKIT EN FR "fr" 250
 EXTRA=()
 run synth_en_fancy_combined  synth_en_fancy.html MLKIT EN FR "fr" 300
 run pc_en_ref_mlkit      pc_en_ref.html      MLKIT EN FR "fr"      300
+# images lues dans la WebView : adresses à usage unique (un second téléchargement recevrait 403)
+run pc_en_once_mlkit     pc_en_once.html     MLKIT EN FR "fr"      300
+# repli : téléchargement séparé seul (lecture par la WebView coupée), avec les en-têtes que la WebView envoie
+OLDX=("${EXTRA[@]}"); EXTRA=("${OLDX[@]}" --es mt_nocdp true)
+run pc_en_strict_mlkit   pc_en_strict.html   MLKIT EN FR "fr"      300
+EXTRA=("${OLDX[@]}")
 run pc_en_lazy_mlkit     pc_en_lazy.html     MLKIT EN FR "fr"      300 lazy
 run synth_ko_mlkit       synth_ko.html       MLKIT KO FR "ko,fr"   300
 run synth_ja_vert_mlkit  synth_ja_vertical.html MLKIT JA FR "ja,fr" 300

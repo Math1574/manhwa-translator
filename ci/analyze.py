@@ -21,6 +21,7 @@ problems = []
 P("# Rapport de test automatique\n")
 for path in sorted(glob.glob(f"{OUT}/reports/*.json")):
     name = os.path.basename(path)[:-5]
+    if name in ('adtest', 'fs'): continue      # rapports d'autres scénarios (bloqueur, plein écran), lus plus bas
     if name == 'prep':
         try: P('## préparation\n- ' + '\n- '.join(json.load(open(path)).get('notes', [])) + '\n')
         except Exception as e: P(f'## préparation illisible : {e}')
@@ -109,6 +110,17 @@ for path in sorted(glob.glob(f"{OUT}/reports/*.json")):
             if n6 < 1: problems.append(f"{name}: bulle supprimée avec le filigrane voisin")
             P(f"- bulle ouverte : {'texte hors ellipse' if out else 'texte dans l ellipse'}")
         except Exception: pass
+    srcs = {}
+    for im in imgs:
+        k = im.get("fetch") or "?"
+        srcs[k] = srcs.get(k, 0) + 1
+    if srcs and any(k != "?" for k in srcs):
+        P("- origine des octets des images : " + ", ".join(f"{k} × {v}" for k, v in sorted(srcs.items())) + " · durée moyenne d'obtention " + str(round(sum(im.get("fetchMs", 0) for im in imgs) / max(1, len(imgs)))) + " ms")
+    if name.startswith("pc_en_once"):
+        if c.get("done", 0) < c.get("total", 1) or c.get("total", 0) == 0: problems.append(f"{name}: images à usage unique non traduites ({c.get('done')}/{c.get('total')}) : la lecture par la WebView ne fonctionne pas")
+        if srcs.get("page", 0) < 1: problems.append(f"{name}: aucune image lue dans la page ({srcs})")
+    if name.startswith("pc_en_strict"):
+        if c.get("done", 0) < c.get("total", 1) or c.get("total", 0) == 0: problems.append(f"{name}: téléchargement séparé refusé malgré les en-têtes de navigateur ({c.get('done')}/{c.get('total')})")
     if name.startswith("adblock"):
         blocked = r.get("blocked", 0); final = r.get("finalUrl", "")
         P(f"- blocage des publicités : {blocked} requêtes ou redirections bloquées · adresse finale {final}")

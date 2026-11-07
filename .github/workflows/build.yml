@@ -23,6 +23,14 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with: { gradle-version: 8.10.2 }
       - run: gradle :core:test --no-daemon
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Script de garde du bloqueur (JavaScript) : syntaxe et comportements dans un navigateur simulé
+        run: |
+          cd tools/adblock
+          npm init -y >/dev/null 2>&1
+          npm install jsdom@24 --no-audit --no-fund --silent
+          node guard_test.js
   apk:
     runs-on: ubuntu-latest
     steps:

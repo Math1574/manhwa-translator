@@ -30,6 +30,10 @@ imgs = sorted(os.path.basename(p) for p in glob.glob(f"{S}/pc/en/E01P*.jpg"))
 if imgs:
     page("pc_en_lazy", "Pepper&Carrot ép.1 (en, chargement progressif)", [f"pc/en/{i}" for i in imgs], lazy=True)
     page("pc_en_ref", "Pepper&Carrot ép.1 (en, Referer + cookie requis)", [f"ref/en/{i}" for i in imgs])
+    page("pc_en_strict", "Pepper&Carrot ép.1 (en, en-têtes de navigateur exigés)", [f"strict/en/{i}" for i in imgs[:4]])
+    # adresses à usage unique : la page les charge avec un jeton aléatoire, le serveur refuse toute seconde requête (403)
+    open(f"{S}/pc_en_once.html", "w").write(HEAD % "Pepper&Carrot ép.1 (en, adresses à usage unique)" + "<h3 style='padding:8px'>Adresses à usage unique</h3><script>"
+        + "".join(f"document.write('<img src=\"/once/en/{i}?n='+Date.now()+'_'+Math.random()+'\" style=\"display:block;width:100%;margin:0\">');" for i in imgs[:4]) + "</script></body></html>")
     page("pc_en_ep6", "Pepper&Carrot ép.6 (en)", [f"pc/en/{os.path.basename(p)}" for p in sorted(glob.glob(f"{S}/pc/en/E06P*.jpg"))])
 if os.path.exists(f"{S}/synth/atypical_0.png"): page("synth_atypical", "Textes atypiques", [f"synth/atypical_{i}.png" for i in range(6)])
 if os.path.exists(f"{S}/synth/layouts_0.png"): page("synth_layouts", "Mises en page difficiles", [f"synth/layouts_{i}.png" for i in range(6)])

@@ -54,11 +54,24 @@ class AdFilters(private val ctx: Context) {
         }
     }
 
+    private val generation = java.util.concurrent.atomic.AtomicInteger()
+    private val ready = java.util.concurrent.CountDownLatch(1)
+
+    /** Attend au plus [ms] ms que le moteur soit prêt : la toute première page après le démarrage ne doit pas se charger sans filtre. */
+    fun awaitEngine(ms: Long) {
+        if (engine != null) return
+        try { ready.await(ms, java.util.concurrent.TimeUnit.MILLISECONDS) } catch (_: InterruptedException) {}
+    }
+
     private fun loadEngine() {
+        // plusieurs chargements peuvent se chevaucher (démarrage, téléchargement, règles de test) : seul le plus récent, qui a lu les règles les plus récentes, est retenu
+        val gen = generation.incrementAndGet()
         try {
             val t0 = System.currentTimeMillis()
             val e = FilterEngine.build(source())
+            if (gen != generation.get()) return
             engine = e
+            ready.countDown()
             val downloaded = File(dir, "filters.txt")
             val whenText = if (downloaded.exists() && downloaded.length() > 500_000) "mises à jour le " + SimpleDateFormat("d MMM yyyy", Locale.FRANCE).format(Date(downloaded.lastModified()))
             else "version livrée avec l'application"

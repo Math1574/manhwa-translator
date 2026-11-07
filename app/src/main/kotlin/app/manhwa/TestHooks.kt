@@ -52,6 +52,7 @@ object TestHooks {
         val timeoutMs = (s("mt_timeout")?.toLongOrNull() ?: 900L) * 1000
         val models = s("mt_models")?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
         val reportName = s("mt_report") ?: "report.json"
+        c.testNoDevTools = s("mt_nocdp") == "true"
 
         thread(name = "mt-test") {
             val t0 = System.currentTimeMillis()
