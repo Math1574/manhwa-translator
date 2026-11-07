@@ -95,6 +95,8 @@ private fun LibraryHome(graph: AppGraph, onOpenSeries: (String) -> Unit, onHisto
         if (series.isEmpty()) {
             item {
                 GlassCard(Modifier.fillMaxWidth(), contentPadding = 22.dp) {
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { MascotImage(132.dp) }
+                    Spacer(Modifier.height(8.dp))
                     Text("Rien à reprendre pour l'instant", style = MaterialTheme.typography.titleLarge)
                     Spacer(Modifier.height(6.dp))
                     Text(

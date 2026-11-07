@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -52,6 +53,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.manhwa.core.LlmModels
 import app.manhwa.core.SourceLang
@@ -159,7 +161,7 @@ private fun SettingsHome(graph: AppGraph, open: (SettingsPage) -> Unit) {
         ScreenHeader("Réglages", "Lecture, traduction et apparence")
         SectionRow(AppIcons.Translate, "Traduction", "${sourceNames.getValue(s.source)} → ${targetNames.getValue(s.target)} · $engine") { open(SettingsPage.TRANSLATION) }
         SectionRow(AppIcons.Eye, "Lecture", "Texte ×${String.format(Locale.FRANCE, "%.1f", s.textScale)} · ${s.maxPrefetchPages} page(s) en avance" + if (s.hideBarsWhileReading) " · barres masquées" else "") { open(SettingsPage.READING) }
-        SectionRow(AppIcons.Palette, "Apparence", "Accent ${accentName(s.themeAccent)} · fond ${backgroundName(s.themeBackground)}" + if (s.reducedMotion) " · animations réduites" else "") { open(SettingsPage.APPEARANCE) }
+        SectionRow(AppIcons.Palette, "Apparence", "${mascotName(s.themeMascot)} · accent ${accentName(s.themeAccent)} · fond ${backgroundName(s.themeBackground)}" + if (s.reducedMotion) " · animations réduites" else "") { open(SettingsPage.APPEARANCE) }
         SectionRow(Icons.Filled.Search, "Reconnaissance du texte", (if (s.enhancedOcr && graph.paddleModels.available) "Lecture renforcée" else "Lecture standard") + (if (s.autoReread) " · relecture Gemma" else "")) { open(SettingsPage.OCR) }
         SectionRow(AppIcons.Globe, "Navigation", if (s.blockAds) "Publicités bloquées" else "Publicités autorisées") { open(SettingsPage.BROWSING) }
         SectionRow(AppIcons.Bookmark, "Glossaire", "${graph.glossary.terms.size + graph.glossary.seriesTerms.size} terme(s)") { open(SettingsPage.GLOSSARY) }
@@ -186,6 +188,15 @@ private fun SectionRow(icon: ImageVector, title: String, summary: String, onClic
             Icon(Icons.Filled.KeyboardArrowRight, null, tint = cs.onSurfaceVariant)
         }
     }
+}
+
+private fun mascotName(m: String) = when (m) { "chat" -> "Chat lofi"; "hibou" -> "Hibou savant"; "dragon" -> "Bébé dragon"; "nuage" -> "Nuage rêveur"; else -> "Esprit-feuille" }
+private fun mascotBlurb(m: String) = when (m) {
+    "chat" -> "Chat lofi : il lit à la lueur de son livre, casque sur les oreilles, pendant que la nuit s'installe."
+    "hibou" -> "Hibou savant : il relit chaque virgule, lunettes sur le bec et crayon à la patte."
+    "dragon" -> "Bébé dragon : il fait des étincelles dès qu'un chapitre devient palpitant."
+    "nuage" -> "Nuage rêveur : il flotte doucement d'un chapitre à l'autre, bonnet de nuit sur la tête."
+    else -> "Esprit-feuille : un petit malin qui garde une pousse de lumière sur la tête."
 }
 
 private fun accentName(a: String) = when (a) { "indigo" -> "indigo"; "rose" -> "rose"; "emeraude" -> "émeraude"; "ambre" -> "ambre"; else -> "violet" }
@@ -234,6 +245,25 @@ private fun AppearanceSettings(graph: AppGraph) {
     val s = store.settings
     val cs = MaterialTheme.colorScheme
     PageScroll {
+        SettingsCard {
+            Text("Mascotte", style = MaterialTheme.typography.titleMedium)
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                ThemeChoices.mascots.forEach { id ->
+                    val sel = s.themeMascot == id
+                    val shape = RoundedCornerShape(18.dp)
+                    Column(
+                        Modifier.width(96.dp).clip(shape).background(Color.White.copy(alpha = if (sel) 0.13f else 0.05f))
+                            .border(if (sel) 2.5.dp else 1.dp, if (sel) cs.primary else Color.White.copy(alpha = 0.14f), shape)
+                            .clickable { store.update { it.copy(themeMascot = id, showMascot = true) } }.padding(8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        MascotImage(68.dp, name = id, always = true, animated = false)
+                        Text(mascotName(id), style = MaterialTheme.typography.labelMedium, color = if (sel) cs.primary else cs.onSurfaceVariant, textAlign = TextAlign.Center, maxLines = 2, modifier = Modifier.padding(top = 4.dp))
+                    }
+                }
+            }
+            Text(mascotBlurb(s.themeMascot), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+        }
         SettingsCard {
             Text("Couleur d'accent", style = MaterialTheme.typography.titleMedium)
             Text("Elle teinte les boutons, les barres de progression et tout le fond de l'application.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)

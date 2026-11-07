@@ -1407,7 +1407,9 @@ fun artEraseTests() {
     }
     T.test("onomatopées : une réplique n'est jamais écartée (phrase, apostrophe, mot courant, bulle)") {
         for (t in listOf("NO!", "WAIT!", "STOP!", "THE ASSASSIN IS COMING", "I'LL KILL YOU!", "DON'T RUN", "Hello", "CHAPTER 12")) T.ok(!sfx(t), "« $t » est une réplique")
-        T.ok(!sfx("BOOM", BlockKind.IN_BUBBLE), "dans une bulle, même « BOOM » est traité comme une réplique")
+        T.ok(!sfx("BOOM", BlockKind.IN_BUBBLE), "dans une bulle de taille normale, même « BOOM » est traité comme une réplique")
+        T.ok(sfx("Boom!", BlockKind.IN_BUBBLE, 1.8f), "gros lettrage que le détecteur a pris pour une bulle : bruitage")
+        T.ok(!sfx("DUDUDUK", BlockKind.IN_BUBBLE, 2.0f), "mot inconnu : jamais écarté dans une bulle")
         T.ok(!sfx("HMPH", BlockKind.IN_BUBBLE) && !sfx("HAHAHA", BlockKind.IN_BUBBLE), "rires et soupirs dans une bulle : traduits")
     }
     T.test("onomatopées : bruitage romanisé seulement en gros lettrage et sans mot anglais") {
@@ -1546,6 +1548,8 @@ fun artEraseTests() {
         val d = AppSettings(); T.ok(d.themeAccent == "violet" && d.themeBackground == "crepuscule" && !d.reducedMotion && d.showMascot, "défauts")
         val r = AppSettings.parse(AppSettings(themeAccent = "rose", themeBackground = "noir", reducedMotion = true, showMascot = false).serialize())
         T.ok(r.themeAccent == "rose" && r.themeBackground == "noir" && r.reducedMotion && !r.showMascot, "aller-retour")
-        val bad = AppSettings.parse("themeAccent=fluo\nthemeBackground=arc-en-ciel\n"); T.ok(bad.themeAccent == "violet" && bad.themeBackground == "crepuscule", "inconnu : défaut")
+        val bad = AppSettings.parse("themeAccent=fluo\nthemeBackground=arc-en-ciel\nthemeMascot=licorne\n"); T.ok(bad.themeAccent == "violet" && bad.themeBackground == "crepuscule" && bad.themeMascot == "feuille", "inconnu : défaut")
+        T.ok(AppSettings().themeMascot == "feuille", "mascotte par défaut")
+        for (m in ThemeChoices.mascots) T.ok(AppSettings.parse(AppSettings(themeMascot = m).serialize()).themeMascot == m, "mascotte $m mémorisée")
     }
 }

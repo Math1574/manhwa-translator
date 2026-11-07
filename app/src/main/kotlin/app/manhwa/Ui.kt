@@ -129,13 +129,25 @@ fun GhostButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier
     ) { Text(text, color = if (enabled) cs.primary else cs.onSurfaceVariant, style = MaterialTheme.typography.labelLarge) }
 }
 
-/** La mascotte, qui flotte doucement (immobile si les animations sont réduites ou la mascotte masquée dans les réglages). */
+/** Illustration d'une mascotte : esprit-feuille, chat lofi, hibou savant, bébé dragon ou nuage rêveur. */
+fun mascotRes(name: String): Int = when (name) {
+    "chat" -> R.drawable.mascot_chat
+    "hibou" -> R.drawable.mascot_hibou
+    "dragon" -> R.drawable.mascot_dragon
+    "nuage" -> R.drawable.mascot_nuage
+    else -> R.drawable.mascot_feuille
+}
+
+/**
+ * La mascotte choisie dans les réglages, qui flotte doucement (immobile si les animations sont réduites ; absente si la mascotte est masquée).
+ * [name] et [always] servent à l'aperçu des choix dans les réglages, qui montre chaque mascotte même masquée, sans la faire bouger.
+ */
 @Composable
-fun MascotImage(size: Dp, modifier: Modifier = Modifier) {
+fun MascotImage(size: Dp, modifier: Modifier = Modifier, name: String? = null, always: Boolean = false, animated: Boolean = true) {
     val look = LocalLook.current
-    if (!look.mascot) return
-    val dy = if (look.reducedMotion) 0f else rememberInfiniteTransition(label = "mascot").animateFloat(-3f, 3f, infiniteRepeatable(tween(2600, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "bob").value
-    Image(painterResource(R.drawable.mascot), contentDescription = null, modifier = modifier.size(size).graphicsLayer { translationY = dy * density })
+    if (!look.mascot && !always) return
+    val dy = if (look.reducedMotion || !animated) 0f else rememberInfiniteTransition(label = "mascot").animateFloat(-3f, 3f, infiniteRepeatable(tween(2600, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "bob").value
+    Image(painterResource(mascotRes(name ?: look.mascotName)), contentDescription = null, modifier = modifier.size(size).graphicsLayer { translationY = dy * density })
 }
 
 /** En-tête d'écran : grand titre arrondi, sous-titre et mascotte. */

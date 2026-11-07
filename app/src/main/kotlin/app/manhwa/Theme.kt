@@ -47,7 +47,7 @@ private fun accentOf(name: String): Accent = when (name) {
 }
 
 /** Réglages visuels exposés aux écrans : fond choisi, mascotte, animations réduites, teinte de l'accent. */
-class Look(val background: String, val mascot: Boolean, val reducedMotion: Boolean, val hue: Float)
+class Look(val background: String, val mascot: Boolean, val reducedMotion: Boolean, val hue: Float, val mascotName: String = "feuille")
 
 val LocalLook = compositionLocalOf { Look("crepuscule", true, false, 262f) }
 
@@ -105,7 +105,7 @@ private val ManhwaShapes = Shapes(
 @Composable
 fun ManhwaTheme(settings: AppSettings, content: @Composable () -> Unit) {
     val accent = accentOf(settings.themeAccent)
-    val look = Look(settings.themeBackground, settings.showMascot, settings.reducedMotion, accent.hue)
+    val look = Look(settings.themeBackground, settings.showMascot, settings.reducedMotion, accent.hue, settings.themeMascot)
     val scheme = remember(settings.themeAccent, settings.themeBackground) { schemeFor(accent, settings.themeBackground) }
     CompositionLocalProvider(LocalLook provides look) {
         MaterialTheme(colorScheme = scheme, shapes = ManhwaShapes, typography = remember { appTypography() }, content = content)

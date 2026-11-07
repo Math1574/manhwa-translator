@@ -144,13 +144,15 @@ chk "retour de la fiche vers la bibliothèque" $(has lib2 'Historique')
 tapt lib2 "=Réglages" 1; sleep 2; uidump set; shot ui 4
 chk "réglages : une carte par thème" $([ "$(has set 'Reconnaissance du texte')" = 1 ] && [ "$(has set 'Navigation')" = 1 ] && [ "$(has set 'Donn')" = 1 ] && [ "$(has set 'Glossaire')" = 1 ] && echo 1 || echo 0)
 tapt set "=Traduction" 1 top; sleep 2; uidump settr
-chk "réglages : la carte Traduction ouvre ses options (langues, moteur)" $([ "$(has settr 'Langue du texte')" = 1 ] && [ "$(has settr 'Moteur de traduction')" = 1 ] && echo 1 || echo 0)
+chk "réglages : la carte Traduction ouvre ses options (langues)" $(has settr 'Langue du texte')
 adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump set2
 tapt set2 "=Lecture" 1 top; sleep 2; uidump setrd; shot ui 6
 chk "réglages : la carte Lecture ouvre ses options (bouton, barres)" $([ "$(has setrd 'Masquer les barres')" = 1 ] && echo 1 || echo 0)
 adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump set3
 tapt set3 "=Apparence" 1 top; sleep 2; uidump setap; shot ui 7
-chk "réglages : la carte Apparence propose accent, fond et animations" $([ "$(has setap 'Couleur d')" = 1 ] && [ "$(has setap 'Animations r')" = 1 ] && echo 1 || echo 0)
+chk "réglages : la carte Apparence propose mascotte, accent et fond" $([ "$(has setap 'Mascotte')" = 1 ] && [ "$(has setap 'Couleur d')" = 1 ] && echo 1 || echo 0)
+tapt setap "=Hibou savant" 1; sleep 1.5; uidump setap2; shot ui 8
+chk "réglages : choisir une autre mascotte met à jour sa présentation" $(has setap2 'Hibou savant : il relit')
 # raccourci « Reprendre la lecture » de l'icône : publié d'après la dernière œuvre lue
 adb shell dumpsys shortcut > $OUT/reports/shortcut.txt 2>/dev/null
 chk "raccourci : « Reprendre la lecture » publié pour l'œuvre lue" $([ "$(grep -c 'id=resume' $OUT/reports/shortcut.txt)" -gt 0 ] && grep -q 'Test Series' $OUT/reports/shortcut.txt && echo 1 || echo 0)

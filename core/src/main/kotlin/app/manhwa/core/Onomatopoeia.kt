@@ -3,7 +3,7 @@ package app.manhwa.core
 /**
  * Onomatopées (bruitages) : on les laisse telles quelles, sans les traduire ni toucher à l'image. Un bruitage est un dessin autant qu'un texte : l'effacer puis le redessiner en
  * police de remplacement l'abîme, et sa « traduction » n'apporte rien. Règle volontairement prudente, pour ne jamais écarter une réplique :
- *  - seuls les textes hors bulle comptent (un « HMPH » ou un « HAHAHA » dans une bulle est une réplique : traduit) ;
+ *  - seuls les textes hors bulle comptent (un « HMPH » ou un « HAHAHA » dans une bulle de taille normale est une réplique : traduit) ;
  *  - un bloc de trois mots au plus, dont chaque mot est un bruitage connu (« CRACK ! », « BOOOM », « TICK TOCK », « *GULP* ») ;
  *  - ou un gros lettrage de deux mots au plus, dont aucun n'est un mot anglais (bruitages romanisés : « DUDUDUK », « KRAAAK ») ; seuil plus strict quand on ne sait pas si le texte est dans une bulle.
  * Anglais seulement : le japonais, le coréen et le chinois ne sont pas concernés.
@@ -33,7 +33,8 @@ object Onomatopoeia {
      * connus comptent.
      */
     fun isSfx(text: String, kind: BlockKind, relativeHeight: Float, lex: EnglishLexicon?): Boolean {
-        if (kind == BlockKind.IN_BUBBLE) return false
+        // dans une bulle, une réplique reste traduite ; sauf un gros lettrage de bruitage que le détecteur a pris pour une bulle (le texte d'une vraie bulle a la taille normale)
+        if (kind == BlockKind.IN_BUBBLE && relativeHeight < 1.3f) return false
         if (ScriptDetector.dominant(text) != "en") return false
         // une apostrophe au milieu d'un mot (« DON'T », « I'LL ») : c'est une réplique, pas un bruitage
         if (Regex("[A-Za-z]['’][A-Za-z]").containsMatchIn(text)) return false
@@ -42,7 +43,7 @@ object Onomatopoeia {
         if (toks.all { squash(it) in sfx }) return true
         // bruitage romanisé en gros lettrage : deux mots au plus, aucun n'est un mot anglais. Sans détecteur de bulles (nature inconnue), seuil plus strict.
         val big = if (kind == BlockKind.FREE) relativeHeight >= 1.3f else relativeHeight >= 1.6f
-        if (lex != null && toks.size <= 2 && big && toks.all { it.length >= 3 && !lex.known(it) }) return true
+        if (kind != BlockKind.IN_BUBBLE && lex != null && toks.size <= 2 && big && toks.all { it.length >= 3 && !lex.known(it) }) return true
         return false
     }
 }

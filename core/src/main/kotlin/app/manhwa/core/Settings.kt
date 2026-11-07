@@ -10,6 +10,7 @@ enum class QualityMode { FAST, ENHANCED }
 object ThemeChoices {
     val accents = listOf("violet", "indigo", "rose", "emeraude", "ambre")
     val backgrounds = listOf("crepuscule", "nuit", "noir")
+    val mascots = listOf("feuille", "chat", "hibou", "dragon", "nuage")
 }
 
 data class AppSettings(
@@ -48,6 +49,8 @@ data class AppSettings(
     val themeBackground: String = "crepuscule",
     val reducedMotion: Boolean = false,
     val showMascot: Boolean = true,
+    /** Mascotte des en-têtes : esprit-feuille, chat lofi, hibou savant, bébé dragon ou nuage rêveur. */
+    val themeMascot: String = "feuille",
 ) {
     /** Ramène les valeurs dans des bornes valides. */
     fun sanitized() = copy(
@@ -62,7 +65,7 @@ data class AppSettings(
         it["autoTranslate"] = autoTranslate.toString(); it["mode"] = mode.name
         it["maxPrefetchPages"] = maxPrefetchPages.toString(); it["cacheMaxMb"] = cacheMaxMb.toString()
         it["schema"] = "2"; it["engine"] = engine.name; it["useGpu"] = useGpu.toString(); it["diagnostic"] = diagnostic.toString(); it["enhancedOcr"] = enhancedOcr.toString(); it["refinePass"] = refinePass.toString(); it["blockAds"] = blockAds.toString(); it["autoReread"] = autoReread.toString(); it["translateSfx"] = translateSfx.toString()
-        it["themeAccent"] = themeAccent; it["themeBackground"] = themeBackground; it["reducedMotion"] = reducedMotion.toString(); it["showMascot"] = showMascot.toString()
+        it["themeAccent"] = themeAccent; it["themeBackground"] = themeBackground; it["reducedMotion"] = reducedMotion.toString(); it["showMascot"] = showMascot.toString(); it["themeMascot"] = themeMascot
         it["readTranslate"] = readTranslate.toString(); it["orbRight"] = orbRight.toString(); it["orbY"] = orbY.toString(); it["hideBarsWhileReading"] = hideBarsWhileReading.toString()
     }.let { p -> java.io.StringWriter().also { w -> p.store(w, null) }.toString() }
 
@@ -96,6 +99,7 @@ data class AppSettings(
                 p.getProperty("themeBackground")?.takeIf { it in ThemeChoices.backgrounds } ?: d.themeBackground,
                 p.getProperty("reducedMotion")?.toBooleanStrictOrNull() ?: d.reducedMotion,
                 p.getProperty("showMascot")?.toBooleanStrictOrNull() ?: d.showMascot,
+                p.getProperty("themeMascot")?.takeIf { it in ThemeChoices.mascots } ?: d.themeMascot,
             ).sanitized()
         }
     }
