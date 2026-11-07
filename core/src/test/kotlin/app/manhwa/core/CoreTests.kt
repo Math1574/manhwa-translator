@@ -1552,4 +1552,125 @@ fun artEraseTests() {
         T.ok(AppSettings().themeMascot == "feuille", "mascotte par défaut")
         for (m in ThemeChoices.mascots) T.ok(AppSettings.parse(AppSettings(themeMascot = m).serialize()).themeMascot == m, "mascotte $m mémorisée")
     }
+
+    // ---------- bloqueur de publicités : moteur de filtres, sites, politique de navigation ----------
+    T.test("sites : nom d'hôte et domaine enregistrable") {
+        T.ok(Sites.hostOf("https://img.Exemple.co.uk:8080/a/b?c=d#e") == "img.exemple.co.uk", "hôte avec port et majuscules")
+        T.ok(Sites.hostOf("https://user:pw@site.com/x") == "site.com", "hôte avec identifiants")
+        T.ok(Sites.hostOf("pas une adresse") == null, "texte quelconque")
+        T.ok(Sites.registrable("img.exemple.co.uk") == "exemple.co.uk" && Sites.registrable("a.b.site.com") == "site.com", "site")
+        T.ok(Sites.registrable("10.0.2.2") == "10.0.2.2", "adresse IP inchangée")
+        T.ok(Sites.registrable("monsite.github.io") == "monsite.github.io" && Sites.registrable("a.monsite.github.io") == "monsite.github.io", "hébergeur à sous-domaines")
+        T.ok(Sites.sameSite("cdn.site.com", "www.site.com") && !Sites.sameSite("site.com", "autre.com"), "même site")
+    }
+    T.test("filtres : domaines, motifs, options, exceptions") {
+        val e = FilterEngine.build(listOf(
+            "! commentaire", "[Adblock Plus 2.0]",
+            "||pub-reseau.com^", "||tiers.net^\$third-party", "||cdn.exemple.org/pubs/", "/bannieres/*\$image,third-party", "||pop.example^\$popup",
+            "@@||pub-reseau.com/ok.js", "||x.com^\$script,domain=lecteur.com|~sous.lecteur.com", "||lourd.com^\$important", "@@||lourd.com^",
+            "/pubs-generiques/", "||rare.com^\$badfilter", "||rare.com^",
+        ))
+        val page = "https://lecteur.com/chapitre-1"
+        T.ok(e.check("https://pub-reseau.com/a.js", page, ResType.SCRIPT).blocked, "domaine pur bloqué")
+        T.ok(e.check("https://img.pub-reseau.com/a.gif", page, ResType.IMAGE).blocked, "sous-domaine bloqué (image tierce, règle de domaine)")
+        T.ok(!e.check("https://pub-reseau.com/ok.js", page, ResType.SCRIPT).blocked, "exception @@ prioritaire")
+        T.ok(e.check("https://tiers.net/x.js", page, ResType.SCRIPT).blocked, "option third-party : tiers bloqué")
+        T.ok(!e.check("https://tiers.net/x.js", "https://tiers.net/", ResType.SCRIPT).blocked, "option third-party : même site non bloqué")
+        T.ok(e.check("https://cdn.exemple.org/pubs/b.js", page, ResType.SCRIPT).blocked, "motif avec chemin")
+        T.ok(!e.check("https://cdn.exemple.org/images/b.js", page, ResType.SCRIPT).blocked, "autre chemin non bloqué")
+        T.ok(!e.check("https://cdn.exemple.org/pubs/b.jpg", "https://cdn.exemple.org/", ResType.IMAGE).blocked, "images du site lui-même jamais bloquées")
+        T.ok(!e.check("https://autre.com/bannieres/a.png", page, ResType.IMAGE).blocked, "image tierce : une règle générique ne suffit pas")
+        T.ok(e.check("https://autre.com/bannieres/a.js", page, ResType.SCRIPT).blocked == false, "option image : pas un script")
+        T.ok(e.check("https://x.com/a.js", page, ResType.SCRIPT).blocked, "domain= : bloqué sur le site visé")
+        T.ok(!e.check("https://x.com/a.js", "https://sous.lecteur.com/", ResType.SCRIPT).blocked, "domain= avec exclusion")
+        T.ok(!e.check("https://x.com/a.js", "https://ailleurs.com/", ResType.SCRIPT).blocked, "domain= : autre site non concerné")
+        T.ok(e.check("https://lourd.com/a.js", page, ResType.SCRIPT).blocked, "\$important passe devant l'exception")
+        T.ok(e.check("https://autre.com/pubs-generiques/x.js", page, ResType.SCRIPT).blocked, "expression générique")
+        T.ok(!e.check("https://rare.com/a.js", page, ResType.SCRIPT).blocked, "\$badfilter désactive la règle")
+        T.ok(e.check("https://pub-reseau.com/a", page, ResType.AMBIGUOUS).blocked, "nature incertaine : règle sans type applicable")
+        T.ok(!e.check("data:text/plain,abc", page, ResType.SCRIPT).blocked, "adresse sans hôte")
+    }
+    T.test("filtres : options abrégées $3p et $1p en première position") {
+        val e = FilterEngine.build(listOf("||regie-tierce.com^\$3p", "||interne.net/ads/\$1p", "/promo-tierce/\$3p,script"))
+        val page = "https://lecteur.com/ch1"
+        T.ok(e.check("https://regie-tierce.com/a.js", page, ResType.SCRIPT).blocked, "\$3p : bloqué quand il est tiers")
+        T.ok(!e.check("https://regie-tierce.com/a.js", "https://regie-tierce.com/", ResType.SCRIPT).blocked, "\$3p : jamais pour le site lui-même")
+        T.ok(e.check("https://interne.net/ads/a.js", "https://interne.net/", ResType.SCRIPT).blocked && !e.check("https://interne.net/ads/a.js", page, ResType.SCRIPT).blocked, "\$1p : seulement pour le site lui-même")
+        T.ok(e.check("https://autre.org/promo-tierce/x.js", page, ResType.SCRIPT).blocked, "motif avec \$3p,script")
+        T.ok(e.networkRules == 3, "les trois règles sont retenues, aucune n'est devenue un motif contenant un « \$ »")
+    }
+    T.test("filtres : une restriction de site non représentable ne rend pas la règle globale") {
+        val e = FilterEngine.build(listOf("*\$script,3p,domain=oxy.*|~oxy.edu", "||ads.example^\$domain=/regex/", "\$script,3p,denyallow=cdn.com"))
+        T.ok(!e.check("https://tiers.com/a.js", "https://lecteur.com/", ResType.SCRIPT).blocked, "joker dans domain= : règle abandonnée")
+        T.ok(!e.check("https://ads.example/a.js", "https://lecteur.com/", ResType.SCRIPT).blocked, "regex dans domain= : règle abandonnée")
+        T.ok(e.networkRules == 0, "aucune règle retenue")
+    }
+    T.test("filtres : ancres, séparateurs et jokers") {
+        val e = FilterEngine.build(listOf("|https://exact.com/a.js|", "||site.org/x^", "/ads*banner.", "||10.0.2.2:8001^"))
+        val p = "https://lecteur.com/"
+        T.ok(e.check("https://exact.com/a.js", p, ResType.SCRIPT).blocked && !e.check("https://exact.com/a.js?x=1", p, ResType.SCRIPT).blocked, "ancres début et fin")
+        T.ok(e.check("https://sous.site.org/x?a=1", p, ResType.SCRIPT).blocked && e.check("https://site.org/x", p, ResType.SCRIPT).blocked, "^ : séparateur ou fin")
+        T.ok(!e.check("https://site.org/xy", p, ResType.SCRIPT).blocked, "^ : une lettre n'est pas un séparateur")
+        T.ok(e.check("https://z.com/ads-big-banner.gif", p, ResType.OTHER).blocked, "joker au milieu")
+        T.ok(e.check("http://10.0.2.2:8001/pub.js", "http://10.0.2.2:8000/", ResType.SCRIPT).blocked, "règle avec port, même hôte que la page")
+        T.ok(!e.check("http://10.0.2.2:8000/pub.js", "http://10.0.2.2:8000/", ResType.SCRIPT).blocked, "autre port non bloqué")
+    }
+    T.test("filtres : masquage d'éléments par site et exceptions") {
+        val e = FilterEngine.build(listOf("site.com##.pub", "site.com,autre.org##div#bandeau", "~lire.site.com,site.com##.sticky", "site.com#@#.pub", "##.partout", "site.com##p:has-text(x)"))
+        val css = e.cosmeticCss("www.site.com")
+        T.ok(css.contains("div#bandeau") && css.contains(".sticky") && !css.contains(".pub"), "sélecteurs du site, exception retirée")
+        T.ok(!css.contains("partout") && !css.contains("has-text"), "règles génériques et procédurales ignorées")
+        T.ok(e.cosmeticCss("lire.site.com").contains("div#bandeau") && !e.cosmeticCss("lire.site.com").contains(".sticky"), "exclusion de sous-domaine")
+        T.ok(e.cosmeticCss("autre.com") == "", "autre site : rien")
+        T.ok(css.startsWith(":is(") && css.endsWith("{display:none!important}"), "forme de la feuille de style")
+    }
+    T.test("navigation : changements de site refusés, redirections et vrais liens autorisés") {
+        val e = FilterEngine.build(listOf("||regie.net^", "||popup-ads.biz^\$popup"))
+        fun d(target: String, page: String? = "https://lecteur.com/ch1", main: Boolean = true, redirect: Boolean = false, link: Boolean = false, allowed: Set<String> = emptySet(), on: Boolean = true) =
+            NavigationPolicy.decide(target, page, main, redirect, link, allowed, on, e)
+        T.ok(d("https://lecteur.com/ch2") is NavDecision.Allow, "même site")
+        T.ok(d("https://cdn.lecteur.com/x") is NavDecision.Allow, "sous-domaine du même site")
+        T.ok(d("https://autre.com/") is NavDecision.Block, "autre site, déclenché par la page")
+        T.ok(d("https://autre.com/", redirect = true) is NavDecision.Allow, "suite d'une redirection serveur")
+        T.ok(d("https://regie.net/click", redirect = true) is NavDecision.Block, "redirection vers une régie : refusée")
+        T.ok(d("https://regie.net/", link = true) is NavDecision.Block, "même un vrai lien vers une régie est refusé")
+        T.ok(d("https://popup-ads.biz/") is NavDecision.Block, "règle \$popup")
+        T.ok(d("https://autre.com/", link = true) is NavDecision.Allow, "lien visible touché par l'utilisateur")
+        T.ok(d("https://autre.com/", allowed = setOf("autre.com")) is NavDecision.Allow, "site déjà autorisé")
+        T.ok(d("https://autre.com/", main = false) is NavDecision.Allow, "sous-cadre : géré par le filtrage réseau")
+        T.ok(d("https://autre.com/", on = false) is NavDecision.Allow, "bloqueur éteint")
+        T.ok(d("https://autre.com/", page = null) is NavDecision.Allow, "première page")
+        T.ok(d("intent://scan#Intent;scheme=app;end") is NavDecision.Block && d("market://details?id=x", on = false) is NavDecision.Block, "autres applications : toujours refusées")
+        T.ok(d("about:blank") is NavDecision.Allow, "page interne")
+    }
+    T.test("journal du bloqueur : compteurs et ordre") {
+        val l = BlockLog(3)
+        l.add("réseau", "https://a/1", "||a^", "https://p/"); l.add("pop-up", "https://b/", null, null); l.add("réseau", "https://a/2", "||a^", null); l.add("réseau", "https://a/3", "||a^", null)
+        T.ok(l.count("réseau") == 3 && l.count("pop-up") == 1 && l.total() == 4, "compteurs")
+        T.ok(l.recent().size == 3 && l.recent().first().url == "https://a/3", "capacité et plus récent d'abord")
+        T.ok(l.pageCount.get() == 4, "compte de la page"); l.newPage(); T.ok(l.pageCount.get() == 0, "remise à zéro")
+        T.ok(l.export().contains("https://a/3"), "export")
+    }
+
+    T.test("types de requêtes : déduits de Accept, de l'extension et des en-têtes") {
+        fun t(main: Boolean = false, accept: String? = "*/*", url: String = "https://a.com/x", method: String? = "GET", xhr: String? = null, dest: String? = null) =
+            RequestTypes.infer(main, accept, url, method, xhr, dest)
+        T.ok(t(main = true) == ResType.DOCUMENT, "page principale")
+        T.ok(t(accept = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8", url = "https://a.com/i?id=3") == ResType.IMAGE, "Accept d'image")
+        T.ok(t(accept = "text/css,*/*;q=0.1") == ResType.STYLESHEET, "feuille de style")
+        T.ok(t(accept = "text/html,application/xhtml+xml,application/xml;q=0.9") == ResType.SUBDOCUMENT, "cadre")
+        T.ok(t(url = "https://a.com/lib/app.min.js?v=3") == ResType.SCRIPT, "extension .js malgré la chaîne de requête")
+        T.ok(t(url = "https://a.com/f/x.woff2") == ResType.FONT && t(url = "https://a.com/v/x.mp4") == ResType.MEDIA, "police, média")
+        T.ok(t(xhr = "XMLHttpRequest", url = "https://a.com/api") == ResType.XHR && t(method = "POST", url = "https://a.com/api") == ResType.XHR, "XHR")
+        T.ok(t(url = "https://a.com/ads?id=1") == ResType.AMBIGUOUS, "inconnu : ambigu")
+        T.ok(t(dest = "script", url = "https://a.com/x") == ResType.SCRIPT && t(dest = "iframe") == ResType.SUBDOCUMENT, "Sec-Fetch-Dest prioritaire")
+        T.ok(t(url = "https://a.com/page.html") == ResType.AMBIGUOUS && t(url = "https://a.com/dir.v2/chemin") == ResType.AMBIGUOUS, "pas de fausse extension")
+    }
+
+    T.test("réglages : sites sans bloqueur et sites autorisés mémorisés") {
+        val st = AppSettings(adAllowSites = "a.com, b.org,", adAllowTargets = "x.net")
+        T.ok(st.adAllowSiteSet == setOf("a.com", "b.org") && st.adAllowTargetSet == setOf("x.net"), "ensembles lus")
+        val r = AppSettings.parse(st.serialize()); T.ok(r.adAllowSites == st.adAllowSites && r.adAllowTargets == "x.net", "aller-retour")
+        T.ok(AppSettings().adAllowSiteSet.isEmpty() && AppSettings().blockAds, "défauts : bloqueur actif, aucun site exclu")
+    }
 }

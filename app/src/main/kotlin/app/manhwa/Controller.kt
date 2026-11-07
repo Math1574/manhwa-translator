@@ -5,6 +5,8 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
+import android.os.Message
+import android.os.SystemClock
 import android.util.Base64
 import android.view.ViewGroup
 import android.webkit.CookieManager
@@ -16,11 +18,19 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import app.manhwa.core.AdBlocker
+import app.manhwa.core.AdVerdict
+import app.manhwa.core.NavDecision
+import app.manhwa.core.NavigationPolicy
+import app.manhwa.core.RequestTypes
+import app.manhwa.core.ResType
+import app.manhwa.core.Sites
 import app.manhwa.core.BrowsingLibrary
 import app.manhwa.core.CacheKey
 import app.manhwa.core.DebugInfo
@@ -113,12 +123,80 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     private val keysById = ConcurrentHashMap<String, CacheKey>()
 
     // ---------- blocage des publicités ----------
-    private val adBlocker: AdBlocker by lazy {
+    /** Ancienne liste de domaines : filet de sécurité pendant que le moteur de filtres se charge. */
+    private val legacyBlocker: AdBlocker by lazy {
         AdBlocker(try { ctx.assets.open("adblock/domains.txt").bufferedReader().use { it.readLines() } } catch (e: Throwable) { emptyList() })
     }
-    @Volatile private var pageHost: String? = null
-    /** Nombre de requêtes publicitaires et de redirections bloquées depuis le démarrage (affiché dans le journal de test). */
-    val blockedCount = java.util.concurrent.atomic.AtomicInteger(0)
+    @Volatile private var pageUrl: String? = null
+    /** Dernier vrai lien visible touché par l'utilisateur (signalé par le script de garde) : sa destination est autorisée quelques secondes. */
+    @Volatile private var trustedHref: String? = null
+    @Volatile private var trustedAt = 0L
+    private var guardAtDocumentStart = false
+    /** Tests automatiques seulement : les noms de domaine en « .test » sont servis par le faux site local (après le filtrage). */
+    @Volatile var testSiteProxy = false
+    val testServed = ConcurrentLinkedQueue<String>()
+    /** Navigation ou pop-up refusé, proposé à l'utilisateur quelques secondes (« Ouvrir quand même »). */
+    class NavBlock(val url: String, val reason: String, val popup: Boolean)
+    var navBlocked by mutableStateOf<NavBlock?>(null)
+    private val clearNavBlocked = Runnable { navBlocked = null }
+    @Volatile private var lastPopupPill = 0L
+
+    private fun currentSite(): String? = Sites.hostOf(currentUrl)?.let { Sites.registrable(it) }
+    private fun siteOf(url: String?): String? = Sites.hostOf(url)?.let { Sites.registrable(it) }
+    private fun blockerOn(page: String?): Boolean {
+        val st = graph.settingsStore.settings
+        val site = siteOf(page)
+        return st.blockAds && (site == null || site !in st.adAllowSiteSet)
+    }
+    private fun sameLink(a: String, b: String) = a.substringBefore('#').removeSuffix("/") == b.substringBefore('#').removeSuffix("/")
+
+    /** Le bloqueur est-il actif sur la page affichée ? (réglage général et exception par site) */
+    fun adsActiveHere(): Boolean = blockerOn(currentUrl)
+    /** Nombre d'éléments bloqués depuis l'ouverture de la page. */
+    fun adCountOnPage(): Int = graph.adFilters.log.pageCount.get()
+    /** Active ou désactive le bloqueur pour le site affiché (puis recharge la page). */
+    fun toggleAdsHere() {
+        val site = currentSite() ?: return
+        graph.settingsStore.update { st ->
+            val set = st.adAllowSiteSet.toMutableSet()
+            if (!set.add(site)) set.remove(site)
+            st.copy(adAllowSites = set.joinToString(","))
+        }
+        reload()
+    }
+
+    private fun showNavBlocked(nb: NavBlock) {
+        navBlocked = nb
+        main.removeCallbacks(clearNavBlocked); main.postDelayed(clearNavBlocked, if (nb.popup) 3000 else 7000)
+    }
+    fun dismissNavBlocked() { navBlocked = null; main.removeCallbacks(clearNavBlocked) }
+    /** « Ouvrir quand même » : autorise ce site comme destination puis ouvre l'adresse refusée. */
+    fun openBlockedNav() {
+        val nb = navBlocked ?: return
+        dismissNavBlocked()
+        if (nb.popup || nb.url.isEmpty()) return
+        val site = siteOf(nb.url) ?: return
+        graph.settingsStore.update { it.copy(adAllowTargets = (it.adAllowTargetSet + site).joinToString(",")) }
+        webView?.loadUrl(nb.url)
+    }
+
+    private fun legacyVerdict(url: String, type: Int, page: String?): AdVerdict =
+        if (type != ResType.IMAGE && legacyBlocker.isBlocked(Sites.hostOf(url), Sites.hostOf(page))) AdVerdict(true, "liste de secours") else AdVerdict.ALLOW
+
+    private fun testProxy(request: WebResourceRequest): WebResourceResponse? {
+        if (!testSiteProxy) return null
+        val host = request.url.host ?: return null
+        if (!host.endsWith(".test")) return null
+        return try {
+            val path = request.url.encodedPath ?: "/"
+            val conn = URL("http://10.0.2.2:8000/__sites/$host$path").openConnection() as HttpURLConnection
+            conn.connectTimeout = 5000; conn.readTimeout = 10000
+            val code = conn.responseCode
+            testServed.add(request.url.toString())
+            val mime = conn.contentType?.substringBefore(';')?.trim()?.ifEmpty { null } ?: "text/plain"
+            WebResourceResponse(mime, null, code, if (code == 200) "OK" else "Not Found", mapOf("Access-Control-Allow-Origin" to "*"), if (code in 200..299) conn.inputStream else conn.errorStream)
+        } catch (t: Throwable) { null }
+    }
     /** Texte normalisé → images (par contenu) où il est apparu : un texte qui revient sur au moins 4 images différentes est un filigrane. */
     private val seenTexts = ConcurrentHashMap<String, MutableSet<String>>()
 
@@ -208,7 +286,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         wv.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
-            setSupportMultipleWindows(false)
+            setSupportMultipleWindows(true)            // sinon window.open et target=_blank remplaceraient la page ; onCreateWindow refuse chaque fenêtre
+            javaScriptCanOpenWindowsAutomatically = false
             useWideViewPort = true
             loadWithOverviewMode = true
             setSupportZoom(true)
@@ -218,26 +297,45 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         }
         CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
         wv.addJavascriptInterface(Bridge(), "AndroidMT")
+        // script de garde (pop-ups, superpositions, masquage) : exécuté avant les scripts du site si la WebView le permet, sinon injecté au début de chaque page
+        guardAtDocumentStart = try {
+            WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT).also { ok -> if (ok) WebViewCompat.addDocumentStartJavaScript(wv, AdGuardScript.JS, setOf("*")) }
+        } catch (_: Throwable) { false }
         wv.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                val scheme = request.url.scheme?.lowercase()
-                if (scheme != "http" && scheme != "https") return true // intent:, market:, etc. : ignorés
-                // redirection vers un autre site sans geste de l'utilisateur (publicité) : refusée
-                if (graph.settingsStore.settings.blockAds && request.isForMainFrame &&
-                    adBlocker.isSuspiciousRedirect(request.url.host, pageHost, request.hasGesture(), request.isRedirect)) { blockedCount.incrementAndGet(); return true }
+                val st = graph.settingsStore.settings
+                val target = request.url.toString()
+                val page = pageUrl
+                val trusted = trustedHref?.let { SystemClock.uptimeMillis() - trustedAt < 4000 && sameLink(it, target) } == true
+                val d = NavigationPolicy.decide(target, page, request.isForMainFrame, request.isRedirect, trusted, st.adAllowTargetSet, blockerOn(page), graph.adFilters.engine)
+                if (d is NavDecision.Block) {
+                    graph.adFilters.log.add(if (d.rule != null) "redirection (liste)" else "redirection", target, d.rule, siteOf(page))
+                    if (target.startsWith("http")) main.post { showNavBlocked(NavBlock(target, d.reason, false)) }
+                    return true
+                }
                 return false
             }
 
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
-                if (!graph.settingsStore.settings.blockAds || request.isForMainFrame) return null
-                if (!adBlocker.isBlocked(request.url.host, pageHost)) return null
-                blockedCount.incrementAndGet()
-                return WebResourceResponse("text/plain", "utf-8", 200, "OK", emptyMap(), java.io.ByteArrayInputStream(ByteArray(0)))
+                if (request.isForMainFrame) return testProxy(request)
+                val page = pageUrl
+                if (!blockerOn(page)) return testProxy(request)
+                val url = request.url.toString()
+                val h = request.requestHeaders
+                val type = RequestTypes.infer(false, h["Accept"], url, request.method, h["X-Requested-With"], h["Sec-Fetch-Dest"])
+                val eng = graph.adFilters.engine
+                val v = if (eng != null) eng.check(url, page, type) else legacyVerdict(url, type, page)
+                if (!v.blocked) return testProxy(request)
+                graph.adFilters.log.add(when (type) { ResType.IMAGE -> "image"; ResType.SUBDOCUMENT -> "cadre"; ResType.SCRIPT -> "script"; else -> "requête" }, url, v.rule, siteOf(page))
+                return AdFilters.blockedResponse(type, h["Origin"])
             }
 
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
                 currentUrl = if (url.startsWith("http")) url else ""
-                pageHost = try { android.net.Uri.parse(url).host } catch (e: Throwable) { null }
+                pageUrl = if (url.startsWith("http")) url else null
+                graph.adFilters.log.newPage()
+                try { view.settings.setSupportMultipleWindows(blockerOn(url)) } catch (_: Throwable) {}   // bloqueur éteint : comportement normal du navigateur
+                if (!guardAtDocumentStart) view.evaluateJavascript(AdGuardScript.JS, null)
                 graph.gemma.seriesTitle = if (url.startsWith("http")) app.manhwa.core.SeriesHint.fromUrl(url) else null
                 loading = true
                 nearBottom = false
@@ -259,7 +357,6 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                         resumeOffer = if (p != null && !p.done && p.percent in 5..93) p.percent else 0
                     }
                 }
-                if (graph.settingsStore.settings.blockAds) view.evaluateJavascript("(function(){var s=document.createElement('style');s.textContent='ins.adsbygoogle,[id^=\"google_ads_iframe\"],iframe[src*=\"doubleclick.net\"],iframe[src*=\"googlesyndication.com\"]{display:none!important}';(document.head||document.documentElement).appendChild(s)})()", null)
                 // traduction pendant la lecture (bouton Original | Traduit) : seulement les pages de chapitre, pas les accueils ni les listes d'œuvres
                 if (translateOn && url.startsWith("http") && (testing || BrowsingLibrary.looksLikeChapter(url))) start(false)
             }
@@ -279,6 +376,14 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         }
         wv.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(view: WebView, newProgress: Int) { progress = newProgress }
+
+            /** Une page n'ouvre jamais de fenêtre : on refuse (les liens en nouvel onglet du site lui-même sont suivis dans la page par le script de garde). */
+            override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message): Boolean {
+                graph.adFilters.log.add("pop-up", "(fenêtre demandée${if (isUserGesture) " après un geste" else ""})", null, siteOf(pageUrl))
+                main.post { notePopupBlocked("") }
+                return false
+            }
+            override fun onJsBeforeUnload(view: WebView, url: String, message: String, result: android.webkit.JsResult): Boolean { result.confirm(); return true }
         }
         webView = wv
         val pending = pendingOpen
@@ -335,6 +440,16 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         sb.append("<p>Avant la première traduction, téléchargez les modèles de langue dans l'onglet « Modèles ». L'historique et les favoris sont dans l'onglet « Bibliothèque ».</p></body></html>")
         webView?.loadDataWithBaseURL(null, sb.toString(), "text/html", "utf-8", null)
         currentUrl = ""; pageError = null; resetSession()
+    }
+    /** Tests automatiques : évalue du JavaScript dans la page et rend le résultat. */
+    fun evalForTest(js: String, cb: (String?) -> Unit) { webView?.evaluateJavascript(js, cb) }
+    /** Tests automatiques : un appui du doigt aux coordonnées de la page (pixels CSS), comme un vrai toucher. */
+    fun tapForTest(xCss: Float, yCss: Float) {
+        val wv = webView ?: return
+        val d = wv.resources.displayMetrics.density
+        val t = SystemClock.uptimeMillis()
+        val down = android.view.MotionEvent.obtain(t, t, android.view.MotionEvent.ACTION_DOWN, xCss * d, yCss * d, 0); wv.dispatchTouchEvent(down); down.recycle()
+        val up = android.view.MotionEvent.obtain(t, t + 70, android.view.MotionEvent.ACTION_UP, xCss * d, yCss * d, 0); wv.dispatchTouchEvent(up); up.recycle()
     }
     fun back() { webView?.goBack() }
     fun forward() { webView?.goForward() }
@@ -638,6 +753,25 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         @JavascriptInterface fun onImagesChanged() { main.post { if (active) start(false) } }
         @JavascriptInterface fun onB64(id: String, data: String) { b64Waiters[id]?.complete(data) }
         @JavascriptInterface fun onEdit(id: String, bid: String, src: String, tr: String) { main.post { editTarget = EditTarget(id, bid.toIntOrNull() ?: -1, src, tr) } }
+        // script de garde du bloqueur
+        @JavascriptInterface fun adsOn(host: String): Boolean {
+            val st = graph.settingsStore.settings
+            val site = if (host.isEmpty()) null else Sites.registrable(host)
+            return st.blockAds && (site == null || site !in st.adAllowSiteSet)
+        }
+        @JavascriptInterface fun adBlocked(kind: String, url: String) {
+            graph.adFilters.log.add(kind, url, null, siteOf(pageUrl))
+            if (kind == "pop-up") main.post { notePopupBlocked(url) }
+        }
+        @JavascriptInterface fun genuineLink(href: String) { trustedHref = href; trustedAt = SystemClock.uptimeMillis() }
+        @JavascriptInterface fun cosmeticCss(host: String): String = try { graph.adFilters.cosmeticCss(host) } catch (_: Throwable) { "" }
+    }
+
+    private fun notePopupBlocked(url: String) {
+        val now = SystemClock.uptimeMillis()
+        if (now - lastPopupPill < 2500) return
+        lastPopupPill = now
+        showNavBlocked(NavBlock(url, "Pop-up bloqué", true))
     }
 
     companion object { const val MAX_IMAGE_BYTES = 30 * 1024 * 1024 }

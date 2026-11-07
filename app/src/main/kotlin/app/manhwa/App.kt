@@ -56,6 +56,8 @@ class AppGraph(ctx: Context) {
     val visionTest = VisionTester(ctx, gemma)
     /** Noms propres probables repérés pendant la lecture (propositions du glossaire) ; remis à zéro quand l'application redémarre. */
     val names = NameSuggestions()
+    /** Listes de filtres du bloqueur de publicités (chargées en arrière-plan). */
+    val adFilters = AdFilters(ctx).also { it.start() }
     val controller = TranslationController(ctx, this)
 }
 

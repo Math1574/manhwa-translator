@@ -1,0 +1,12 @@
+! Règles propres au projet : ajouts et corrections faits à la main (une règle par ligne, syntaxe Adblock Plus / uBlock Origin).
+! Elles s'ajoutent aux listes téléchargées ; on y met ce qui manque aux listes publiques pour les sites de scans.
+! Régies et réseaux de pop-unders que les listes publiques ne couvrent pas en entier (nom de domaine complet, tous les types de requêtes).
+||exoclick.com^
+||doubleclick.net^
+||googlesyndication.com^
+||googleadservices.com^
+||admaven.com^
+||taboola.com^
+||pushhouse.io^
+||smartadserver.com^
+||onclicka.com^

@@ -156,6 +156,24 @@ for path in sorted(glob.glob(f"{OUT}/reports/*.json")):
     P("")
 
 # interface (scénario ui) : une ligne « vérification<TAB>0 ou 1 » par contrôle fait sur l'export de l'écran de l'émulateur
+adt = f"{OUT}/reports/adtest.json"
+P("\n## Bloqueur de publicités (émulateur)\n")
+if os.path.exists(adt) and os.path.getsize(adt) > 0:
+    try:
+        a = json.load(open(adt, encoding="utf8"))
+        P("| vérification | résultat |\n|---|---|")
+        for ck in a["checks"]: P(f"| {ck['name']} | {'oui' if ck['ok'] else '**NON**'} |")
+        badc = [ck for ck in a["checks"] if not ck["ok"]]
+        P(f"\n**Bloqueur : {len(a['checks']) - len(badc)}/{len(a['checks'])} vérifications réussies**")
+        for ck in badc: problems.append(f"bloqueur : {ck['name']} ({str(ck.get('detail', ''))[:140]})")
+        P("\nRequêtes tierces servies par le faux site (donc non bloquées) : " + (", ".join(a.get("served", [])) or "aucune"))
+        P("\n<details><summary>journal du bloqueur</summary>\n\n```\n" + a.get("log", "")[:3500] + "\n```\n</details>")
+        for n in a.get("notes", []): P("- " + str(n)[:300])
+    except Exception as e:
+        P(f"(rapport illisible : {e})"); problems.append("bloqueur : rapport illisible")
+else:
+    P("(scénario non exécuté ou sans rapport)"); problems.append("bloqueur : pas de rapport")
+
 uit = f"{OUT}/reports/ui.tsv"
 if os.path.exists(uit):
     rows = [l.rstrip("\n").split("\t") for l in open(uit, encoding="utf8") if "\t" in l]

@@ -166,13 +166,17 @@ fun BrowserScreen(graph: AppGraph) {
                 ReaderOverlay(graph)
             }
             // propositions discrètes : reprendre le chapitre où l'on s'était arrêté ; corriger la traduction dont on regarde l'original
-            if (!(c.fullscreen && c.readerBar) && (c.resumeOffer > 0 || c.peekTarget != null)) {
+            if (!(c.fullscreen && c.readerBar) && (c.resumeOffer > 0 || c.peekTarget != null || c.navBlocked != null)) {
                 Column(Modifier.align(Alignment.BottomCenter).padding(bottom = if (c.fullscreen) 28.dp else 20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (c.resumeOffer > 0) {
                         LaunchedEffect(c.resumeOffer) { delay(9000); c.dismissResumeOffer() }
                         Pill("Reprendre à ${c.resumeOffer} %", onClick = { c.resumeNow() }, onClose = { c.dismissResumeOffer() })
                     }
                     if (c.peekTarget != null) Pill("Corriger cette traduction", onClick = { c.openPeekEdit() })
+                    c.navBlocked?.let { nb ->
+                        if (nb.popup) Pill(nb.reason, onClick = { c.dismissNavBlocked() })
+                        else Pill("Redirection bloquée vers ${android.net.Uri.parse(nb.url).host ?: "un autre site"} · Ouvrir", onClick = { c.openBlockedNav() }, onClose = { c.dismissNavBlocked() })
+                    }
                 }
             }
         }
@@ -272,6 +276,13 @@ private fun AddressBar(graph: AppGraph) {
                 DropdownMenuItem(text = { Text("Page suivante") }, enabled = c.canGoForward, onClick = { menu = false; c.forward() })
                 DropdownMenuItem(text = { Text("Accueil") }, onClick = { menu = false; c.goHome() })
                 if (seriesUrl != null) DropdownMenuItem(text = { Text("Page de l'œuvre") }, onClick = { menu = false; c.load(seriesUrl) })
+                if (c.currentUrl.startsWith("http")) {
+                    val on = c.adsActiveHere()
+                    DropdownMenuItem(
+                        text = { Text(if (on) "Bloqueur actif ici · ${c.adCountOnPage()} bloqué${if (c.adCountOnPage() > 1) "s" else ""} (désactiver)" else "Bloqueur désactivé ici (réactiver)") },
+                        onClick = { menu = false; c.toggleAdsHere() },
+                    )
+                }
                 DropdownMenuItem(text = { Text("Copier l'adresse") }, enabled = c.currentUrl.isNotEmpty(), onClick = {
                     menu = false
                     val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager

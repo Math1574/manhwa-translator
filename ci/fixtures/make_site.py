@@ -43,5 +43,40 @@ if os.path.exists(f"{S}/synth/en_mixed.png"):
     for n in (1, 2, 3):
         open(f"{d}/{n}.html", "w").write(HEAD % f"Test Series - Chapter {n}" + f"<h3 style='padding:8px'>Test Series - Chapter {n}</h3>"
             + '<img src="/synth/en_mixed.png" style="display:block;width:100%;margin:0">' * 2 + "</body></html>")
+# banc du bloqueur : page piégée + faux sites tiers (noms en « .test », servis par l'application depuis /__sites/<nom>/ en mode test)
+if os.path.exists(f"{S}/synth/en_caps.png"):
+    import shutil
+    def site_file(host, path, data=None, src=None):
+        full = f"{S}/__sites/{host}/{path}"; os.makedirs(os.path.dirname(full), exist_ok=True)
+        if src: shutil.copy(src, full)
+        else: open(full, "w").write(data)
+    img = f"{S}/synth/en_caps.png"
+    site_file("adnet.test", "ad.js", "window.__adLoaded = true;")
+    site_file("adnet.test", "frame.html", "<html><body><script>try{parent.__frameLoaded=true}catch(e){}</script>annonce</body></html>")
+    site_file("adnet.test", "banner.gif", src=img)
+    site_file("popunder.test", "landing", "<html><body>Pop-under</body></html>")
+    site_file("cdn.test", "ads/ad.png", src=img)
+    site_file("cdn.test", "bannieres-generiques/ok.png", src=img)
+    site_file("cdn.test", "images/p1.png", src=img)
+    site_file("cdn.test", "images/p2.png", src=img)
+    site_file("friend.test", "page.html", "<html><head><title>Friend</title></head><body style='background:#123;color:#fff'><h2>Site ami</h2></body></html>")
+    box = "position:fixed;left:20px;width:220px;height:56px;z-index:50;display:block;background:#446;color:#fff;font:20px sans-serif;line-height:56px;text-align:center;text-decoration:none"
+    open(f"{S}/adtest2.html", "w").write(HEAD % "adtest2" + "<h3 style='padding:8px'>Test du bloqueur</h3>"
+        + '<script src="http://adnet.test/ad.js"></script>'
+        + '<iframe id="fr" src="http://adnet.test/frame.html" width="300" height="100"></iframe>'
+        + ''.join(f'<img id="{i}" src="{u}" style="width:100%;display:block">' for i, u in (("banner", "http://adnet.test/banner.gif"), ("adimg", "http://cdn.test/ads/ad.png"),
+            ("generic", "http://cdn.test/bannieres-generiques/ok.png"), ("cdn1", "http://cdn.test/images/p1.png"), ("cdn2", "http://cdn.test/images/p2.png"), ("same", "/synth/en_caps.png")))
+        + '<a id="ov" href="http://popunder.test/overlay" style="position:fixed;left:0;top:0;width:100%;height:100%;opacity:0;z-index:99999"></a>'
+        + f'<button id="btnPop" onclick="window.open(\'http://popunder.test/btn\')" style="position:fixed;left:20px;top:100px;width:220px;height:56px;z-index:50">Pop-up</button>'
+        + f'<a id="next" target="_blank" href="/adtest2_ch2.html" style="top:180px;{box}">Suivant</a>'
+        + f'<a id="ext" href="http://friend.test/page.html" style="top:260px;{box}">Autre site</a>'
+        + f'<a id="adlink" href="http://popunder.test/clicked" style="top:340px;{box}">Lien regie</a>'
+        + "<script>window.__popupFake=false;"
+        + "setTimeout(function(){var w=window.open('http://popunder.test/p1');window.__popupFake=!!w&&w.closed===false},800);"
+        + "setTimeout(function(){location.href='http://popunder.test/landing'},1500);"
+        + "function real(id){var i=document.getElementById(id);return !!(i&&i.complete&&i.naturalWidth>20)}"
+        + "setTimeout(function(){window.__state={adLoaded:!!window.__adLoaded,frameLoaded:!!window.__frameLoaded,bannerReal:real('banner'),adImgReal:real('adimg'),genericReal:real('generic'),cdn1Real:real('cdn1'),cdn2Real:real('cdn2'),sameReal:real('same'),popupFake:window.__popupFake}},4000);"
+        + "</script></body></html>")
+    open(f"{S}/adtest2_ch2.html", "w").write(HEAD % "adtest2 ch2" + "<h3 style='padding:8px'>Chapitre 2</h3></body></html>")
 open(f"{S}/index.html", "w").write(HEAD % "Tests" + "".join(f'<p><a style="color:#8af" href="{os.path.basename(p)}">{os.path.basename(p)}</a></p>' for p in sorted(glob.glob(f"{S}/*.html")) if not p.endswith("index.html")) + "</body></html>")
 print(sorted(os.listdir(S)))

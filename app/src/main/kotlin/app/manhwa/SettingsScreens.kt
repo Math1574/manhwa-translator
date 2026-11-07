@@ -14,6 +14,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -380,10 +383,62 @@ private fun OcrSettings(graph: AppGraph) {
 private fun BrowsingSettings(graph: AppGraph) {
     val store = graph.settingsStore
     val s = store.settings
+    val cs = MaterialTheme.colorScheme
+    val ctx = LocalContext.current
+    var updateMsg by remember { mutableStateOf<String?>(null) }
+    var logOpen by remember { mutableStateOf(false) }
     PageScroll {
         SettingsCard {
-            SwitchRow("Bloquer les publicités", "Filtre les régies publicitaires connues, les fenêtres intempestives et les redirections. Désactivez-le si un site de lecture ne s'affiche plus correctement.", s.blockAds) { v -> store.update { it.copy(blockAds = v) } }
+            SwitchRow(
+                "Bloquer les publicités", "Régies publicitaires, pop-ups, pop-unders, redirections et liens invisibles. Désactivable site par site depuis le menu ⋮ du navigateur si un site de lecture ne s'affiche plus correctement.", s.blockAds,
+            ) { v -> store.update { it.copy(blockAds = v) } }
         }
+        SettingsCard {
+            Text("Listes de filtres", style = MaterialTheme.typography.titleMedium)
+            Text(graph.adFilters.summary, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            Text("Issues d'uBlock Origin, EasyList et HaGeZi ; mises à jour automatiquement tous les quelques jours quand l'application est ouverte.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            GhostButton(if (graph.adFilters.updating) "Mise à jour…" else "Mettre à jour maintenant", { graph.adFilters.updateAsync { updateMsg = it } }, enabled = !graph.adFilters.updating)
+            updateMsg?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.primary) }
+        }
+        SettingsCard {
+            Text("Sites sans bloqueur", style = MaterialTheme.typography.titleMedium)
+            val sites = s.adAllowSiteSet.sorted()
+            if (sites.isEmpty()) Text("Aucun. Le menu ⋮ du navigateur permet d'éteindre le bloqueur pour le site affiché.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            for (site in sites) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(site, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                TextButton(onClick = { store.update { st -> st.copy(adAllowSites = (st.adAllowSiteSet - site).joinToString(",")) } }) { Text("Rétablir") }
+            }
+            val targets = s.adAllowTargetSet.sorted()
+            if (targets.isNotEmpty()) {
+                HorizontalDivider()
+                Text("Sites autorisés comme destination", style = MaterialTheme.typography.titleMedium)
+                Text("Les pages de lecture ne peuvent pas vous envoyer ailleurs d'elles-mêmes ; ces sites ont été autorisés avec « Ouvrir ».", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                for (site in targets) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(site, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                    TextButton(onClick = { store.update { st -> st.copy(adAllowTargets = (st.adAllowTargetSet - site).joinToString(",")) } }) { Text("Retirer") }
+                }
+            }
+        }
+        SettingsCard {
+            Text("Journal du bloqueur", style = MaterialTheme.typography.titleMedium)
+            Text("${graph.adFilters.log.total()} action(s) depuis le démarrage : requêtes bloquées, pop-ups et redirections refusés. Utile si une image n'apparaît pas : le journal dit quelle règle l'a bloquée.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            GhostButton("Voir le journal", { logOpen = true })
+        }
+    }
+    if (logOpen) {
+        val text = graph.adFilters.log.export()
+        AlertDialog(
+            onDismissRequest = { logOpen = false },
+            title = { Text("Journal du bloqueur") },
+            text = { Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) { Text(text.take(12000), style = MaterialTheme.typography.bodySmall) } },
+            confirmButton = {
+                TextButton(onClick = {
+                    val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, text)
+                    ctx.startActivity(android.content.Intent.createChooser(send, "Partager le journal").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                }) { Text("Partager") }
+            },
+            dismissButton = { Row { TextButton(onClick = { graph.adFilters.log.clear(); logOpen = false }) { Text("Effacer") }; TextButton(onClick = { logOpen = false }) { Text("Fermer") } } },
+        )
     }
 }
 

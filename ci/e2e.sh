@@ -102,6 +102,19 @@ run synth_ja_vert_mlkit  synth_ja_vertical.html MLKIT JA FR "ja,fr" 300
 run synth_zh_mlkit       synth_zh.html       MLKIT ZH_HANS FR "zh,fr" 300
 run pc_ja_mlkit          pc_ja.html          MLKIT JA FR "ja,fr"   300
 
+# --- bloqueur de publicités : page piégée (régies, pop-ups, redirection, superposition invisible, vrais liens), appuis réels dans la WebView ---
+say "=== bloqueur de publicités"
+adb shell am force-stop $PKG
+adb shell "run-as $PKG rm -f files/adtest.json"
+adb shell am start -n $PKG/app.manhwa.MainActivity --es mt_adtest 1 --es mt_report adtest.json >/dev/null
+for i in $(seq 1 100); do
+  sleep 3
+  if adb shell "run-as $PKG ls files/adtest.json" 2>/dev/null | grep -q adtest.json; then break; fi
+done
+adb shell "run-as $PKG cat files/adtest.json" > $OUT/reports/adtest.json 2>/dev/null || true
+adb exec-out screencap -p | convert - -resize 540x -quality 70 "$OUT/shots/adtest-0.jpg" 2>/dev/null
+say "bloqueur terminé ($(wc -c < $OUT/reports/adtest.json) octets de rapport)"
+
 # --- interface : plein écran d'un appui, onglets, bouton Original | Traduit, bibliothèque par œuvre, réglages en sections ---
 say "=== interface"
 UI=$OUT/reports/ui.tsv; : > $UI
