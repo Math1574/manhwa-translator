@@ -11,9 +11,9 @@ w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kot
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Screens.kt:254:64 Unnecessary non-null assertion (!!) on a non-null receiver of type 'String'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/SettingsScreens.kt:124:27 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/SettingsScreens.kt:188:31 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
-BUILD SUCCESSFUL in 54s
-total 400516
-drwxr-xr-x 2 runner runner      4096 Nov  7 02:08 .
-drwxr-xr-x 3 runner runner      4096 Nov  7 02:08 ..
--rw-r--r-- 1 runner runner 410115419 Nov  7 02:08 app-debug.apk
--rw-r--r-- 1 runner runner       405 Nov  7 02:08 output-metadata.json
+BUILD SUCCESSFUL in 1m 1s
+total 400520
+drwxr-xr-x 2 runner runner      4096 Nov  7 10:10 .
+drwxr-xr-x 3 runner runner      4096 Nov  7 10:10 ..
+-rw-r--r-- 1 runner runner 410116699 Nov  7 10:10 app-debug.apk
+-rw-r--r-- 1 runner runner       405 Nov  7 10:10 output-metadata.json
