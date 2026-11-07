@@ -20,7 +20,7 @@ class H(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         # /once/… : l'image n'est servie qu'à la PREMIÈRE requête (adresse à usage unique) : un second téléchargement par l'application reçoit 403
-        # /strict/… : refusée (403) sans les en-têtes qu'un vrai navigateur envoie pour une image (Sec-Fetch-Dest: image, Accept-Language, Referer)
+        # /strict/… : refusée (403) sans les en-têtes qu'un vrai navigateur envoie pour une image (Accept d'image, Accept-Language, Referer)
         if self.path.startswith("/once/") or self.path.startswith("/strict/"):
             once = self.path.startswith("/once/")
             if once:
@@ -30,7 +30,8 @@ class H(http.server.SimpleHTTPRequestHandler):
                 ok = not seen
             else:
                 h = self.headers
-                ok = h.get("Sec-Fetch-Dest") == "image" and bool(h.get("Accept-Language")) and bool(h.get("Referer"))
+                # (Chrome n'envoie les en-têtes Sec-Fetch-* qu'en HTTPS : on exige ceux que la WebView envoie aussi en HTTP simple)
+                ok = bool(h.get("Accept-Language")) and bool(h.get("Referer")) and "image/" in h.get("Accept", "")
             if not ok:
                 self.send_response(403); self.end_headers(); self.wfile.write(b"forbidden"); return
             self.path = "/pc/" + self.path.split("/", 2)[2].split("?")[0]

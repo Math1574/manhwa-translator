@@ -346,7 +346,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                 val url = request.url.toString()
                 val h = request.requestHeaders
                 val type = RequestTypes.infer(false, h["Accept"], url, request.method, h["X-Requested-With"], h["Sec-Fetch-Dest"])
-                graph.adFilters.awaitEngine(3000)
+                graph.adFilters.awaitEngine(10_000)
                 val eng = graph.adFilters.engine
                 val v = if (eng != null) eng.check(url, page, type) else legacyVerdict(url, type, page)
                 if (!v.blocked) return testProxy(request)
