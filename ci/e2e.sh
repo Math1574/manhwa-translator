@@ -10,6 +10,7 @@ say() { echo "[e2e $(date +%H:%M:%S)] $*" | tee -a $OUT/run.log; }
 adb wait-for-device
 adb shell input keyevent KEYCODE_WAKEUP; adb shell wm dismiss-keyguard 2>/dev/null || true
 adb shell settings put secure immersive_mode_confirmations confirmed; adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 2>&1; adb shell settings put global window_animation_scale 0; adb shell settings put global transition_animation_scale 0
+adb shell settings put global hide_error_dialogs 1 2>/dev/null || true
 adb install -r apk/app-debug.apk 2>&1 | tee -a $OUT/run.log
 adb shell wm size | tee -a $OUT/run.log
 
@@ -108,7 +109,9 @@ uidump() { adb shell uiautomator dump /sdcard/ui_$1.xml >/dev/null 2>&1; adb exe
 has() { if grep -qi -- "$2" "$OUT/reports/ui_$1.xml" 2>/dev/null; then echo 1; else echo 0; fi; }
 hasnot() { if grep -qi -- "$2" "$OUT/reports/ui_$1.xml" 2>/dev/null; then echo 0; else echo 1; fi; }
 chk() { printf '%s\t%s\n' "$1" "$2" >> $UI; }
-tapt() { local xy; xy=$(python3 ci/ui_tap.py "$OUT/reports/ui_$1.xml" "$2" ${3:-1}) && adb shell input tap $xy; }
+dismiss_anr() { for k in 1 2 3 4; do if adb shell dumpsys window | grep -q "Application Not Responding"; then say "fenêtre « ne répond plus » du système fermée"; adb shell input keyevent KEYCODE_BACK; sleep 1.5; else break; fi; done; }
+tap() { dismiss_anr; adb shell input tap "$@"; }
+tapt() { local xy; dismiss_anr; xy=$(python3 ci/ui_tap.py "$OUT/reports/ui_$1.xml" "$2" ${3:-1}) && adb shell input tap $xy; }
 # l'émulateur affiche parfois « Pixel Launcher ne répond plus » : cette fenêtre absorbe le premier appui, on la ferme avant de commencer
 for k in 1 2 3; do
   uidump anr; if grep -q "isn't responding\|not responding" "$OUT/reports/ui_anr.xml" 2>/dev/null; then tapt anr "Wait" || adb shell input keyevent KEYCODE_BACK; sleep 1; else break; fi
@@ -128,10 +131,10 @@ uidump fs0; chk "plein écran : rien d'affiché au repos" $(hasnot fs0 'Quitter 
 # diagnostic : quelle fenêtre a le focus, et quelle activité est au premier plan, avant le premier appui
 adb shell dumpsys window | grep -E "mCurrentFocus" | head -2 | sed 's/^/  [avant appui] /' | tee -a $OUT/run.log
 adb shell dumpsys activity activities | grep -E "ResumedActivity" | head -2 | sed 's/^/  [avant appui] /' | tee -a $OUT/run.log
-adb shell input tap 540 1200; sleep 2; adb shell dumpsys window | grep -E "mCurrentFocus" | head -1 | sed 's/^/  [après appui] /' | tee -a $OUT/run.log; uidump fs1; chk "plein écran : un appui ouvre le menu de lecture" $(has fs1 'Quitter le plein'); shot ui 1
+tap 540 1200; sleep 2; adb shell dumpsys window | grep -E "mCurrentFocus" | head -1 | sed 's/^/  [après appui] /' | tee -a $OUT/run.log; uidump fs1; chk "plein écran : un appui ouvre le menu de lecture" $(has fs1 'Quitter le plein'); shot ui 1
 chk "plein écran : le menu propose Original | Traduit et les chapitres" $([ "$(has fs1 'Original')" = 1 ] && [ "$(has fs1 'Traduit')" = 1 ] && [ "$(has fs1 'Suivant')" = 1 ] && echo 1 || echo 0)
-adb shell input tap 540 1200; sleep 2; uidump fs2; chk "plein écran : un second appui le referme" $(hasnot fs2 'Quitter le plein')
-adb shell input tap 540 1200; sleep 2; uidump fs3; tapt fs3 "Quitter le plein"; sleep 2; uidump nav
+tap 540 1200; sleep 2; uidump fs2; chk "plein écran : un second appui le referme" $(hasnot fs2 'Quitter le plein')
+tap 540 1200; sleep 2; uidump fs3; tapt fs3 "Quitter le plein"; sleep 2; uidump nav
 chk "plein écran : le bouton du menu le quitte (onglets de retour)" $(has nav 'Biblioth')
 chk "onglets : Lecture, Bibliothèque, Réglages" $([ "$(has nav 'Lecture')" = 1 ] && [ "$(has nav 'Biblioth')" = 1 ] && [ "$(has nav 'glages')" = 1 ] && echo 1 || echo 0)
 chk "bouton rond Original | Traduit présent hors plein écran" $([ "$(has nav 'Traduction activ')" = 1 ] || [ "$(has nav 'Traduire')" = 1 ] && echo 1 || echo 0)
