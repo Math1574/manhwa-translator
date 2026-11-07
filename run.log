@@ -1,0 +1,48 @@
+Performing Streamed Install
+Success
+Physical size: 1080x2400
+[e2e 10:39:33] === prep (index.html, MLKIT, EN→FR)
+[e2e 10:41:10] terminé : prep (97 s)
+[e2e 10:41:10] aucune image traitée : nouvel essai de prep
+[e2e 10:41:10] === prep (index.html, MLKIT, EN→FR)
+[e2e 10:42:04] terminé : prep (54 s)
+[e2e 10:42:04] === pc_en_mlkit (pc_en.html, MLKIT, EN→FR)
+[e2e 10:43:03] terminé : pc_en_mlkit (58 s)
+[e2e 10:43:03] === synth_en_caps_mlkit (synth_en_caps.html, MLKIT, EN→FR)
+[e2e 10:43:52] terminé : synth_en_caps_mlkit (49 s)
+[e2e 10:43:52] === synth_en_mixed_mlkit (synth_en_mixed.html, MLKIT, EN→FR)
+[e2e 10:44:35] terminé : synth_en_mixed_mlkit (43 s)
+[e2e 10:44:35] === synth_en_variety_combined (synth_en_variety.html, MLKIT, EN→FR)
+[e2e 10:45:23] terminé : synth_en_variety_combined (48 s)
+[e2e 10:45:23] === adblock_mlkit (adtest.html, MLKIT, EN→FR)
+[e2e 10:46:06] terminé : adblock_mlkit (42 s)
+[e2e 10:46:06] === synth_layouts_combined (synth_layouts.html, MLKIT, EN→FR)
+[e2e 10:47:19] terminé : synth_layouts_combined (73 s)
+[e2e 10:47:19] === synth_atypical_combined (synth_atypical.html, MLKIT, EN→FR)
+[e2e 10:48:20] terminé : synth_atypical_combined (61 s)
+[e2e 10:48:20] === synth_en_fancy_mlkitonly (synth_en_fancy.html, MLKIT, EN→FR)
+[e2e 10:48:57] terminé : synth_en_fancy_mlkitonly (37 s)
+[e2e 10:48:57] === synth_en_fancy_combined (synth_en_fancy.html, MLKIT, EN→FR)
+[e2e 10:49:46] terminé : synth_en_fancy_combined (49 s)
+[e2e 10:49:46] === pc_en_ref_mlkit (pc_en_ref.html, MLKIT, EN→FR)
+[e2e 10:50:44] terminé : pc_en_ref_mlkit (57 s)
+[e2e 10:50:44] === pc_en_lazy_mlkit (pc_en_lazy.html, MLKIT, EN→FR)
+[e2e 10:51:53] terminé : pc_en_lazy_mlkit (68 s)
+[e2e 10:51:53] === synth_ko_mlkit (synth_ko.html, MLKIT, KO→FR)
+[e2e 10:52:42] terminé : synth_ko_mlkit (49 s)
+[e2e 10:52:42] === synth_ja_vert_mlkit (synth_ja_vertical.html, MLKIT, JA→FR)
+[e2e 10:53:37] terminé : synth_ja_vert_mlkit (55 s)
+[e2e 10:53:37] === synth_zh_mlkit (synth_zh.html, MLKIT, ZH_HANS→FR)
+[e2e 10:54:20] terminé : synth_zh_mlkit (42 s)
+[e2e 10:54:20] === pc_ja_mlkit (pc_ja.html, MLKIT, JA→FR)
+[e2e 10:55:30] terminé : pc_ja_mlkit (70 s)
+[e2e 10:55:30] === interface
+  [avant appui]   mCurrentFocus=Window{a0c041b u0 app.manhwa.translator/app.manhwa.MainActivity}
+  [avant appui]     topResumedActivity=ActivityRecord{3aeef29 u0 app.manhwa.translator/app.manhwa.MainActivity t25}
+  [avant appui]   ResumedActivity: ActivityRecord{3aeef29 u0 app.manhwa.translator/app.manhwa.MainActivity t25}
+  [après appui]   mCurrentFocus=Window{a0c041b u0 app.manhwa.translator/app.manhwa.MainActivity}
+  mCurrentFocus=Window{a0c041b u0 app.manhwa.translator/app.manhwa.MainActivity}
+        InsetsSource id=72a20000 type=statusBars frame=[0,0][1080,128] visible=true flags= insetsRoundedCornerFrame=false
+        mSource=InsetsSource id=72a20000 type=statusBars frame=[0,0][1080,128] visible=true flags= insetsRoundedCornerFrame=false
+  [journal système] 30 ligne(s) d'ANR ou de plantage
+[e2e 10:57:18] toutes les scènes sont terminées
