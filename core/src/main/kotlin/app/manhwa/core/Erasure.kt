@@ -18,6 +18,13 @@ interface PixelSource {
  * - ART : texte sur dessin → la zone du texte est reconstruite à partir de ses abords (bords adoucis).
  */
 object Erasure {
+    /** Diagnostic (bancs d'essai) : reçoit les mesures qui décident entre aplat et effacement des lettres. Nul en production. */
+    @JvmField var trace: ((String) -> Unit)? = null
+    /** Nettoyage du halo clair autour des lettres effacées sur fond blanc (mode ART). Désactivable pour comparer, dans les bancs d'essai. */
+    @JvmField var haloClean: Boolean = true
+    /** Bancs d'essai seulement : force le mode ART (même sur un fond uni) pour mesurer ses restes. */
+    @JvmField var forceArt: Boolean = false
+
     enum class Mode { FLAT, SMOOTH, ART }
 
     class Plan(
@@ -299,8 +306,11 @@ object Erasure {
         fun rects() = (lineBoxes + extra).map { l -> intArrayOf((l.left * s).toInt() - x0, (l.top * s).toInt() - y0, (l.right * s).toInt() - x0, (l.bottom * s).toInt() - y0) }
         val lh = lineH * s
 
-        var a = TextErase.analyze(px, w, h, TextErase.rectMask(w, h, rects(), max(3, (lh * 0.2f).toInt())), grow = max(2, (lh * 0.06f).toInt()))
-        if (a.outlined) a = TextErase.analyze(px, w, h, TextErase.rectMask(w, h, rects(), max(6, (lh * 0.3f).toInt())), grow = max(3, (lh * 0.1f).toInt()))
+        // blocs voisins connus (autres textes, bulles voisines) : leur encre dans le cadre d'analyse n'est pas un défaut d'uniformité du fond
+        val frameIgnore: BooleanArray? = (exclude + protect + protectRound + outlines).map { l -> intArrayOf((l.left * s).toInt() - x0, (l.top * s).toInt() - y0, (l.right * s).toInt() - x0, (l.bottom * s).toInt() - y0) }
+            .takeIf { it.isNotEmpty() }?.let { TextErase.rectMask(w, h, it, max(6, (lh * 0.3f).toInt())) }
+        var a = TextErase.analyze(px, w, h, TextErase.rectMask(w, h, rects(), max(3, (lh * 0.2f).toInt())), grow = max(2, (lh * 0.06f).toInt()), ignoreFrame = frameIgnore)
+        if (a.outlined) a = TextErase.analyze(px, w, h, TextErase.rectMask(w, h, rects(), max(6, (lh * 0.3f).toInt())), grow = max(3, (lh * 0.1f).toInt()), ignoreFrame = frameIgnore)
 
         // bulle : zone de texte sur fond uni ET (abords unis OU contour fermé : le remplissage depuis le texte reste borné)
         val bubble = if (!a.outlined && a.zoneFlat >= 0.9f && a.bgShare >= 0.45f) bubbleArea(src, s, textUnion, a.bg, imageW, imageH) else null
@@ -319,10 +329,12 @@ object Erasure {
             val ignore = if (neighbours.isEmpty()) null else TextErase.rectMask(w, h, neighbours, max(6, (lh * 0.3f).toInt()))
             val limit = if (bubbleCtx) BooleanArray(w * h) { interiorPre!![it] && (ignore == null || !ignore[it]) } else if (ignore != null) BooleanArray(w * h) { !ignore[it] } else null
             val st = TextErase.structure(px, w, h, zone, textS, limit)
+            trace?.invoke("structure : bords=${st[0]} masse=${st[2]} (seuils 0,012 / 0,10) ; voisins=${neighbours.size}")
             st[0] > 0.012f || st[2] > 0.10f
         }
         // un lettrage cerné d'un contour ou d'une lueur est traité comme du dessin : l'aplat laisserait des fragments du contour
-        val flat = !structured && !a.outlined && a.zoneFlat >= 0.9f && a.bgShare >= 0.45f && (a.uniformity >= 0.85f || bubble != null)
+        trace?.invoke("décision : structured=$structured outlined=${a.outlined} zoneFlat=${a.zoneFlat} bgShare=${a.bgShare} uniformity=${a.uniformity} bubble=${bubble != null} bg=${"%06X".format(a.bg and 0xFFFFFF)}")
+        val flat = !forceArt && !structured && !a.outlined && a.zoneFlat >= 0.9f && a.bgShare >= 0.45f && (a.uniformity >= 0.85f || bubble != null)
         if (flat) {
             val allowedZone = TextErase.rectMask(w, h, rects(), max(3, (lh * 0.2f).toInt()))
             val shrink = max(1, (lh * 0.2f).toInt())
@@ -402,7 +414,9 @@ object Erasure {
         val tightLines = TextErase.rectMask(w, h, rects(), 3)
         val reachCap = max(4, (lh * 0.06f).toInt())
         val artInfo = TextErase.artMaskInfo(px, w, h, zoneArt, fillColor, 2, Int.MAX_VALUE, tightLines, reachCap)
-        val mask = artInfo.mask
+        // fond blanc : le halo clair collé aux lettres (compression, lueur) est effacé avec elles, sans quoi il reste un fantôme de leur forme
+        val plainWhite = haloClean && TextErase.ringIsPlainWhite(px, w, h, artInfo.mask, a.bg, frameIgnore)
+        val mask = if (plainWhite) TextErase.lightHalo(px, w, h, artInfo.mask, a.bg, max(6, (lh * 0.12f).toInt()), frameIgnore) else artInfo.mask
         // texte sur dessin : région élargie pour trouver de la vraie texture à copier à côté du trou (second passage)
         if (padOverride == 0f) planUnclipped(src, s, lineBoxes, lineH, imageW, imageH, max(40f, lineH * 1.6f), container, protect, free, outlines, extra, protectRound, confine, confineRect, exclude)?.let { if (it.mode == Mode.ART) return it }
         // texte sur dessin : couleur du plus proche voisin plutôt que diffusion (la diffusion mélange le blanc d'une bulle et le fond sombre en un gris voilé)
@@ -410,7 +424,14 @@ object Erasure {
         // trame de points ou motif répété autour du trou : on recopie le motif plutôt que de le lisser en un voile gris
         val fill = TextErase.periodicFill(px, w, h, mask, diffused) ?: TextErase.addGrain(TextErase.inpaintClone(px, w, h, mask, diffused), px, w, h, mask)
         val alpha = TextErase.featherAlpha(mask, w, h)
-        val layer = IntArray(w * h) { if (mask[it]) (alpha[it] shl 24) or (fill[it] and 0xFFFFFF) else 0 }
+        // blanc franc tout autour : un remplissage qui n'en diffère que par du bruit de compression est ramené au blanc exact (sinon des stries d'un blanc légèrement gris restent visibles)
+        val bgPure = a.bg and 0xFFFFFF
+        val layer = IntArray(w * h) {
+            if (mask[it]) {
+                val f = fill[it] and 0xFFFFFF
+                (alpha[it] shl 24) or (if (plainWhite && TextErase.dist(f, bgPure) <= 14) bgPure else f)
+            } else 0
+        }
         val inkArt = TextErase.artMask(px, w, h, zoneArt, fillColor, 0, Int.MAX_VALUE, tightLines, reachCap)
         return Plan(Mode.ART, x0, y0, w, h, mask, layer, a.bg, fillColor, a.outlined || artInfo.outlined, null, null, TextErase.strokeWidth(inkArt, w, h), inkArt, meanFill(layer))
     }

@@ -55,6 +55,7 @@ object TestHooks {
         c.testNoDevTools = s("mt_nocdp") == "true"
         c.testBatch = s("mt_batch") == "true"
         c.testNoSeam = s("mt_noseam") == "true"
+        val toggleMs = s("mt_toggle")?.toLongOrNull() ?: 0L   // bascule sur « Original » puis de nouveau sur « Traduit » à ce moment (ms après le chargement), comme un lecteur qui compare
 
         thread(name = "mt-test") {
             val t0 = System.currentTimeMillis()
@@ -85,9 +86,15 @@ object TestHooks {
                 main.post { c.load(url) }
 
                 // 3) attendre la fin de la traduction (compteurs stables)
-                var lastSig = ""; var stableSince = System.currentTimeMillis()
+                var lastSig = ""; var stableSince = System.currentTimeMillis(); var toggled = false
                 while (System.currentTimeMillis() - tLoad < timeoutMs) {
                     Thread.sleep(2000)
+                    if (toggleMs > 0 && !toggled && System.currentTimeMillis() - tLoad >= toggleMs && c.total > 0) {
+                        toggled = true
+                        val before = "${c.total}/${c.done}/${c.failed}"
+                        main.post { c.setTranslate(false) }; Thread.sleep(1500); main.post { c.setTranslate(true) }
+                        notes.put("bascule Original puis Traduit à ${(System.currentTimeMillis() - tLoad) / 1000} s (total/traitées/échecs avant : $before)")
+                    }
                     val sig = "${c.total}/${c.done}/${c.failed}/${c.loading}"
                     val now = System.currentTimeMillis()
                     if (sig != lastSig) { lastSig = sig; stableSince = now }

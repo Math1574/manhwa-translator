@@ -43,6 +43,7 @@ object OcrRepair {
     fun repair(text: String, lex: EnglishLexicon, protect: Set<String> = emptySet()): String {
         if (ScriptDetector.dominant(text) != "en") return text
         var s = text.replace(Regex("([.!?])(?=[A-Za-z])"), "$1 ")         // « EVERYONE!IP » → « EVERYONE! IP »
+        s = s.replace(Regex("(?<![A-Za-z0-9])[Oo](?=[.,]\\d)"), "0")      // « SET TO O.1% » → « SET TO 0.1% » : un O collé à une décimale est un zéro
         val letters = s.filter { it.isLetter() }
         val caps = letters.length >= 4 && letters.count { it.isUpperCase() }.toFloat() / letters.length >= 0.5f
         val tokens = tokenRe.findAll(s).toList()
@@ -58,6 +59,21 @@ object OcrRepair {
         return sb.toString()
     }
 
+    private val tailRe = Regex("^(.*[.!?…][\"'”’)]*)\\s+([^.!?…]{1,24})$", RegexOption.DOT_MATCHES_ALL)
+
+    /**
+     * Débris collé en fin de phrase : un texte voisin (caractères d'une fenêtre de jeu, d'un décor) lu avec la dernière ligne (« …SI ÉLEVÉ ? Taay sr4: In ) »).
+     * Retiré seulement s'il suit une fin de phrase, reste court, contient un chiffre ou un signe parasite et ressemble à un débris.
+     * À appliquer au texte final : [repair] sert aussi à comparer des lectures, où retirer un débris ferait paraître plausible une lecture absurde.
+     */
+    fun dropJunkTail(text: String, lex: EnglishLexicon): String {
+        if (ScriptDetector.dominant(text) != "en") return text
+        val m = tailRe.find(text.trim()) ?: return text
+        val tail = m.groupValues[2].trim()
+        if (tail.any { !it.isLetter() && !it.isWhitespace() && it != '\'' && it != '’' && it != '-' } && JunkFilter.isDebris(tail, lex)) return m.groupValues[1]
+        return text
+    }
+
     private fun recase(orig: String, cand: String, caps: Boolean): String = when {
         caps || orig.length > 1 && orig.all { !it.isLetter() || it.isUpperCase() } -> cand.uppercase()
         orig.firstOrNull()?.isUpperCase() == true -> cand.lowercase().replaceFirstChar { it.uppercase() }
@@ -68,10 +84,13 @@ object OcrRepair {
         val core = tok.trim('\'', '’')
         if (core.isEmpty()) return tok
         if (core.all { it.isDigit() }) {
-            // nombre seul : gardé, sauf « 50 » → « SO » ou « 4 » → « A » dans une phrase dont la lecture est manifestement abîmée
-            if (alphaTokens < 3 || core.length > 2 || (core.length == 1 && !noisy)) return tok
-            return digitFix(core, lex)?.takeIf { lex.isCommon(it) }?.let { recase(tok, it, caps) } ?: tok
+            // nombre seul : gardé (36, 20, 12, 25… sont de vrais nombres), sauf « 50 » → « SO » ou « 4 » → « A » dans une phrase dont la lecture est manifestement abîmée ;
+            // chaque chiffre doit alors devenir une lettre (jamais supprimé : « 36 » ne devient pas « E »)
+            if (alphaTokens < 3 || core.length > 2 || !noisy) return tok
+            return digitFix(core, lex, keepAll = true)?.takeIf { lex.isCommon(it) }?.let { recase(tok, it, caps) } ?: tok
         }
+        // nombre abîmé : « 1OO » → « 100 », « 2O0X » → « 200X » (O et I lus à la place de 0 et 1 dans un nombre)
+        numberFix(core)?.let { return tok.replace(core, it) }
         val lower = core.lowercase()
         if (lower in protect) return tok
         val hasDigit = core.any { it.isDigit() }
@@ -88,15 +107,29 @@ object OcrRepair {
 
     private fun keepApostrophes(orig: String, fixed: String): String = fixed
 
-    private fun digitFix(core: String, lex: EnglishLexicon): String? {
+    /** Nombre dont des chiffres ont été lus comme des lettres : au moins un vrai chiffre, le reste n'étant que des O, I, l ou | (suffixe x ou % permis). */
+    private val lookalikeNumber = Regex("[0-9OoIl|]{2,}[xX%]?")
+    private fun numberFix(core: String): String? {
+        if (!lookalikeNumber.matches(core) || core.none { it.isDigit() }) return null
+        val body = core.trimEnd('x', 'X', '%')
+        if (body.isEmpty() || body.none { it.isDigit() }) return null
+        val mapped = body.map { when (it) { 'O', 'o' -> '0'; 'I', 'l', '|' -> '1'; else -> it } }.joinToString("")
+        return mapped + core.substring(body.length)
+    }
+
+    /**
+     * [keepAll] : chaque chiffre doit devenir une lettre (nombre seul). Sinon un chiffre parasite dans un mot peut aussi être supprimé (« INJURIE3 » → « INJURIES »).
+     * Un résultat d'une seule lettre n'est accepté que s'il s'agit d'un mot anglais (A, I) : « E », « D » ou « S » n'en sont pas.
+     */
+    private fun digitFix(core: String, lex: EnglishLexicon, keepAll: Boolean = false): String? {
         val up = core.uppercase()
-        // variantes : chaque chiffre → l'une de ses lettres possibles, ou supprimé
+        // variantes : chaque chiffre → l'une de ses lettres possibles, ou supprimé (sauf pour un nombre seul)
         var cands = listOf("")
         for (c in up) {
-            val opts: List<String> = if (c.isDigit()) (digitMap[c]?.map { it.toString() } ?: emptyList()) + "" else listOf(c.toString())
+            val opts: List<String> = if (c.isDigit()) (digitMap[c]?.map { it.toString() } ?: emptyList()) + (if (keepAll) emptyList() else listOf("")) else listOf(c.toString())
             cands = cands.flatMap { p -> opts.map { p + it } }.take(400)
         }
-        val ok = cands.filter { it.isNotEmpty() && lex.known(it) && (it.length >= 3 || lex.isCommon(it)) }
+        val ok = cands.filter { it.isNotEmpty() && lex.known(it) && (it.length >= 3 || lex.isCommon(it)) && (it.length >= 2 || it == "A" || it == "I") }
         return ok.minByOrNull { lex.rank(it) }
     }
 

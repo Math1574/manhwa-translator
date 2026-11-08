@@ -38,6 +38,7 @@ if imgs:
     # long chapitre : 36 images (les pages du faux site, répétées avec un paramètre distinct) pour détecter un arrêt ou un ralentissement sur la durée
     pool = [f"pc/en/{i}" for i in imgs] + [f"pc/en/{os.path.basename(p)}" for p in sorted(glob.glob(f"{S}/pc/en/E06P*.jpg"))]
     page("pc_en_long", "Long chapitre (36 images, en)", [f"{pool[k % len(pool)]}?k={k}" for k in range(36)])
+    page("pc_en_toggle", "Bascule Original/Traduit (14 images, en)", [f"{pool[k % len(pool)]}?k={k}" for k in range(14)])
 # textes coupés entre deux images collées (deux paires, séparées par un espace) : la traduction doit lire chaque bulle en entier et la poser sur les deux images
 if os.path.exists(f"{S}/synth/seam_a1.png"):
     im = lambda n: f'<img src="synth/seam_{n}.png" style="display:block;width:100%;margin:0">'

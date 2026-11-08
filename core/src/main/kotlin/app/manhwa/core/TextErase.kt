@@ -146,11 +146,44 @@ object TextErase {
     }
 
     /**
+     * Halo clair autour des lettres effacées sur un fond blanc : le bruit de compression et la lueur grise que le masque serré (lettres seules) laissait en « fantôme »
+     * de la forme des lettres. Les pixels clairs, proches du fond, à moins de [reach] px du masque rejoignent le masque ; jamais ceux qui touchent un trait sombre
+     * (contour de case ou de bulle, dessin) ni ceux d'une zone [avoid]. Sans effet si le fond n'est pas presque blanc.
+     */
+    /**
+     * Vrai si le fond est un blanc franc tout autour du masque : sur l'anneau de 5 à 14 px qui l'entoure (hors zones [avoid]), 97 % des pixels sont à moins de 6 niveaux du fond.
+     * Un dégradé, un ciel clair ou un contour dans l'anneau l'exclut : le nettoyage des halos ne doit servir que sur un blanc réellement uni, sans quoi il laisse des aplats visibles.
+     */
+    fun ringIsPlainWhite(pixels: IntArray, w: Int, h: Int, mask: BooleanArray, bg: Int, avoid: BooleanArray?): Boolean {
+        if (r(bg) < 235 || g(bg) < 235 || b(bg) < 235) return false
+        val inner = dilate(mask, w, h, 5); val outer = dilate(mask, w, h, 14)
+        var n = 0; var plain = 0
+        for (i in pixels.indices) if (outer[i] && !inner[i] && (avoid == null || !avoid[i])) { n++; if (dist(pixels[i], bg) <= 6) plain++ }
+        return n >= 200 && plain >= 0.97f * n
+    }
+
+    fun lightHalo(pixels: IntArray, w: Int, h: Int, mask: BooleanArray, bg: Int, reach: Int, avoid: BooleanArray?): BooleanArray {
+        if (r(bg) < 235 || g(bg) < 235 || b(bg) < 235) return mask
+        fun lum(c: Int) = (r(c) * 299 + g(c) * 587 + b(c) * 114) / 1000
+        // traits à préserver : pixels francs (nettement plus sombres que le fond) qui ne font pas partie du masque, élargis de 3 px
+        val structure = BooleanArray(w * h) { !mask[it] && dist(pixels[it], bg) > 90 }
+        val keep = dilate(structure, w, h, 3)
+        val near = dilate(mask, w, h, reach)
+        val out = mask.copyOf()
+        for (i in out.indices) {
+            if (out[i] || !near[i] || keep[i] || (avoid != null && avoid[i])) continue
+            val c = pixels[i]
+            if (lum(c) >= 185 && dist(c, bg) <= 75) out[i] = true
+        }
+        return out
+    }
+
+    /**
      * @param pixels région ARGB (w*h)
      * @param allowed zone où le texte peut se trouver (lignes OCR agrandies) : rien n'est effacé en dehors
-     * Le fond est la couleur dominante de la zone ; l'uniformité est mesurée sur le cadre de 6 px autour de la zone.
+     * Le fond est la couleur dominante de la zone ; l'uniformité est mesurée sur le cadre de 6 px autour de la zone ([ignoreFrame] : parties du cadre à ne pas compter, blocs voisins connus).
      */
-    fun analyze(pixels: IntArray, w: Int, h: Int, allowed: BooleanArray, grow: Int = 2): Analysis {
+    fun analyze(pixels: IntArray, w: Int, h: Int, allowed: BooleanArray, grow: Int = 2, ignoreFrame: BooleanArray? = null): Analysis {
         // fond : couleur dominante (quantifiée) dans la zone autorisée, affinée par la médiane des pixels proches
         val buckets = HashMap<Int, Int>()
         for (i in pixels.indices) if (allowed[i]) { val c = pixels[i]; val k = ((r(c) shr 4) shl 8) or ((g(c) shr 4) shl 4) or (b(c) shr 4); buckets[k] = (buckets[k] ?: 0) + 1 }
@@ -164,7 +197,8 @@ object TextErase {
 
         val frame = dilate(allowed, w, h, 6)
         var fc = 0; var fn = 0
-        for (i in pixels.indices) if (frame[i] && !allowed[i]) { fc++; if (dist(pixels[i], bg) <= 14) fn++ }
+        // le texte d'un bloc voisin (autre moitié du même paragraphe, par exemple) n'est pas du bruit de fond : il est ignoré dans la mesure
+        for (i in pixels.indices) if (frame[i] && !allowed[i] && (ignoreFrame == null || !ignoreFrame[i])) { fc++; if (dist(pixels[i], bg) <= 14) fn++ }
         val uniformity = if (fc == 0) 1f else fn.toFloat() / fc
 
         val hist = IntArray(256)

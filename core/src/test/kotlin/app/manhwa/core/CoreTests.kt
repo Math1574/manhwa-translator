@@ -727,6 +727,29 @@ fun repairTests() {
         T.eq("IT STINGS SO BADLY", r("IT STINGS 50 BADLY")); T.eq("I WAITED 4 DAYS HERE", r("I WAITED 4 DAYS HERE"))
         T.eq("I JUST WANT TO LIVE A QUTET UIFE. YOU KNOW?", r("I JUST wA4NT TO LIVE 4 QUTET UIFE. You Know?"))
     }
+    T.test("réparation : les nombres restent des nombres, un nombre abîmé est remis en chiffres, un débris collé en fin de phrase est retiré") {
+        val lx = EnglishLexicon(
+            listOf("my", "four", "basic", "attributes", "add", "up", "to", "points", "a", "normal", "person's", "person", "total", "are", "usually", "around", "how", "come", "is", "so", "high", "as", "strength", "physique", "agility", "mental", "power",
+                "you", "can", "read", "chapters", "from", "exclusively", "at", "i'm", "level", "the", "max", "your", "damage", "modified", "and", "chance", "set", "stop", "it", "haha", "know", "ok", "quiet", "life", "sigh", "i"),
+            listOf("the", "i", "you", "a", "to", "so", "is", "it", "as", "of", "my", "in", "up", "at"),
+        )
+        fun q(t: String) = OcrRepair.repair(t, lx)
+        // défauts constatés sur un chapitre réel : 36 → « E », 20 → « D », 12 → « I », 25 → « S »
+        T.eq("!? MY FOUR BASIC ATTRIBUTES ADD UP TO 36 POINTS?", q("!? MY FOUR BASIC ATTRIBUTES ADD UP TO 36 POINTS?"))
+        T.eq("A NORMAL PERSON'S TOTAL ATTRIBUTES ARE USUALLY AROUND 20 POINTS, HOW COME MY TOTAL IS SO HIGH AS 36?!", q("A NORMAL PERSON'S TOTAL ATTRIBUTES ARE USUALLY AROUND 20 POINTS, HOW COME MY TOTAL IS SO HIGH AS 36?!"))
+        T.eq("[STRENGTH: 4] [PHYSIQUE: 8] [AGILITY: 12] [MENTAL POWER: 12]", q("[STRENGTH: 4] [PHYSIQUE: 8] [AGILITY: 12] [MENTAL POWER: 12]"))
+        T.eq("YOU CAN READ CHAPTERS FROM 1 TO 25 EXCLUSIVELY AT:", q("YOU CAN READ CHAPTERS FROM 1 TO 25 EXCLUSIVELY AT:"))
+        // même dans une ligne abîmée (mot inconnu), un nombre à deux chiffres n'est jamais changé en lettre isolée
+        T.eq("MY FOUR BASIC ATTRIBUTEZZ ADD UP TO 36 POINTS", q("MY FOUR BASIC ATTRIBUTEZZ ADD UP TO 36 POINTS"))
+        // les lectures abîmées d'un nombre sont remises en chiffres
+        T.eq("I'M LEVEL 100, THE MAX LEVEL", q("I'M LEVEL 1OO, THE MAX LEVEL"))
+        T.eq("YOUR DAMAGE IS MODIFIED TO 200X, AND THE CHANCE IS SET TO 0.1%", q("YOUR DAMAGE IS MODIFIED TO 2O0X, AND THE CHANCE IS SET TO O.1%"))
+        // un débris lu avec la dernière ligne (texte voisin sur un décor) est retiré ; une vraie fin de phrase ne l'est jamais
+        T.eq("A NORMAL PERSON'S TOTAL IS SO HIGH AS 36?!", OcrRepair.dropJunkTail(q("A NORMAL PERSON'S TOTAL IS SO HIGH AS 36?! Taay sr4: In )"), lx))
+        for (keep in listOf("STOP IT! HAHA", "YOU KNOW? OK", "IT IS A QUIET LIFE. (SIGH)", "I'M LEVEL 100. I'M")) T.eq(keep, OcrRepair.dropJunkTail(q(keep), lx))
+        // les corrections voulues restent faites
+        T.eq("IT STINGS SO BADLY", r("IT STINGS 50 BADLY"))
+    }
     T.test("réparation : mots collés et ponctuation collée") {
         T.eq("LET'S GO CHECK", r("LET'S GOCHECK"))
         T.eq("OUR SOULS", r("OURSOULS"))
@@ -1807,6 +1830,18 @@ fun queueBatchTests() {
         q.submit(PageJob("bloquee") { PageOutcome.NoText(1, 1) })
         T.ok(q.awaitIdle(2000) && "bloquee" in finished, "l'identifiant abandonné peut être soumis de nouveau")
     }
+    T.test("file de pages : une erreur dans un rappel ne tue pas les fils (les pages en attente restent traitées), l'état de la file est lisible") {
+        val finished = java.util.concurrent.atomic.AtomicInteger(0)
+        val q = PageQueue(20, object : QueueListener {
+            override fun onStarted(id: String) { if (id == "s0") throw IllegalStateException("rappel défaillant") }
+            override fun onFinished(id: String, outcome: PageOutcome) { finished.incrementAndGet(); throw IllegalStateException("rappel défaillant") }
+        }, workers = 2)
+        for (i in 0 until 12) q.submit(PageJob("s$i") { PageOutcome.NoText(1, 1) })
+        T.ok(q.awaitIdle(4000) && finished.get() == 12, "les 12 pages sont traitées malgré les erreurs des rappels (${finished.get()})")
+        val snap = q.snapshot()
+        T.ok(snap.alive == 2 && snap.pending == 0 && snap.running == 0, "fils vivants ${snap.alive}, en attente ${snap.pending}, en cours ${snap.running}")
+        T.ok(q.ensureWorkers() == 0, "aucun fil à relancer")
+    }
     T.test("regroupeur de traductions : pages accumulées pendant un appel traduites ensemble, échec isolé, annulation") {
         val calls = java.util.Collections.synchronizedList(ArrayList<List<String>>())
         val engine = object : TranslationEngine {
@@ -1890,6 +1925,11 @@ fun readingOrderTests() {
         T.ok(ReadingOrder.priority(900.0, 900.0, 800.0, 800.0) < ReadingOrder.priority(1700.0, 900.0, 800.0, 800.0) && ReadingOrder.priority(1700.0, 900.0, 800.0, 800.0) < ReadingOrder.priority(0.0, 500.0, 2000.0, 800.0), "visible, puis dessous, puis dessus")
         // une très haute image dont l'écran occupe le milieu reste visible
         T.ok(ReadingOrder.priority(0.0, 16000.0, 8000.0, 800.0) < ReadingOrder.priority(16000.0, 3000.0, 8000.0, 800.0), "bande de 16 000 px lue en son milieu : visible")
+        // défaut constaté : « J'AVAIS UNE MAISON ET UNE FAMILLE, ET » (y 5617-5766) replacé en y 6061, sous « JE COMMENÇAIS À PEINE À… » (y 5795-5974), phrases à l'envers
+        val before = RectF(162f, 5617f, 737f, 5766f); val after = RectF(162f, 6061f, 737f, 6219f); val neighbour = RectF(95f, 5795f, 805f, 5974f)
+        T.ok(ReadingOrder.crossesNeighbour(before, after, neighbour), "passer sous le voisin est détecté")
+        T.ok(!ReadingOrder.crossesNeighbour(before, RectF(162f, 5560f, 737f, 5709f), neighbour), "rester au-dessus (même en remontant) n'est pas un passage de l'autre côté")
+        T.ok(!ReadingOrder.crossesNeighbour(before, after, RectF(900f, 5795f, 1200f, 5974f)), "un voisin sans recouvrement horizontal ne compte pas")
         // l'ancien calcul (bord haut seul) plaçait en dernier une image dont le bord haut est à 5 px au-dessus de l'écran ; le nouveau la garde en premier
         T.ok(ReadingOrder.priority(-5.0, 1500.0, 0.0, 800.0) < ReadingOrder.priority(1500.0, 1500.0, 0.0, 800.0), "image légèrement décalée vers le haut : toujours avant les suivantes")
     }

@@ -105,6 +105,9 @@ EXTRA=()
 EXTRA=(--es mt_batch true)
 run pc_en_batch_mlkit    pc_en.html          MLKIT EN FR "fr"      300
 run pc_en_long_mlkit     pc_en_long.html     MLKIT EN FR "fr"      900
+# lecteur qui bascule sur « Original » puis sur « Traduit » en cours de traduction : aucune image ne doit rester sans traduction (la barre de progression allait jusqu'au bout)
+EXTRA=(--es mt_toggle 5000)
+run pc_en_toggle_mlkit   pc_en_toggle.html   MLKIT EN FR "fr"      500
 EXTRA=()
 # images lues dans la WebView : adresses à usage unique (un second téléchargement recevrait 403)
 run pc_en_once_mlkit     pc_en_once.html     MLKIT EN FR "fr"      300

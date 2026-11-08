@@ -256,6 +256,10 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     private val pageNotes = ConcurrentHashMap<String, StringBuilder>()
     private val pageTiming = ConcurrentHashMap<String, String>()
     private val ocrLock = Any()
+    /** Pages dont le traitement est terminé (réussi, sans texte ou en échec) : les autres, si le travail est interrompu, sont à redemander à la page. */
+    private val finishedIds = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    private val failEntries = java.util.concurrent.atomic.AtomicInteger(0)
+    private var idleTicks = 0
     /** L'affichage d'une page (effacement, dessin) est lourd en mémoire et en calcul : une seule à la fois. */
     private val renderLock = Any()
     @Volatile private var viewportY = 0.0
@@ -273,6 +277,11 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         override fun onStarted(id: String) { runStart[id] = SystemClock.uptimeMillis(); runStage[id] = "téléchargement" }
         override fun onFinished(id: String, outcome: PageOutcome) {
             runStart.remove(id); runStage.remove(id)
+            finishedIds.add(id)
+            // un échec n'apparaissait nulle part dans le journal : on le note (étape et message), avec l'état de la mémoire, pour comprendre un arrêt
+            if (outcome is PageOutcome.Failed && failEntries.incrementAndGet() <= 60) {
+                graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "fail").put("img", id).put("stage", outcome.stage).put("message", outcome.message.take(300)).put("sys", diag()))
+            }
             main.post {
                 when (outcome) {
                     is PageOutcome.Done -> done++
@@ -571,11 +580,22 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         graph.gemma.resetContext()
     }
 
-    private fun resetCounters() { total = 0; done = 0; failed = 0; noText = 0; lastError = null }
+    private fun resetCounters() { total = 0; done = 0; failed = 0; noText = 0; lastError = null; finishedIds.clear() }
 
     private fun stopWork() {
         queue.cancelAll()
-        synchronized(backlog) { backlog.clear(); submitted.clear() }
+        val lost: List<String>
+        synchronized(backlog) {
+            lost = submitted.filter { it !in finishedIds }
+            backlog.clear(); submitted.clear()
+        }
+        // Les images qui attendaient ou étaient en cours sont perdues pour la collecte : la page les croit déjà données. Sans cela, après un passage sur « Original »
+        // puis un retour sur « Traduit », elles n'étaient jamais redemandées (la barre de progression restait bloquée sous la moitié). On les fait oublier à la page :
+        // elles seront redonnées au prochain départ, et retirées du total en attendant.
+        if (lost.isNotEmpty()) {
+            total = (total - lost.size).coerceAtLeast(done + failed)
+            webView?.evaluateJavascript("window.__mt&&window.__mt.forget(${JSONArray(lost)})", null)
+        }
     }
 
     private fun onCandidates(raw: String?) {
@@ -677,7 +697,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             // un texte libre sans zone du détecteur est écarté s'il ne contient aucun mot reconnu, même en gros lettrage (décor lu comme du texte : « IC », « RIC », « PY »)
             junk = { t, rel, anchored -> s.source.code != "ja" && s.source.code != "ko" && s.source.code != "zh" && (JunkFilter.isWatermark(t) || ((rel < 1.6f || !anchored) && JunkFilter.isDebris(t, lexicon)) || repeatedAcrossPages(t, keysById[c.id]?.imageHash ?: c.id)) },
             isSfx = { t, kind, rel -> skipSfx && Onomatopoeia.isSfx(t, kind, rel, lexicon) },
-            repair = { t -> try { OcrRepair.repair(t, lexicon, graph.gemma.chapterNames()) } catch (e: Throwable) { t } },
+            repair = { t -> try { OcrRepair.dropJunkTail(OcrRepair.repair(t, lexicon, graph.gemma.chapterNames()), lexicon) } catch (e: Throwable) { t } },
             reader = if (rereadOn) graph.blockReader else null,
             // part de vrais mots anglais (noms propres du chapitre compris) : repère les lectures absurdes et vérifie les relectures
             plausibility = { t -> try { val names = graph.gemma.chapterNames(); OcrMerge.plausibility(t, lexicon, names) } catch (e: Throwable) { 1f } },
@@ -1010,6 +1030,20 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                         if (el > STALL_REPORT_MS && now - (stallReported[id] ?: 0L) > 120_000) { stallReported[id] = now; graph.journal.add(stallEntry(id, el)) }
                         if (el > STALL_ABANDON_MS) { runStart.remove(id); queue.abandon(id) }   // un fil bloqué est remplacé : la file continue avec les pages suivantes
                     }
+                    // du travail attend mais rien ne tourne depuis 20 s : les fils manquants sont relancés, la file est relancée, et le cas est noté au journal
+                    val snap = queue.snapshot()
+                    val waiting = synchronized(backlog) { backlog.size }
+                    if (waiting > 0 && snap.running == 0) {
+                        if (++idleTicks >= 2) {
+                            idleTicks = 0
+                            val restarted = queue.ensureWorkers()
+                            graph.journal.add(
+                                JSONObject().put("t", System.currentTimeMillis()).put("type", "idle").put("backlog", waiting).put("pending", snap.pending).put("alive", snap.alive).put("restarted", restarted)
+                                    .put("total", total).put("done", done).put("failed", failed).put("maxPending", queue.maxPending).put("sys", diag()),
+                            )
+                            main.post { pump() }
+                        }
+                    } else idleTicks = 0
                 } catch (_: Throwable) {}
             }
         }, "mt-watchdog").also { it.isDaemon = true; it.start() }

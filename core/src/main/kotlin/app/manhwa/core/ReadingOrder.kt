@@ -19,4 +19,13 @@ object ReadingOrder {
             else -> 2_000_000 + min(viewportY - bottom, 1_000_000.0).toInt()                                          // au-dessus de l'écran
         }
     }
+
+    /**
+     * Vrai si déplacer un bloc de [before] à [after] le fait passer de l'autre côté de [other] (centre au-dessus puis en dessous, ou l'inverse) alors qu'ils se recouvrent
+     * horizontalement : les phrases seraient lues à l'envers. Sert à refuser un replacement qui contournerait un voisin par l'autre côté.
+     */
+    fun crossesNeighbour(before: RectF, after: RectF, other: RectF): Boolean {
+        if (min(after.right, other.right) <= max(after.left, other.left)) return false
+        return (before.centerY < other.centerY) != (after.centerY < other.centerY)
+    }
 }

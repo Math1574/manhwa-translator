@@ -23,7 +23,7 @@ interface QueueListener {
  * - une erreur sur une page n'interrompt pas les suivantes ;
  * - annulation d'une page ou de toutes.
  */
-class PageQueue(maxPending: Int = 8, private val listener: QueueListener, workers: Int = 1) {
+class PageQueue(maxPending: Int = 8, private val listener: QueueListener, private val workers: Int = 1) {
     /** Modifiable à chaud (réglage « pages prétraitées »). */
     @Volatile var maxPending: Int = maxPending
     private data class Item(val job: PageJob, val seq: Long)
@@ -39,7 +39,27 @@ class PageQueue(maxPending: Int = 8, private val listener: QueueListener, worker
     private var seq = 0L
     private var stopped = false
 
-    private val threads = List(workers.coerceAtLeast(1)) { i -> Thread({ loop() }, "page-queue-$i").apply { isDaemon = true; start() } }
+    /** Fils de traitement vivants : un fil qui s'arrêterait sur une erreur imprévue serait remplacé (voir [ensureWorkers]). */
+    private val alive = java.util.concurrent.atomic.AtomicInteger(0)
+    private val wanted = workers.coerceAtLeast(1)
+
+    init { repeat(wanted) { startWorker() } }
+
+    private fun startWorker() {
+        alive.incrementAndGet()
+        Thread({ try { loop() } finally { alive.decrementAndGet() } }, "page-queue-${seq++}").apply { isDaemon = true; start() }
+    }
+
+    /** Relance les fils manquants (un fil arrêté par une erreur imprévue). @return le nombre de fils relancés. */
+    fun ensureWorkers(): Int = synchronized(lock) {
+        var started = 0
+        while (alive.get() < wanted && !stopped) { startWorker(); started++ }
+        started
+    }
+
+    class Snapshot(val pending: Int, val running: Int, val alive: Int)
+
+    fun snapshot(): Snapshot = synchronized(lock) { Snapshot(pending.size, running.size, alive.get()) }
 
     /** @return false si le job est déjà connu ou si la file est pleine. */
     fun submit(job: PageJob): Boolean = synchronized(lock) {
@@ -71,7 +91,7 @@ class PageQueue(maxPending: Int = 8, private val listener: QueueListener, worker
             if (id !in running) return
             abandoned.add(id); cancelled.add(id); running.remove(id); known.remove(id)
             stuck = owner.remove(id)
-            Thread({ loop() }, "page-queue-r${seq++}").apply { isDaemon = true; start() }
+            startWorker()
             lock.notifyAll()
         }
         try { stuck?.interrupt() } catch (_: Throwable) {}
@@ -119,7 +139,8 @@ class PageQueue(maxPending: Int = 8, private val listener: QueueListener, worker
                 running.add(item.job.id)
                 owner[item.job.id] = Thread.currentThread()
             }
-            listener.onStarted(item.job.id)
+            // une erreur dans un rappel (ou imprévue) ne doit jamais arrêter le fil : sans lui, les pages en attente ne seraient plus jamais traitées
+            safely { listener.onStarted(item.job.id) }
             val flag = AtomicBoolean(false)
             val outcome: PageOutcome = try {
                 item.job.work { synchronized(lock) { item.job.id in cancelled }.also { flag.set(it) } }
@@ -130,11 +151,13 @@ class PageQueue(maxPending: Int = 8, private val listener: QueueListener, worker
             val wasAbandoned = synchronized(lock) { abandoned.remove(item.job.id).also { if (it) cancelled.remove(item.job.id) } }
             if (wasAbandoned) { Thread.interrupted(); return }
             val wasCancelled = synchronized(lock) { item.job.id in cancelled }
-            if (wasCancelled) listener.onCancelled(item.job.id) else listener.onFinished(item.job.id, outcome)
+            safely { if (wasCancelled) listener.onCancelled(item.job.id) else listener.onFinished(item.job.id, outcome) }
             synchronized(lock) {
                 known.remove(item.job.id); cancelled.remove(item.job.id); running.remove(item.job.id); owner.remove(item.job.id)
                 lock.notifyAll()
             }
         }
     }
+
+    private inline fun safely(f: () -> Unit) { try { f() } catch (_: Throwable) {} }
 }

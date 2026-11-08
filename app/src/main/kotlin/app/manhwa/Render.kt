@@ -20,6 +20,7 @@ import app.manhwa.core.FontMatcher
 import app.manhwa.core.GlyphRender
 import app.manhwa.core.GlyphRenderer
 import app.manhwa.core.PageResult
+import app.manhwa.core.ReadingOrder
 import app.manhwa.core.RectF
 import app.manhwa.core.RenderGate
 import app.manhwa.core.RowShape
@@ -194,7 +195,19 @@ object PageRenderer {
                     val mine = li.placed(2f)
                     val others = preps.indices.filter { it != i }.mapNotNull { j -> laids[j]?.placed(4f) }
                     if (others.none { o -> (mine.intersection(o)?.area ?: 0f) > 0.04f * mine.area }) continue
-                    val relaid = try { layoutBlock(fonts, s, pi.withHard(others), iw, ih, settings.textScale, src) } catch (e: Throwable) { null } ?: continue
+                    var relaid = try { layoutBlock(fonts, s, pi.withHard(others), iw, ih, settings.textScale, src) } catch (e: Throwable) { null } ?: continue
+                    // ordre de lecture : un bloc replacé de l'autre côté d'un voisin inverserait les phrases (« …COMPRENDRE LE BONHEUR » avant « J'AVAIS UNE MAISON… »).
+                    // On réduit alors la taille du texte jusqu'à ce qu'il ne chevauche plus rien, plutôt que de le déplacer par-dessus ou par-dessous le voisin.
+                    val crosses = { r: Laid -> val b0 = li.placed(0f); val a0 = r.placed(0f); preps.indices.any { j -> j != i && laids[j]?.let { o -> ReadingOrder.crossesNeighbour(b0, a0, o.placed(0f)) } == true } }
+                    if (crosses(relaid)) {
+                        var alt: Laid? = null
+                        for (k in listOf(0.9f, 0.8f, 0.7f)) {
+                            val cand = try { layoutBlock(fonts, s, pi, iw, ih, settings.textScale * k, src) } catch (e: Throwable) { null } ?: continue
+                            val m = cand.placed(2f)
+                            if (others.none { o -> (m.intersection(o)?.area ?: 0f) > 0.04f * m.area } && !crosses(cand)) { alt = cand; break }
+                        }
+                        relaid = alt ?: continue   // aucune taille ne convient sans inverser l'ordre : on garde la première mise en page
+                    }
                     laids[i] = relaid; changed = true
                 }
                 if (!changed) break

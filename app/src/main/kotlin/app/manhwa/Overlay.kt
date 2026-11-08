@@ -33,6 +33,8 @@ object PageScript {
   function idOf(im){ if(!im.__mtid){ im.__mtid = 'i' + (++S.seq); } return im.__mtid; }
   function findImg(id){ var l = document.images; for (var i=0;i<l.length;i++){ if (l[i].__mtid === id) return l[i]; } return null; }
   function srcOf(im){ var s = im.currentSrc || im.src || ''; if (s.indexOf('data:')===0 || s.indexOf('blob:')===0) return 'js:'; return s; }
+  // images que l'application n'a pas pu traiter (travail interrompu) : la page les oublie, elles seront redonnées à la prochaine collecte
+  function forget(ids){ for (var i=0;i<ids.length;i++){ delete S.seen[ids[i]]; delete S.first[ids[i]]; } }
   function collect(force){
     if (force) { S.seen = {}; }
     var out = [], l = document.images, now = Date.now();
@@ -236,7 +238,7 @@ object PageScript {
       setTimeout(tick, 400);
     })();
   }
-  window.__mt = {collect:collect, apply:apply, setVisible:setVisible, clear:clear, getB64:getB64, resumeTo:resumeTo};
+  window.__mt = {collect:collect, apply:apply, setVisible:setVisible, clear:clear, getB64:getB64, resumeTo:resumeTo, forget:forget};
 })();
 """
 }

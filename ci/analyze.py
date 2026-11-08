@@ -140,6 +140,12 @@ for path in sorted(glob.glob(f"{OUT}/reports/*.json")):
                 elif len(blks) != 1: problems.append(f"{name}: paire {g['pair']} : {len(blks)} blocs au lieu d'un (texte traduit deux fois ou en morceaux)")
                 if not up: problems.append(f"{name}: paire {g['pair']} : rien n'est posé sur l'image du dessus")
         P(f"- textes coupés lus en entier : {whole}/{len(gt)} ({'avec' if on else 'sans'} la jonction)")
+    if name.startswith("pc_en_toggle"):
+        done_n = sum(1 for im in imgs if im.get("outcome", "").startswith("done"))
+        tot_n = c.get("total") or 0
+        P(f"- bascule Original/Traduit : {done_n} images traitées sur {tot_n} repérées ; {[x for x in r.get('notes', []) if 'bascule' in x]}")
+        if r.get("timeout") or tot_n < 8 or c.get("done", 0) + c.get("failed", 0) < tot_n:
+            problems.append(f"{name}: après une bascule Original/Traduit, des images restent sans traduction ({c.get('done', 0)}+{c.get('failed', 0)} sur {tot_n}, délai dépassé : {r.get('timeout')})")
     if name.startswith("pc_en_long"):
         done_n = sum(1 for im in imgs if im.get("outcome", "").startswith("done"))
         tot_n = c.get("total") or 0
