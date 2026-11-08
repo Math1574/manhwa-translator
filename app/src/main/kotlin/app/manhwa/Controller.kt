@@ -33,6 +33,7 @@ import app.manhwa.core.GlossaryEntry
 import app.manhwa.core.SourceLang
 import app.manhwa.core.BatchContext
 import app.manhwa.core.NavDecision
+import app.manhwa.core.ReadingOrder
 import app.manhwa.core.NavigationPolicy
 import app.manhwa.core.RequestTypes
 import app.manhwa.core.ResType
@@ -64,12 +65,17 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 
-private data class Candidate(val id: String, val src: String, val top: Double, val scrollY: Double) {
+private data class Candidate(
+    val id: String, val src: String, val top: Double, val scrollY: Double,
+    /** Hauteur affichée de l'image et hauteur de l'écran (px CSS) au repérage. */
+    val height: Double = 0.0, val viewportH: Double = 0.0,
+) {
     val priority: Int
-        get() = priorityAt(scrollY)
+        get() = priorityAt(scrollY, viewportH)
 
-    /** Distance à l'écran pour une position de défilement donnée : les images sous l'écran d'abord (la plus proche en premier), puis celles au-dessus. */
-    fun priorityAt(viewportY: Double): Int = if (top >= viewportY) (top - viewportY).toInt() else 1_000_000 + abs(viewportY - top).toInt()
+    /** Ordre de traitement pour une position de lecture donnée : visibles d'abord (de haut en bas), puis sous l'écran, puis au-dessus. */
+    fun priorityAt(viewportY: Double, vh: Double): Int =
+        ReadingOrder.priority(top, if (height > 0) height else 1.0, viewportY, if (vh > 0) vh else if (viewportH > 0) viewportH else 800.0)
 }
 
 /** Bulle sélectionnée par appui long pour une correction manuelle. */
@@ -242,8 +248,12 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     private val runStage = ConcurrentHashMap<String, String>()
     private val stallReported = ConcurrentHashMap<String, Long>()
     private val batchInfo = ConcurrentHashMap<String, Pair<Int, Long>>()
+    /** Notes de diagnostic et durées de lecture propres à chaque page (deux pages sont traitées en même temps : une variable commune mélangerait leurs notes). */
+    private val pageNotes = ConcurrentHashMap<String, StringBuilder>()
+    private val pageTiming = ConcurrentHashMap<String, String>()
     private val ocrLock = Any()
     @Volatile private var viewportY = 0.0
+    @Volatile private var viewportH = 800.0
     /** Tests automatiques : la traduction ML Kit passe aussi par le regroupeur, pour exercer la file parallèle sur l'émulateur. */
     @Volatile var testBatch = false
 
@@ -563,11 +573,11 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         synchronized(backlog) {
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
-                val c = Candidate(o.getString("id"), o.getString("src"), o.getDouble("top"), o.getDouble("sy"))
+                val c = Candidate(o.getString("id"), o.getString("src"), o.getDouble("top"), o.getDouble("sy"), height = o.optDouble("dh", 0.0), viewportH = o.optDouble("vh", 0.0))
                 if (submitted.add(c.id)) { backlog.add(c); added++ }
             }
-            if (arr.length() > 0) viewportY = arr.getJSONObject(arr.length() - 1).optDouble("sy", viewportY)
-            backlog.sortBy { it.priorityAt(viewportY) }
+            if (arr.length() > 0) { val last = arr.getJSONObject(arr.length() - 1); viewportY = last.optDouble("sy", viewportY); last.optDouble("vh", 0.0).takeIf { it > 0 }?.let { viewportH = it } }
+            backlog.sortBy { it.priorityAt(viewportY, viewportH) }
         }
         total += added
         pump()
@@ -577,11 +587,11 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         synchronized(backlog) {
             queue.maxPending = if (thermalHot) 1 else graph.settingsStore.settings.maxPrefetchPages + 1
             ensureWatchdog()
-            backlog.sortBy { it.priorityAt(viewportY) }
+            backlog.sortBy { it.priorityAt(viewportY, viewportH) }
             while (backlog.isNotEmpty()) {
                 val c = backlog.first()
                 // la priorité est relue à chaque choix : on traite ce que le lecteur regarde maintenant, pas ce qui était proche au repérage de l'image
-                if (queue.submit(PageJob(c.id, c.priorityAt(viewportY), { c.priorityAt(viewportY) }) { cancelled -> process(c, cancelled) })) backlog.removeAt(0) else break
+                if (queue.submit(PageJob(c.id, c.priorityAt(viewportY, viewportH), { c.priorityAt(viewportY, viewportH) }) { cancelled -> process(c, cancelled) })) backlog.removeAt(0) else break
             }
         }
     }
@@ -621,7 +631,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             synchronized(ocrLock) {
                 runStage[c.id] = "lecture du texte"
                 val t = SystemClock.uptimeMillis()
-                try { ocrEngine.recognize(b) } finally { stages[0] += SystemClock.uptimeMillis() - t }
+                try { ocrEngine.recognize(b).also { pageNotes[c.id] = StringBuilder(OcrDebug.note); pageTiming[c.id] = OcrDebug.timing } } finally { stages[0] += SystemClock.uptimeMillis() - t }
             }
         }
         val timedTr = TimedTranslator(translator, { stages[1] += it }) { runStage[c.id] = "traduction" }
@@ -638,7 +648,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             reader = if (rereadOn) graph.blockReader else null,
             // part de vrais mots anglais (noms propres du chapitre compris) : repère les lectures absurdes et vérifie les relectures
             plausibility = { t -> try { val names = graph.gemma.chapterNames(); OcrMerge.plausibility(t, lexicon, names) } catch (e: Throwable) { 1f } },
-            log = { msg -> OcrDebug.note = (OcrDebug.note + " [" + msg + "]").takeLast(1500); android.util.Log.i("MT", msg) },
+            log = { msg -> pageNotes.getOrPut(c.id) { StringBuilder() }.let { if (it.length < 3000) it.append(" [").append(msg).append("]") }; android.util.Log.i("MT", msg) },
         )
         val out = pipeline.process(bytes, s.source.code, s.target.code)
         // noms qui reviennent d'une page à l'autre : proposés dans le glossaire de l'œuvre (anglais seulement, le lexique est anglais)
@@ -662,6 +672,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             if (json != null && out is PageOutcome.Done) journalLayout(c, pageUrl, out, json)
         }
         if (testing) logForTest(c, out, debug, overlayForLog, System.currentTimeMillis() - t0)
+        // les informations propres à cette page ne servent plus
+        pageNotes.remove(c.id); pageTiming.remove(c.id); batchInfo.remove(c.id); fetchInfo.remove(c.id); stageInfo.remove(c.id)
         return out
     }
 
@@ -700,8 +712,9 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             JSONObject().put("t", System.currentTimeMillis()).put("type", "page").put("url", pageUrl).put("series", graph.gemma.seriesTitle ?: "")
                 .put("engine", engineId).put("img", c.id).put("w", out.result.imageWidth).put("h", out.result.imageHeight).put("ms", ms)
                 .put("fetch", fetchInfo[c.id]?.first ?: "").put("fetchMs", fetchInfo[c.id]?.second ?: 0L).put("fetchWhy", fetchInfo[c.id]?.third ?: "")
-                .put("ocrMs", stageInfo[c.id]?.get(0) ?: 0L).put("trMs", stageInfo[c.id]?.get(1) ?: 0L).put("ocrT", OcrDebug.timing).put("batch", batchInfo[c.id]?.first ?: 0).put("trEngineMs", batchInfo[c.id]?.second ?: 0L).put("sys", diag())
-                .put("dbg", OcrDebug.note.take(1500)).put("blocks", blocks),
+                .put("ocrMs", stageInfo[c.id]?.get(0) ?: 0L).put("trMs", stageInfo[c.id]?.get(1) ?: 0L).put("ocrT", pageTiming[c.id] ?: "").put("batch", batchInfo[c.id]?.first ?: 0).put("trEngineMs", batchInfo[c.id]?.second ?: 0L).put("sys", diag())
+                .put("backend", graph.gemma.backendLabel).put("gpuSetting", graph.settingsStore.settings.useGpu)
+                .put("dbg", (pageNotes[c.id]?.toString() ?: "").takeLast(1500)).put("blocks", blocks),
         )
     }
 
@@ -749,7 +762,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
     private fun logForTest(c: Candidate, out: PageOutcome, debug: DebugInfo?, overlay: JSONObject?, ms: Long) {
         val e = JSONObject().put("id", c.id).put("src", c.src).put("ms", ms).put("fetch", fetchInfo[c.id]?.first ?: "").put("fetchMs", fetchInfo[c.id]?.second ?: 0L).put("fetchWhy", fetchInfo[c.id]?.third ?: "")
-            .put("ocrMs", stageInfo[c.id]?.get(0) ?: 0L).put("trMs", stageInfo[c.id]?.get(1) ?: 0L).put("renderMs", stageInfo[c.id]?.get(2) ?: 0L).put("ocrT", OcrDebug.timing).put("batch", batchInfo[c.id]?.first ?: 0)
+            .put("ocrMs", stageInfo[c.id]?.get(0) ?: 0L).put("trMs", stageInfo[c.id]?.get(1) ?: 0L).put("renderMs", stageInfo[c.id]?.get(2) ?: 0L).put("ocrT", pageTiming[c.id] ?: "").put("batch", batchInfo[c.id]?.first ?: 0)
         when (out) {
             is PageOutcome.Done -> {
                 e.put("outcome", if (out.fromCache) "done-cache" else "done").put("w", out.result.imageWidth).put("h", out.result.imageHeight)
@@ -895,7 +908,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             main.post { peekTarget = EditTarget(id, bid.toIntOrNull() ?: -1, src, tr); main.removeCallbacks(clearPeek); main.postDelayed(clearPeek, 7000) }
         }
         @JavascriptInterface fun onImagesChanged() { main.post { if (active) start(false) } }
-        @JavascriptInterface fun onViewport(y: Double) { viewportY = y }
+        @JavascriptInterface fun onViewport(y: Double, h: Double) { viewportY = y; if (h > 0) viewportH = h }
         @JavascriptInterface fun onB64(id: String, data: String) { b64Waiters[id]?.complete(data) }
         @JavascriptInterface fun onEdit(id: String, bid: String, src: String, tr: String) { main.post { editTarget = EditTarget(id, bid.toIntOrNull() ?: -1, src, tr) } }
         // script de garde du bloqueur

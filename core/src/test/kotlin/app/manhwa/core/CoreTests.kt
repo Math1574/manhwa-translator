@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); queueBatchTests(); modelTests(); settingsTests(); utilTests(); textTests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests(); openBubbleTests(); barrierShapeTests(); safetyTests(); artEraseTests()
+    groupingTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); queueBatchTests(); readingOrderTests(); modelTests(); settingsTests(); utilTests(); textTests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests(); openBubbleTests(); barrierShapeTests(); safetyTests(); artEraseTests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -1872,6 +1872,26 @@ fun queueBatchTests() {
         val th4 = listOf(Triple(0.0, "p0", g1), Triple(1.0, "p1", g1), Triple(2.0, "p2", g2), Triple(3.0, "p3", g1)).map { (o, t, g) -> Thread { BatchContext.order.set(o); b4.translateWithGlossary(listOf(t), "en", "fr", g) }.also { it.start(); Thread.sleep(40) } }
         gate4.countDown(); th4.forEach { it.join(4000) }
         T.ok(calls4.none { "p2" in it && it.size > 1 }, "un glossaire différent n'est jamais regroupé : $calls4")
+    }
+}
+
+// ---------- ordre de lecture ----------
+fun readingOrderTests() {
+    T.test("ordre de lecture : l'image que l'on regarde d'abord, même débordante ; le premier d'un chapitre décalé de quelques pixels n'est plus le dernier") {
+        // écran à 40 px du haut, hauteur 800 ; images de 1500 px empilées
+        val order = (0 until 6).map { i -> i to ReadingOrder.priority(i * 1500.0, 1500.0, 40.0, 800.0) }.sortedBy { it.second }.map { it.first }
+        T.ok(order == listOf(0, 1, 2, 3, 4, 5), "ordre de lecture depuis le haut du chapitre : $order")
+        // lecture au milieu de la 3e image : elle d'abord, puis celles dessous, puis celles dessus (la plus proche d'abord)
+        val mid = (0 until 6).map { i -> i to ReadingOrder.priority(i * 1500.0, 1500.0, 2 * 1500.0 + 600.0, 800.0) }.sortedBy { it.second }.map { it.first }
+        T.ok(mid == listOf(2, 3, 4, 5, 1, 0), "depuis le milieu de l'image 3 : $mid")
+        // deux images visibles : de haut en bas
+        T.ok(ReadingOrder.priority(0.0, 500.0, 300.0, 800.0) < ReadingOrder.priority(500.0, 500.0, 300.0, 800.0), "deux images visibles : celle du haut d'abord")
+        // une image visible passe avant une image sous l'écran, qui passe avant une image au-dessus
+        T.ok(ReadingOrder.priority(900.0, 900.0, 800.0, 800.0) < ReadingOrder.priority(1700.0, 900.0, 800.0, 800.0) && ReadingOrder.priority(1700.0, 900.0, 800.0, 800.0) < ReadingOrder.priority(0.0, 500.0, 2000.0, 800.0), "visible, puis dessous, puis dessus")
+        // une très haute image dont l'écran occupe le milieu reste visible
+        T.ok(ReadingOrder.priority(0.0, 16000.0, 8000.0, 800.0) < ReadingOrder.priority(16000.0, 3000.0, 8000.0, 800.0), "bande de 16 000 px lue en son milieu : visible")
+        // l'ancien calcul (bord haut seul) plaçait en dernier une image dont le bord haut est à 5 px au-dessus de l'écran ; le nouveau la garde en premier
+        T.ok(ReadingOrder.priority(-5.0, 1500.0, 0.0, 800.0) < ReadingOrder.priority(1500.0, 1500.0, 0.0, 800.0), "image légèrement décalée vers le haut : toujours avant les suivantes")
     }
 }
 

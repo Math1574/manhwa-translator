@@ -43,7 +43,7 @@ object PageScript {
       if (r.width < MIN*0.8 || r.height < MIN*0.8) continue;
       var s = srcOf(im); if (!s) continue;
       var id = idOf(im); if (S.seen[id] === s) continue; S.seen[id] = s;
-      out.push({id:id, src:s, w:im.naturalWidth, h:im.naturalHeight, top:r.top + window.scrollY, sy:window.scrollY});
+      out.push({id:id, src:s, w:im.naturalWidth, h:im.naturalHeight, top:r.top + window.scrollY, sy:window.scrollY, dh:r.height, vh:window.innerHeight});
     }
     return out;
   }
@@ -121,7 +121,7 @@ object PageScript {
   window.addEventListener('scroll', function(){ if (!nbTick) { nbTick = true; setTimeout(nbCheck, 300); } }, {passive:true});
   // position de lecture : l'application traduit d'abord ce que l'on regarde à cet instant
   var vpTick = false;
-  function vpReport(){ vpTick = false; try { AndroidMT.onViewport(window.scrollY); } catch(e) {} }
+  function vpReport(){ vpTick = false; try { AndroidMT.onViewport(window.scrollY, window.innerHeight); } catch(e) {} }
   window.addEventListener('scroll', function(){ if (!vpTick) { vpTick = true; setTimeout(vpReport, 250); } }, {passive:true});
   setTimeout(nbCheck, 800);
 
