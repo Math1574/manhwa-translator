@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); queueBatchTests(); modelTests(); settingsTests(); utilTests(); textTests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests(); openBubbleTests(); barrierShapeTests(); safetyTests(); artEraseTests()
+    groupingTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); queueBatchTests(); seamTests(); modelTests(); settingsTests(); utilTests(); textTests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests(); openBubbleTests(); barrierShapeTests(); safetyTests(); artEraseTests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -1872,6 +1872,53 @@ fun queueBatchTests() {
         val th4 = listOf(Triple(0.0, "p0", g1), Triple(1.0, "p1", g1), Triple(2.0, "p2", g2), Triple(3.0, "p3", g1)).map { (o, t, g) -> Thread { BatchContext.order.set(o); b4.translateWithGlossary(listOf(t), "en", "fr", g) }.also { it.start(); Thread.sleep(40) } }
         gate4.countDown(); th4.forEach { it.join(4000) }
         T.ok(calls4.none { "p2" in it && it.size > 1 }, "un glossaire différent n'est jamais regroupé : $calls4")
+    }
+}
+
+// ---------- ordre de lecture et jonctions d'images ----------
+fun seamTests() {
+    T.test("ordre de lecture : l'image que l'on regarde d'abord, même débordante ; le premier d'un chapitre décalé de quelques pixels n'est plus le dernier") {
+        // écran à 40 px du haut, hauteur 800 ; images de 1500 px empilées
+        val order = (0 until 6).map { i -> i to ReadingOrder.priority(i * 1500.0, 1500.0, 40.0, 800.0) }.sortedBy { it.second }.map { it.first }
+        T.ok(order == listOf(0, 1, 2, 3, 4, 5), "ordre de lecture depuis le haut du chapitre : $order")
+        // lecture au milieu de la 3e image : elle d'abord, puis celles dessous, puis celles dessus (la plus proche d'abord)
+        val mid = (0 until 6).map { i -> i to ReadingOrder.priority(i * 1500.0, 1500.0, 2 * 1500.0 + 600.0, 800.0) }.sortedBy { it.second }.map { it.first }
+        T.ok(mid == listOf(2, 3, 4, 5, 1, 0), "depuis le milieu de l'image 3 : $mid")
+        // deux images visibles : de haut en bas
+        T.ok(ReadingOrder.priority(0.0, 500.0, 300.0, 800.0) < ReadingOrder.priority(500.0, 500.0, 300.0, 800.0), "deux images visibles : celle du haut d'abord")
+        // une image visible passe avant une image sous l'écran, qui passe avant une image au-dessus
+        T.ok(ReadingOrder.priority(900.0, 900.0, 800.0, 800.0) < ReadingOrder.priority(1700.0, 900.0, 800.0, 800.0) && ReadingOrder.priority(1700.0, 900.0, 800.0, 800.0) < ReadingOrder.priority(0.0, 700.0, 800.0, 800.0), "visible < dessous < dessus")
+        // une très haute image dont l'écran occupe le milieu reste visible
+        T.ok(ReadingOrder.priority(0.0, 16000.0, 8000.0, 800.0) < ReadingOrder.priority(16000.0, 3000.0, 8000.0, 800.0), "bande de 16 000 px lue en son milieu : visible")
+    }
+    T.test("jonctions d'images : propriété des blocs, fenêtre de contexte") {
+        fun blk(id: Int, top: Float, bottom: Float) = TranslatedBlock(id, RectF(100f, top, 400f, bottom), "t$id", "x$id")
+        // fenêtre : contexte de 480 px, puis image de 1500 px
+        val ctx = 480; val h = 1500
+        val blocks = listOf(
+            blk(1, 100f, 200f),                    // dans le contexte seulement : appartient à l'image du dessus
+            blk(2, 400f, 560f),                    // à cheval sur la jonction (haut dans le contexte, bas dans l'image) : à cette image
+            blk(3, 700f, 800f),                    // dans l'image
+            blk(4, 1900f, 1980f),                  // coupé au bas de l'image (bas = 1980) : à l'image suivante si elle existe
+            blk(5, 470f, 478f),                    // bas à 2 px sous le haut de la jonction... (dans la tolérance) : à cette image
+        )
+        val owned = Seams.owned(blocks, ctx, h, nextTakesOver = true).map { it.id }
+        T.ok(owned == listOf(2, 3, 5), "avec image suivante : $owned")
+        val ownedLast = Seams.owned(blocks, ctx, h, nextTakesOver = false).map { it.id }
+        T.ok(ownedLast == listOf(2, 3, 4, 5), "dernière image : le bloc coupé en bas reste à elle : $ownedLast")
+        T.ok(Seams.owned(blocks, 0, h, true).map { it.id }.containsAll(listOf(1, 2, 3)), "sans contexte (première image) : rien n'est écarté en haut")
+        // règle commune aux deux images voisines : un même bloc n'est jamais pris par les deux ni par aucune
+        for (bottomOfBlock in listOf(1960f, 1975f, 1980f, 1990f, 1996f, 1999f)) {
+            // vu de l'image du haut (fenêtre : ctx + 1500, jonction en bas à ctx+1500) et de l'image du bas (jonction à ctxBas)
+            val seamInUpper = ctx + h; val b = blk(9, bottomOfBlock - 60f, bottomOfBlock)
+            val upper = Seams.owned(listOf(b), ctx, h, true).isNotEmpty()
+            val lowerCtx = 480; val bInLower = blk(9, bottomOfBlock - 60f - seamInUpper + lowerCtx, bottomOfBlock - seamInUpper + lowerCtx)
+            val lower = Seams.owned(listOf(bInLower), lowerCtx, 1500, false).isNotEmpty()
+            T.ok(upper != lower, "bas à ${bottomOfBlock - seamInUpper} px de la jonction : une seule image le traduit (haut=$upper, bas=$lower)")
+        }
+        T.ok(Seams.contextHeight(300) == 300 && Seams.contextHeight(5000) == Seams.CTX_MAX && Seams.contextHeight(0) == 0, "hauteur de contexte bornée")
+        T.ok(Seams.windowContext(1500, 1500) == Seams.CTX_MAX && Seams.windowContext(9000, 1500) == 0 && Seams.windowContext(1500, null) == 0, "pas de fenêtre pour une très haute image ni sans image au-dessus")
+        T.ok(Seams.nextTakesOver(1500) && !Seams.nextTakesOver(null) && !Seams.nextTakesOver(16000), "l'image suivante ne prend en charge que si elle a une fenêtre")
     }
 }
 

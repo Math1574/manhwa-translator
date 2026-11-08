@@ -64,12 +64,19 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 
-private data class Candidate(val id: String, val src: String, val top: Double, val scrollY: Double) {
+private data class Candidate(
+    val id: String, val src: String, val top: Double, val scrollY: Double,
+    /** Hauteur affichée et hauteur de l'écran (px CSS) au repérage ; taille d'origine de l'image. */
+    val height: Double = 0.0, val viewportH: Double = 0.0, val naturalH: Int = 0,
+    /** Image collée au-dessus (identifiant, adresse, hauteur d'origine) et hauteur d'origine de l'image collée dessous : pour joindre un texte coupé par le découpage du chapitre. */
+    val prevId: String? = null, val prevSrc: String? = null, val prevH: Int = 0, val nextH: Int? = null,
+) {
     val priority: Int
-        get() = priorityAt(scrollY)
+        get() = priorityAt(scrollY, viewportH)
 
-    /** Distance à l'écran pour une position de défilement donnée : les images sous l'écran d'abord (la plus proche en premier), puis celles au-dessus. */
-    fun priorityAt(viewportY: Double): Int = if (top >= viewportY) (top - viewportY).toInt() else 1_000_000 + abs(viewportY - top).toInt()
+    /** Ordre de traitement pour une position de lecture donnée : visibles d'abord (de haut en bas), puis sous l'écran, puis au-dessus. */
+    fun priorityAt(viewportY: Double, vh: Double): Int =
+        ReadingOrder.priority(top, if (height > 0) height else 1.0, viewportY, if (vh > 0) vh else if (viewportH > 0) viewportH else 800.0)
 }
 
 /** Bulle sélectionnée par appui long pour une correction manuelle. */
@@ -242,8 +249,19 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     private val runStage = ConcurrentHashMap<String, String>()
     private val stallReported = ConcurrentHashMap<String, Long>()
     private val batchInfo = ConcurrentHashMap<String, Pair<Int, Long>>()
+    /** Notes de diagnostic et durées de lecture propres à chaque page (deux pages sont traitées en même temps : une variable commune mélangerait leurs notes). */
+    private val pageNotes = ConcurrentHashMap<String, StringBuilder>()
+    private val pageTiming = ConcurrentHashMap<String, String>()
     private val ocrLock = Any()
     @Volatile private var viewportY = 0.0
+    @Volatile private var viewportH = 800.0
+    /** Images récemment téléchargées (par adresse) : l'image du dessus sert de contexte à la suivante sans être redemandée. */
+    private val recentBytes = object : LinkedHashMap<String, ByteArray>(8, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ByteArray>?): Boolean = size > 4
+    }
+    private val seamInfo = ConcurrentHashMap<String, JSONObject>()
+    /** Tests automatiques : jonctions d'images coupées, pour comparer avec et sans. */
+    @Volatile var testNoSeam = false
     /** Tests automatiques : la traduction ML Kit passe aussi par le regroupeur, pour exercer la file parallèle sur l'émulateur. */
     @Volatile var testBatch = false
 
@@ -563,11 +581,16 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         synchronized(backlog) {
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
-                val c = Candidate(o.getString("id"), o.getString("src"), o.getDouble("top"), o.getDouble("sy"))
+                val pv = o.optJSONObject("prev"); val nx = o.optJSONObject("next")
+                val c = Candidate(
+                    o.getString("id"), o.getString("src"), o.getDouble("top"), o.getDouble("sy"),
+                    height = o.optDouble("dh", 0.0), viewportH = o.optDouble("vh", 0.0), naturalH = o.optInt("h", 0),
+                    prevId = pv?.optString("id")?.ifEmpty { null }, prevSrc = pv?.optString("src")?.ifEmpty { null }, prevH = pv?.optInt("h", 0) ?: 0, nextH = nx?.optInt("h", 0)?.takeIf { it > 0 },
+                )
                 if (submitted.add(c.id)) { backlog.add(c); added++ }
             }
-            if (arr.length() > 0) viewportY = arr.getJSONObject(arr.length() - 1).optDouble("sy", viewportY)
-            backlog.sortBy { it.priorityAt(viewportY) }
+            if (arr.length() > 0) { val last = arr.getJSONObject(arr.length() - 1); viewportY = last.optDouble("sy", viewportY); last.optDouble("vh", 0.0).takeIf { it > 0 }?.let { viewportH = it } }
+            backlog.sortBy { it.priorityAt(viewportY, viewportH) }
         }
         total += added
         pump()
@@ -577,11 +600,11 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         synchronized(backlog) {
             queue.maxPending = if (thermalHot) 1 else graph.settingsStore.settings.maxPrefetchPages + 1
             ensureWatchdog()
-            backlog.sortBy { it.priorityAt(viewportY) }
+            backlog.sortBy { it.priorityAt(viewportY, viewportH) }
             while (backlog.isNotEmpty()) {
                 val c = backlog.first()
                 // la priorité est relue à chaque choix : on traite ce que le lecteur regarde maintenant, pas ce qui était proche au repérage de l'image
-                if (queue.submit(PageJob(c.id, c.priorityAt(viewportY), { c.priorityAt(viewportY) }) { cancelled -> process(c, cancelled) })) backlog.removeAt(0) else break
+                if (queue.submit(PageJob(c.id, c.priorityAt(viewportY, viewportH), { c.priorityAt(viewportY, viewportH) }) { cancelled -> process(c, cancelled) })) backlog.removeAt(0) else break
             }
         }
     }
@@ -621,7 +644,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             synchronized(ocrLock) {
                 runStage[c.id] = "lecture du texte"
                 val t = SystemClock.uptimeMillis()
-                try { ocrEngine.recognize(b) } finally { stages[0] += SystemClock.uptimeMillis() - t }
+                try { ocrEngine.recognize(b).also { pageNotes[c.id] = StringBuilder(OcrDebug.note); pageTiming[c.id] = OcrDebug.timing } } finally { stages[0] += SystemClock.uptimeMillis() - t }
             }
         }
         val timedTr = TimedTranslator(translator, { stages[1] += it }) { runStage[c.id] = "traduction" }
@@ -638,7 +661,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             reader = if (rereadOn) graph.blockReader else null,
             // part de vrais mots anglais (noms propres du chapitre compris) : repère les lectures absurdes et vérifie les relectures
             plausibility = { t -> try { val names = graph.gemma.chapterNames(); OcrMerge.plausibility(t, lexicon, names) } catch (e: Throwable) { 1f } },
-            log = { msg -> OcrDebug.note = (OcrDebug.note + " [" + msg + "]").takeLast(1500); android.util.Log.i("MT", msg) },
+            log = { msg -> pageNotes.getOrPut(c.id) { StringBuilder() }.let { if (it.length < 3000) it.append(" [").append(msg).append("]") }; android.util.Log.i("MT", msg) },
         )
         val out = pipeline.process(bytes, s.source.code, s.target.code)
         // noms qui reviennent d'une page à l'autre : proposés dans le glossaire de l'œuvre (anglais seulement, le lexique est anglais)
@@ -662,6 +685,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             if (json != null && out is PageOutcome.Done) journalLayout(c, pageUrl, out, json)
         }
         if (testing) logForTest(c, out, debug, overlayForLog, System.currentTimeMillis() - t0)
+        // les informations propres à cette page ne servent plus
+        pageNotes.remove(c.id); pageTiming.remove(c.id); batchInfo.remove(c.id); fetchInfo.remove(c.id); stageInfo.remove(c.id)
         return out
     }
 
@@ -700,8 +725,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             JSONObject().put("t", System.currentTimeMillis()).put("type", "page").put("url", pageUrl).put("series", graph.gemma.seriesTitle ?: "")
                 .put("engine", engineId).put("img", c.id).put("w", out.result.imageWidth).put("h", out.result.imageHeight).put("ms", ms)
                 .put("fetch", fetchInfo[c.id]?.first ?: "").put("fetchMs", fetchInfo[c.id]?.second ?: 0L).put("fetchWhy", fetchInfo[c.id]?.third ?: "")
-                .put("ocrMs", stageInfo[c.id]?.get(0) ?: 0L).put("trMs", stageInfo[c.id]?.get(1) ?: 0L).put("ocrT", OcrDebug.timing).put("batch", batchInfo[c.id]?.first ?: 0).put("trEngineMs", batchInfo[c.id]?.second ?: 0L).put("sys", diag())
-                .put("dbg", OcrDebug.note.take(1500)).put("blocks", blocks),
+                .put("ocrMs", stageInfo[c.id]?.get(0) ?: 0L).put("trMs", stageInfo[c.id]?.get(1) ?: 0L).put("ocrT", pageTiming[c.id] ?: "").put("batch", batchInfo[c.id]?.first ?: 0).put("trEngineMs", batchInfo[c.id]?.second ?: 0L).put("sys", diag()).put("backend", graph.gemma.backendLabel).put("gpuSetting", graph.settingsStore.settings.useGpu)
+                .put("dbg", (pageNotes[c.id]?.toString() ?: "").takeLast(1500)).put("blocks", blocks),
         )
     }
 
@@ -749,7 +774,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
     private fun logForTest(c: Candidate, out: PageOutcome, debug: DebugInfo?, overlay: JSONObject?, ms: Long) {
         val e = JSONObject().put("id", c.id).put("src", c.src).put("ms", ms).put("fetch", fetchInfo[c.id]?.first ?: "").put("fetchMs", fetchInfo[c.id]?.second ?: 0L).put("fetchWhy", fetchInfo[c.id]?.third ?: "")
-            .put("ocrMs", stageInfo[c.id]?.get(0) ?: 0L).put("trMs", stageInfo[c.id]?.get(1) ?: 0L).put("renderMs", stageInfo[c.id]?.get(2) ?: 0L).put("ocrT", OcrDebug.timing).put("batch", batchInfo[c.id]?.first ?: 0)
+            .put("ocrMs", stageInfo[c.id]?.get(0) ?: 0L).put("trMs", stageInfo[c.id]?.get(1) ?: 0L).put("renderMs", stageInfo[c.id]?.get(2) ?: 0L).put("ocrT", pageTiming[c.id] ?: "").put("batch", batchInfo[c.id]?.first ?: 0)
         when (out) {
             is PageOutcome.Done -> {
                 e.put("outcome", if (out.fromCache) "done-cache" else "done").put("w", out.result.imageWidth).put("h", out.result.imageHeight)
@@ -796,11 +821,11 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     private fun originOf(url: String): String? = try { java.net.URI(url).let { if (it.scheme != null && it.authority != null) "${it.scheme}://${it.authority}" else null } } catch (_: Throwable) { null }
 
     /** Séries d'en-têtes à essayer pour un téléchargement séparé : d'abord exactement ceux que la WebView a envoyés, puis des variantes du Referer (origine seule, adresse complète, aucun). */
-    private fun downloadAttempts(c: Candidate, pageUrl: String): List<Map<String, String>> {
-        val seen = synchronized(seenImageHeaders) { seenImageHeaders[c.src] }
+    private fun downloadAttempts(src: String, pageUrl: String): List<Map<String, String>> {
+        val seen = synchronized(seenImageHeaders) { seenImageHeaders[src] }
         val origin = originOf(pageUrl)
-        val sameOrigin = origin != null && originOf(c.src) == origin
-        val site = if (sameOrigin) "same-origin" else if (Sites.sameSite(Sites.hostOf(c.src), Sites.hostOf(pageUrl))) "same-site" else "cross-site"
+        val sameOrigin = origin != null && originOf(src) == origin
+        val site = if (sameOrigin) "same-origin" else if (Sites.sameSite(Sites.hostOf(src), Sites.hostOf(pageUrl))) "same-site" else "cross-site"
         fun base() = java.util.TreeMap<String, String>(String.CASE_INSENSITIVE_ORDER).also {
             it["User-Agent"] = userAgent
             it["Accept"] = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
@@ -848,27 +873,30 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
      *  3. un fetch dans la page (marche si le serveur d'images autorise la lecture inter-sites).
      * Aucune protection n'est contournée : on ne lit que ce que la page a elle-même chargé et affiche.
      */
-    private fun fetch(c: Candidate, pageUrl: String): ByteArray {
+    private fun fetch(c: Candidate, pageUrl: String): ByteArray = fetchImage(c.id, c.src, pageUrl, record = true)
+
+    /** Octets d'une image de la page : lus dans la WebView, sinon téléchargés avec les en-têtes de la page, sinon demandés à la page. [record] : note l'origine et la durée au journal. */
+    private fun fetchImage(id: String, src: String, pageUrl: String, record: Boolean = false): ByteArray {
         val t0 = SystemClock.uptimeMillis()
-        fetchInfo.remove(c.id); stageInfo.remove(c.id)
+        if (record) { fetchInfo.remove(id); stageInfo.remove(id) }
         var why = ""
-        fun got(b: ByteArray, how: String): ByteArray { fetchInfo[c.id] = Triple(how, SystemClock.uptimeMillis() - t0, why); return b }
-        if (c.src == "js:") return got(fetchViaPage(c.id), "page (blob)")
-        val scheme = c.src.substringBefore(':').lowercase()
+        fun got(b: ByteArray, how: String): ByteArray { if (record) fetchInfo[id] = Triple(how, SystemClock.uptimeMillis() - t0, why); return b }
+        if (src == "js:") return got(fetchViaPage(id), "page (blob)")
+        val scheme = src.substringBefore(':').lowercase()
         if (scheme != "http" && scheme != "https") throw IOException("Adresse d'image non prise en charge")
-        if (!testNoDevTools) devTools.imageBytes(c.src, MAX_IMAGE_BYTES)?.let { return got(it, "page") }
+        if (!testNoDevTools) devTools.imageBytes(src, MAX_IMAGE_BYTES)?.let { return got(it, "page") }
         why = if (testNoDevTools) "lecture par la WebView coupée (test)" else devTools.lastReason
         var code = 0
         var failure: String? = null
-        for (headers in downloadAttempts(c, pageUrl)) {
+        for (headers in downloadAttempts(src, pageUrl)) {
             try {
-                val r = download(c.src, headers)
+                val r = download(src, headers)
                 if (r.first == 200 && r.second != null) return got(r.second!!, "réseau")
                 code = r.first
                 if (code != 401 && code != 403) break
             } catch (e: IOException) { failure = e.message; break }
         }
-        try { return got(fetchViaPage(c.id), "page (fetch)") } catch (_: Exception) {}
+        try { return got(fetchViaPage(id), "page (fetch)") } catch (_: Exception) {}
         throw IOException(if (code != 0) "HTTP $code : le site refuse le téléchargement séparé de l'image, et la page ne l'a pas fournie ($why)" else (failure ?: "téléchargement impossible"))
     }
 
@@ -895,7 +923,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             main.post { peekTarget = EditTarget(id, bid.toIntOrNull() ?: -1, src, tr); main.removeCallbacks(clearPeek); main.postDelayed(clearPeek, 7000) }
         }
         @JavascriptInterface fun onImagesChanged() { main.post { if (active) start(false) } }
-        @JavascriptInterface fun onViewport(y: Double) { viewportY = y }
+        @JavascriptInterface fun onViewport(y: Double, h: Double) { viewportY = y; if (h > 0) viewportH = h }
         @JavascriptInterface fun onB64(id: String, data: String) { b64Waiters[id]?.complete(data) }
         @JavascriptInterface fun onEdit(id: String, bid: String, src: String, tr: String) { main.post { editTarget = EditTarget(id, bid.toIntOrNull() ?: -1, src, tr) } }
         // script de garde du bloqueur
