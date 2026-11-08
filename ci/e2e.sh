@@ -96,6 +96,11 @@ run synth_en_fancy_mlkitonly synth_en_fancy.html MLKIT EN FR "fr" 250
 EXTRA=()
 run synth_en_fancy_combined  synth_en_fancy.html MLKIT EN FR "fr" 300
 run pc_en_ref_mlkit      pc_en_ref.html      MLKIT EN FR "fr"      300
+# textes coupés entre deux images collées : avec la jonction (lecture entière de la bulle, posée sur les deux images), puis sans (témoin : fragments)
+run seam_mlkit           seam_cut.html       MLKIT EN FR "fr"      300
+EXTRA=(--es mt_noseam true)
+run seam_off_mlkit       seam_cut.html       MLKIT EN FR "fr"      300
+EXTRA=()
 # file à deux traitements + regroupement des traductions (ML Kit passe aussi par le regroupeur) : trois pages, puis un long chapitre de 36 images
 EXTRA=(--es mt_batch true)
 run pc_en_batch_mlkit    pc_en.html          MLKIT EN FR "fr"      300

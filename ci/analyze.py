@@ -124,6 +124,22 @@ for path in sorted(glob.glob(f"{OUT}/reports/*.json")):
         if ot: P(f"- détail de la lecture (dernière image) : {ot[-1]}")
         why = sorted({im.get("fetchWhy") for im in imgs if im.get("fetchWhy")})
         if why: P("- lecture dans la WebView impossible, motif : " + " ; ".join(why)[:300])
+    if name.startswith("seam_"):
+        gt = [{"pair": "a", "needles": ["NEVER", "FORGIVE", "DID", "HER"]}, {"pair": "b", "needles": ["COME", "JOURNEY", "BEGUN"]}]     # mots lus dans la bulle entière (voir gen_seams.py)
+        on = not name.startswith("seam_off")
+        whole = 0
+        for g in gt:
+            ims = [im for im in imgs if f"seam_{g['pair']}" in im.get("src", "")]
+            blks = [b for im in ims for b in im.get("blocks", [])]
+            full = [b for b in blks if all(n in b.get("src", "").upper() for n in g["needles"])]
+            up = [im for im in ims if im.get("overlayUp") and im["overlayUp"].get("patches")]
+            P(f"- jonction {g['pair'].upper()} : {len(blks)} bloc(s), dont {len(full)} lu(s) en entier ; image du dessus recouverte : {'oui' if up else 'non'}")
+            whole += 1 if full else 0
+            if on:
+                if len(full) != 1: problems.append(f"{name}: paire {g['pair']} : le texte coupé n'est pas lu en un seul bloc ({len(full)})")
+                elif len(blks) != 1: problems.append(f"{name}: paire {g['pair']} : {len(blks)} blocs au lieu d'un (texte traduit deux fois ou en morceaux)")
+                if not up: problems.append(f"{name}: paire {g['pair']} : rien n'est posé sur l'image du dessus")
+        P(f"- textes coupés lus en entier : {whole}/{len(gt)} ({'avec' if on else 'sans'} la jonction)")
     if name.startswith("pc_en_long"):
         done_n = sum(1 for im in imgs if im.get("outcome", "").startswith("done"))
         tot_n = c.get("total") or 0

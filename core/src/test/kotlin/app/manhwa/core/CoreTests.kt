@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); queueBatchTests(); readingOrderTests(); modelTests(); settingsTests(); utilTests(); textTests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests(); openBubbleTests(); barrierShapeTests(); safetyTests(); artEraseTests()
+    groupingTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); queueBatchTests(); readingOrderTests(); seamTests(); modelTests(); settingsTests(); utilTests(); textTests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests(); openBubbleTests(); barrierShapeTests(); safetyTests(); artEraseTests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -1892,6 +1892,52 @@ fun readingOrderTests() {
         T.ok(ReadingOrder.priority(0.0, 16000.0, 8000.0, 800.0) < ReadingOrder.priority(16000.0, 3000.0, 8000.0, 800.0), "bande de 16 000 px lue en son milieu : visible")
         // l'ancien calcul (bord haut seul) plaçait en dernier une image dont le bord haut est à 5 px au-dessus de l'écran ; le nouveau la garde en premier
         T.ok(ReadingOrder.priority(-5.0, 1500.0, 0.0, 800.0) < ReadingOrder.priority(1500.0, 1500.0, 0.0, 800.0), "image légèrement décalée vers le haut : toujours avant les suivantes")
+    }
+}
+
+// ---------- jonctions d'images empilées ----------
+fun seamTests() {
+    T.test("jonctions : propriété d'un texte entre deux images voisines (règle identique des deux côtés)") {
+        fun r(top: Float, bottom: Float) = RectF(100f, top, 400f, bottom)
+        val ctx = 480; val h = 1500
+        // fenêtre : contexte de 480 px puis image de 1500 px ; l'image suivante existe
+        T.ok(!Seams.owns(r(100f, 200f), null, null, ctx, h, true), "entièrement dans le contexte : à l'image du dessus")
+        T.ok(Seams.owns(r(400f, 560f), null, null, ctx, h, true), "à cheval sur la jonction du haut : à cette image")
+        T.ok(Seams.owns(r(700f, 800f), null, null, ctx, h, true), "dans l'image : à elle")
+        T.ok(!Seams.owns(r(1900f, 1980f), null, null, ctx, h, true), "coupé au bas de l'image : à l'image suivante")
+        T.ok(Seams.owns(r(1900f, 1980f), null, null, ctx, h, false), "dernière image : le bloc coupé en bas reste à elle")
+        T.ok(Seams.owns(r(470f, 478f), null, null, ctx, h, true), "bas à 2 px sous la jonction (tolérance) : à cette image")
+        T.ok(Seams.owns(r(100f, 200f), null, null, 0, h, true), "sans contexte (première image) : rien n'est écarté en haut")
+        // une bulle (ou une zone détectée) qui passe sous la jonction fait suivre ses lignes, même si elles ne touchent pas le bord
+        T.ok(Seams.owns(r(100f, 300f), RectF(60f, 60f, 440f, 540f), null, ctx, h, true), "lignes dans le contexte mais bulle sous la jonction : à cette image")
+        T.ok(!Seams.owns(r(1700f, 1800f), RectF(60f, 1650f, 440f, 1980f), null, ctx, h, true), "bulle coupée par le bas de l'image, lignes au-dessus du bord : à l'image suivante")
+        T.ok(!Seams.owns(r(1700f, 1800f), null, RectF(90f, 1690f, 410f, 1985f), ctx, h, true), "zone de texte coupée par le bas de l'image : à l'image suivante")
+        // règle commune : un même texte n'est jamais pris par les deux images voisines ni par aucune (pour un texte entier dans l'image du dessus)
+        for (bottomOfBlock in listOf(1960f, 1975f, 1980f, 1990f, 1996f, 1999f)) {
+            val seamInUpper = ctx + h
+            val b = r(bottomOfBlock - 60f, bottomOfBlock)
+            val upper = Seams.owns(b, null, null, ctx, h, true)
+            val lowerCtx = 480
+            val bLower = r(bottomOfBlock - 60f - seamInUpper + lowerCtx, bottomOfBlock - seamInUpper + lowerCtx)
+            val lower = Seams.owns(bLower, null, null, lowerCtx, 1500, false)
+            T.ok(upper != lower, "bas à ${bottomOfBlock - seamInUpper} px de la jonction : une seule image le traduit (haut=$upper, bas=$lower)")
+        }
+        T.ok(Seams.contextHeight(300) == 300 && Seams.contextHeight(5000) == Seams.CTX_MAX && Seams.contextHeight(0) == 0, "hauteur de contexte bornée")
+        T.ok(Seams.windowContext(1500, 1500) == Seams.CTX_MAX && Seams.windowContext(9000, 1500) == 0 && Seams.windowContext(1500, null) == 0, "pas de fenêtre pour une très haute image ni sans image au-dessus")
+        T.ok(Seams.nextTakesOver(1500) && !Seams.nextTakesOver(null) && !Seams.nextTakesOver(16000), "l'image suivante ne prend en charge que si elle a une fenêtre")
+    }
+    T.test("jonctions : le pipeline ne traduit que les textes qui reviennent à l'image") {
+        // fenêtre simulée : contexte de 400 px, image de 1000 px ; trois lignes de texte, l'une dans le contexte (à l'image du dessus), deux dans l'image
+        val lines = listOf(line("ALREADY TRANSLATED ABOVE", 100f, 120f, 500f, 170f), line("THE HERO LOOKED AT THE SKY", 100f, 600f, 700f, 650f), line("SUDDENLY IT BEGAN TO RAIN", 100f, 900f, 700f, 950f))
+        val ocr = OcrEngine { OcrResult(800, 1400, lines, emptyList()) }
+        val seen = java.util.Collections.synchronizedList(ArrayList<List<String>>())
+        val tr = object : TranslationEngine {
+            override fun translate(texts: List<String>, source: String, target: String): List<String> { seen.add(texts); return texts.map { it.lowercase() } }
+        }
+        val p = PagePipeline(ResultCache(tmp(), 8, 1_000_000), ocr, tr, "t", useCache = false, owns = { b -> Seams.owns(b.box, b.container, b.zone, 400, 1000, false) })
+        val out = p.process(ByteArray(8), "en", "fr")
+        T.ok(out is PageOutcome.Done && out.result.blocks.size == 2, "deux blocs gardés sur trois : ${(out as? PageOutcome.Done)?.result?.blocks?.map { it.source }}")
+        T.ok(seen.flatten().none { it.contains("ALREADY") }, "le texte de l'image du dessus n'est pas envoyé à la traduction : $seen")
     }
 }
 

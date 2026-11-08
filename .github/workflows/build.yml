@@ -112,6 +112,7 @@ jobs:
           python3 ci/fixtures/gen_synthetic.py /tmp/site/synth
           python3 ci/fixtures/gen_layouts.py /tmp/site/synth
           python3 ci/fixtures/gen_atypical.py /tmp/site/synth
+          python3 ci/fixtures/gen_seams.py /tmp/site/synth
           python3 ci/fixtures/make_site.py /tmp/site
           mkdir -p /tmp/site/ref && ln -sfn /tmp/site/pc/en /tmp/site/ref/en
           nohup python3 ci/fixtures/server.py /tmp/site 8000 > /tmp/server.log 2>&1 &

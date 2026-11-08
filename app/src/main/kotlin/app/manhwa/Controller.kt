@@ -3,6 +3,7 @@ package app.manhwa
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.os.Handler
 import android.os.Looper
 import android.os.Message
@@ -33,6 +34,7 @@ import app.manhwa.core.GlossaryEntry
 import app.manhwa.core.SourceLang
 import app.manhwa.core.BatchContext
 import app.manhwa.core.NavDecision
+import app.manhwa.core.Seams
 import app.manhwa.core.ReadingOrder
 import app.manhwa.core.NavigationPolicy
 import app.manhwa.core.RequestTypes
@@ -67,8 +69,10 @@ import kotlin.math.abs
 
 private data class Candidate(
     val id: String, val src: String, val top: Double, val scrollY: Double,
-    /** Hauteur affichée de l'image et hauteur de l'écran (px CSS) au repérage. */
-    val height: Double = 0.0, val viewportH: Double = 0.0,
+    /** Hauteur affichée de l'image et hauteur de l'écran (px CSS) au repérage ; taille d'origine de l'image. */
+    val height: Double = 0.0, val viewportH: Double = 0.0, val naturalH: Int = 0,
+    /** Image collée au-dessus (identifiant, adresse, hauteur d'origine) et hauteur d'origine de l'image collée dessous : pour joindre un texte coupé par le découpage du chapitre. */
+    val prevId: String? = null, val prevSrc: String? = null, val prevH: Int = 0, val nextH: Int? = null,
 ) {
     val priority: Int
         get() = priorityAt(scrollY, viewportH)
@@ -254,6 +258,12 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     private val ocrLock = Any()
     @Volatile private var viewportY = 0.0
     @Volatile private var viewportH = 800.0
+    /** Images récemment téléchargées (par adresse) : l'image du dessus sert de contexte à la suivante sans être redemandée. */
+    private val recentBytes = object : LinkedHashMap<String, ByteArray>(8, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ByteArray>?): Boolean = size > 4
+    }
+    /** Tests automatiques : ignore les jonctions d'images (comme avant), pour comparer avec et sans. */
+    @Volatile var testNoSeam = false
     /** Tests automatiques : la traduction ML Kit passe aussi par le regroupeur, pour exercer la file parallèle sur l'émulateur. */
     @Volatile var testBatch = false
 
@@ -573,7 +583,12 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         synchronized(backlog) {
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
-                val c = Candidate(o.getString("id"), o.getString("src"), o.getDouble("top"), o.getDouble("sy"), height = o.optDouble("dh", 0.0), viewportH = o.optDouble("vh", 0.0))
+                val pv = o.optJSONObject("prev"); val nx = o.optJSONObject("next")
+                val c = Candidate(
+                    o.getString("id"), o.getString("src"), o.getDouble("top"), o.getDouble("sy"),
+                    height = o.optDouble("dh", 0.0), viewportH = o.optDouble("vh", 0.0), naturalH = o.optInt("h", 0),
+                    prevId = pv?.optString("id")?.ifEmpty { null }, prevSrc = pv?.optString("src")?.ifEmpty { null }, prevH = pv?.optInt("h", 0) ?: 0, nextH = nx?.optInt("h", 0)?.takeIf { it > 0 },
+                )
                 if (submitted.add(c.id)) { backlog.add(c); added++ }
             }
             if (arr.length() > 0) { val last = arr.getJSONObject(arr.length() - 1); viewportY = last.optDouble("sy", viewportY); last.optDouble("vh", 0.0).takeIf { it > 0 }?.let { viewportH = it } }
@@ -609,6 +624,22 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         if (cancelled()) return PageOutcome.Failed("annulé", "")
         val s = graph.settingsStore.settings
         val t0 = System.currentTimeMillis()
+        // jonction avec l'image du dessus : l'image est traitée avec le bas de celle du dessus collé au-dessus d'elle, pour lire en entier un texte que le découpage a coupé en deux ;
+        // chaque texte n'est traduit que par une des deux images (voir Seams.owns)
+        synchronized(recentBytes) { recentBytes[c.src] = bytes }
+        val imageH = if (c.naturalH > 0) c.naturalH else boundsHeight(bytes)
+        val nextTakes = !testNoSeam && Seams.nextTakesOver(c.nextH)
+        val ctxWanted = if (testNoSeam || c.prevSrc == null || c.prevId == null) 0 else Seams.windowContext(imageH, c.prevH.takeIf { it > 0 })
+        val window: SeamWindow? = if (ctxWanted > 0) {
+            runStage[c.id] = "assemblage avec l'image du dessus"
+            val prevSrc = c.prevSrc!!; val prevId = c.prevId!!
+            val prevBytes = synchronized(recentBytes) { recentBytes[prevSrc] }
+                ?: try { fetchImage(prevId, prevSrc, pageUrl).also { b -> synchronized(recentBytes) { recentBytes[prevSrc] = b } } } catch (_: Exception) { null }
+            if (prevBytes != null) SeamWindows.build(bytes, prevBytes, ctxWanted) else null
+        } else null
+        val workBytes = window?.bytes ?: bytes
+        val ctxH = window?.ctxH ?: 0
+        val seamTag = if (ctxH > 0 || nextTakes) "+sm$ctxH" + (if (nextTakes) "n" else "") else ""
         val spec = LlmModels.specFor(s.engine)
         val translator: TranslationEngine = if (spec == null) (if (testBatch) graph.mlkitBatch else MlKitTranslation(graph.models)) else graph.gemmaBatch
         val enhanced = s.enhancedOcr && graph.paddleModels.available
@@ -617,11 +648,11 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         // « pp2 » : lecture des lignes inclinées sur recadrage redressé ; « rr » : relecture des textes douteux par Gemma (résultats différents, cache à part)
         // onomatopées laissées telles quelles (anglais) : clé de cache distincte, pour ne pas reprendre d'anciens résultats où elles étaient traduites
         val skipSfx = !s.translateSfx && s.source.code != "ja" && s.source.code != "ko" && s.source.code != "zh"
-        val engineId = (if (spec == null) MlKitTranslation.ID else GemmaTranslator.engineId(spec)) + (if (enhanced) "+pp2" else "") + (if (rereadOn) "+rr1" else "") + (if (skipSfx) "+sfx0" else "")
+        val engineId = (if (spec == null) MlKitTranslation.ID else GemmaTranslator.engineId(spec)) + (if (enhanced) "+pp2" else "") + (if (rereadOn) "+rr1" else "") + (if (skipSfx) "+sfx0" else "") + seamTag
         var debug: DebugInfo? = null
         val lexicon = Lexicon.get(ctx)
         candidatesById[c.id] = c
-        keysById[c.id] = CacheKey(sha256Hex(bytes), s.source.code, s.target.code, engineId)
+        keysById[c.id] = CacheKey(sha256Hex(workBytes), s.source.code, s.target.code, engineId)
         // durées mesurées pour le journal : lecture du texte, traduction (le rendu est mesuré plus bas)
         val stages = LongArray(3)
         stageInfo[c.id] = stages
@@ -649,29 +680,38 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             // part de vrais mots anglais (noms propres du chapitre compris) : repère les lectures absurdes et vérifie les relectures
             plausibility = { t -> try { val names = graph.gemma.chapterNames(); OcrMerge.plausibility(t, lexicon, names) } catch (e: Throwable) { 1f } },
             log = { msg -> pageNotes.getOrPut(c.id) { StringBuilder() }.let { if (it.length < 3000) it.append(" [").append(msg).append("]") }; android.util.Log.i("MT", msg) },
+            owns = { b -> !(ctxH > 0 || nextTakes) || Seams.owns(b.box, b.container, b.zone, ctxH, imageH, nextTakes) },
         )
-        val out = pipeline.process(bytes, s.source.code, s.target.code)
+        val out = pipeline.process(workBytes, s.source.code, s.target.code)
         // noms qui reviennent d'une page à l'autre : proposés dans le glossaire de l'œuvre (anglais seulement, le lexique est anglais)
         if (out is PageOutcome.Done && s.source.code != "ja" && s.source.code != "ko" && s.source.code != "zh") {
             try { synchronized(graph.names) { graph.names.observe(pageSeries, c.id, out.result.blocks.map { it.source }, lexicon) } } catch (_: Throwable) {}
         }
         var overlayForLog: JSONObject? = null
+        var overlayUpForLog: JSONObject? = null
         BatchContext.lastBatch.get()?.let { batchInfo[c.id] = it }
         runStage[c.id] = "affichage"
         if (out is PageOutcome.Done && !out.fromCache) journalPage(c, pageUrl, engineId, s.target.code, out, System.currentTimeMillis() - t0)
         if (!cancelled()) {
             val tRender = SystemClock.uptimeMillis()
             val json = when {
-                out is PageOutcome.Done -> PageRenderer.render(fonts, bytes, out.result, s, debug)
+                out is PageOutcome.Done -> PageRenderer.render(fonts, workBytes, out.result, s, debug)
                 s.diagnostic && debug != null -> OverlayBuilder.debugOnly(debug!!)
                 else -> null
             }
             stages[2] = SystemClock.uptimeMillis() - tRender
-            if (json != null) sendOverlay(c.id, json)
-            overlayForLog = json
-            if (json != null && out is PageOutcome.Done) journalLayout(c, pageUrl, out, json)
+            var own = json; var up: JSONObject? = null
+            if (json != null && window != null && out is PageOutcome.Done) {
+                // la superposition couvre la fenêtre : la partie sous la jonction se pose sur cette image, celle au-dessus sur l'image du dessus
+                val sp = SeamOverlay.split(json, window.ctxH, window.width, window.imageH, c.prevH, c.prevId!!)
+                own = sp.own; up = sp.up
+            }
+            if (own != null) sendOverlay(c.id, own)
+            if (up != null) sendOverlay(c.id + "~up", up, c.prevId)
+            overlayForLog = own; overlayUpForLog = up
+            if (own != null && out is PageOutcome.Done) journalLayout(c, pageUrl, out, own)
         }
-        if (testing) logForTest(c, out, debug, overlayForLog, System.currentTimeMillis() - t0)
+        if (testing) logForTest(c, out, debug, overlayForLog, System.currentTimeMillis() - t0, if (window != null) window.width to window.imageH else null, overlayUpForLog)
         // les informations propres à cette page ne servent plus
         pageNotes.remove(c.id); pageTiming.remove(c.id); batchInfo.remove(c.id); fetchInfo.remove(c.id); stageInfo.remove(c.id)
         return out
@@ -741,17 +781,17 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     fun dismissEdit() { editTarget = null }
 
     /** Envoie l'overlay à la page par morceaux d'environ 1,2 Mo : évite une énorme chaîne JavaScript d'un seul bloc. */
-    private fun sendOverlay(id: String, json: JSONObject) {
+    private fun sendOverlay(id: String, json: JSONObject, target: String? = null) {
         val patches = json.optJSONArray("patches") ?: JSONArray()
         val chunks = ArrayList<JSONObject>()
         var cur = JSONArray(); var size = 0
         for (i in 0 until patches.length()) {
             val p = patches.getJSONObject(i)
             val len = p.optString("png").length
-            if (size > 0 && size + len > 1_200_000) { chunks.add(JSONObject().put("w", json.get("w")).put("h", json.get("h")).put("patches", cur)); cur = JSONArray(); size = 0 }
+            if (size > 0 && size + len > 1_200_000) { chunks.add(JSONObject().put("w", json.get("w")).put("h", json.get("h")).put("patches", cur).also { if (target != null) it.put("target", target) }); cur = JSONArray(); size = 0 }
             cur.put(p); size += len
         }
-        val first = JSONObject().put("w", json.get("w")).put("h", json.get("h")).put("patches", cur)
+        val first = JSONObject().put("w", json.get("w")).put("h", json.get("h")).put("patches", cur).also { if (target != null) it.put("target", target) }
         json.optJSONArray("dbg")?.let { first.put("dbg", it) }
         chunks.add(first)
         chunks.forEachIndexed { i, ch ->
@@ -760,7 +800,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         }
     }
 
-    private fun logForTest(c: Candidate, out: PageOutcome, debug: DebugInfo?, overlay: JSONObject?, ms: Long) {
+    private fun logForTest(c: Candidate, out: PageOutcome, debug: DebugInfo?, overlay: JSONObject?, ms: Long, dims: Pair<Int, Int>? = null, overlayUp: JSONObject? = null) {
         val e = JSONObject().put("id", c.id).put("src", c.src).put("ms", ms).put("fetch", fetchInfo[c.id]?.first ?: "").put("fetchMs", fetchInfo[c.id]?.second ?: 0L).put("fetchWhy", fetchInfo[c.id]?.third ?: "")
             .put("ocrMs", stageInfo[c.id]?.get(0) ?: 0L).put("trMs", stageInfo[c.id]?.get(1) ?: 0L).put("renderMs", stageInfo[c.id]?.get(2) ?: 0L).put("ocrT", pageTiming[c.id] ?: "").put("batch", batchInfo[c.id]?.first ?: 0)
         when (out) {
@@ -776,7 +816,9 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             is PageOutcome.NoText -> e.put("outcome", "notext").put("w", out.imageWidth).put("h", out.imageHeight)
             is PageOutcome.Failed -> e.put("outcome", "failed").put("stage", out.stage).put("message", out.message)
         }
+        if (dims != null) e.put("w", dims.first).put("h", dims.second).put("seam", true)       // fenêtre de jonction : la taille est celle de l'image, pas de la fenêtre
         if (overlay != null) e.put("overlay", overlay)
+        if (overlayUp != null) e.put("overlayUp", overlayUp)
         if (debug != null) {
             val ocr = JSONArray()
             debug.lines.forEach { l -> ocr.put(JSONObject().put("x0", l.box.left.toDouble()).put("y0", l.box.top.toDouble()).put("x1", l.box.right.toDouble()).put("y1", l.box.bottom.toDouble()).put("t", l.text).put("c", l.confidence.toDouble()).put("s", l.status)) }
@@ -809,11 +851,11 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     private fun originOf(url: String): String? = try { java.net.URI(url).let { if (it.scheme != null && it.authority != null) "${it.scheme}://${it.authority}" else null } } catch (_: Throwable) { null }
 
     /** Séries d'en-têtes à essayer pour un téléchargement séparé : d'abord exactement ceux que la WebView a envoyés, puis des variantes du Referer (origine seule, adresse complète, aucun). */
-    private fun downloadAttempts(c: Candidate, pageUrl: String): List<Map<String, String>> {
-        val seen = synchronized(seenImageHeaders) { seenImageHeaders[c.src] }
+    private fun downloadAttempts(src: String, pageUrl: String): List<Map<String, String>> {
+        val seen = synchronized(seenImageHeaders) { seenImageHeaders[src] }
         val origin = originOf(pageUrl)
-        val sameOrigin = origin != null && originOf(c.src) == origin
-        val site = if (sameOrigin) "same-origin" else if (Sites.sameSite(Sites.hostOf(c.src), Sites.hostOf(pageUrl))) "same-site" else "cross-site"
+        val sameOrigin = origin != null && originOf(src) == origin
+        val site = if (sameOrigin) "same-origin" else if (Sites.sameSite(Sites.hostOf(src), Sites.hostOf(pageUrl))) "same-site" else "cross-site"
         fun base() = java.util.TreeMap<String, String>(String.CASE_INSENSITIVE_ORDER).also {
             it["User-Agent"] = userAgent
             it["Accept"] = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
@@ -861,27 +903,36 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
      *  3. un fetch dans la page (marche si le serveur d'images autorise la lecture inter-sites).
      * Aucune protection n'est contournée : on ne lit que ce que la page a elle-même chargé et affiche.
      */
-    private fun fetch(c: Candidate, pageUrl: String): ByteArray {
+    private fun fetch(c: Candidate, pageUrl: String): ByteArray = fetchImage(c.id, c.src, pageUrl, record = true)
+
+    private fun boundsHeight(bytes: ByteArray): Int {
+        val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, o)
+        return o.outHeight
+    }
+
+    /** Octets d'une image de la page : lus dans la WebView, sinon téléchargés avec les en-têtes de la page, sinon demandés à la page. [record] : note l'origine et la durée au journal. */
+    private fun fetchImage(id: String, src: String, pageUrl: String, record: Boolean = false): ByteArray {
         val t0 = SystemClock.uptimeMillis()
-        fetchInfo.remove(c.id); stageInfo.remove(c.id)
+        if (record) { fetchInfo.remove(id); stageInfo.remove(id) }
         var why = ""
-        fun got(b: ByteArray, how: String): ByteArray { fetchInfo[c.id] = Triple(how, SystemClock.uptimeMillis() - t0, why); return b }
-        if (c.src == "js:") return got(fetchViaPage(c.id), "page (blob)")
-        val scheme = c.src.substringBefore(':').lowercase()
+        fun got(b: ByteArray, how: String): ByteArray { if (record) fetchInfo[id] = Triple(how, SystemClock.uptimeMillis() - t0, why); return b }
+        if (src == "js:") return got(fetchViaPage(id), "page (blob)")
+        val scheme = src.substringBefore(':').lowercase()
         if (scheme != "http" && scheme != "https") throw IOException("Adresse d'image non prise en charge")
-        if (!testNoDevTools) devTools.imageBytes(c.src, MAX_IMAGE_BYTES)?.let { return got(it, "page") }
+        if (!testNoDevTools) devTools.imageBytes(src, MAX_IMAGE_BYTES)?.let { return got(it, "page") }
         why = if (testNoDevTools) "lecture par la WebView coupée (test)" else devTools.lastReason
         var code = 0
         var failure: String? = null
-        for (headers in downloadAttempts(c, pageUrl)) {
+        for (headers in downloadAttempts(src, pageUrl)) {
             try {
-                val r = download(c.src, headers)
+                val r = download(src, headers)
                 if (r.first == 200 && r.second != null) return got(r.second!!, "réseau")
                 code = r.first
                 if (code != 401 && code != 403) break
             } catch (e: IOException) { failure = e.message; break }
         }
-        try { return got(fetchViaPage(c.id), "page (fetch)") } catch (_: Exception) {}
+        try { return got(fetchViaPage(id), "page (fetch)") } catch (_: Exception) {}
         throw IOException(if (code != 0) "HTTP $code : le site refuse le téléchargement séparé de l'image, et la page ne l'a pas fournie ($why)" else (failure ?: "téléchargement impossible"))
     }
 

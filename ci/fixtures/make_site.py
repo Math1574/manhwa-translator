@@ -38,6 +38,11 @@ if imgs:
     # long chapitre : 36 images (les pages du faux site, répétées avec un paramètre distinct) pour détecter un arrêt ou un ralentissement sur la durée
     pool = [f"pc/en/{i}" for i in imgs] + [f"pc/en/{os.path.basename(p)}" for p in sorted(glob.glob(f"{S}/pc/en/E06P*.jpg"))]
     page("pc_en_long", "Long chapitre (36 images, en)", [f"{pool[k % len(pool)]}?k={k}" for k in range(36)])
+# textes coupés entre deux images collées (deux paires, séparées par un espace) : la traduction doit lire chaque bulle en entier et la poser sur les deux images
+if os.path.exists(f"{S}/synth/seam_a1.png"):
+    im = lambda n: f'<img src="synth/seam_{n}.png" style="display:block;width:100%;margin:0">'
+    open(f"{S}/seam_cut.html", "w").write(HEAD % "Textes coupés" + "<h3 style='padding:8px'>Textes coupés entre deux images</h3>"
+        + im("a1") + im("a2") + '<div style="height:80px"></div>' + im("b1") + im("b2") + "</body></html>")
 if os.path.exists(f"{S}/synth/atypical_0.png"): page("synth_atypical", "Textes atypiques", [f"synth/atypical_{i}.png" for i in range(6)])
 if os.path.exists(f"{S}/synth/layouts_0.png"): page("synth_layouts", "Mises en page difficiles", [f"synth/layouts_{i}.png" for i in range(6)])
 if os.path.exists(f"{S}/synth/en_variety.jpg"): page("synth_en_variety", "Synthétique en_variety (JPEG)", ["synth/en_variety.jpg"])

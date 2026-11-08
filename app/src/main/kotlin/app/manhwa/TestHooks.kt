@@ -54,6 +54,7 @@ object TestHooks {
         val reportName = s("mt_report") ?: "report.json"
         c.testNoDevTools = s("mt_nocdp") == "true"
         c.testBatch = s("mt_batch") == "true"
+        c.testNoSeam = s("mt_noseam") == "true"
 
         thread(name = "mt-test") {
             val t0 = System.currentTimeMillis()

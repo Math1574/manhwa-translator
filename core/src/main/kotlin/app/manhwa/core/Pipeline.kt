@@ -47,6 +47,8 @@ class PagePipeline(
     /** Journal de diagnostic (relectures proposées, acceptées ou refusées). */
     private val log: (String) -> Unit = {},
     private val maxReread: Int = 4,
+    /** Ce bloc revient-il à cette image ? (jonctions d'images empilées : un texte coupé est traduit par une seule des deux images voisines). */
+    private val owns: (TextBlock) -> Boolean = { true },
 ) {
     fun process(imageBytes: ByteArray, source: String, target: String): PageOutcome {
         val key = CacheKey(sha256Hex(imageBytes), source, target, engineId)
@@ -62,8 +64,9 @@ class PagePipeline(
         fun relH(b: TextBlock) = if (medianH > 0f) medianLineHeight(b) / medianH else 1f
         // une onomatopée collée à une phrase voisine (même bloc) : sa ligne est retirée du bloc, qui garde le reste ; l'image n'y touche pas
         val grouped = grouped0.mapNotNull { b -> withoutSfxLines(b, medianH) }
-        val blocks = grouped.filter { !TextNormalizer.isNoise(it.text) && !junk(it.text, relH(it), it.kind != BlockKind.FREE || it.zone != null) && !isSfx(it.text, it.kind, relH(it)) }
-        for (g in grouped) if (g !in blocks) log("écarté « ${g.text.take(40)} » (${if (TextNormalizer.isNoise(g.text)) "bruit" else if (isSfx(g.text, g.kind, relH(g))) "onomatopée laissée telle quelle" else "débris, filigrane ou répété"}${if (g.kind != BlockKind.IN_BUBBLE && g.zone == null) ", hors zone" else ""})")
+        val blocks = grouped.filter { owns(it) && !TextNormalizer.isNoise(it.text) && !junk(it.text, relH(it), it.kind != BlockKind.FREE || it.zone != null) && !isSfx(it.text, it.kind, relH(it)) }
+        for (g in grouped) if (g !in blocks && !owns(g)) log("écarté « ${g.text.take(40)} » (traduit par l'image voisine, de l'autre côté de la jonction)")
+        for (g in grouped) if (g !in blocks && owns(g)) log("écarté « ${g.text.take(40)} » (${if (TextNormalizer.isNoise(g.text)) "bruit" else if (isSfx(g.text, g.kind, relH(g))) "onomatopée laissée telle quelle" else "débris, filigrane ou répété"}${if (g.kind != BlockKind.IN_BUBBLE && g.zone == null) ", hors zone" else ""})")
         val clean = blocks.map { repair(it.text) }.toMutableList()
         reportDebug(ocrResult, grouped, blocks, emptySet())
         if (blocks.isEmpty()) return PageOutcome.NoText(ocrResult.imageWidth, ocrResult.imageHeight)

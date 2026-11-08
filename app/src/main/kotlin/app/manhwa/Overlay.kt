@@ -28,22 +28,45 @@ object PageScript {
     val INJECT = """
 (function(){
   if (window.__mt) return;
-  var S = {entries:{}, seen:{}, seq:0, visible:true, timer:null};
+  var S = {entries:{}, seen:{}, first:{}, seq:0, visible:true, timer:null};
   var MIN = 150;
   function idOf(im){ if(!im.__mtid){ im.__mtid = 'i' + (++S.seq); } return im.__mtid; }
   function findImg(id){ var l = document.images; for (var i=0;i<l.length;i++){ if (l[i].__mtid === id) return l[i]; } return null; }
   function srcOf(im){ var s = im.currentSrc || im.src || ''; if (s.indexOf('data:')===0 || s.indexOf('blob:')===0) return 'js:'; return s; }
   function collect(force){
     if (force) { S.seen = {}; }
-    var out = [], l = document.images;
+    var out = [], l = document.images, now = Date.now();
+    // images empilées : l'image collée juste au-dessus (son bord bas touche le bord haut de celle-ci, même colonne, même largeur) apporte le contexte
+    // d'un texte que le découpage du chapitre a coupé en deux ; l'image collée dessous prendra en charge les textes coupés au bas de celle-ci
+    var geo = [];
+    for (var g0=0; g0<l.length; g0++){
+      var g = l[g0]; if (g.getAttribute('data-mt-img')) continue;
+      var gr = g.getBoundingClientRect(); if (gr.width < MIN*0.8 || gr.height < MIN*0.8) continue;
+      geo.push({im:g, top:gr.top + window.scrollY, bottom:gr.bottom + window.scrollY, left:gr.left + window.scrollX, width:gr.width});
+    }
+    function near(a, b){ return Math.abs(a - b) <= 3; }
     for (var i=0;i<l.length;i++){
       var im = l[i], r = im.getBoundingClientRect();
       if (im.getAttribute('data-mt-img')) continue;
       if (!im.complete || im.naturalWidth < MIN || im.naturalHeight < MIN) continue;
       if (r.width < MIN*0.8 || r.height < MIN*0.8) continue;
       var s = srcOf(im); if (!s) continue;
-      var id = idOf(im); if (S.seen[id] === s) continue; S.seen[id] = s;
-      out.push({id:id, src:s, w:im.naturalWidth, h:im.naturalHeight, top:r.top + window.scrollY, sy:window.scrollY, dh:r.height, vh:window.innerHeight});
+      var id = idOf(im); if (S.seen[id] === s) continue;
+      var top = r.top + window.scrollY, left = r.left + window.scrollX, prev = null, next = null;
+      for (var k=0;k<geo.length;k++){
+        var q = geo[k]; if (q.im === im || q.im.naturalWidth !== im.naturalWidth) continue;
+        if (near(q.bottom, top) && near(q.left, left) && near(q.width, r.width)) prev = q.im;
+        if (near(q.top, top + r.height) && near(q.left, left) && near(q.width, r.width)) next = q.im;
+      }
+      // l'image du dessus n'est pas encore chargée : on l'attend (6 s au plus) pour la joindre à celle-ci ; un minuteur relance la collecte si rien d'autre ne le fait
+      if (prev && !(prev.complete && prev.naturalHeight > 0)) {
+        if (!S.first[id]) { S.first[id] = now; setTimeout(notify, 6200); }
+        if (now - S.first[id] < 6000) continue;
+        prev = null;
+      }
+      S.seen[id] = s;
+      out.push({id:id, src:s, w:im.naturalWidth, h:im.naturalHeight, top:top, sy:window.scrollY, dh:r.height, vh:window.innerHeight,
+                prev: prev ? {id:idOf(prev), src:srcOf(prev), h:prev.naturalHeight} : null, next: next ? {h:next.naturalHeight} : null});
     }
     return out;
   }
@@ -59,7 +82,7 @@ object PageScript {
     for (var i=0;i<k.length;i++){ var f = k[i].getAttribute('data-fs'); if (f) k[i].style.fontSize = (parseFloat(f) * s) + 'px'; }
   }
   function apply(id, data){
-    var im = findImg(id); if (!im) return false;
+    var im = findImg(data.target || id); if (!im) return false;     // « target » : superposition rattachée à l'image du dessus (partie d'un texte coupé par la jonction)
     var old = S.entries[id];
     if (data.append && old && old.div) {
       var d = old.div;
@@ -68,6 +91,7 @@ object PageScript {
       var d = document.createElement('div');
       d.setAttribute('data-mt-overlay', '1');
       d.style.cssText = 'position:absolute;pointer-events:none;z-index:2147483000;overflow:hidden;margin:0;padding:0;';
+      if (data.target) d.style.zIndex = 2147483001;     // la partie posée sur l'image du dessus recouvre toujours une éventuelle traduction partielle de cette image
       document.documentElement.appendChild(d);
     }
     var ps = data.patches || [];
