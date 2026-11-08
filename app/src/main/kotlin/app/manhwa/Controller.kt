@@ -256,6 +256,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     private val pageNotes = ConcurrentHashMap<String, StringBuilder>()
     private val pageTiming = ConcurrentHashMap<String, String>()
     private val ocrLock = Any()
+    /** L'affichage d'une page (effacement, dessin) est lourd en mémoire et en calcul : une seule à la fois. */
+    private val renderLock = Any()
     @Volatile private var viewportY = 0.0
     @Volatile private var viewportH = 800.0
     /** Images récemment téléchargées (par adresse) : l'image du dessus sert de contexte à la suivante sans être redemandée. */
@@ -287,7 +289,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             pump()
         }
         override fun onCancelled(id: String) { runStart.remove(id); runStage.remove(id); main.post { pump() } }
-    }, workers = 2)
+    }, workers = 4)
 
     // ---------- plein écran et lecture ----------
 
@@ -694,10 +696,12 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         if (out is PageOutcome.Done && !out.fromCache) journalPage(c, pageUrl, engineId, s.target.code, out, System.currentTimeMillis() - t0)
         if (!cancelled()) {
             val tRender = SystemClock.uptimeMillis()
-            val json = when {
-                out is PageOutcome.Done -> PageRenderer.render(fonts, workBytes, out.result, s, debug)
-                s.diagnostic && debug != null -> OverlayBuilder.debugOnly(debug!!)
-                else -> null
+            val json = synchronized(renderLock) {
+                when {
+                    out is PageOutcome.Done -> PageRenderer.render(fonts, workBytes, out.result, s, debug)
+                    s.diagnostic && debug != null -> OverlayBuilder.debugOnly(debug!!)
+                    else -> null
+                }
             }
             stages[2] = SystemClock.uptimeMillis() - tRender
             var own = json; var up: JSONObject? = null
