@@ -31,6 +31,7 @@ import app.manhwa.core.OcrEngine
 import app.manhwa.core.TranslationEngine
 import app.manhwa.core.GlossaryEntry
 import app.manhwa.core.SourceLang
+import app.manhwa.core.BatchContext
 import app.manhwa.core.NavDecision
 import app.manhwa.core.NavigationPolicy
 import app.manhwa.core.RequestTypes
@@ -65,7 +66,10 @@ import kotlin.math.abs
 
 private data class Candidate(val id: String, val src: String, val top: Double, val scrollY: Double) {
     val priority: Int
-        get() = if (top >= scrollY) (top - scrollY).toInt() else 1_000_000 + abs(scrollY - top).toInt()
+        get() = priorityAt(scrollY)
+
+    /** Distance à l'écran pour une position de défilement donnée : les images sous l'écran d'abord (la plus proche en premier), puis celles au-dessus. */
+    fun priorityAt(viewportY: Double): Int = if (top >= viewportY) (top - viewportY).toInt() else 1_000_000 + abs(viewportY - top).toInt()
 }
 
 /** Bulle sélectionnée par appui long pour une correction manuelle. */
@@ -233,8 +237,20 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     private val backlog = ArrayList<Candidate>()
     private val submitted = HashSet<String>()
 
+    // suivi des traitements en cours (détection d'un blocage), position de lecture actuelle, exclusion mutuelle de la lecture du texte
+    private val runStart = ConcurrentHashMap<String, Long>()
+    private val runStage = ConcurrentHashMap<String, String>()
+    private val stallReported = ConcurrentHashMap<String, Long>()
+    private val batchInfo = ConcurrentHashMap<String, Pair<Int, Long>>()
+    private val ocrLock = Any()
+    @Volatile private var viewportY = 0.0
+    /** Tests automatiques : la traduction ML Kit passe aussi par le regroupeur, pour exercer la file parallèle sur l'émulateur. */
+    @Volatile var testBatch = false
+
     private val queue = PageQueue(maxPending = 4, listener = object : QueueListener {
+        override fun onStarted(id: String) { runStart[id] = SystemClock.uptimeMillis(); runStage[id] = "téléchargement" }
         override fun onFinished(id: String, outcome: PageOutcome) {
+            runStart.remove(id); runStage.remove(id)
             main.post {
                 when (outcome) {
                     is PageOutcome.Done -> done++
@@ -250,8 +266,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             }
             pump()
         }
-        override fun onCancelled(id: String) { main.post { pump() } }
-    })
+        override fun onCancelled(id: String) { runStart.remove(id); runStage.remove(id); main.post { pump() } }
+    }, workers = 2)
 
     // ---------- plein écran et lecture ----------
 
@@ -550,7 +566,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                 val c = Candidate(o.getString("id"), o.getString("src"), o.getDouble("top"), o.getDouble("sy"))
                 if (submitted.add(c.id)) { backlog.add(c); added++ }
             }
-            backlog.sortBy { it.priority }
+            if (arr.length() > 0) viewportY = arr.getJSONObject(arr.length() - 1).optDouble("sy", viewportY)
+            backlog.sortBy { it.priorityAt(viewportY) }
         }
         total += added
         pump()
@@ -559,9 +576,12 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     private fun pump() {
         synchronized(backlog) {
             queue.maxPending = if (thermalHot) 1 else graph.settingsStore.settings.maxPrefetchPages + 1
+            ensureWatchdog()
+            backlog.sortBy { it.priorityAt(viewportY) }
             while (backlog.isNotEmpty()) {
                 val c = backlog.first()
-                if (queue.submit(PageJob(c.id, c.priority) { cancelled -> process(c, cancelled) })) backlog.removeAt(0) else break
+                // la priorité est relue à chaque choix : on traite ce que le lecteur regarde maintenant, pas ce qui était proche au repérage de l'image
+                if (queue.submit(PageJob(c.id, c.priorityAt(viewportY), { c.priorityAt(viewportY) }) { cancelled -> process(c, cancelled) })) backlog.removeAt(0) else break
             }
         }
     }
@@ -569,6 +589,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     private fun process(c: Candidate, cancelled: () -> Boolean): PageOutcome {
         val pageUrl = currentUrl
         val pageSeries = BrowsingLibrary.seriesKey(pageUrl)
+        BatchContext.cancelled.set(cancelled); BatchContext.order.set(c.top); BatchContext.lastBatch.remove()
+        runStage[c.id] = "téléchargement"
         val bytes = try { fetch(c, pageUrl) } catch (e: Exception) {
             val f = PageOutcome.Failed("image", e.message ?: "téléchargement impossible")
             if (testing) logForTest(c, f, null, null, 0)
@@ -578,7 +600,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val s = graph.settingsStore.settings
         val t0 = System.currentTimeMillis()
         val spec = LlmModels.specFor(s.engine)
-        val translator = if (spec == null) MlKitTranslation(graph.models) else graph.gemma
+        val translator: TranslationEngine = if (spec == null) (if (testBatch) graph.mlkitBatch else MlKitTranslation(graph.models)) else graph.gemmaBatch
         val enhanced = s.enhancedOcr && graph.paddleModels.available
         val ocrEngine = CombinedOcr(s.source, MlKitOcr(s.source), if (enhanced) graph.paddle else null, Lexicon.get(ctx), parallel = !thermalHot)
         val rereadOn = spec != null && s.source.code == "en" && graph.blockReader.available
@@ -593,8 +615,16 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         // durées mesurées pour le journal : lecture du texte, traduction (le rendu est mesuré plus bas)
         val stages = LongArray(3)
         stageInfo[c.id] = stages
-        val timedOcr = OcrEngine { b -> val t = SystemClock.uptimeMillis(); try { ocrEngine.recognize(b) } finally { stages[0] += SystemClock.uptimeMillis() - t } }
-        val timedTr = TimedTranslator(translator) { stages[1] += it }
+        // une seule lecture du texte à la fois (elle occupe déjà tous les cœurs) ; pendant ce temps l'autre page peut attendre sa traduction ou s'afficher
+        val timedOcr = OcrEngine { b ->
+            runStage[c.id] = "attente de la lecture du texte"
+            synchronized(ocrLock) {
+                runStage[c.id] = "lecture du texte"
+                val t = SystemClock.uptimeMillis()
+                try { ocrEngine.recognize(b) } finally { stages[0] += SystemClock.uptimeMillis() - t }
+            }
+        }
+        val timedTr = TimedTranslator(translator, { stages[1] += it }) { runStage[c.id] = "traduction" }
         val pipeline = PagePipeline(
             graph.cache, timedOcr, timedTr, engineId,
             glossary = { graph.glossary.current(pageSeries) },
@@ -613,9 +643,11 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val out = pipeline.process(bytes, s.source.code, s.target.code)
         // noms qui reviennent d'une page à l'autre : proposés dans le glossaire de l'œuvre (anglais seulement, le lexique est anglais)
         if (out is PageOutcome.Done && s.source.code != "ja" && s.source.code != "ko" && s.source.code != "zh") {
-            try { graph.names.observe(pageSeries, c.id, out.result.blocks.map { it.source }, lexicon) } catch (_: Throwable) {}
+            try { synchronized(graph.names) { graph.names.observe(pageSeries, c.id, out.result.blocks.map { it.source }, lexicon) } } catch (_: Throwable) {}
         }
         var overlayForLog: JSONObject? = null
+        BatchContext.lastBatch.get()?.let { batchInfo[c.id] = it }
+        runStage[c.id] = "affichage"
         if (out is PageOutcome.Done && !out.fromCache) journalPage(c, pageUrl, engineId, s.target.code, out, System.currentTimeMillis() - t0)
         if (!cancelled()) {
             val tRender = SystemClock.uptimeMillis()
@@ -668,7 +700,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             JSONObject().put("t", System.currentTimeMillis()).put("type", "page").put("url", pageUrl).put("series", graph.gemma.seriesTitle ?: "")
                 .put("engine", engineId).put("img", c.id).put("w", out.result.imageWidth).put("h", out.result.imageHeight).put("ms", ms)
                 .put("fetch", fetchInfo[c.id]?.first ?: "").put("fetchMs", fetchInfo[c.id]?.second ?: 0L).put("fetchWhy", fetchInfo[c.id]?.third ?: "")
-                .put("ocrMs", stageInfo[c.id]?.get(0) ?: 0L).put("trMs", stageInfo[c.id]?.get(1) ?: 0L).put("ocrT", OcrDebug.timing).put("dbg", OcrDebug.note.take(1500)).put("blocks", blocks),
+                .put("ocrMs", stageInfo[c.id]?.get(0) ?: 0L).put("trMs", stageInfo[c.id]?.get(1) ?: 0L).put("ocrT", OcrDebug.timing).put("batch", batchInfo[c.id]?.first ?: 0).put("trEngineMs", batchInfo[c.id]?.second ?: 0L).put("sys", diag())
+                .put("dbg", OcrDebug.note.take(1500)).put("blocks", blocks),
         )
     }
 
@@ -716,7 +749,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
     private fun logForTest(c: Candidate, out: PageOutcome, debug: DebugInfo?, overlay: JSONObject?, ms: Long) {
         val e = JSONObject().put("id", c.id).put("src", c.src).put("ms", ms).put("fetch", fetchInfo[c.id]?.first ?: "").put("fetchMs", fetchInfo[c.id]?.second ?: 0L).put("fetchWhy", fetchInfo[c.id]?.third ?: "")
-            .put("ocrMs", stageInfo[c.id]?.get(0) ?: 0L).put("trMs", stageInfo[c.id]?.get(1) ?: 0L).put("renderMs", stageInfo[c.id]?.get(2) ?: 0L).put("ocrT", OcrDebug.timing)
+            .put("ocrMs", stageInfo[c.id]?.get(0) ?: 0L).put("trMs", stageInfo[c.id]?.get(1) ?: 0L).put("renderMs", stageInfo[c.id]?.get(2) ?: 0L).put("ocrT", OcrDebug.timing).put("batch", batchInfo[c.id]?.first ?: 0)
         when (out) {
             is PageOutcome.Done -> {
                 e.put("outcome", if (out.fromCache) "done-cache" else "done").put("w", out.result.imageWidth).put("h", out.result.imageHeight)
@@ -862,6 +895,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             main.post { peekTarget = EditTarget(id, bid.toIntOrNull() ?: -1, src, tr); main.removeCallbacks(clearPeek); main.postDelayed(clearPeek, 7000) }
         }
         @JavascriptInterface fun onImagesChanged() { main.post { if (active) start(false) } }
+        @JavascriptInterface fun onViewport(y: Double) { viewportY = y }
         @JavascriptInterface fun onB64(id: String, data: String) { b64Waiters[id]?.complete(data) }
         @JavascriptInterface fun onEdit(id: String, bid: String, src: String, tr: String) { main.post { editTarget = EditTarget(id, bid.toIntOrNull() ?: -1, src, tr) } }
         // script de garde du bloqueur
@@ -886,12 +920,54 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     }
 
     /** Enveloppe qui mesure le temps passé dans le moteur de traduction (somme des appels de la page). */
-    private class TimedTranslator(private val inner: TranslationEngine, private val add: (Long) -> Unit) : TranslationEngine {
-        private inline fun <T> timed(f: () -> T): T { val t = SystemClock.uptimeMillis(); try { return f() } finally { add(SystemClock.uptimeMillis() - t) } }
+    private class TimedTranslator(private val inner: TranslationEngine, private val add: (Long) -> Unit, private val enter: () -> Unit = {}) : TranslationEngine {
+        private inline fun <T> timed(f: () -> T): T { enter(); val t = SystemClock.uptimeMillis(); try { return f() } finally { add(SystemClock.uptimeMillis() - t) } }
         override fun translate(texts: List<String>, source: String, target: String): List<String> = timed { inner.translate(texts, source, target) }
         override fun usesGlossaryPrompt(): Boolean = inner.usesGlossaryPrompt()
         override fun translateWithGlossary(texts: List<String>, source: String, target: String, glossary: List<GlossaryEntry>): List<String> = timed { inner.translateWithGlossary(texts, source, target, glossary) }
     }
+
+    // ---------- veille des traitements ----------
+    private val watchdogOn = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    private fun ensureWatchdog() {
+        if (!watchdogOn.compareAndSet(false, true)) return
+        Thread({
+            while (true) {
+                try { Thread.sleep(10_000) } catch (_: InterruptedException) { return@Thread }
+                try {
+                    val now = SystemClock.uptimeMillis()
+                    for ((id, t0) in runStart.entries.toList()) {
+                        val el = now - t0
+                        if (el > STALL_REPORT_MS && now - (stallReported[id] ?: 0L) > 120_000) { stallReported[id] = now; graph.journal.add(stallEntry(id, el)) }
+                        if (el > STALL_ABANDON_MS) { runStart.remove(id); queue.abandon(id) }   // un fil bloqué est remplacé : la file continue avec les pages suivantes
+                    }
+                } catch (_: Throwable) {}
+            }
+        }, "mt-watchdog").also { it.isDaemon = true; it.start() }
+    }
+
+    /** Journal : une page est bloquée depuis longtemps (étape, mémoire, pile des fils de traitement) : indique où le travail est coincé. */
+    private fun stallEntry(id: String, elapsedMs: Long): JSONObject {
+        val threads = JSONObject()
+        for ((t, frames) in Thread.getAllStackTraces()) {
+            if (t.name.startsWith("page-queue") || t.name.startsWith("lecture-ocr") || t.name.startsWith("traduction-groupee") || t.name.startsWith("warm-up") || t.name.startsWith("mt-llm"))
+                threads.put(t.name, JSONArray(frames.take(14).map { it.toString() }))
+        }
+        return JSONObject().put("t", System.currentTimeMillis()).put("type", "stall").put("page", id).put("elapsedMs", elapsedMs).put("stage", runStage[id] ?: "")
+            .put("running", JSONArray(queue.runningIds())).put("sys", diag()).put("threads", threads)
+    }
+
+    /** Mémoire (Java, native, disponible) et état thermique : à joindre aux entrées du journal pour comprendre un ralentissement ou un arrêt. */
+    private fun diag(): JSONObject = try {
+        val rt = Runtime.getRuntime()
+        val mi = android.app.ActivityManager.MemoryInfo()
+        ctx.getSystemService(android.app.ActivityManager::class.java)?.getMemoryInfo(mi)
+        val pm = ctx.getSystemService(android.os.PowerManager::class.java)
+        JSONObject().put("java", (rt.totalMemory() - rt.freeMemory()) shr 20).put("javaMax", rt.maxMemory() shr 20)
+            .put("native", android.os.Debug.getNativeHeapAllocatedSize() shr 20).put("avail", mi.availMem shr 20).put("low", mi.lowMemory)
+            .put("thermal", if (android.os.Build.VERSION.SDK_INT >= 29) (pm?.currentThermalStatus ?: -1) else -1).put("hot", thermalHot)
+    } catch (_: Throwable) { JSONObject() }
 
     // ---------- préchargement des modèles ----------
     private val warming = java.util.concurrent.atomic.AtomicBoolean(false)
@@ -915,5 +991,10 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         }, "warm-up").also { it.isDaemon = true; it.priority = Thread.NORM_PRIORITY - 1 }.start()
     }
 
-    companion object { const val MAX_IMAGE_BYTES = 30 * 1024 * 1024 }
+    companion object {
+        const val MAX_IMAGE_BYTES = 30 * 1024 * 1024
+        /** Une page bloquée depuis 1 min est signalée au journal ; depuis 4 min, son fil est abandonné et remplacé. */
+        const val STALL_REPORT_MS = 60_000L
+        const val STALL_ABANDON_MS = 240_000L
+    }
 }

@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); modelTests(); settingsTests(); utilTests(); textTests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests(); openBubbleTests(); barrierShapeTests(); safetyTests(); artEraseTests()
+    groupingTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); queueBatchTests(); modelTests(); settingsTests(); utilTests(); textTests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests(); openBubbleTests(); barrierShapeTests(); safetyTests(); artEraseTests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -1754,6 +1754,126 @@ fun artEraseTests() {
     }
 }
 
+
+// ---------- file de pages en parallèle et regroupement des traductions ----------
+fun queueBatchTests() {
+    T.test("file de pages : priorité relue au moment du choix, deux traitements en parallèle, annulation de tous") {
+        // priorité dynamique : la page choisie est la plus proche de l'écran à cet instant, pas à la soumission
+        val viewport = java.util.concurrent.atomic.AtomicInteger(0)
+        val order = java.util.Collections.synchronizedList(ArrayList<String>())
+        val gate = java.util.concurrent.CountDownLatch(1)
+        val q = PageQueue(10, object : QueueListener {})
+        q.submit(PageJob("bloc") { gate.await(2, java.util.concurrent.TimeUnit.SECONDS); PageOutcome.NoText(1, 1) })
+        Thread.sleep(80)   // « bloc » occupe l'unique fil ; les suivantes attendent
+        for (top in listOf(1000, 3000, 5000)) q.submit(PageJob("p$top", priorityNow = { Math.abs(top - viewport.get()) }) { order.add("p$top"); PageOutcome.NoText(1, 1) })
+        viewport.set(4800)    // le lecteur a défilé jusqu'en bas : p5000 est maintenant la plus proche
+        gate.countDown(); q.awaitIdle(3000)
+        T.ok(order.toList() == listOf("p5000", "p3000", "p1000"), "ordre selon la position actuelle : $order")
+
+        // deux traitements en parallèle : chacun attend que l'autre ait démarré
+        val both = java.util.concurrent.CountDownLatch(2)
+        val q2 = PageQueue(10, object : QueueListener {}, workers = 2)
+        val ok = java.util.concurrent.atomic.AtomicInteger(0)
+        for (id in listOf("a", "b")) q2.submit(PageJob(id) { both.countDown(); if (both.await(2, java.util.concurrent.TimeUnit.SECONDS)) ok.incrementAndGet(); PageOutcome.NoText(1, 1) })
+        T.ok(q2.awaitIdle(4000) && ok.get() == 2, "deux pages avancent en même temps (${ok.get()})")
+
+        // annulation de toutes les pages, y compris celles en cours sur chaque fil
+        val started = java.util.concurrent.CountDownLatch(2)
+        val cancelledIds = java.util.Collections.synchronizedList(ArrayList<String>())
+        val q3 = PageQueue(10, object : QueueListener { override fun onCancelled(id: String) { cancelledIds.add(id) } }, workers = 2)
+        for (id in listOf("x", "y", "z")) q3.submit(PageJob(id) { cancelled -> started.countDown(); val end = System.currentTimeMillis() + 3000; while (!cancelled() && System.currentTimeMillis() < end) Thread.sleep(10); PageOutcome.NoText(1, 1) })
+        started.await(2, java.util.concurrent.TimeUnit.SECONDS); q3.cancelAll(); q3.awaitIdle(4000)
+        T.ok(cancelledIds.toSet() == setOf("x", "y", "z"), "toutes annulées : $cancelledIds")
+    }
+    T.test("file de pages : un traitement bloqué est abandonné et remplacé, les pages suivantes avancent") {
+        val cancelledIds = java.util.Collections.synchronizedList(ArrayList<String>())
+        val finished = java.util.Collections.synchronizedList(ArrayList<String>())
+        val release = java.util.concurrent.atomic.AtomicBoolean(false)
+        val q = PageQueue(10, object : QueueListener {
+            override fun onCancelled(id: String) { cancelledIds.add(id) }
+            override fun onFinished(id: String, outcome: PageOutcome) { finished.add(id) }
+        }, workers = 1)
+        // un traitement qui ignore l'interruption, comme un appel natif bloqué
+        q.submit(PageJob("bloquee") { while (!release.get()) { try { Thread.sleep(20) } catch (_: InterruptedException) {} }; PageOutcome.NoText(1, 1) })
+        Thread.sleep(100)
+        q.submit(PageJob("suivante") { PageOutcome.NoText(1, 1) })
+        Thread.sleep(150)
+        T.ok("suivante" !in finished, "tant que le fil est bloqué, la page suivante attend")
+        q.abandon("bloquee")
+        T.ok(q.awaitIdle(3000) && "suivante" in finished, "après l'abandon, un fil neuf traite la page suivante : $finished")
+        T.ok(cancelledIds == listOf("bloquee"), "la page abandonnée est signalée une seule fois : $cancelledIds")
+        release.set(true); Thread.sleep(300)
+        T.ok(finished == listOf("suivante") && cancelledIds == listOf("bloquee"), "le fil abandonné, quand il rend la main, ne signale plus rien : $finished / $cancelledIds")
+        q.submit(PageJob("bloquee") { PageOutcome.NoText(1, 1) })
+        T.ok(q.awaitIdle(2000) && "bloquee" in finished, "l'identifiant abandonné peut être soumis de nouveau")
+    }
+    T.test("regroupeur de traductions : pages accumulées pendant un appel traduites ensemble, échec isolé, annulation") {
+        val calls = java.util.Collections.synchronizedList(ArrayList<List<String>>())
+        val engine = object : TranslationEngine {
+            override fun translate(texts: List<String>, source: String, target: String): List<String> = translateWithGlossary(texts, source, target, emptyList())
+            override fun translateWithGlossary(texts: List<String>, source: String, target: String, glossary: List<GlossaryEntry>): List<String> {
+                calls.add(texts); Thread.sleep(150)
+                if (texts.size > 1 && texts.any { it == "BAD" }) throw IllegalStateException("réponse invalide")
+                if (texts.any { it == "ONLYBAD" }) throw IllegalStateException("refus")
+                return texts.map { it.uppercase() + "!" }
+            }
+        }
+        val b = TranslationBatcher(engine, maxPages = 3)
+        // 6 pages demandées presque en même temps : la première part seule, les autres s'accumulent pendant son appel
+        val results = java.util.concurrent.ConcurrentHashMap<Int, List<String>>()
+        val ths = (1..6).map { i -> Thread { BatchContext.order.set(i.toDouble()); results[i] = b.translateWithGlossary(listOf("page$i a", "page$i b"), "en", "fr", emptyList()) }.also { th -> th.start(); Thread.sleep(15) } }
+        ths.forEach { it.join(5000) }
+        T.ok((1..6).all { results[it] == listOf("PAGE$it A!", "PAGE$it B!") }, "chaque page reçoit ses propres traductions : $results")
+        T.ok(calls.size in 2..4 && calls.size < 6, "moins d'appels que de pages : ${calls.size} appel(s) pour 6 pages")
+        T.ok(calls.maxOf { it.size } in 4..6, "un groupe réunit plusieurs pages (jusqu'à 3 pages de 2 lignes) : ${calls.maxOf { it.size }} lignes")
+        // un groupe qui échoue : chaque page est retentée seule, seule la page fautive échoue
+        calls.clear()
+        val gate = java.util.concurrent.CountDownLatch(1)
+        val slow = object : TranslationEngine {
+            override fun translate(texts: List<String>, source: String, target: String) = translateWithGlossary(texts, source, target, emptyList())
+            override fun translateWithGlossary(texts: List<String>, source: String, target: String, glossary: List<GlossaryEntry>): List<String> {
+                gate.await(2, java.util.concurrent.TimeUnit.SECONDS); calls.add(texts)
+                if (texts.size > 1 && "BAD" in texts) throw IllegalStateException("groupe refusé")
+                if (texts == listOf("BAD")) throw IllegalStateException("page refusée")
+                return texts.map { it.lowercase() }
+            }
+        }
+        val b2 = TranslationBatcher(slow, maxPages = 3)
+        val out = java.util.concurrent.ConcurrentHashMap<String, Any>()
+        val t0 = Thread { BatchContext.order.set(0.0); out["premiere"] = b2.translateWithGlossary(listOf("A"), "en", "fr", emptyList()) }.also { it.start() }
+        Thread.sleep(60)
+        val t1 = Thread { BatchContext.order.set(1.0); out["bonne"] = try { b2.translateWithGlossary(listOf("OK"), "en", "fr", emptyList()) } catch (e: Throwable) { e } }.also { it.start() }
+        val t2 = Thread { BatchContext.order.set(2.0); out["fautive"] = try { b2.translateWithGlossary(listOf("BAD"), "en", "fr", emptyList()) } catch (e: Throwable) { e } }.also { it.start() }
+        Thread.sleep(80); gate.countDown(); listOf(t0, t1, t2).forEach { it.join(5000) }
+        T.ok(out["premiere"] == listOf("a") && out["bonne"] == listOf("ok") && out["fautive"] is IllegalStateException, "échec isolé : bonne page traduite, page fautive en erreur : $out")
+        // annulation : une page annulée avant son tour n'est pas traduite
+        val seen = java.util.Collections.synchronizedList(ArrayList<List<String>>())
+        val gate2 = java.util.concurrent.CountDownLatch(1)
+        val eng3 = object : TranslationEngine {
+            override fun translate(texts: List<String>, source: String, target: String) = translateWithGlossary(texts, source, target, emptyList())
+            override fun translateWithGlossary(texts: List<String>, source: String, target: String, glossary: List<GlossaryEntry>): List<String> { gate2.await(2, java.util.concurrent.TimeUnit.SECONDS); seen.add(texts); return texts }
+        }
+        val b3 = TranslationBatcher(eng3)
+        val flag = java.util.concurrent.atomic.AtomicBoolean(false)
+        val res = java.util.concurrent.ConcurrentHashMap<String, Any>()
+        Thread { BatchContext.order.set(0.0); res["a"] = b3.translateWithGlossary(listOf("un"), "en", "fr", emptyList()) }.start(); Thread.sleep(60)
+        val tc = Thread { BatchContext.order.set(1.0); BatchContext.cancelled.set { flag.get() }; res["b"] = try { b3.translateWithGlossary(listOf("deux"), "en", "fr", emptyList()) } catch (e: Throwable) { e } }.also { it.start() }
+        Thread.sleep(60); flag.set(true); gate2.countDown(); tc.join(4000); Thread.sleep(100)
+        T.ok(res["b"] is java.util.concurrent.CancellationException && seen.none { "deux" in it }, "page annulée : jamais envoyée au moteur ($res, $seen)")
+        // glossaires différents : jamais dans le même groupe
+        val calls4 = java.util.Collections.synchronizedList(ArrayList<List<String>>())
+        val gate4 = java.util.concurrent.CountDownLatch(1)
+        val eng4 = object : TranslationEngine {
+            override fun translate(texts: List<String>, source: String, target: String) = translateWithGlossary(texts, source, target, emptyList())
+            override fun translateWithGlossary(texts: List<String>, source: String, target: String, glossary: List<GlossaryEntry>): List<String> { gate4.await(2, java.util.concurrent.TimeUnit.SECONDS); calls4.add(texts); return texts }
+        }
+        val b4 = TranslationBatcher(eng4)
+        val g1 = listOf(GlossaryEntry("a", "b")); val g2 = listOf(GlossaryEntry("c", "d"))
+        val th4 = listOf(Triple(0.0, "p0", g1), Triple(1.0, "p1", g1), Triple(2.0, "p2", g2), Triple(3.0, "p3", g1)).map { (o, t, g) -> Thread { BatchContext.order.set(o); b4.translateWithGlossary(listOf(t), "en", "fr", g) }.also { it.start(); Thread.sleep(40) } }
+        gate4.countDown(); th4.forEach { it.join(4000) }
+        T.ok(calls4.none { "p2" in it && it.size > 1 }, "un glossaire différent n'est jamais regroupé : $calls4")
+    }
+}
 
 /** Faux serveur de débogage de Chrome pour les tests : /json/list, poignée de main WebSocket, Page.enable, Page.getResourceTree et Page.getResourceContent. */
 class FakeDevTools(private val images: Map<String, ByteArray>, private val childUrls: Set<String> = emptySet()) : AutoCloseable {

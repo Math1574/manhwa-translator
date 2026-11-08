@@ -124,6 +124,17 @@ for path in sorted(glob.glob(f"{OUT}/reports/*.json")):
         if ot: P(f"- détail de la lecture (dernière image) : {ot[-1]}")
         why = sorted({im.get("fetchWhy") for im in imgs if im.get("fetchWhy")})
         if why: P("- lecture dans la WebView impossible, motif : " + " ; ".join(why)[:300])
+    if name.startswith("pc_en_long"):
+        done_n = sum(1 for im in imgs if im.get("outcome", "").startswith("done"))
+        if done_n < 36: problems.append(f"{name}: long chapitre : {done_n}/36 images traitées (arrêt ou échecs)")
+        seq = [im.get("ms", 0) for im in imgs if im.get("outcome", "").startswith("done")]
+        if len(seq) >= 24:
+            a = sum(seq[:12]) / 12; b = sum(seq[-12:]) / 12
+            P(f"- long chapitre : durée moyenne des 12 premières {a/1000:.1f}s, des 12 dernières {b/1000:.1f}s")
+            if b > 2.5 * a: problems.append(f"{name}: ralentissement sur la durée ({a/1000:.1f}s → {b/1000:.1f}s par image)")
+        P(f"- débit : {done_n / max(1, r.get('elapsedMs', 1) / 60000):.1f} images par minute")
+    shared = sum(1 for im in imgs if im.get("batch", 0) > 1)
+    if any("batch" in im for im in imgs) and name.startswith("pc_en_"): P(f"- traductions regroupées avec d'autres pages : {shared}/{len(imgs)} images")
     if name.startswith("pc_en_once"):
         if c.get("done", 0) < c.get("total", 1) or c.get("total", 0) == 0: problems.append(f"{name}: images à usage unique non traduites ({c.get('done')}/{c.get('total')}) : la lecture par la WebView ne fonctionne pas")
         if srcs.get("page", 0) < 1: problems.append(f"{name}: aucune image lue dans la page ({srcs})")

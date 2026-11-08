@@ -409,7 +409,8 @@ class GemmaTranslator(
         const val HISTORY_SIZE = 10
         /** Délai d'inactivité avant de décharger le modèle (plusieurs Go) : assez long pour qu'une pause de lecture ne force pas un rechargement de 10 à 30 s. */
         const val IDLE_RELEASE_MS = 10 * 60 * 1000L
-        const val GENERATION_TIMEOUT_MS = 5 * 60 * 1000L
+        /** Une génération normale dure moins de 20 s : au-delà d'une minute, elle est interrompue (la réponse partielle reste exploitable ligne par ligne). */
+        const val GENERATION_TIMEOUT_MS = 60 * 1000L
         fun engineId(spec: ModelSpec) = "${spec.id}-ctx1"
     }
 }

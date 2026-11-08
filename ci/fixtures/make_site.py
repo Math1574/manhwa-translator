@@ -35,6 +35,9 @@ if imgs:
     open(f"{S}/pc_en_once.html", "w").write(HEAD % "Pepper&Carrot ép.1 (en, adresses à usage unique)" + "<h3 style='padding:8px'>Adresses à usage unique</h3><script>"
         + "".join(f"document.write('<img src=\"/once/en/{i}?n='+Date.now()+'_'+Math.random()+'\" style=\"display:block;width:100%;margin:0\">');" for i in imgs[:4]) + "</script></body></html>")
     page("pc_en_ep6", "Pepper&Carrot ép.6 (en)", [f"pc/en/{os.path.basename(p)}" for p in sorted(glob.glob(f"{S}/pc/en/E06P*.jpg"))])
+    # long chapitre : 36 images (les pages du faux site, répétées avec un paramètre distinct) pour détecter un arrêt ou un ralentissement sur la durée
+    pool = [f"pc/en/{i}" for i in imgs] + [f"pc/en/{os.path.basename(p)}" for p in sorted(glob.glob(f"{S}/pc/en/E06P*.jpg"))]
+    page("pc_en_long", "Long chapitre (36 images, en)", [f"{pool[k % len(pool)]}?k={k}" for k in range(36)])
 if os.path.exists(f"{S}/synth/atypical_0.png"): page("synth_atypical", "Textes atypiques", [f"synth/atypical_{i}.png" for i in range(6)])
 if os.path.exists(f"{S}/synth/layouts_0.png"): page("synth_layouts", "Mises en page difficiles", [f"synth/layouts_{i}.png" for i in range(6)])
 if os.path.exists(f"{S}/synth/en_variety.jpg"): page("synth_en_variety", "Synthétique en_variety (JPEG)", ["synth/en_variety.jpg"])

@@ -14,6 +14,7 @@ import app.manhwa.core.GlossaryEntry
 import app.manhwa.core.NameSuggestions
 import app.manhwa.core.SeriesTerm
 import app.manhwa.core.ResultCache
+import app.manhwa.core.TranslationBatcher
 import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.common.model.DownloadConditions
 import com.google.mlkit.common.model.RemoteModelManager
@@ -25,6 +26,36 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
         graph = AppGraph(this)
+        ExitReasons.record(this, graph.journal)
+    }
+}
+
+/**
+ * Pourquoi le processus précédent de l'application s'est arrêté (plantage, manque de mémoire, blocage, arrêt par le système…) : consigné au journal à chaque lancement,
+ * pour savoir si une traduction « qui s'arrête » vient d'un arrêt de l'application elle-même.
+ */
+object ExitReasons {
+    private fun name(r: Int) = when (r) {
+        1 -> "arrêt volontaire"; 2 -> "tuée par un signal"; 3 -> "manque de mémoire"; 4 -> "plantage Java"; 5 -> "plantage natif"; 6 -> "application ne répond plus"
+        7 -> "échec d'initialisation"; 8 -> "permission"; 9 -> "ressources excessives"; 10 -> "arrêt demandé par l'utilisateur"; 11 -> "arrêt par l'utilisateur"; 12 -> "dépendance arrêtée"
+        13 -> "autre"; 14 -> "gel par le système"; 15 -> "permission modifiée"; 16 -> "état du paquet modifié"; 17 -> "mise à jour"; else -> "code $r"
+    }
+
+    fun record(ctx: Context, journal: TranslationJournal) {
+        if (android.os.Build.VERSION.SDK_INT < 30) return
+        try {
+            val prefs = ctx.getSharedPreferences("exit_reasons", Context.MODE_PRIVATE)
+            val seen = prefs.getLong("seen", 0L)
+            val am = ctx.getSystemService(android.app.ActivityManager::class.java) ?: return
+            val list = am.getHistoricalProcessExitReasons(ctx.packageName, 0, 8).filter { it.timestamp > seen }.sortedBy { it.timestamp }
+            for (e in list) {
+                journal.add(
+                    org.json.JSONObject().put("t", e.timestamp).put("type", "exit").put("reason", e.reason).put("why", name(e.reason)).put("description", e.description ?: "")
+                        .put("importance", e.importance).put("rssMb", e.rss shr 10).put("pssMb", e.pss shr 10).put("status", e.status),
+                )
+            }
+            if (list.isNotEmpty()) prefs.edit().putLong("seen", list.last().timestamp).apply()
+        } catch (_: Throwable) {}
     }
 }
 
@@ -43,6 +74,10 @@ class AppGraph(ctx: Context) {
     val paddleModels = PaddleModels(ctx)
     val paddle = PaddleOcr(paddleModels)
     val gemma = GemmaTranslator(ctx, llm) { settingsStore.settings }
+    /** Traductions de plusieurs pages regroupées en un seul appel au moteur (le surcoût fixe de chaque appel est partagé). */
+    val gemmaBatch = TranslationBatcher(gemma)
+    /** Tests automatiques seulement : ML Kit passe aussi par un regroupeur, pour exercer la file parallèle sur l'émulateur. */
+    val mlkitBatch by lazy { TranslationBatcher(MlKitTranslation(models)) }
     init {
         // dès qu'un modèle Gemma est prêt, on le choisit s'il n'y avait que ML Kit : meilleure traduction sans geste de l'utilisateur
         llm.onDownloaded = { spec ->

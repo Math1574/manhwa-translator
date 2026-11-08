@@ -53,6 +53,7 @@ object TestHooks {
         val models = s("mt_models")?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
         val reportName = s("mt_report") ?: "report.json"
         c.testNoDevTools = s("mt_nocdp") == "true"
+        c.testBatch = s("mt_batch") == "true"
 
         thread(name = "mt-test") {
             val t0 = System.currentTimeMillis()

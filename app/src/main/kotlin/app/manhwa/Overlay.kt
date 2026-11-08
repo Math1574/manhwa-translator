@@ -119,6 +119,10 @@ object PageScript {
   var nbState = false, nbTick = false;
   function nbCheck(){ nbTick = false; var nb = (window.innerHeight + window.scrollY) >= (document.documentElement.scrollHeight - 900); if (nb !== nbState) { nbState = nb; try { AndroidMT.onBottom(nb); } catch(e) {} } }
   window.addEventListener('scroll', function(){ if (!nbTick) { nbTick = true; setTimeout(nbCheck, 300); } }, {passive:true});
+  // position de lecture : l'application traduit d'abord ce que l'on regarde à cet instant
+  var vpTick = false;
+  function vpReport(){ vpTick = false; try { AndroidMT.onViewport(window.scrollY); } catch(e) {} }
+  window.addEventListener('scroll', function(){ if (!vpTick) { vpTick = true; setTimeout(vpReport, 250); } }, {passive:true});
   setTimeout(nbCheck, 800);
 
   // appui long sur une traduction : tant que le doigt reste posé, la traduction s'efface et l'original réapparaît dessous (aperçu) ; l'application propose alors de la corriger
