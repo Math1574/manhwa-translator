@@ -250,12 +250,25 @@ object TextErase {
     fun textComponents(
         pixels: IntArray, w: Int, h: Int, bg: Int, thr: Int, allowed: BooleanArray, grow: Int,
         interior: BooleanArray? = null, core: BooleanArray? = null, thin: BooleanArray? = null, smallDim: Int = Int.MAX_VALUE,
+        /** Fond et lettres entourées, sans refus de fuite : borne ce que l'on efface d'une composante reliée au bord (voir plus bas). Par défaut : [interior]. */
+        reach: BooleanArray? = null,
+        /** Reçoit, pour un texte incliné, la zone hors de laquelle rien ne doit être effacé (l'élargissement des lettres ne doit pas en sortir) ; sinon reste null. */
+        limitOut: Array<BooleanArray?>? = null,
     ): BooleanArray {
         val raw = BooleanArray(w * h) { dist(pixels[it], bg) > thr }
         val seen = BooleanArray(w * h)
         val keep = BooleanArray(w * h)
         val queue = IntArray(w * h)
         val maxArea = w * h / 2
+        // Texte incliné (axe des lettres isolées en diagonale, entre 8° et 80°) : la boîte de lecture d'un texte incliné est un grand rectangle qui englobe du décor hors de la bulle
+        // (étiquette blanche inclinée sur un fond sombre). Dans ce cas seulement, ce qui est relié au bord n'est effacé que s'il touche l'intérieur de la bulle (à 1 px près) : le décor
+        // sombre n'est plus repeint en blanc. Pour un texte horizontal ou vertical, rien ne change (une lettre soudée au contour est effacée comme avant).
+        val reachSrc = reach ?: interior
+        val encAll = if (core != null && reachSrc != null) enclosedOnly(raw, w, h) else null
+        val diagonal = encAll != null && diagonalAxis(BooleanArray(w * h) { encAll[it] && core!![it] }, w, h)
+        val interiorNear = if (diagonal) reachSrc?.let { dilate(it, w, h, 1) } else null
+        if (limitOut != null && limitOut.isNotEmpty()) limitOut[0] = interiorNear
+        Erasure.trace?.invoke("texte incliné : ${if (diagonal) "oui, effacement des composantes reliées au bord limité à l'intérieur de la bulle" else "non"}")
         // boîte englobante du cœur du texte : une composante qui la dépasse largement n'est pas du texte seul (contour de bulle soudé aux lettres)
         var cx0 = w; var cx1 = -1; var cy0 = h; var cy1 = -1
         if (core != null) for (i in 0 until w * h) if (core[i]) { val x = i % w; val y = i / w; if (x < cx0) cx0 = x; if (x > cx1) cx1 = x; if (y < cy0) cy0 = y; if (y > cy1) cy1 = y }
@@ -300,20 +313,59 @@ object TextErase {
                 val sw = strokeWidth(inCore, w, h).let { if (it < 3f) strokeWidth(comp, w, h) else it }
                 val r = (sw * 0.3f).toInt().coerceIn(2, 8)
                 val opened = dilate(erode(comp, w, h, r), w, h, r, comp)
-                for (k in 0 until tail) { val q = queue[k]; if (opened[q]) keep[q] = true else thin?.set(q, true) }
+                // dans une bulle, seul ce qui touche son intérieur est du texte : un grand décor sombre qui dépasse de la bulle (ici, derrière une étiquette inclinée dont la boîte de lecture
+                // est un grand rectangle) survit à l'ouverture comme une lettre épaisse, était effacé puis repeint en blanc
+                for (k in 0 until tail) { val q = queue[k]; if (opened[q] && (interiorNear == null || interiorNear[q])) keep[q] = true else thin?.set(q, true) }
                 continue
             }
             when {
                 // lettre isolée : effacée entièrement, même si elle dépasse la boîte de l'OCR (mot omis, lettre débordante)
                 enclosed && (inAllowed || inInterior * 2 >= tail) -> for (k in 0 until tail) keep[queue[k]] = true
-                // composante reliée au bord ou à un contour (lettre collée au contour) : seulement le cœur des lignes de texte
-                inAllowed && core != null -> for (k in 0 until tail) if (core[queue[k]]) keep[queue[k]] = true
+                // composante reliée au bord ou à un contour (lettre collée au contour) : seulement le cœur des lignes de texte, et, dans une bulle, seulement ce qui touche son intérieur
+                // (à 3 px près : une lettre soudée au contour y touche). La boîte de lecture d'un texte incliné est un grand rectangle qui englobe du décor sombre hors de la bulle :
+                // ce décor n'est pas du texte, il était effacé puis repeint en blanc
+                inAllowed && core != null -> for (k in 0 until tail) if (core[queue[k]] && (interiorNear == null || interiorNear[queue[k]])) keep[queue[k]] = true
             }
         }
         return dilate(keep, w, h, grow)
     }
 
     /** Épaisseur moyenne du trait (pixels) d'un masque de texte : 2 × aire / périmètre (exact pour un trait fin de longueur ≫ épaisseur). */
+    /**
+     * Vrai si les lettres isolées (composantes de [letters], d'au moins 30 px) sont alignées en diagonale : au moins 3 composantes, nuage de centres allongé, axe entre 8° et 80°
+     * par rapport à l'horizontale.
+     */
+    fun diagonalAxis(letters: BooleanArray, w: Int, h: Int): Boolean {
+        val seen = BooleanArray(w * h); val queue = IntArray(w * h)
+        val cx = ArrayList<Double>(); val cy = ArrayList<Double>()
+        for (start in 0 until w * h) {
+            if (!letters[start] || seen[start]) continue
+            var head = 0; var tail = 0; queue[tail++] = start; seen[start] = true
+            var sx = 0.0; var sy = 0.0
+            while (head < tail) {
+                val i = queue[head++]; val x = i % w; val y = i / w; sx += x; sy += y
+                for (dy in -1..1) for (dx in -1..1) {
+                    if (dx == 0 && dy == 0) continue
+                    val nx = x + dx; val ny = y + dy
+                    if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
+                    val j = ny * w + nx
+                    if (letters[j] && !seen[j]) { seen[j] = true; queue[tail++] = j }
+                }
+            }
+            if (tail >= 30) { cx.add(sx / tail); cy.add(sy / tail) }
+        }
+        if (cx.size < 3) return false
+        val mx = cx.average(); val my = cy.average()
+        var sxx = 0.0; var syy = 0.0; var sxy = 0.0
+        for (k in cx.indices) { val dx = cx[k] - mx; val dy = cy[k] - my; sxx += dx * dx; syy += dy * dy; sxy += dx * dy }
+        val tr = sxx + syy; val det = sxx * syy - sxy * sxy
+        val disc = Math.sqrt(Math.max(0.0, tr * tr / 4 - det))
+        val l1 = tr / 2 + disc; val l2 = tr / 2 - disc
+        if (l1 < 4 * Math.max(l2, 1e-6)) return false                       // nuage rond : pas d'axe
+        val angle = Math.abs(Math.toDegrees(0.5 * Math.atan2(2 * sxy, sxx - syy)))
+        return angle in 8.0..80.0
+    }
+
     fun strokeWidth(mask: BooleanArray, w: Int, h: Int): Float {
         var area = 0; var perim = 0
         for (y in 0 until h) for (x in 0 until w) {
@@ -659,6 +711,16 @@ object TextErase {
         val bandArr = IntArray(n); var bandN = 0; val valid = BooleanArray(n)
         for (i in 0 until n) if (dm[i] in 1..10 && dist(pixels[i], bg) <= 70) { bandArr[bandN++] = i; valid[i] = true }
         if (bandN < 60) return null
+        // fond blanc : seules les références vraiment blanches comptent. Les bords roses du texte, l'ombre ou le dessin sombre qui déborde d'une étiquette (jusqu'à 70 niveaux du blanc)
+        // salissaient le remplissage : une étiquette blanche était repeinte en gris moucheté
+        if (((bg shr 16) and 0xFF) >= 235 && ((bg shr 8) and 0xFF) >= 235 && (bg and 0xFF) >= 235) {
+            var tight = 0; for (k in 0 until bandN) if (dist(pixels[bandArr[k]], bg) <= 24) tight++
+            if (tight >= 80 && tight >= 0.5f * bandN) {
+                var kept = 0
+                for (k in 0 until bandN) { val i = bandArr[k]; if (dist(pixels[i], bg) <= 24) bandArr[kept++] = i else valid[i] = false }
+                bandN = kept
+            }
+        }
         fun medOf(a: IntArray, cnt: Int, sh: Int): Int { val t = IntArray(cnt) { (a[it] shr sh) and 0xFF }; t.sort(); return t[cnt / 2] }
         val cols = IntArray(bandN) { pixels[bandArr[it]] }
         val mr = medOf(cols, bandN, 16); val mg = medOf(cols, bandN, 8); val mb = medOf(cols, bandN, 0)
@@ -677,6 +739,7 @@ object TextErase {
         val meds = (0..3).filter { quadN[it] >= 12 }.map { q -> intArrayOf(medOf(quad[q], quadN[q], 16), medOf(quad[q], quadN[q], 8), medOf(quad[q], quadN[q], 0)) }
         for (c in 0..2) { if (meds.size >= 2) spread = maxOf(spread, meds.maxOf { it[c] } - meds.minOf { it[c] }) }
         val flat = mad <= 3 && spread <= 6
+        Erasure.trace?.invoke("zoneFill : mad=$mad écart des côtés=$spread bande=$bandN médiane=${"%02X%02X%02X".format(mr, mg, mb)} → ${if (flat) "aplat exact" else "fond lissé + grain"}")
         if (flat) return null
         val smooth = inpaintSmooth(pixels, w, h, mask, valid)
         return addGrain(smooth, pixels, w, h, mask)

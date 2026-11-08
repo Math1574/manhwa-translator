@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); queueBatchTests(); readingOrderTests(); seamTests(); modelTests(); settingsTests(); utilTests(); textTests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests(); openBubbleTests(); barrierShapeTests(); safetyTests(); artEraseTests()
+    groupingTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); queueBatchTests(); readingOrderTests(); eraseWhiteBandTests(); seamTests(); modelTests(); settingsTests(); utilTests(); textTests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests(); openBubbleTests(); barrierShapeTests(); safetyTests(); artEraseTests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -519,6 +519,7 @@ fun eraseTests() {
 }
 
 // ---------- plan d'effacement complet ----------
+typealias ArrayPixels = ArraySource
 class ArraySource(override val width: Int, override val height: Int, val px: IntArray) : PixelSource {
     override fun pixels(x: Int, y: Int, w: Int, h: Int): IntArray = IntArray(w * h) { px[(y + it / w) * width + x + it % w] }
 }
@@ -1978,6 +1979,76 @@ fun seamTests() {
         val out = p.process(ByteArray(8), "en", "fr")
         T.ok(out is PageOutcome.Done && out.result.blocks.size == 2, "deux blocs gardés sur trois : ${(out as? PageOutcome.Done)?.result?.blocks?.map { it.source }}")
         T.ok(seen.flatten().none { it.contains("ALREADY") }, "le texte de l'image du dessus n'est pas envoyé à la traduction : $seen")
+    }
+}
+
+// ---------- effacement : lettrage sur bandeau blanc, étiquette inclinée, frange du contour ----------
+fun eraseWhiteBandTests() {
+    fun lum(c: Int) = (((c shr 16) and 0xFF) * 299 + ((c shr 8) and 0xFF) * 587 + (c and 0xFF) * 114) / 1000
+    fun rgb(r: Int, g: Int, b: Int) = (0xFF shl 24) or (r.coerceIn(0, 255) shl 16) or (g.coerceIn(0, 255) shl 8) or b.coerceIn(0, 255)
+    fun apply(src: IntArray, W: Int, plan: Erasure.Plan): IntArray {
+        val out = src.copyOf()
+        for (i in plan.layer.indices) if (plan.mask[i] && (plan.layer[i] ushr 24) != 0) { val x = plan.x0 + i % plan.w; val y = plan.y0 + i / plan.w; out[y * W + x] = plan.layer[i] or (0xFF shl 24) }
+        return out
+    }
+    // bandeau blanc (bruit de compression) entre deux cases à bordure noire ; lettrage : dégradé noir → gris, cerné d'une lueur lilas qui s'estompe sur 14 px
+    fun band(withArt: Boolean): Triple<IntArray, Int, Int> {
+        val W = 900; val H = 560; val rnd = java.util.Random(11)
+        val px = IntArray(W * H) { val n = rnd.nextInt(5) - 2; rgb(253 + n, 253 + n, 253 + n) }
+        for (y in 0 until 150) for (x in 0 until W) px[y * W + x] = rgb(110 + (x / 7) % 60, 40 + y / 3, 40)       // case du haut (dessin sombre)
+        for (y in 150 until 155) for (x in 0 until W) px[y * W + x] = rgb(0, 0, 0)                               // bordure noire
+        for (y in 400 until H) for (x in 0 until W) px[y * W + x] = rgb(60, 50 + (x / 9) % 50, 90 + y % 40)      // case du bas
+        for (y in 396 until 400) for (x in 0 until W) px[y * W + x] = rgb(0, 0, 0)
+        if (withArt) for (y in 155 until 396) for (x in 0 until W) px[y * W + x] = rgb(70 + (x * 3 / 5) % 120, 90 + (y * 2) % 100, 160 - (x / 6) % 90)   // le « bandeau » est du dessin
+        val glyph = BooleanArray(W * H)
+        for (gx in 0 until 7) for (y in 215 until 330) for (x in 150 + gx * 100 until 150 + gx * 100 + 70) if ((y - 215) < 22 || (x - (150 + gx * 100)) < 20 || (x - (150 + gx * 100)) > 48) glyph[y * W + x] = true
+        // lueur
+        for (y in 195 until 350) for (x in 130 until 880) {
+            var d = 99; for (dy in -14..14 step 2) for (dx in -14..14 step 2) { val xx = x + dx; val yy = y + dy; if (xx in 0 until W && yy in 0 until H && glyph[yy * W + xx]) d = minOf(d, maxOf(kotlin.math.abs(dx), kotlin.math.abs(dy))) }
+            if (!glyph[y * W + x] && d <= 14 && !withArt) { val t = d / 14.0; px[y * W + x] = rgb((255 - 55 * (1 - t)).toInt(), (255 - 75 * (1 - t)).toInt(), (255 - 25 * (1 - t)).toInt()) }
+        }
+        for (y in 215 until 330) for (x in 130 until 880) if (glyph[y * W + x]) { val g = 10 + (y - 215) * 140 / 115; px[y * W + x] = rgb(g, g, g + 5) }
+        return Triple(px, W, H)
+    }
+    T.test("effacement : lettrage à dégradé et lueur isolé sur un bandeau blanc entre deux cases → aplat sans aucun reste, bordures de case intactes") {
+        val (px, W, H) = band(false)
+        val plan = Erasure.plan(ArrayPixels(W, H, px), 1f, listOf(RectF(150f, 215f, 840f, 330f)), 115f, W.toFloat(), H.toFloat(), emptyList(), null, free = true, extra = listOf(RectF(130f, 195f, 860f, 350f)))!!
+        T.eq(Erasure.Mode.FLAT, plan.mode, "le lettrage isolé sur du blanc est effacé à plat")
+        val out = apply(px, W, plan)
+        var residue = 0; for (y in 170 until 380) for (x in 100 until 800) if (lum(out[y * W + x]) < 245) residue++
+        T.eq(0, residue, "pixels non blancs restant dans le bandeau")
+        var borderChanged = 0; for (y in 150 until 155) for (x in 0 until W) if (out[y * W + x] != px[y * W + x]) borderChanged++
+        for (y in 396 until 400) for (x in 0 until W) if (out[y * W + x] != px[y * W + x]) borderChanged++
+        T.eq(0, borderChanged, "pixels des bordures de case modifiés")
+    }
+    T.test("effacement : le même lettrage sur un décor (le bandeau est du dessin) n'est pas effacé à plat") {
+        val (px, W, H) = band(true)
+        val plan = Erasure.plan(ArrayPixels(W, H, px), 1f, listOf(RectF(150f, 215f, 840f, 330f)), 115f, W.toFloat(), H.toFloat(), emptyList(), null, free = true, extra = listOf(RectF(130f, 195f, 860f, 350f)))
+        T.ok(plan == null || plan.mode != Erasure.Mode.FLAT, "pas d'aplat sur un décor : ${plan?.mode}")
+    }
+    T.test("effacement : le décor sombre englobé par la boîte de lecture d'un texte incliné n'est pas repeint (étiquette blanche inclinée)") {
+        val W = 700; val H = 520; val rnd = java.util.Random(5)
+        val px = IntArray(W * H) { i -> val x = i % W; rgb(80 + (x / 9) % 3 * 12 + rnd.nextInt(4), 70 + rnd.nextInt(4), 60) }    // fond brun à barres verticales
+        // étiquette : parallélogramme blanc incliné (bord gauche en diagonale), texte sombre rose le long de son grand axe
+        fun inLabel(x: Int, y: Int): Boolean { val u = (x - 150) * 0.94 + (y - 200) * -0.34; val v = (x - 150) * 0.34 + (y - 200) * 0.94; return u in -20.0..440.0 && v in -42.0..42.0 }
+        val label = BooleanArray(W * H) { inLabel(it % W, it / W) }
+        for (i in px.indices) if (label[i]) px[i] = rgb(250 + rnd.nextInt(3) - 1, 250, 247)
+        val ink = BooleanArray(W * H)
+        // sept « lettres » séparées (épaisseur 15 px) le long du grand axe : aucune ne touche le bord de l'étiquette
+        // (le texte suit le grand axe de l'étiquette ; celle-ci n'a que 84 px de large, si bien que les coins du rectangle de lecture sortent sur le décor sombre)
+        for (g in 0 until 7) for (t in (g * 52)..(g * 52 + 34)) for (th in -7..7) { val x = (150 + t * 0.94 + th * 0.34 + 30).toInt(); val y = (200 - t * 0.34 + th * 0.94 - 10).toInt(); if (x in 0 until W && y in 0 until H && label[y * W + x]) { px[y * W + x] = rgb(140, 70, 95); ink[y * W + x] = true } }
+        var minX = W; var minY = H; var maxX = 0; var maxY = 0; for (i in ink.indices) if (ink[i]) { val x = i % W; val y = i / W; minX = minOf(minX, x); minY = minOf(minY, y); maxX = maxOf(maxX, x); maxY = maxOf(maxY, y) }
+        var lx0 = W; var ly0 = H; var lx1 = 0; var ly1 = 0; for (i in label.indices) if (label[i]) { val x = i % W; val y = i / W; lx0 = minOf(lx0, x); ly0 = minOf(ly0, y); lx1 = maxOf(lx1, x); ly1 = maxOf(ly1, y) }
+        val plan = Erasure.plan(ArrayPixels(W, H, px), 1f, listOf(RectF(minX.toFloat(), minY.toFloat(), maxX.toFloat(), maxY.toFloat())), 40f, W.toFloat(), H.toFloat(), emptyList(), RectF(lx0.toFloat(), ly0.toFloat(), lx1.toFloat(), ly1.toFloat()), free = false)!!
+        var darkErased = 0; var textKept = 0
+        for (i in plan.mask.indices) {
+            val x = plan.x0 + i % plan.w; val y = plan.y0 + i / plan.w
+            if (plan.mask[i] && !label[y * W + x] && lum(px[y * W + x]) < 110) darkErased++
+        }
+        for (i in ink.indices) if (ink[i]) { val x = i % W; val y = i / W; val k = (y - plan.y0) * plan.w + (x - plan.x0); if (k in plan.mask.indices && x >= plan.x0 && y >= plan.y0 && !plan.mask[k]) textKept++ }
+        // seule la frange de 1 px collée à l'étiquette peut partir ; avant, tout le décor de la boîte de lecture (des milliers de pixels) était repeint
+        T.ok(darkErased < 700, "pixels sombres du décor, hors de l'étiquette, effacés puis repeints en blanc : $darkErased")
+        T.ok(textKept < 40, "pixels du texte non effacés : $textKept sur ${ink.count { it }} (mode ${plan.mode}, région ${plan.w}x${plan.h} en (${plan.x0},${plan.y0}), boîte du texte $minX,$minY-$maxX,$maxY)")
     }
 }
 

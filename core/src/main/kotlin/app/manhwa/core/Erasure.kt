@@ -24,6 +24,8 @@ object Erasure {
     @JvmField var haloClean: Boolean = true
     /** Bancs d'essai seulement : force le mode ART (même sur un fond uni) pour mesurer ses restes. */
     @JvmField var forceArt: Boolean = false
+    /** Bancs d'essai seulement : force l'aplat (même si la mesure le refuse) pour voir ce qu'il donnerait. */
+    @JvmField var forceFlat: Boolean = false
 
     enum class Mode { FLAT, SMOOTH, ART }
 
@@ -319,6 +321,7 @@ object Erasure {
         // Structure du fond autour du texte : un aplat de zone ou un dégradé lissé ne conviennent qu'à un fond lisse (blanc, couleur unie, dégradé, ombrage, flou). Quand la marge du texte
         // porte des bords francs ou une masse de dessin très différente (contours, cheveux, motifs, panneau sombre), un remplacement de toute la zone abîme le dessin et se voit comme
         // un carré : on n'efface alors que les lettres, et le reste du dessin est conservé. Dans une bulle, seul son intérieur compte (le contour n'est pas une structure du fond).
+        val interiorLoose: BooleanArray? by lazy { BubbleMask.interior(px, w, h, textRect, a.bg, strict = false) }   // sans refus de fuite : sert seulement à borner l'effacement
         val interiorPre: BooleanArray? by lazy { BubbleMask.interior(px, w, h, textRect, a.bg) }   // seulement si une bulle ou l'aplat en a besoin
         val bubbleCtx = container != null || bubble != null
         val structured = run {
@@ -334,14 +337,22 @@ object Erasure {
         }
         // un lettrage cerné d'un contour ou d'une lueur est traité comme du dessin : l'aplat laisserait des fragments du contour
         trace?.invoke("décision : structured=$structured outlined=${a.outlined} zoneFlat=${a.zoneFlat} bgShare=${a.bgShare} uniformity=${a.uniformity} bubble=${bubble != null} bg=${"%06X".format(a.bg and 0xFFFFFF)}")
-        val flat = !forceArt && !structured && !a.outlined && a.zoneFlat >= 0.9f && a.bgShare >= 0.45f && (a.uniformity >= 0.85f || bubble != null)
+        val flatBase = !forceArt && !structured && !a.outlined && a.zoneFlat >= 0.9f && a.bgShare >= 0.45f && (a.uniformity >= 0.85f || bubble != null)
+        // Lettrage stylisé (dégradé, lueur, contour épais) isolé sur un bandeau blanc entre deux cases : sa lueur faisait classer le fond comme « non uni », ou la bordure de case voisine comme
+        // « structure », et l'effacement lettre par lettre laissait la moitié grise des lettres ou des morceaux colorés sous la traduction. Quand le lettrage est entièrement isolé du dessin
+        // (aucune de ses composantes ne touche le bord de la région), tout ce que la zone contient en dehors des traits francs du décor est effacé à plat, sans reste.
+        val isolated = !forceArt && !flatBase && isolatedOnWhite(px, w, h, a, lineBoxes, s, x0, y0, zone)
+        trace?.invoke("lettrage isolé sur blanc : $isolated")
+        val flat = forceFlat || flatBase || isolated
         if (flat) {
             val allowedZone = TextErase.rectMask(w, h, rects(), max(3, (lh * 0.2f).toInt()))
             val shrink = max(1, (lh * 0.2f).toInt())
             val core = TextErase.rectMask(w, h, rects().map { r -> intArrayOf(r[0], r[1] + shrink, r[2], r[3] - shrink) }.filter { r -> r[3] > r[1] }, 0)
             val interior = interiorPre
+            trace?.invoke("aplat : intérieur de bulle ${if (interior != null) "trouvé (${interior.count { it }} px)" else "absent"} ; cœur du texte ${core.count { it }} px ; région ${w}x$h")
             val thin = BooleanArray(w * h)
-            val raw = TextErase.textComponents(px, w, h, a.bg, a.threshold, allowedZone, 0, interior, core, thin, (lh * 0.6f).toInt())
+            val diagLimit = arrayOfNulls<BooleanArray>(1)
+            val raw = TextErase.textComponents(px, w, h, a.bg, a.threshold, allowedZone, 0, interior, core, thin, (lh * 0.6f).toInt(), reach = interior ?: interiorLoose, limitOut = diagLimit)
             val stroke = TextErase.strokeWidth(raw, w, h)
             // nettoyage de toute la zone : plus de « fantômes » (bruit de compression JPEG autour des lettres, points et ponctuation hors boîte OCR)
             val clean = BooleanArray(w * h)
@@ -353,7 +364,7 @@ object Erasure {
                 val enc = TextErase.limitSize(TextErase.enclosedOnly(far, w, h), w, h, ((textRect[2] - textRect[0]) * 1.2f).toInt() + 4, ((textRect[3] - textRect[1]) * 1.2f).toInt() + 4)
                 for (i in clean.indices) clean[i] = zone[i] && (!far[i] || enc[i])
             }
-            val grown = TextErase.dilate(raw, w, h, max(2, (lh * 0.06f).toInt()))
+            val grown = TextErase.dilate(raw, w, h, max(2, (lh * 0.06f).toInt()), diagLimit[0])   // texte incliné : l'élargissement des lettres ne sort pas de la bulle (le contour de l'étiquette reste)
             // le contour fin soudé aux lettres (thin) n'est jamais effacé, ni par le nettoyage de la zone ni par la dilatation des lettres
             val mask = BooleanArray(w * h) { !thin[it] && (clean[it] || grown[it]) }
             // fond uni : aplat exact (comportement d'origine) ; fond en dégradé, ombré ou légèrement bruité : reconstruction qui suit le fond autour de la zone, avec bords adoucis
@@ -379,7 +390,15 @@ object Erasure {
                     val py0 = ((pr.top * s).toInt() - y0).coerceIn(0, h); val py1 = ((pr.bottom * s).toInt() - y0).coerceIn(0, h)
                     for (yy in py0 until py1) for (xx in px0 until px1) prot[yy * w + xx] = true
                 }
-                val mask = BooleanArray(w * h) { i -> zone[i] && (shape.contains((x0 + i % w + 0.5f) / s, (y0 + i / w + 0.5f) / s) || encG[i] || (coreLines[i] && farS[i] && !prot[i])) }
+                // frange adoucie du contour des lettres : ses pixels intermédiaires sont trop proches de leur voisinage pour être « loin » et restaient en lettres fantômes
+                // (contour blanc visible sous la traduction) là où l'intérieur de la bulle n'est pas détecté ; ils partent avec les lettres
+                // seuls les pixels des lignes de texte elles-mêmes sont élargis (pas ceux de la zone du détecteur, qui peut toucher le contour de la bulle : il serait grignoté)
+                val textOnly = TextErase.rectMask(w, h, lineBoxes.map { l -> intArrayOf((l.left * s).toInt() - x0, (l.top * s).toInt() - y0, (l.right * s).toInt() - x0, (l.bottom * s).toInt() - y0) }, 0)
+                // seulement les composantes de la taille du texte (lettres, mots) : un arc du contour de la bulle qui passe dans la boîte d'une ligne est bien plus grand, il n'est pas élargi
+                val letters = TextErase.limitSize(farS, w, h, (textUnion.width * s).toInt() + 6, (textUnion.height * s).toInt() + 6)
+                val farText = BooleanArray(w * h) { textOnly[it] && letters[it] && !prot[it] }
+                val farTextG = TextErase.dilate(farText, w, h, max(2, (lh * 0.1f).toInt()), zone)
+                val mask = BooleanArray(w * h) { i -> zone[i] && (shape.contains((x0 + i % w + 0.5f) / s, (y0 + i / w + 0.5f) / s) || encG[i] || (coreLines[i] && farS[i] && !prot[i]) || (farTextG[i] && !prot[i])) }
                 if (mask.count { it } > 0) {
                     // références du remplissage : seulement l'intérieur de la bulle (ni la page blanche autour, ni le contour)
                     val outside = BooleanArray(w * h) { i -> !shape.contains((x0 + i % w + 0.5f) / s, (y0 + i / w + 0.5f) / s) }
@@ -434,6 +453,28 @@ object Erasure {
         }
         val inkArt = TextErase.artMask(px, w, h, zoneArt, fillColor, 0, Int.MAX_VALUE, tightLines, reachCap)
         return Plan(Mode.ART, x0, y0, w, h, mask, layer, a.bg, fillColor, a.outlined || artInfo.outlined, null, null, TextErase.strokeWidth(inkArt, w, h), inkArt, meanFill(layer))
+    }
+
+    /**
+     * Vrai si le texte est un lettrage isolé sur un fond blanc : fond blanc franc, aucun pixel franc des lignes de texte ne fait partie d'une composante qui touche le bord de la région
+     * (le lettrage, sa lueur et son contour ne sont soudés à aucun dessin) et le cadre extérieur de la zone est du blanc, sans dessin qu'un aplat découperait en carré.
+     */
+    private fun isolatedOnWhite(px: IntArray, w: Int, h: Int, a: TextErase.Analysis, lineBoxes: List<RectF>, s: Float, x0: Int, y0: Int, zone: BooleanArray): Boolean {
+        val bg = a.bg
+        if (((bg shr 16) and 0xFF) < 240 || ((bg shr 8) and 0xFF) < 240 || (bg and 0xFF) < 240 || a.bgShare < 0.45f) return false
+        val far = TextErase.farMask(px, bg, a.threshold)
+        val textRects = lineBoxes.map { l -> intArrayOf((l.left * s).toInt() - x0, (l.top * s).toInt() - y0, (l.right * s).toInt() - x0, (l.bottom * s).toInt() - y0) }
+        val text = TextErase.rectMask(w, h, textRects, 0)
+        val union = lineBoxes.reduce { x, y -> x.union(y) }
+        val enc = TextErase.limitSize(TextErase.enclosedOnly(far, w, h), w, h, (union.width * s * 1.25f).toInt() + 6, (union.height * s * 1.25f).toInt() + 6)
+        var inText = 0; var loose = 0
+        for (i in far.indices) if (far[i] && text[i]) { inText++; if (!enc[i]) loose++ }
+        if (inText < 40 || loose > 0.01f * inText) return false
+        // cadre de 6 px autour de la zone : hors traits francs (bordures de case, qui sont conservées), il doit être blanc ; un dégradé ou un dessin pâle y serait coupé en carré par l'aplat
+        val outer = TextErase.dilate(zone, w, h, 6)
+        var n = 0; var plain = 0
+        for (i in far.indices) if (outer[i] && !zone[i] && !far[i]) { n++; if (TextErase.dist(px[i], bg) <= 14) plain++ }
+        return n == 0 || plain >= 0.93f * n
     }
 
     /**

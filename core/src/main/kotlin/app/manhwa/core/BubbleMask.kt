@@ -54,9 +54,10 @@ object BubbleMask {
 
     /**
      * Intérieur de la bulle autour du texte : zone de couleur uniforme atteinte depuis le texte, plus les « trous » enfermés
-     * (les lettres). Le contour et le dessin extérieur ne font pas partie du résultat. Null si le contour n'est pas fermé.
+     * (les lettres). Le contour et le dessin extérieur ne font pas partie du résultat. Null si le contour n'est pas fermé
+     * (sauf [strict] = false : le remplissage peut alors s'échapper de la région, le résultat sert seulement à savoir ce qui touche le fond autour du texte).
      */
-    fun interior(pixels: IntArray, w: Int, h: Int, text: IntArray, bg: Int, tol: Int = 42, maxFill: Float = 0.8f): BooleanArray? {
+    fun interior(pixels: IntArray, w: Int, h: Int, text: IntArray, bg: Int, tol: Int = 42, maxFill: Float = 0.8f, strict: Boolean = true): BooleanArray? {
         if (w < 8 || h < 8) return null
         val x0 = text[0].coerceIn(0, w - 1); val y0 = text[1].coerceIn(0, h - 1)
         val x1 = text[2].coerceIn(x0 + 1, w); val y1 = text[3].coerceIn(y0 + 1, h)
@@ -80,12 +81,12 @@ object BubbleMask {
             val i = queue[head++]; val x = i % w; val y = i / w
             push(x + 1, y); push(x - 1, y); push(x, y + 1); push(x, y - 1)
         }
-        if (tail > maxFill * (w * h)) return null
+        if (strict && tail > maxFill * (w * h)) return null
         // fuite : le remplissage touche le bord de la région sur une grande partie de son pourtour (contour ouvert ou bulle plus grande que la région)
         var edge = 0
         for (x in 0 until w) { if (flood[x]) edge++; if (flood[(h - 1) * w + x]) edge++ }
         for (y in 0 until h) { if (flood[y * w]) edge++; if (flood[y * w + w - 1]) edge++ }
-        if (edge > 0.55f * (2 * (w + h))) return null
+        if (strict && edge > 0.55f * (2 * (w + h))) return null
         // trous : pixels non remplis qui ne communiquent pas avec le bord de la région
         val outside = BooleanArray(w * h)
         var oh = 0; var ot = 0
