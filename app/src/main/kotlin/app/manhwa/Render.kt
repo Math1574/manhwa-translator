@@ -270,7 +270,8 @@ object PageRenderer {
 
     /** Hauteur médiane des lettres d'origine (pixels de l'image d'origine), 0 si inconnue. */
     private fun measuredInkHeight(plan: Erasure.Plan?, b: TranslatedBlock, s: Float): Float {
-        val ink = plan?.core ?: plan?.ink ?: return 0f      // cœur des lettres : la hauteur ne comprend pas leur halo
+        if (plan == null) return 0f
+        val ink = plan.core ?: plan.ink ?: return 0f      // cœur des lettres : la hauteur ne comprend pas leur halo
         val boxes = b.lineBoxes; val texts = b.lineTexts
         if (boxes.isEmpty() || texts.size != boxes.size) return 0f
         val hs = boxes.indices.mapNotNull { i ->
