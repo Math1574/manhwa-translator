@@ -268,16 +268,26 @@ object PageRenderer {
         return Prep(b, plan, style, text, bubble, obstacles, neighborBubbles, emptyList(), (bubble ?: container)?.let { isRect(it) } ?: false, container)
     }
 
+    /**
+     * Encre d'une ligne d'origine : le cœur des lettres (sans leur halo ni leur contour) quand il est cohérent avec l'encre complète, c'est-à-dire d'au moins 60 % de sa hauteur ;
+     * sinon l'encre complète. Un cœur réduit à des fragments (couleur du texte mal estimée) donnerait des lettres de 3 ou 4 pixels, donc un texte minuscule.
+     */
+    private fun lineInkOf(plan: Erasure.Plan, s: Float, b: RectF, text: String): app.manhwa.core.LineInk? {
+        val x0 = (b.left * s).toInt() - plan.x0; val y0 = (b.top * s).toInt() - plan.y0; val x1 = (b.right * s).toInt() - plan.x0; val y1 = (b.bottom * s).toInt() - plan.y0
+        val full = plan.ink?.let { FontMatcher.lineInk(it, plan.w, plan.h, x0, y0, x1, y1, text) }
+        val core = plan.core?.let { FontMatcher.lineInk(it, plan.w, plan.h, x0, y0, x1, y1, text) }
+        return when {
+            core != null && full != null -> if (core.letterHeight >= 0.6f * full.letterHeight) core else full
+            else -> full ?: core
+        }
+    }
+
     /** Hauteur médiane des lettres d'origine (pixels de l'image d'origine), 0 si inconnue. */
     private fun measuredInkHeight(plan: Erasure.Plan?, b: TranslatedBlock, s: Float): Float {
         if (plan == null) return 0f
-        val ink = plan.core ?: plan.ink ?: return 0f      // cœur des lettres : la hauteur ne comprend pas leur halo
         val boxes = b.lineBoxes; val texts = b.lineTexts
         if (boxes.isEmpty() || texts.size != boxes.size) return 0f
-        val hs = boxes.indices.mapNotNull { i ->
-            val bx = boxes[i]
-            FontMatcher.lineInk(ink, plan.w, plan.h, (bx.left * s).toInt() - plan.x0, (bx.top * s).toInt() - plan.y0, (bx.right * s).toInt() - plan.x0, (bx.bottom * s).toInt() - plan.y0, texts[i])?.letterHeight
-        }.sorted()
+        val hs = boxes.indices.mapNotNull { i -> lineInkOf(plan, s, boxes[i], texts[i])?.letterHeight }.sorted()
         return if (hs.isEmpty()) 0f else min(hs[hs.size / 2] / s, if (!b.vertical && b.lineHeight > 0f) b.lineHeight / 1.12f else Float.MAX_VALUE)
     }
 
@@ -291,14 +301,11 @@ object PageRenderer {
 
     /** Encre de chaque ligne d'origine (recadrée au plus juste) à partir du plan d'effacement. */
     private fun lineInks(p: Prep, s: Float): List<app.manhwa.core.LineInk> {
-        // cœur des lettres (sans leur halo ni leur contour, remplissage compris) quand il a pu être isolé : la graisse et la taille ne sont pas faussées par la lueur
-        val plan = p.plan ?: return emptyList(); val ink = plan.core ?: plan.ink ?: return emptyList()
+        // cœur des lettres (sans leur halo ni leur contour) quand il est cohérent : la graisse et la taille ne sont pas faussées par la lueur
+        val plan = p.plan ?: return emptyList()
         val boxes = p.block.lineBoxes; val texts = p.block.lineTexts
         if (boxes.isEmpty() || texts.size != boxes.size) return emptyList()
-        return boxes.indices.mapNotNull { i ->
-            val b = boxes[i]
-            FontMatcher.lineInk(ink, plan.w, plan.h, (b.left * s).toInt() - plan.x0, (b.top * s).toInt() - plan.y0, (b.right * s).toInt() - plan.x0, (b.bottom * s).toInt() - plan.y0, texts[i])
-        }
+        return boxes.indices.mapNotNull { i -> lineInkOf(plan, s, boxes[i], texts[i]) }
     }
 
     /**
