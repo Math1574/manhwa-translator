@@ -24,20 +24,20 @@ Solution: Please update the Gradle version to at least Gradle 8.14.4.
 > Task :app:packageDebugResources
 > Task :app:createDebugCompatibleScreenManifests
 > Task :app:extractDeepLinksDebug
-> Task :app:mergeDebugResources
 > Task :app:parseDebugLocalResources
+> Task :app:mergeDebugResources
 > Task :app:processDebugMainManifest
 > Task :app:processDebugManifest
-> Task :app:processDebugManifestForPackage
 > Task :app:javaPreCompileDebug
 > Task :app:mergeDebugShaders
 > Task :app:compileDebugShaders NO-SOURCE
 > Task :app:generateDebugAssets UP-TO-DATE
-> Task :app:processDebugResources
 > Task :app:mergeDebugAssets
+> Task :app:processDebugManifestForPackage
 > Task :app:desugarDebugFileDependencies
-> Task :app:mergeDebugJniLibFolders
 > Task :app:checkDebugDuplicateClasses
+> Task :app:processDebugResources
+> Task :app:mergeDebugJniLibFolders
 > Task :app:validateSigningDebug
 > Task :app:writeDebugAppMetadata
 > Task :app:writeDebugSigningConfigVersions
@@ -45,8 +45,9 @@ Solution: Please update the Gradle version to at least Gradle 8.14.4.
 > Task :app:mergeExtDexDebug
 > Task :core:compileKotlin
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/PageQueue.kt:31:24 This class is not recommended for use in Kotlin. Use 'kotlin.Any' instead.
-w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/StyleMatcher.kt:117:47 Unnecessary non-null assertion (!!) on a non-null receiver of type 'LineInk'.
-w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/StyleMatcher.kt:156:55 Unnecessary non-null assertion (!!) on a non-null receiver of type 'StyleMatcher.Memory.Exemplar'.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/StyleMatcher.kt:167:47 Unnecessary non-null assertion (!!) on a non-null receiver of type 'LineInk'.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/StyleMatcher.kt:209:55 Unnecessary non-null assertion (!!) on a non-null receiver of type 'StyleMatcher.Memory.Exemplar'.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/StyleMatcher.kt:258:56 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Group'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/TranslationBatcher.kt:39:24 This class is not recommended for use in Kotlin. Use 'kotlin.Any' instead.
 
 > Task :core:compileJava NO-SOURCE
@@ -83,7 +84,7 @@ w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kot
 > Task :app:packageDebug
 > Task :app:createDebugApkListingFileRedirect
 > Task :app:assembleDebug
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_2-1794236792958.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_2-1794259393657.json
 
 BUILD SUCCESSFUL in 1m 9s
 37 actionable tasks: 37 executed
