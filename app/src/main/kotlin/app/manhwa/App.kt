@@ -76,6 +76,8 @@ class AppGraph(ctx: Context) {
     val gemma = GemmaTranslator(ctx, llm) { settingsStore.settings }
     /** Traductions de plusieurs pages regroupées en un seul appel au moteur (le surcoût fixe de chaque appel est partagé). */
     val gemmaBatch = TranslationBatcher(gemma)
+    /** Police du texte traduit : famille choisie une fois par page, mémorisée par série pour rester la même d'une page à l'autre. */
+    val fontMemory = app.manhwa.core.FontPolicy.Memory()
     /** Tests automatiques seulement : ML Kit passe aussi par un regroupeur, pour exercer la file parallèle sur l'émulateur. */
     val mlkitBatch by lazy { TranslationBatcher(MlKitTranslation(models)) }
     init {

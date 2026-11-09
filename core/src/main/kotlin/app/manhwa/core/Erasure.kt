@@ -52,6 +52,12 @@ object Erasure {
         val fillMean: Int = 0,
         /** Couleur de la lueur entourant le lettrage (RGB opaque), 0 s'il n'y en a pas : la traduction est redessinée avec la même lueur. */
         val glow: Int = 0,
+        /** Cœur des lettres (remplissage seul, sans halo ni contour, w*h) : sert à mesurer la graisse et la taille du lettrage d'origine ; null si inconnu. */
+        val core: BooleanArray? = null,
+        /** Couleur du remplissage des lettres (RVB opaque, 0 si inconnue) et de leur halo (0 s'il n'y en a pas) : la traduction est dessinée avec les mêmes couleurs. */
+        val letterColor: Int = 0, val haloColor: Int = 0,
+        /** Épaisseur du halo en pixels échantillonnés (0 si aucun). */
+        val haloPx: Float = 0f,
     )
 
     /** Couleur moyenne (RGB opaque) des pixels effectivement remplacés ; 0 s'il n'y en a pas. */
@@ -62,6 +68,15 @@ object Erasure {
     }
 
     /** @param exclude lignes de texte des AUTRES blocs (pixels de l'image) : un bloc n'efface jamais ce qui appartient à un voisin. */
+    /** Cœur des lettres du plan : masque, couleur, couleur du halo, épaisseur du halo (zéros si l'encre est vide ou trop pauvre). */
+    private class CoreInfo(val mask: BooleanArray?, val color: Int, val halo: Int, val haloPx: Float)
+    private fun coreOf(px: IntArray, w: Int, h: Int, ink: BooleanArray?, bg: Int, textColor: Int): CoreInfo {
+        val lc = if (ink == null) null else try { TextErase.letterCore(px, w, h, ink, bg, textColor) } catch (e: Throwable) { null }
+        // lettrage creux (fin contour autour d'un remplissage de couleur) : le remplissage fait partie des lettres, sans quoi la graisse mesurée est celle du seul contour
+        val letters = (lc?.mask ?: ink)?.let { m -> try { TextErase.solidify(px, w, h, m, bg) } catch (e: Throwable) { m } }
+        return if (lc == null) CoreInfo(letters, 0, 0, 0f) else CoreInfo(letters, lc.color and 0xFFFFFF, lc.haloColor and 0xFFFFFF, lc.haloPx)
+    }
+
     fun plan(src: PixelSource, s: Float, lineBoxes: List<RectF>, lineH: Float, imageW: Float, imageH: Float, exclude: List<RectF> = emptyList(), container: RectF? = null, protect: List<RectF> = emptyList(), free: Boolean = false, outlines: List<RectF> = emptyList(), extra: List<RectF> = emptyList(), protectRound: List<RectF> = emptyList(), confine: RectF? = null, confineRect: Boolean = false): Plan? {
         val p = planUnclipped(src, s, lineBoxes, lineH, imageW, imageH, container = container, protect = protect, free = free, outlines = outlines, extra = extra, protectRound = protectRound, confine = confine, confineRect = confineRect, exclude = exclude) ?: return null
         // contour d'une bulle voisine : les traits qui le forment ne sont jamais remplacés, quelle que soit la méthode d'effacement employée
@@ -246,7 +261,8 @@ object Erasure {
             val mx = max(r, max(g2, b2)); val mn = kotlin.math.min(r, kotlin.math.min(g2, b2))
             if (mx - mn >= 40) glow = (0xFF shl 24) or (min(255, (r * 1.6f).toInt()) shl 16) or (min(255, (g2 * 1.6f).toInt()) shl 8) or min(255, (b2 * 1.6f).toInt())
         }
-        return Plan(Mode.FLAT, x0, y0, w, h, mask, layer, bg, textColor, false, null, null, TextErase.strokeWidth(ink, w, h), ink, bg and 0xFFFFFF, glow)
+        val ci = coreOf(px, w, h, ink, bg, textColor)
+        return Plan(Mode.FLAT, x0, y0, w, h, mask, layer, bg, textColor, false, null, null, TextErase.strokeWidth(ink, w, h), ink, bg and 0xFFFFFF, glow, ci.mask, ci.color, ci.halo, ci.haloPx)
     }
 
     /**
@@ -372,7 +388,8 @@ object Erasure {
             val featherF = if (adaptiveFlat != null) TextErase.featherAlpha(mask, w, h) else null
             val layer = IntArray(w * h) { if (mask[it]) ((featherF?.get(it) ?: 0xFF) shl 24) or ((adaptiveFlat?.get(it) ?: a.bg) and 0xFFFFFF) else 0 }
             val shape = bubbleShape(src, s, textUnion, a.bg, imageW, imageH, container = container)
-            return Plan(Mode.FLAT, x0, y0, w, h, mask, layer, a.bg, a.textColor, a.outlined, bubble, shape, stroke, raw, meanFill(layer))
+            val ci = coreOf(px, w, h, raw, a.bg, a.textColor)
+            return Plan(Mode.FLAT, x0, y0, w, h, mask, layer, a.bg, a.textColor, a.outlined, bubble, shape, stroke, raw, meanFill(layer), 0, ci.mask, ci.color, ci.halo, ci.haloPx)
         }
         // bulle au fond non uni (dégradé, ombre, lueur sombre) : on remplace toute la zone du texte à l'intérieur de la bulle par un fond lissé
         if (!free && !structured) run {
@@ -420,13 +437,15 @@ object Erasure {
                     val layer = IntArray(w * h) { if (mask[it]) (alpha[it] shl 24) or (fill[it] and 0xFFFFFF) else 0 }
                     val fc = TextErase.extremeTextColor(px, zone)
                     val ink = TextErase.artMask(px, w, h, zone, fc, 0)
-                    return Plan(Mode.SMOOTH, x0, y0, w, h, mask, layer, a.bg, fc, false, null, shape, TextErase.strokeWidth(ink, w, h), ink, meanFill(layer))
+                    val ci = coreOf(px, w, h, ink, a.bg, fc)
+                    return Plan(Mode.SMOOTH, x0, y0, w, h, mask, layer, a.bg, fc, false, null, shape, TextErase.strokeWidth(ink, w, h), ink, meanFill(layer), 0, ci.mask, ci.color, ci.halo, ci.haloPx)
                 }
             }
         }
         // texte sur dessin : seules les lettres (remplissage + contour) sont effacées et reconstruites, pas un rectangle entier
         val zoneArt = TextErase.rectMask(w, h, rects(), min(if (a.outlined) 30 else 18, max(4, (lh * (if (a.outlined) 0.35f else 0.25f)).toInt())))
-        val fillColor = TextErase.extremeTextColor(px, zoneArt)
+        val tightForColor = TextErase.rectMask(w, h, lineBoxes.map { l -> intArrayOf((l.left * s).toInt() - x0, (l.top * s).toInt() - y0, (l.right * s).toInt() - x0, (l.bottom * s).toInt() - y0) }, 0)
+        val fillColor = TextErase.extremeTextColor(px, zoneArt, tightForColor, w, h)
         // lettrage à lueur : on élargit le masque pour effacer aussi la lueur, de sorte que la reconstruction vienne des abords du halo
         // masque serré : lettres et contour, élargis de 2 à 4 px seulement. Un masque élargi à 14 px (ancienne règle, proportionnelle à la hauteur de ligne) fusionnait toutes
         // les lettres en un grand rectangle reconstruit par diffusion : un flou visible sur le dessin, avec des bords nets
@@ -452,7 +471,8 @@ object Erasure {
             } else 0
         }
         val inkArt = TextErase.artMask(px, w, h, zoneArt, fillColor, 0, Int.MAX_VALUE, tightLines, reachCap)
-        return Plan(Mode.ART, x0, y0, w, h, mask, layer, a.bg, fillColor, a.outlined || artInfo.outlined, null, null, TextErase.strokeWidth(inkArt, w, h), inkArt, meanFill(layer))
+        val ci = coreOf(px, w, h, inkArt, a.bg, fillColor)
+        return Plan(Mode.ART, x0, y0, w, h, mask, layer, a.bg, fillColor, a.outlined || artInfo.outlined, null, null, TextErase.strokeWidth(inkArt, w, h), inkArt, meanFill(layer), 0, ci.mask, ci.color, ci.halo, ci.haloPx)
     }
 
     /**

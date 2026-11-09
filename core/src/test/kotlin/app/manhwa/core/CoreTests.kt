@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); queueBatchTests(); readingOrderTests(); eraseWhiteBandTests(); seamTests(); modelTests(); settingsTests(); utilTests(); textTests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests(); openBubbleTests(); barrierShapeTests(); safetyTests(); artEraseTests()
+    groupingTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); queueBatchTests(); readingOrderTests(); eraseWhiteBandTests(); fontPolicyTests(); seamTests(); modelTests(); settingsTests(); utilTests(); textTests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests(); openBubbleTests(); barrierShapeTests(); safetyTests(); artEraseTests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -2049,6 +2049,98 @@ fun eraseWhiteBandTests() {
         // seule la frange de 1 px collée à l'étiquette peut partir ; avant, tout le décor de la boîte de lecture (des milliers de pixels) était repeint
         T.ok(darkErased < 700, "pixels sombres du décor, hors de l'étiquette, effacés puis repeints en blanc : $darkErased")
         T.ok(textKept < 40, "pixels du texte non effacés : $textKept sur ${ink.count { it }} (mode ${plan.mode}, région ${plan.w}x${plan.h} en (${plan.x0},${plan.y0}), boîte du texte $minX,$minY-$maxX,$maxY)")
+    }
+}
+
+// ---------- police : une famille par page, mémoire de la série, inclinaison, lettrage creux, couleur des lettres ----------
+fun fontPolicyTests() {
+    // « polices » factices : des traits verticaux dont la largeur (rapportée à la hauteur) caractérise la famille ; la plus ressemblante est celle de même largeur
+    val thick = mapOf("comicneue" to 0.10f, "noto-600-85" to 0.13f, "noto-700-80" to 0.17f, "anton" to 0.26f)
+    fun stripes(w: Int, h: Int, t: Float, slant: Float = 0f): BooleanArray {
+        val sw = maxOf(2, (t * h).toInt()); val yc = (h - 1) / 2f
+        return BooleanArray(w * h) { val x = it % w; val y = it / w; (((x + (slant * (y - yc)).toInt() + 4 * sw) / sw) % 2) == 0 }
+    }
+    val fake = GlyphRenderer { _, family, _, _, w, h -> thick[family]?.let { GlyphRender(stripes(w, h, it), 1f) } }
+    fun line(t: Float, slant: Float = 0f, w: Int = 240, h: Int = 40) = LineInk("ABC", stripes(w, h, t, slant), w, h)
+
+    T.test("police : une seule famille par page, celle dont le trait ressemble à l'original, et un trait épais isolé ne l'emporte pas") {
+        T.eq("anton", FontPolicy.choose(List(4) { line(0.26f) }, fake, null, null).family)
+        T.eq("noto-700-80", FontPolicy.choose(List(4) { line(0.17f) }, fake, null, null).family)
+        T.eq("comicneue", FontPolicy.choose(List(4) { line(0.10f) }, fake, null, null).family)
+        // trois lignes au trait de l'original « anton » et une seule plus fine : la page reste cohérente (une seule famille), celle de la majorité
+        T.eq("anton", FontPolicy.choose(listOf(line(0.26f), line(0.26f), line(0.26f), line(0.10f)), fake, null, null).family)
+        // rien ne ressemble (aucune police utilisable) : la famille par défaut, jamais une famille fine ou grasse au hasard
+        val none = GlyphRenderer { _, _, _, _, w, h -> GlyphRender(BooleanArray(w * h), 1f) }
+        T.eq(FontPolicy.DEFAULT, FontPolicy.choose(List(3) { line(0.17f) }, none, null, null).family)
+    }
+    T.test("police : mémoire de la série (stable d'une page à l'autre, ne change que sous l'effet d'un vrai changement de lettrage)") {
+        val mem = FontPolicy.Memory()
+        T.eq("noto-700-80", FontPolicy.choose(List(4) { line(0.17f) }, fake, mem, "serie-A").family)
+        // page ambiguë (trait entre deux familles) : la famille de la série est conservée
+        T.eq("noto-700-80", FontPolicy.choose(listOf(line(0.15f), line(0.15f)), fake, mem, "serie-A").family)
+        // une seule page contraire ne la change pas
+        T.eq("noto-700-80", FontPolicy.choose(List(2) { line(0.10f) }, fake, mem, "serie-A").family)
+        // une autre série ne subit pas la première
+        T.eq("comicneue", FontPolicy.choose(List(3) { line(0.10f) }, fake, mem, "serie-B").family)
+        // un vrai changement durable (plusieurs pages) finit par être suivi
+        var last = ""
+        repeat(6) { last = FontPolicy.choose(List(4) { line(0.10f) }, fake, mem, "serie-A").family }
+        T.eq("comicneue", last)
+    }
+    T.test("police : l'italique n'est choisi que si presque toute la page est inclinée") {
+        val straight = List(4) { line(0.10f) }
+        val slanted = List(4) { line(0.10f, slant = 0.2f) }
+        T.eq("comicneue", FontPolicy.choose(straight, fake, null, null).family)
+        // les polices factices ne sont pas inclinées, mais l'encre l'est : la mesure d'inclinaison décide
+        val c = FontPolicy.choose(slanted, GlyphRenderer { _, f, _, _, w, h -> thick[f.removeSuffix("-italic")]?.let { GlyphRender(stripes(w, h, it, 0.2f), 1f) } }, null, null)
+        T.ok(c.italic && c.family == FontPolicy.ITALIC, "page inclinée : ${c.family}")
+        val mixed = FontPolicy.choose(listOf(line(0.10f, 0.2f), line(0.10f, 0.2f), line(0.10f), line(0.10f)), fake, null, null)
+        T.ok(!mixed.italic && mixed.family == "comicneue", "page à moitié inclinée : ${mixed.family}")
+        val sh = FontMatcher.shear(line(0.10f, slant = 0.2f))!!; val st = FontMatcher.shear(line(0.10f))!!
+        T.ok(sh in -0.27f..-0.13f, "inclinaison mesurée d'une ligne inclinée : $sh"); T.ok(kotlin.math.abs(st) < 0.05f, "inclinaison mesurée d'une ligne droite : $st")
+    }
+    fun rgb(r: Int, g: Int, b: Int) = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+    T.test("lettres creuses : le remplissage coloré d'un fin contour est ajouté, l'intérieur d'un O (couleur du fond) reste ouvert") {
+        val w = 60; val h = 40; val bg = rgb(10, 50, 80)
+        val px = IntArray(w * h) { bg }; val ring = BooleanArray(w * h)
+        // « O » : trait de remplissage bleu (8 px) cerné d'un fin contour blanc (2 px), contre un fond sombre ; le centre garde la couleur du fond
+        for (y in 0 until h) for (x in 0 until w) {
+            val d = kotlin.math.hypot(x - 30.0, y - 20.0)
+            when { d in 8.0..10.0 || d in 16.0..18.0 -> { px[y * w + x] = rgb(240, 250, 255); ring[y * w + x] = true }; d > 10.0 && d < 16.0 -> px[y * w + x] = rgb(30, 136, 229) }
+        }
+        val solid = TextErase.solidify(px, w, h, ring, bg)
+        var fillIn = 0; var fillTotal = 0; var counterIn = 0
+        for (y in 0 until h) for (x in 0 until w) { val d = kotlin.math.hypot(x - 30.0, y - 20.0); if (d > 10.5 && d < 15.5) { fillTotal++; if (solid[y * w + x]) fillIn++ }; if (d < 7.0 && solid[y * w + x]) counterIn++ }
+        T.ok(fillIn >= 0.95 * fillTotal, "remplissage ajouté : $fillIn / $fillTotal"); T.eq(0, counterIn, "pixels de l'intérieur du O ajoutés")
+    }
+    T.test("couleur des lettres : lettres noires cernées d'une lueur blanche sur un ciel sombre → noires (et non le blanc de la lueur)") {
+        val w = 160; val h = 70; val rnd = java.util.Random(3)
+        val px = IntArray(w * h) { rgb(20 + rnd.nextInt(6), 40 + rnd.nextInt(6), 90 + rnd.nextInt(6)) }
+        // un nuage clair hors des boîtes de lecture, de grandes surfaces claires
+        for (y in 0 until 12) for (x in 0 until w) px[y * w + x] = rgb(200, 210, 225)
+        val letters = BooleanArray(w * h); val box = BooleanArray(w * h)
+        // lettres épaisses (comme un lettrage condensé gras) : 20 px de large, 8 px d'écart
+        for (g in 0 until 5) for (y in 22 until 58) for (x in 12 + g * 28 until 12 + g * 28 + 20) { letters[y * w + x] = true }
+        for (y in 18 until 62) for (x in 8 until 152) box[y * w + x] = true
+        for (i in px.indices) if (letters[i]) px[i] = rgb(4, 4, 6)
+        // lueur blanche de 4 px autour des lettres
+        val halo = BooleanArray(w * h)
+        for (y in 0 until h) for (x in 0 until w) if (!letters[y * w + x]) { var near = false; for (dy in -4..4) for (dx in -4..4) { val yy = y + dy; val xx = x + dx; if (yy in 0 until h && xx in 0 until w && letters[yy * w + xx]) near = true }; if (near) { px[y * w + x] = rgb(240, 245, 250); halo[y * w + x] = true } }
+        val all = BooleanArray(w * h) { true }
+        val c = TextErase.extremeTextColor(px, all, box, w, h)
+        val lumC = (((c shr 16) and 0xFF) * 299 + ((c shr 8) and 0xFF) * 587 + (c and 0xFF) * 114) / 1000
+        T.ok(lumC < 60, "couleur retenue : ${"%06X".format(c and 0xFFFFFF)} (luminosité $lumC)")
+        // sans halo ni nuage : texte noir sur blanc et texte blanc sur noir restent ce qu'ils étaient
+        val plain = IntArray(w * h) { rgb(250, 250, 250) }; for (i in plain.indices) if (letters[i]) plain[i] = rgb(5, 5, 5)
+        val cp = TextErase.extremeTextColor(plain, all, box, w, h); T.ok(((cp shr 16) and 0xFF) < 60, "noir sur blanc : ${"%06X".format(cp and 0xFFFFFF)}")
+        val inv = IntArray(w * h) { rgb(10, 10, 10) }; for (i in inv.indices) if (letters[i]) inv[i] = rgb(250, 250, 250)
+        val ci = TextErase.extremeTextColor(inv, all, box, w, h); T.ok(((ci shr 16) and 0xFF) > 200, "blanc sur noir : ${"%06X".format(ci and 0xFFFFFF)}")
+        // cœur des lettres : sans leur lueur
+        val ink = BooleanArray(w * h) { letters[it] || halo[it] }
+        val lc = TextErase.letterCore(px, w, h, ink, rgb(22, 42, 92), c)!!
+        val coreN = lc.mask.count { it }; val lettersN = letters.count { it }
+        T.ok(coreN in (lettersN * 0.85).toInt()..(lettersN * 1.05).toInt(), "cœur : $coreN pixels pour $lettersN de lettres")
+        T.ok(lc.haloPx in 2.5f..6f, "épaisseur de la lueur : ${lc.haloPx}")
     }
 }
 

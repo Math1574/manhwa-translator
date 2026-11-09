@@ -72,6 +72,20 @@ for path in sorted(glob.glob(f"{OUT}/reports/*.json")):
     shaped = sum(1 for im in imgs for b in (im.get('overlay') or {}).get('blocks', []) if b.get('shape'))
     if nblocks: P(f"- rendu : {shaped}/{nblocks} bulles à forme détectée · texte ne tenant pas dans sa zone : {nofit}")
     if nofit: problems.append(f"{name}: texte ne tient pas dans sa zone ({nofit})")
+    # police : une seule famille par page pour le texte ordinaire (cris et sources CJK exclus), jamais d'épaississement ni de déformation en largeur
+    fam_count = {}; fam_multi = 0; fam_pages = 0; fam_bad = 0
+    for im in imgs:
+        bl = (im.get('overlay') or {}).get('blocks', [])
+        fs = [b.get('family') for b in bl if b.get('style') != 'SHOUT' and b.get('family') and b.get('family') != 'noto']
+        for f in fs: fam_count[f] = fam_count.get(f, 0) + 1
+        if len(fs) >= 2:
+            fam_pages += 1
+            if len(set(fs)) > 1: fam_multi += 1
+        fam_bad += sum(1 for b in bl if (b.get('embolden') or 0) > 0 or abs((b.get('scaleX') or 1) - 1) > 0.01)
+    if fam_count:
+        P(f"- police : {', '.join(f'{k}×{v}' for k, v in sorted(fam_count.items(), key=lambda kv: -kv[1]))} ; pages à plusieurs blocs : {fam_pages}, avec plusieurs familles : {fam_multi}")
+        if fam_multi: problems.append(f"{name}: police différente d'un bloc à l'autre sur {fam_multi} page(s)")
+        if fam_bad: problems.append(f"{name}: {fam_bad} bloc(s) avec épaississement ou déformation de la police")
     if name.startswith("synth_layouts"):
         # regroupement : un bloc lu qui recouvre deux blocs de la vérité est une fusion à tort ; un bloc de la vérité réparti sur deux blocs lus est une scission
         merges = splits = 0; gt_total = 0; read_total = 0

@@ -332,6 +332,136 @@ object TextErase {
 
     /** Épaisseur moyenne du trait (pixels) d'un masque de texte : 2 × aire / périmètre (exact pour un trait fin de longueur ≫ épaisseur). */
     /**
+     * Lettrage creux : lettres bleues cernées d'un fin trait blanc, dont l'encre détectée est l'anneau du contour et non le remplissage. Mesurée telle quelle, la graisse paraît minuscule
+     * (la police choisie était alors très fine). Les creux de l'encre qui ne communiquent pas avec le bord de la région et dont la couleur n'est pas celle du fond ([bg], à [tol] près)
+     * sont le remplissage des lettres : on les ajoute. Ceux qui ont la couleur du fond (l'intérieur d'un O, d'un D) restent ouverts ; un creux plus grand que [maxArea] pixels n'est pas rempli.
+     */
+    fun solidify(pixels: IntArray, w: Int, h: Int, mask: BooleanArray, bg: Int, tol: Int = 60, maxArea: Int = Int.MAX_VALUE): BooleanArray {
+        val outside = BooleanArray(w * h); val stack = IntArray(w * h); var sp = 0
+        fun push(i: Int) { if (!mask[i] && !outside[i]) { outside[i] = true; stack[sp++] = i } }
+        for (x in 0 until w) { push(x); push((h - 1) * w + x) }
+        for (y in 0 until h) { push(y * w); push(y * w + w - 1) }
+        while (sp > 0) {
+            val i = stack[--sp]; val x = i % w; val y = i / w
+            if (x > 0) push(i - 1); if (x < w - 1) push(i + 1); if (y > 0) push(i - w); if (y < h - 1) push(i + w)
+        }
+        val out = mask.copyOf(); val seen = BooleanArray(w * h)
+        for (start in 0 until w * h) {
+            if (mask[start] || outside[start] || seen[start]) continue
+            // composante de creux
+            val members = ArrayList<Int>(); sp = 0; stack[sp++] = start; seen[start] = true
+            while (sp > 0) {
+                val i = stack[--sp]; members.add(i); val x = i % w; val y = i / w
+                for (d in 0 until 4) {
+                    val nx = x + (if (d == 0) -1 else if (d == 1) 1 else 0); val ny = y + (if (d == 2) -1 else if (d == 3) 1 else 0)
+                    if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
+                    val j = ny * w + nx
+                    if (!mask[j] && !outside[j] && !seen[j]) { seen[j] = true; stack[sp++] = j }
+                }
+            }
+            if (members.size > maxArea) continue
+            var far = 0; for (i in members) if (dist(pixels[i], bg) > tol) far++
+            if (far * 2 > members.size) for (i in members) out[i] = true      // plus de la moitié du creux n'a pas la couleur du fond : c'est le remplissage d'une lettre
+        }
+        return out
+    }
+
+    /**
+     * Cœur des lettres d'un lettrage cerné d'un halo ou d'un contour : [mask] ne contient que le remplissage des lettres, [color] est sa couleur, [haloColor] celle du halo
+     * (0 s'il n'y en a pas) et [haloPx] son épaisseur moyenne en pixels échantillonnés.
+     * Le texte d'origine peut être noir cerné de blanc sur un ciel sombre : la couleur « extrême » est alors le blanc du halo, et la traduction était dessinée à l'envers
+     * (blanc cerné de noir) ; l'encre comptée avec son halo faisait aussi paraître les lettres bien plus grasses qu'elles ne sont.
+     * Le cœur est la classe de luminosité dont les pixels touchent le moins l'extérieur de l'encre (les lettres sont entourées par le halo, qui touche le fond).
+     */
+    class LetterCore(val mask: BooleanArray, val color: Int, val haloColor: Int, val haloPx: Float)
+
+    fun letterCore(pixels: IntArray, w: Int, h: Int, ink: BooleanArray, bg: Int, textColor: Int): LetterCore? {
+        var n = 0; for (v in ink) if (v) n++
+        if (n < 40) return null
+        // un seul ton (pas de halo net) : tout est du texte, et la couleur reste celle que le plan a déjà estimée (0 = inconnue ici)
+        fun single(): LetterCore = LetterCore(ink, 0, 0, 0f)
+        fun meanColor(sel: (Int) -> Boolean): Int {
+            var rr = 0L; var gg = 0L; var bb = 0L; var c = 0
+            for (i in ink.indices) if (ink[i] && sel(i)) { rr += r(pixels[i]); gg += g(pixels[i]); bb += b(pixels[i]); c++ }
+            return if (c == 0) 0 else pack((rr / c).toInt(), (gg / c).toInt(), (bb / c).toInt())
+        }
+        // profondeur de chaque pixel d'encre (distance 4-voisinage au plus proche pixel hors de l'encre)
+        val depth = IntArray(w * h) { if (ink[it]) 1 shl 20 else 0 }
+        for (y in 0 until h) for (x in 0 until w) {
+            val i = y * w + x; if (!ink[i]) continue
+            depth[i] = minOf(depth[i], if (x == 0) 1 else depth[i - 1] + 1, if (y == 0) 1 else depth[i - w] + 1)
+        }
+        for (y in h - 1 downTo 0) for (x in w - 1 downTo 0) {
+            val i = y * w + x; if (!ink[i]) continue
+            depth[i] = minOf(depth[i], if (x == w - 1) 1 else depth[i + 1] + 1, if (y == h - 1) 1 else depth[i + w] + 1)
+        }
+        // cœur = pixels d'encre de la couleur du texte (estimée plus haut, lettres noires cernées de blanc comprises) ; on garde les composantes qui ont une vraie épaisseur :
+        // le lissage des bords, l'anneau mince de fond que le masque englobe parfois autour du halo n'en sont pas
+        val near = BooleanArray(w * h) { ink[it] && dist(pixels[it], textColor) <= 70 }
+        var nearN = 0; for (v in near) if (v) nearN++
+        if (nearN < 0.15 * n) return single()
+        var dmax = 0; for (i in near.indices) if (near[i] && depth[i] > dmax) dmax = depth[i]
+        val deepMin = maxOf(2, (0.35 * dmax).toInt())
+        val core = BooleanArray(w * h); val stack = IntArray(w * h); val seen = BooleanArray(w * h)
+        for (start in near.indices) {
+            if (!near[start] || seen[start]) continue
+            var sp = 0; stack[sp++] = start; seen[start] = true
+            val members = ArrayList<Int>(); var deepest = 0
+            while (sp > 0) {
+                val i = stack[--sp]; members.add(i); if (depth[i] > deepest) deepest = depth[i]
+                val x = i % w; val y = i / w
+                for (dy in -1..1) for (dx in -1..1) {
+                    if (dx == 0 && dy == 0) continue
+                    val nx = x + dx; val ny = y + dy
+                    if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
+                    val j = ny * w + nx
+                    if (near[j] && !seen[j]) { seen[j] = true; stack[sp++] = j }
+                }
+            }
+            if (deepest >= deepMin) for (i in members) core[i] = true
+        }
+        var coreN = 0; var perim = 0
+        for (y in 0 until h) for (x in 0 until w) {
+            if (!core[y * w + x]) continue
+            coreN++
+            if (x == 0 || !core[y * w + x - 1]) perim++
+            if (x == w - 1 || !core[y * w + x + 1]) perim++
+            if (y == 0 || !core[(y - 1) * w + x]) perim++
+            if (y == h - 1 || !core[(y + 1) * w + x]) perim++
+        }
+        if (coreN < 20) return single()
+        // halo : le reste de l'encre relié au cœur (ce qui n'y touche pas n'est pas son halo)
+        val halo = BooleanArray(w * h); var sp = 0
+        for (i in core.indices) if (core[i]) {
+            val x = i % w; val y = i / w
+            for (dy in -1..1) for (dx in -1..1) {
+                if (dx == 0 && dy == 0) continue
+                val nx = x + dx; val ny = y + dy
+                if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
+                val j = ny * w + nx
+                if (ink[j] && !core[j] && !halo[j]) { halo[j] = true; stack[sp++] = j }
+            }
+        }
+        while (sp > 0) {
+            val i = stack[--sp]; val x = i % w; val y = i / w
+            for (dy in -1..1) for (dx in -1..1) {
+                if (dx == 0 && dy == 0) continue
+                val nx = x + dx; val ny = y + dy
+                if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
+                val j = ny * w + nx
+                if (ink[j] && !core[j] && !halo[j]) { halo[j] = true; stack[sp++] = j }
+            }
+        }
+        var haloN = 0; for (v in halo) if (v) haloN++
+        var deepN = 0; for (i in core.indices) if (core[i] && depth[i] >= 2) deepN++
+        val coreColor = if (deepN >= 20) meanColor { i -> core[i] && depth[i] >= 2 } else meanColor { i -> core[i] }
+        // sans halo net (moins d'un dixième de l'encre) : les lettres sont toute l'encre, la mesure du cœur vaut celle de l'encre
+        if (haloN < 0.10 * n) return LetterCore(ink, coreColor, 0, 0f)
+        val haloColor = meanColor { i -> halo[i] }
+        return LetterCore(core, coreColor, haloColor, if (perim == 0) 0f else haloN.toFloat() / perim)
+    }
+
+    /**
      * Vrai si les lettres isolées (composantes de [letters], d'au moins 30 px) sont alignées en diagonale : au moins 3 composantes, nuage de centres allongé, axe entre 8° et 80°
      * par rapport à l'horizontale.
      */
@@ -385,15 +515,41 @@ object TextErase {
      * Couleur du remplissage des lettres sur un dessin : l'extrême de luminance (très clair ou très foncé) le plus éloigné de la médiane
      * de la zone. Le lettrage est presque toujours l'extrême : lettres blanches à contour sombre, ou noires sur fond clair.
      */
-    fun extremeTextColor(pixels: IntArray, allowed: BooleanArray): Int {
+    /** Profondeur maximale (distance 4-voisinage au plus proche pixel hors de [sel]) d'un masque : l'épaisseur des plus grosses surfaces pleines. */
+    private fun maxDepth(sel: BooleanArray, w: Int, h: Int): Int {
+        val d = IntArray(w * h) { if (sel[it]) 1 shl 20 else 0 }
+        for (y in 0 until h) for (x in 0 until w) { val i = y * w + x; if (!sel[i]) continue; d[i] = minOf(d[i], if (x == 0) 1 else d[i - 1] + 1, if (y == 0) 1 else d[i - w] + 1) }
+        var best = 0
+        for (y in h - 1 downTo 0) for (x in w - 1 downTo 0) { val i = y * w + x; if (!sel[i]) continue; d[i] = minOf(d[i], if (x == w - 1) 1 else d[i + 1] + 1, if (y == h - 1) 1 else d[i + w] + 1); if (d[i] > best) best = d[i] }
+        return best
+    }
+
+    /**
+     * Couleur des lettres d'origine : l'extrême de luminosité (très clair ou très foncé) le plus éloigné de la médiane. Quand les deux extrêmes sont loin de la médiane
+     * (lettres noires cernées d'une lueur blanche sur un ciel sombre, ou l'inverse), le plus éloigné est souvent la lueur : les lettres sont alors celles dont les pixels extrêmes,
+     * dans les boîtes de lecture ([tight], région [w] × [h]), forment les plus grosses surfaces pleines (la lueur est mince).
+     */
+    fun extremeTextColor(pixels: IntArray, allowed: BooleanArray, tight: BooleanArray? = null, w: Int = 0, h: Int = 0): Int {
         val idx = pixels.indices.filter { allowed[it] }
         if (idx.isEmpty()) return 0xFF000000.toInt()
         val sorted = idx.sortedBy { lum(pixels[it]) }
         val n = max(1, sorted.size / 10)
-        val dark = sorted.take(n).map { pixels[it] }; val bright = sorted.takeLast(n).map { pixels[it] }
+        val darkIdx = sorted.take(n); val brightIdx = sorted.takeLast(n)
+        val dark = darkIdx.map { pixels[it] }; val bright = brightIdx.map { pixels[it] }
         val med = lum(pixels[sorted[sorted.size / 2]])
         val dd = med - dark.map { lum(it) }.average().toFloat(); val db = bright.map { lum(it) }.average().toFloat() - med
-        val pick = if (db >= dd) bright else dark
+        var pickBright = db >= dd
+        // les deux extrêmes doivent être nettement distincts de la médiane (un texte blanc sur fond sombre a un extrême sombre à peine plus sombre que le fond : pas d'ambiguïté)
+        if (tight != null && w > 0 && h > 0 && pixels.size == w * h && dd >= 0.12f && db >= 0.25f) {
+            // surfaces pleines de chaque extrême : tous les pixels des boîtes de lecture qui ont (à 0,12 près) la luminosité de cet extrême, pas seulement les 10 % les plus extrêmes
+            val darkRef = (med - dd); val brightRef = (med + db)
+            val dMask = BooleanArray(w * h); val bMask = BooleanArray(w * h)
+            for (i in idx) if (tight[i]) { val l = lum(pixels[i]); if (l <= darkRef + 0.12f) dMask[i] = true; if (l >= brightRef - 0.12f) bMask[i] = true }
+            val dDeep = maxDepth(dMask, w, h); val bDeep = maxDepth(bMask, w, h)
+            Erasure.trace?.invoke("couleur du texte : sombre ${"%.2f".format(dd)} (épaisseur $dDeep px) / clair ${"%.2f".format(db)} (épaisseur $bDeep px)")
+            if (dDeep >= 1.3f * bDeep && dDeep >= 4) pickBright = false else if (bDeep >= 1.3f * dDeep && bDeep >= 4) pickBright = true
+        }
+        val pick = if (pickBright) bright else dark
         return pack(pick.sumOf { r(it) } / pick.size, pick.sumOf { g(it) } / pick.size, pick.sumOf { b(it) } / pick.size)
     }
 

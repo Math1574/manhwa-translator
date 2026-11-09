@@ -92,6 +92,44 @@ object FontMatcher {
         return if (perim == 0) 0f else 2f * area / perim / h
     }
 
+    /** Score d'une famille (sans épaississement ni inclinaison) pour une ligne : ressemblance de forme, déformation imposée, écart de graisse. Null si la ligne ne peut pas être dessinée. */
+    fun lineScore(l: LineInk, r: GlyphRenderer, family: String): Float? {
+        val g = r.render(l.text, family, 0f, 0f, l.w, l.h) ?: return null
+        var inter = 0; var uni = 0
+        for (i in l.mask.indices) { val a = l.mask[i]; val b = g.mask[i]; if (a && b) inter++; if (a || b) uni++ }
+        val iou = if (uni == 0) 0f else inter.toFloat() / uni
+        val so = strokeRatio(l.mask, l.w, l.h); val sc = strokeRatio(g.mask, l.w, l.h)
+        val weightPenalty = if (so > 0f && sc > 0f) 0.6f * abs(ln(sc / so)) else 0f
+        return iou - 0.30f * abs(ln(max(g.stretch, 1e-3f))) - weightPenalty
+    }
+
+    /**
+     * Inclinaison d'une ligne, dans l'unité de l'inclinaison de texte d'Android (0 = droit ; environ −0,2 pour de l'italique incliné vers la droite). Méthode classique de redressement :
+     * on cisaille l'encre de plusieurs valeurs et on garde celle qui rend les colonnes les plus « pointues » (les traits verticaux s'alignent). Robuste aux lignes soudées ou bruitées,
+     * contrairement à une covariance directe. Null si l'encre est trop pauvre ou si aucune valeur ne se détache.
+     */
+    fun shear(l: LineInk): Float? {
+        var n = 0; for (v in l.mask) if (v) n++
+        if (n < 80 || l.h < 8) return null
+        val yc = (l.h - 1) / 2f
+        var bestK = 0f; var bestV = -1.0; var v0 = 0.0
+        val ks = (-10..10).map { it * 0.03f }                       // redressement testé : de −0,30 à +0,30
+        for (k in ks) {
+            val width = l.w + (kotlin.math.abs(k) * l.h).toInt() + 3
+            val hist = IntArray(width)
+            val off = if (k < 0f) (-k * l.h).toInt() + 1 else 1
+            for (y in 0 until l.h) for (x in 0 until l.w) if (l.mask[y * l.w + x]) {
+                val xs = (x + k * (y - yc)).toInt() + off
+                if (xs in 0 until width) hist[xs]++
+            }
+            var sq = 0.0; for (c in hist) sq += c.toDouble() * c
+            if (kotlin.math.abs(k) < 1e-6f) v0 = sq
+            if (sq > bestV) { bestV = sq; bestK = k }
+        }
+        // un gain net sur le texte non redressé est exigé : sinon la ligne est considérée droite
+        return if (bestV > v0 * 1.04) -bestK else 0f
+    }
+
     private fun scoreOf(lines: List<LineInk>, r: GlyphRenderer, family: String, emb: Float, skew: Float): Pair<Float, Float>? {
         var sum = 0f; var stretchSum = 0f; var n = 0
         for (l in lines) {

@@ -17,6 +17,7 @@ import app.manhwa.core.PixelSource
 import app.manhwa.core.ColorMath
 import app.manhwa.core.DebugInfo
 import app.manhwa.core.FontMatcher
+import app.manhwa.core.FontPolicy
 import app.manhwa.core.GlyphRender
 import app.manhwa.core.GlyphRenderer
 import app.manhwa.core.PageResult
@@ -139,11 +140,13 @@ object PageRenderer {
         val hardObstacles: List<RectF> = emptyList(),     // texte déjà placé d'autres blocs : toujours évité
         val bubbleRect: Boolean = false,                  // la bulle (confirmée, sinon la boîte du détecteur) est un cartouche rectangulaire ; sinon bulle ronde, bornée par son ellipse
         val container: RectF? = null,                     // boîte de bulle du détecteur NON confirmée par un contour : elle borne quand même la mise en page (jamais de texte libre dans une bulle)
+        val pageFont: String? = null,                     // famille de police choisie une fois pour toute la page (voir FontPolicy) ; null : famille par défaut
     ) {
-        fun withHard(h: List<RectF>) = Prep(block, plan, style, text, bubble, obstacles, neighborBubbles, h, bubbleRect, container)
+        fun withHard(h: List<RectF>) = Prep(block, plan, style, text, bubble, obstacles, neighborBubbles, h, bubbleRect, container, pageFont)
+        fun withFont(f: String?) = Prep(block, plan, style, text, bubble, obstacles, neighborBubbles, hardObstacles, bubbleRect, container, f)
     }
 
-    fun render(fonts: Typefaces, imageBytes: ByteArray, result: PageResult, settings: AppSettings, debug: DebugInfo?): JSONObject {
+    fun render(fonts: Typefaces, imageBytes: ByteArray, result: PageResult, settings: AppSettings, debug: DebugInfo?, fontMemory: FontPolicy.Memory? = null, series: String? = null): JSONObject {
         val bmp = decodeSampled(imageBytes, result.imageWidth, result.imageHeight)
         val s = if (bmp == null) 1f else bmp.width.toFloat() / result.imageWidth
         val iw = result.imageWidth.toFloat(); val ih = result.imageHeight.toFloat()
@@ -182,7 +185,12 @@ object PageRenderer {
                     if (n > 10f * textArea) { skipped++; continue }
                 }
                 preps.add(prep)
-                laids.add(try { layoutBlock(fonts, s, prep, iw, ih, settings.textScale, src) } catch (e: Throwable) { null })
+            }
+            // police : UNE famille pour toute la page (vote sur toutes ses lignes, mémoire de la série), puis mise en page de chaque bloc
+            val pageFont: String? = try { choosePageFont(fonts, preps, s, fontMemory, series) } catch (e: Throwable) { null }
+            for (i in preps.indices) {
+                preps[i] = preps[i].withFont(pageFont)
+                laids.add(try { layoutBlock(fonts, s, preps[i], iw, ih, settings.textScale, src) } catch (e: Throwable) { null })
             }
             // 2) collisions : un texte hors bulle (forme libre) dont le texte placé recouvre celui d'un autre bloc est replacé en évitant le texte réellement placé
             //    des autres (leur traduction est plus longue que l'original, que chaque bloc évitait seul)
@@ -262,7 +270,7 @@ object PageRenderer {
 
     /** Hauteur médiane des lettres d'origine (pixels de l'image d'origine), 0 si inconnue. */
     private fun measuredInkHeight(plan: Erasure.Plan?, b: TranslatedBlock, s: Float): Float {
-        val ink = plan?.ink ?: return 0f
+        val ink = plan?.core ?: plan?.ink ?: return 0f      // cœur des lettres : la hauteur ne comprend pas leur halo
         val boxes = b.lineBoxes; val texts = b.lineTexts
         if (boxes.isEmpty() || texts.size != boxes.size) return 0f
         val hs = boxes.indices.mapNotNull { i ->
@@ -282,7 +290,8 @@ object PageRenderer {
 
     /** Encre de chaque ligne d'origine (recadrée au plus juste) à partir du plan d'effacement. */
     private fun lineInks(p: Prep, s: Float): List<app.manhwa.core.LineInk> {
-        val plan = p.plan ?: return emptyList(); val ink = plan.ink ?: return emptyList()
+        // cœur des lettres (sans leur halo ni leur contour, remplissage compris) quand il a pu être isolé : la graisse et la taille ne sont pas faussées par la lueur
+        val plan = p.plan ?: return emptyList(); val ink = plan.core ?: plan.ink ?: return emptyList()
         val boxes = p.block.lineBoxes; val texts = p.block.lineTexts
         if (boxes.isEmpty() || texts.size != boxes.size) return emptyList()
         return boxes.indices.mapNotNull { i ->
@@ -292,27 +301,30 @@ object PageRenderer {
     }
 
     /**
-     * Choisit la police qui ressemble le plus au lettrage d'origine : on dessine le texte d'origine avec chaque famille candidate
-     * (épaississement, inclinaison réglés ensuite) et on garde la forme qui recouvre le mieux l'encre. Sources CJK : Noto Sans calibrée.
+     * Police de toute la page : vote pondéré de quelques familles lisibles sur toutes les lignes d'origine (cris et sources CJK exclus), mémoire de la série (une autre famille
+     * ne la remplace que si elle l'emporte nettement), italique seulement si la page entière l'est. Avant, chaque bloc choisissait seul parmi treize polices, avec épaississement,
+     * inclinaison et étirement libres : une police différente d'un bloc à l'autre, souvent très grasse.
      */
-    private fun matchFont(fonts: Typefaces, p: Prep, s: Float, inks: List<app.manhwa.core.LineInk>): FontChoice {
+    private fun choosePageFont(fonts: Typefaces, preps: List<Prep>, s: Float, memory: FontPolicy.Memory?, series: String?): String? {
+        val lines = ArrayList<app.manhwa.core.LineInk>()
+        for (p in preps) {
+            if (p.style == FontStyle.SHOUT || ScriptDetector.dominant(p.block.source) != "en") continue
+            lines.addAll(lineInks(p, s))
+        }
+        if (lines.isEmpty()) return null
+        return FontPolicy.choose(lines, AndroidGlyphRenderer(fonts), memory, series).family
+    }
+
+    /** Police d'un bloc : cris en police de cri, sources CJK en Noto calibrée, tout le reste dans la famille choisie pour la page (sans épaississement ni étirement). */
+    private fun matchFont(fonts: Typefaces, p: Prep): FontChoice {
         if (p.style == FontStyle.SHOUT) return FontChoice(fonts.shout(), 0f, 400, 100f, family = "bangers")
-        val src = p.block.source
-        val cjk = ScriptDetector.dominant(src) != "en"
-        val outlined = p.plan?.outlined ?: false
+        val cjk = ScriptDetector.dominant(p.block.source) != "en"
         if (cjk) {
-            val wght = if (outlined) 800 else 650
+            val wght = if (p.plan?.outlined ?: false) 800 else 650
             return FontChoice(fonts.noto(wght, 100f), 0f, wght, 100f)
         }
-        val m = if (inks.isNotEmpty()) FontMatcher.best(inks, fonts.comicFamilies, AndroidGlyphRenderer(fonts)) else null
-        if (m == null) return FontChoice(fonts.family("comicneue"), 0f, 700, 100f, family = "comicneue")
-        // aucune police comique ne ressemble (lettrage très particulier) : police neutre de même graisse plutôt qu'une police manuscrite étirée
-        if (m.score < 0.12f) {
-            // aucune police comique ne ressemble : on garde l'esprit du lettrage de BD (fin ou gras selon le trait d'origine) plutôt qu'un Noto neutre
-            val fam = if (FontMatcher.weightOf(inks) < 600) "patrickhandsc" else "comicneue"
-            return FontChoice(fonts.family(fam), 0f, 700, 100f, family = fam)
-        }
-        return FontChoice(fonts.family(m.family), 0f, 700, 100f, scaleX = m.stretch.coerceIn(0.72f, 1.25f), skew = m.skew, embolden = m.embolden, family = m.family)
+        val fam = p.pageFont ?: FontPolicy.DEFAULT
+        return FontChoice(fonts.family(fam), 0f, 700, 100f, family = fam)
     }
 
     /** Résultat de la mise en page d'un bloc : police, pinceau de mesure, lignes placées. */
@@ -337,7 +349,7 @@ object PageRenderer {
 
         // police assortie au lettrage d'origine ; corps cible : même hauteur de capitales que l'encre d'origine
         val inks = lineInks(p, s)
-        val font = matchFont(fonts, p, s, inks)
+        val font = matchFont(fonts, p)
         // texte vertical : la taille d'un caractère est la LARGEUR de la colonne (et non sa hauteur, qui est la longueur du texte)
         val inkH = if (inks.isEmpty()) 0f else (if (b.vertical) inks.map { it.w } else inks.map { it.letterHeight }).sorted().let { it[it.size / 2] } / s       // pixels de l'image d'origine
         val cap = capRatio(font.typeface)
@@ -491,7 +503,7 @@ object PageRenderer {
                 val base = bandCenter + (if (allCapsOut || allCaps) capPx / 2f else capPx * 0.5f)
                 paint.textAlign = Paint.Align.CENTER
                 if (art) { // texte sur dessin : contour de couleur opposée pour rester lisible
-                    paint.style = Paint.Style.STROKE; paint.strokeWidth = px * 0.15f; paint.strokeJoin = Paint.Join.ROUND
+                    paint.style = Paint.Style.STROKE; paint.strokeWidth = px * 0.11f; paint.strokeJoin = Paint.Join.ROUND
                     paint.color = if (ColorMath.luminance(fg) > 0.5f) 0xFF000000.toInt() else 0xFFFFFFFF.toInt()
                     canvas.drawText(ln.text, cx, base, paint)
                 }
