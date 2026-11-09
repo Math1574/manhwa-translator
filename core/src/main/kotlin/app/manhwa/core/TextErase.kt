@@ -331,6 +331,14 @@ object TextErase {
     }
 
     /** Épaisseur moyenne du trait (pixels) d'un masque de texte : 2 × aire / périmètre (exact pour un trait fin de longueur ≫ épaisseur). */
+    /** Part de sa boîte englobante que couvre un masque (0 si vide). Un lettrage réel en couvre 30 à 60 % ; plus de 70 %, c'est une plaque. */
+    fun boxFill(mask: BooleanArray, w: Int, h: Int): Float {
+        var minX = w; var maxX = -1; var minY = h; var maxY = -1; var n = 0
+        for (y in 0 until h) for (x in 0 until w) if (mask[y * w + x]) { n++; if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y }
+        if (n == 0) return 0f
+        return n.toFloat() / ((maxX - minX + 1).toLong() * (maxY - minY + 1)).toFloat()
+    }
+
     /**
      * Lettrage creux : lettres bleues cernées d'un fin trait blanc, dont l'encre détectée est l'anneau du contour et non le remplissage. Mesurée telle quelle, la graisse paraît minuscule
      * (la police choisie était alors très fine). Les creux de l'encre qui ne communiquent pas avec le bord de la région et dont la couleur n'est pas celle du fond ([bg], à [tol] près)
@@ -457,6 +465,35 @@ object TextErase {
         val coreColor = if (deepN >= 20) meanColor { i -> core[i] && depth[i] >= 2 } else meanColor { i -> core[i] }
         // sans halo net (moins d'un dixième de l'encre) : les lettres sont toute l'encre, la mesure du cœur vaut celle de l'encre
         if (haloN < 0.10 * n) return LetterCore(ink, coreColor, 0, 0f)
+        var haloDeep = 0; for (i in halo.indices) if (halo[i] && depth[i] >= 2) haloDeep++
+        val haloRef = if (haloDeep >= 20) meanColor { i -> halo[i] && depth[i] >= 2 } else meanColor { i -> halo[i] }
+        // le cœur ne gardait que les pixels très proches de la couleur du texte : les bords adoucis des lettres (un pixel de chaque côté) étaient comptés dans le halo, ce qui amincissait
+        // le trait mesuré (donc la graisse, et le choix de la police). On rattache au cœur les pixels de halo au contact d'une lettre qui sont plus proches de la couleur des lettres que de celle du halo.
+        fun d2(a: Int, b: Int): Int { val dr = r(a) - r(b); val dg = g(a) - g(b); val db = b(a) - b(b); return dr * dr + dg * dg + db * db }
+        repeat(2) {
+            val grow = ArrayList<Int>()
+            for (i in halo.indices) if (halo[i]) {
+                val x = i % w; val y = i / w; var touch = false
+                for (dy in -1..1) { for (dx in -1..1) {
+                    if (dx == 0 && dy == 0) continue
+                    val nx = x + dx; val ny = y + dy
+                    if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
+                    if (core[ny * w + nx]) { touch = true }
+                } }
+                if (touch && d2(pixels[i], coreColor) < d2(pixels[i], haloRef)) grow.add(i)
+            }
+            for (i in grow) { core[i] = true; halo[i] = false }
+        }
+        coreN = 0; perim = 0; haloN = 0
+        for (y in 0 until h) for (x in 0 until w) {
+            if (halo[y * w + x]) haloN++
+            if (!core[y * w + x]) continue
+            coreN++
+            if (x == 0 || !core[y * w + x - 1]) perim++
+            if (x == w - 1 || !core[y * w + x + 1]) perim++
+            if (y == 0 || !core[(y - 1) * w + x]) perim++
+            if (y == h - 1 || !core[(y + 1) * w + x]) perim++
+        }
         val haloColor = meanColor { i -> halo[i] }
         return LetterCore(core, coreColor, haloColor, if (perim == 0) 0f else haloN.toFloat() / perim)
     }

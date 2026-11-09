@@ -755,7 +755,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                     JSONObject().put("t", r.optString("t").replace('\n', ' ').take(40)).put("kind", r.optString("kind")).put("mode", r.optString("mode"))
                         .put("fs", Math.round(r.optDouble("fs") * 10) / 10.0).put("lines", r.optInt("lines")).put("fits", r.optBoolean("fits")).put("shape", r.optBoolean("shape"))
                         .put("bubbleOk", r.optBoolean("bubbleOk")).put("rectBubble", r.optBoolean("rectBubble")).put("erase", r.optInt("erase")).put("lay", r.optString("lay"))
-                        .put("family", r.optString("family")).put("fg", r.optString("fg")).put("orig", r.opt("orig")).put("cont", r.opt("cont")).put("zone", r.opt("zoneBox"))
+                        .put("family", r.optString("family")).put("fontInfo", r.optString("fontInfo")).put("fg", r.optString("fg")).put("orig", r.opt("orig")).put("cont", r.opt("cont")).put("zone", r.opt("zoneBox"))
                         .put("out", JSONArray(listOf("x", "y", "w", "h").map { k -> Math.round(r.optDouble(k)) })),
                 )
             }

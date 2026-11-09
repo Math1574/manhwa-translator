@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
 """Analyse des rapports de test : lecture OCR (vérité terrain des pages synthétiques), couverture, mise en page, erreurs, durées."""
+import re, os
 import json, os, re, sys, glob, difflib
 
 OUT = sys.argv[1] if len(sys.argv) > 1 else "/tmp/e2e"
 SYN = sys.argv[2] if len(sys.argv) > 2 else "/tmp/site/synth"
 lines = []
+try:
+    FONT_CLS = dict(re.findall(r'Spec\("([^"]+)", "[^"]*", "[^"]*", "([^"]+)"', open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "core", "src", "main", "kotlin", "app", "manhwa", "core", "FontLibrary.kt"), encoding="utf8").read()))
+except Exception:
+    FONT_CLS = {}
+
 def P(*a): lines.append(" ".join(str(x) for x in a))
 
 def norm(s): return "".join(ch for ch in s.casefold() if ch.isalnum())
@@ -72,20 +78,25 @@ for path in sorted(glob.glob(f"{OUT}/reports/*.json")):
     shaped = sum(1 for im in imgs for b in (im.get('overlay') or {}).get('blocks', []) if b.get('shape'))
     if nblocks: P(f"- rendu : {shaped}/{nblocks} bulles à forme détectée · texte ne tenant pas dans sa zone : {nofit}")
     if nofit: problems.append(f"{name}: texte ne tient pas dans sa zone ({nofit})")
-    # police : une seule famille par page pour le texte ordinaire (cris et sources CJK exclus), jamais d'épaississement ni de déformation en largeur
-    fam_count = {}; fam_multi = 0; fam_pages = 0; fam_bad = 0
+    # police : chaque bloc reçoit la police de la bibliothèque (143 candidates libres) qui copie le mieux son lettrage d'origine ; jamais d'épaississement ni de déformation en largeur.
+    # Les pages synthétiques sont dessinées avec des polices sans empattement ou comiques : une police à empattement ou de machine à écrire serait un mauvais appariement, et les blocs
+    # d'un même lettrage (toutes les bulles de la page « caps ») doivent recevoir la même police ou presque.
+    fam_count = {}; cls_count = {}; fam_bad = 0; odd = 0; scattered = 0
+    synth_latin = name.startswith(("synth_en_caps", "synth_en_mixed", "synth_en_variety", "synth_en_fancy"))
     for im in imgs:
-        bl = (im.get('overlay') or {}).get('blocks', [])
-        fs = [b.get('family') for b in bl if b.get('style') != 'SHOUT' and b.get('family') and b.get('family') != 'noto']
-        for f in fs: fam_count[f] = fam_count.get(f, 0) + 1
-        if len(fs) >= 2:
-            fam_pages += 1
-            if len(set(fs)) > 1: fam_multi += 1
-        fam_bad += sum(1 for b in bl if (b.get('embolden') or 0) > 0 or abs((b.get('scaleX') or 1) - 1) > 0.01)
+        fs = []
+        for b in (im.get('overlay') or {}).get('blocks', []):
+            f = b.get('family')
+            if not f or f == 'noto': continue                      # source CJK : police calibrée
+            c = FONT_CLS.get(f, '?'); fam_count[f] = fam_count.get(f, 0) + 1; cls_count[c] = cls_count.get(c, 0) + 1; fs.append(f)
+            if (b.get('embolden') or 0) > 0 or abs((b.get('scaleX') or 1) - 1) > 0.01: fam_bad += 1
+            if synth_latin and c in ('serif', 'mono'): odd += 1
+        if name.startswith(("synth_en_caps", "synth_en_mixed")) and len(set(fs)) > 2: scattered += 1
     if fam_count:
-        P(f"- police : {', '.join(f'{k}×{v}' for k, v in sorted(fam_count.items(), key=lambda kv: -kv[1]))} ; pages à plusieurs blocs : {fam_pages}, avec plusieurs familles : {fam_multi}")
-        if fam_multi: problems.append(f"{name}: police différente d'un bloc à l'autre sur {fam_multi} page(s)")
+        P(f"- police : {', '.join(f'{k}×{v}' for k, v in sorted(fam_count.items(), key=lambda kv: -kv[1]))} ; classes : {', '.join(f'{k}×{v}' for k, v in sorted(cls_count.items(), key=lambda kv: -kv[1]))}")
         if fam_bad: problems.append(f"{name}: {fam_bad} bloc(s) avec épaississement ou déformation de la police")
+        if odd: problems.append(f"{name}: {odd} bloc(s) de page synthétique avec une police à empattement ou machine à écrire (mauvais appariement)")
+        if scattered: problems.append(f"{name}: plus de deux polices différentes sur une page au lettrage unique ({scattered} page(s))")
     if name.startswith("synth_layouts"):
         # regroupement : un bloc lu qui recouvre deux blocs de la vérité est une fusion à tort ; un bloc de la vérité réparti sur deux blocs lus est une scission
         merges = splits = 0; gt_total = 0; read_total = 0

@@ -2052,52 +2052,66 @@ fun eraseWhiteBandTests() {
     }
 }
 
-// ---------- police : une famille par page, mémoire de la série, inclinaison, lettrage creux, couleur des lettres ----------
+// ---------- police : appariement de style (descripteur, décision par bloc, cohérence, mémoire de série), lettrage creux, couleur des lettres ----------
 fun fontPolicyTests() {
-    // « polices » factices : des traits verticaux dont la largeur (rapportée à la hauteur) caractérise la famille ; la plus ressemblante est celle de même largeur
-    val thick = mapOf("comicneue" to 0.10f, "noto-600-85" to 0.13f, "noto-700-80" to 0.17f, "anton" to 0.26f)
-    fun stripes(w: Int, h: Int, t: Float, slant: Float = 0f): BooleanArray {
-        val sw = maxOf(2, (t * h).toInt()); val yc = (h - 1) / 2f
-        return BooleanArray(w * h) { val x = it % w; val y = it / w; (((x + (slant * (y - yc)).toInt() + 4 * sw) / sw) % 2) == 0 }
+    // lettrage factice : des traits verticaux dont l'épaisseur (rapportée à la hauteur) fixe la graisse mesurée
+    fun stripes(w: Int, h: Int, t: Float): BooleanArray {
+        val sw = maxOf(2, (t * h).toInt()); val period = sw * 3
+        return BooleanArray(w * h) { (it % w) % period < sw }
     }
-    val fake = GlyphRenderer { _, family, _, _, w, h -> thick[family]?.let { GlyphRender(stripes(w, h, it), 1f) } }
-    fun line(t: Float, slant: Float = 0f, w: Int = 240, h: Int = 40) = LineInk("ABC", stripes(w, h, t, slant), w, h)
+    fun line(t: Float, w: Int = 600, h: Int = 100, text: String = "THE QUICK BROWN FOX") = LineInk(text, stripes(w, h, t), w, h)
+    fun block(t: Float, lines: Int = 3, regime: StyleMatcher.Regime = StyleMatcher.Regime.FLAT) = StyleMatcher.describe(List(lines) { line(t) }, regime)
 
-    T.test("police : une seule famille par page, celle dont le trait ressemble à l'original, et un trait épais isolé ne l'emporte pas") {
-        T.eq("anton", FontPolicy.choose(List(4) { line(0.26f) }, fake, null, null).family)
-        T.eq("noto-700-80", FontPolicy.choose(List(4) { line(0.17f) }, fake, null, null).family)
-        T.eq("comicneue", FontPolicy.choose(List(4) { line(0.10f) }, fake, null, null).family)
-        // trois lignes au trait de l'original « anton » et une seule plus fine : la page reste cohérente (une seule famille), celle de la majorité
-        T.eq("anton", FontPolicy.choose(listOf(line(0.26f), line(0.26f), line(0.26f), line(0.10f)), fake, null, null).family)
-        // rien ne ressemble (aucune police utilisable) : la famille par défaut, jamais une famille fine ou grasse au hasard
-        val none = GlyphRenderer { _, _, _, _, w, h -> GlyphRender(BooleanArray(w * h), 1f) }
-        T.eq(FontPolicy.DEFAULT, FontPolicy.choose(List(3) { line(0.17f) }, none, null, null).family)
+    T.test("style : le descripteur mesure la graisse et ne dépend pas de la taille du texte") {
+        val a = StyleFeatures.of(line(0.08f))!!; val b = StyleFeatures.of(line(0.16f))!!
+        T.ok(b[0] > a[0] + 0.3f, "graisse mesurée : ${a[0]} → ${b[0]}")
+        val small = StyleFeatures.of(LineInk("ABC", stripes(300, 50, 0.12f), 300, 50))!!; val big = StyleFeatures.of(LineInk("ABC", stripes(900, 150, 0.12f), 900, 150))!!
+        T.ok(kotlin.math.abs(small[0] - big[0]) < 0.25f, "même lettrage à deux tailles : ${small[0]} / ${big[0]}")
+        T.eq(null, StyleFeatures.of(LineInk("A", BooleanArray(20 * 20), 20, 20)), "encre vide")
     }
-    T.test("police : mémoire de la série (stable d'une page à l'autre, ne change que sous l'effet d'un vrai changement de lettrage)") {
-        val mem = FontPolicy.Memory()
-        T.eq("noto-700-80", FontPolicy.choose(List(4) { line(0.17f) }, fake, mem, "serie-A").family)
-        // page ambiguë (trait entre deux familles) : la famille de la série est conservée
-        T.eq("noto-700-80", FontPolicy.choose(listOf(line(0.15f), line(0.15f)), fake, mem, "serie-A").family)
-        // une seule page contraire ne la change pas
-        T.eq("noto-700-80", FontPolicy.choose(List(2) { line(0.10f) }, fake, mem, "serie-A").family)
-        // une autre série ne subit pas la première
-        T.eq("comicneue", FontPolicy.choose(List(3) { line(0.10f) }, fake, mem, "serie-B").family)
-        // un vrai changement durable (plusieurs pages) finit par être suivi
-        var last = ""
-        repeat(6) { last = FontPolicy.choose(List(4) { line(0.10f) }, fake, mem, "serie-A").family }
-        T.eq("comicneue", last)
+    T.test("style : une mesure brouillée (hauteurs de lettres incohérentes, graisse impossible) n'est pas utilisée") {
+        T.eq(null, StyleMatcher.describe(listOf(line(0.1f), line(0.1f, h = 260), line(0.1f)), StyleMatcher.Regime.FLAT), "hauteurs incohérentes")
+        T.eq(null, StyleMatcher.describe(List(3) { LineInk("X", BooleanArray(600 * 100) { true }, 600, 100) }, StyleMatcher.Regime.FLAT), "plaque pleine")
+        T.ok(block(0.1f) != null, "lettrage correct")
     }
-    T.test("police : l'italique n'est choisi que si presque toute la page est inclinée") {
-        val straight = List(4) { line(0.10f) }
-        val slanted = List(4) { line(0.10f, slant = 0.2f) }
-        T.eq("comicneue", FontPolicy.choose(straight, fake, null, null).family)
-        // les polices factices ne sont pas inclinées, mais l'encre l'est : la mesure d'inclinaison décide
-        val c = FontPolicy.choose(slanted, GlyphRenderer { _, f, _, _, w, h -> thick[f.removeSuffix("-italic")]?.let { GlyphRender(stripes(w, h, it, 0.2f), 1f) } }, null, null)
-        T.ok(c.italic && c.family == FontPolicy.ITALIC, "page inclinée : ${c.family}")
-        val mixed = FontPolicy.choose(listOf(line(0.10f, 0.2f), line(0.10f, 0.2f), line(0.10f), line(0.10f)), fake, null, null)
-        T.ok(!mixed.italic && mixed.family == "comicneue", "page à moitié inclinée : ${mixed.family}")
-        val sh = FontMatcher.shear(line(0.10f, slant = 0.2f))!!; val st = FontMatcher.shear(line(0.10f))!!
-        T.ok(sh in -0.27f..-0.13f, "inclinaison mesurée d'une ligne inclinée : $sh"); T.ok(kotlin.math.abs(st) < 0.05f, "inclinaison mesurée d'une ligne droite : $st")
+    T.test("style : la police choisie suit la graisse de l'original et n'est jamais nettement plus grasse") {
+        var last = 0f
+        for (t in listOf(0.06f, 0.10f, 0.15f)) {
+            val b = block(t)!!; val d = StyleMatcher.decide(listOf(b), null, null, null)[0]!!
+            val wc = StyleMatcher.weightOf(d.id); val wo = kotlin.math.exp(b.raw[0])
+            T.ok(wc >= last - 1e-4f, "graisse de la police croissante : $last → $wc (${d.id})"); last = wc
+            T.ok(wc <= wo * 1.35f, "police ${d.id} (graisse $wc) plus grasse que l'original ($wo)")
+        }
+    }
+    T.test("style : deux blocs de même style reçoivent la même police, un bloc de style très différent peut en recevoir une autre") {
+        val a = block(0.10f)!!; val a2 = block(0.103f, lines = 2)!!; val heavy = block(0.20f)!!
+        val d = StyleMatcher.decide(listOf(a, a2, heavy), null, null, null)
+        T.eq(d[0]!!.id, d[1]!!.id, "même style")
+        // un style très différent n'est pas écrasé par les autres blocs de la page : seul, il aurait la même police qu'avec eux
+        val alone = StyleMatcher.decide(listOf(heavy), null, null, null)[0]!!
+        T.ok(StyleMatcher.weightOf(d[2]!!.id) >= StyleMatcher.weightOf(d[0]!!.id) - 1e-4f, "style plus gras : ${d[0]!!.id} → ${d[2]!!.id} (seul : ${alone.id})")
+    }
+    T.test("style : un bloc sur dessin (mesure peu fiable) se range derrière un bloc fiable de style voisin de la même page") {
+        val flat = block(0.11f)!!; val art = block(0.115f, regime = StyleMatcher.Regime.ART)!!
+        val d = StyleMatcher.decide(listOf(flat, art), null, null, null)
+        T.eq(d[0]!!.id, d[1]!!.id, "même police que le bloc fiable")
+    }
+    T.test("style : mémoire de série (un style déjà vu garde sa police, une autre série n'est pas influencée)") {
+        val mem = StyleMatcher.Memory()
+        val first = StyleMatcher.decide(listOf(block(0.12f)!!), null, mem, "serie-A")[0]!!
+        for (t in listOf(0.115f, 0.125f, 0.118f, 0.122f)) T.eq(first.id, StyleMatcher.decide(listOf(block(t)!!), null, mem, "serie-A")[0]!!.id, "page à graisse $t")
+        val other = StyleMatcher.decide(listOf(block(0.07f)!!), null, mem, "serie-B")[0]!!
+        T.ok(StyleMatcher.weightOf(other.id) < StyleMatcher.weightOf(first.id), "série B : ${other.id} contre ${first.id}")
+    }
+    T.test("style : un bloc non mesurable reçoit la police de son voisin, rien n'est choisi s'il n'y a aucun voisin") {
+        val d = StyleMatcher.decide(listOf(block(0.1f)!!, null), null, null, null)
+        T.eq(d[0]!!.id, d[1]!!.id, "voisin"); T.eq(null, StyleMatcher.decide(listOf<StyleMatcher.Block?>(null), null, null, null)[0], "aucun voisin")
+    }
+    T.test("style : la bibliothèque est cohérente (identifiants uniques, chaque candidate connue du modèle appris)") {
+        val ids = FontLibrary.specs.map { it.id }
+        T.eq(ids.size, ids.toSet().size, "identifiants uniques"); T.ok(ids.size >= 100, "au moins 100 candidates : ${ids.size}")
+        T.ok(ids.all { it in StyleModel.ids }, "toutes les candidates sont dans le modèle"); T.ok(StyleModel.ids.all { FontLibrary.spec(it) != null }, "tout le modèle est dans la bibliothèque")
+        T.ok(FontLibrary.specs.all { it.file.startsWith("lib/") && it.file.endsWith(".ttf") }, "fichiers dans fonts/lib")
     }
     fun rgb(r: Int, g: Int, b: Int) = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
     T.test("lettres creuses : le remplissage coloré d'un fin contour est ajouté, l'intérieur d'un O (couleur du fond) reste ouvert") {

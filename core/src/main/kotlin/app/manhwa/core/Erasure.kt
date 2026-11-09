@@ -73,7 +73,13 @@ object Erasure {
     private fun coreOf(px: IntArray, w: Int, h: Int, ink: BooleanArray?, bg: Int, textColor: Int): CoreInfo {
         val lc = if (ink == null) null else try { TextErase.letterCore(px, w, h, ink, bg, textColor) } catch (e: Throwable) { null }
         // lettrage creux (fin contour autour d'un remplissage de couleur) : le remplissage fait partie des lettres, sans quoi la graisse mesurée est celle du seul contour
-        val letters = (lc?.mask ?: ink)?.let { m -> try { TextErase.solidify(px, w, h, m, bg) } catch (e: Throwable) { m } }
+        val letters = (lc?.mask ?: ink)?.let { m ->
+            try {
+                val sol = TextErase.solidify(px, w, h, m, bg)
+                // des contours qui se touchent d'une lettre à l'autre referment les espaces et les contreformes : le « remplissage » couvre alors presque toute la ligne, ce n'est plus un lettrage
+                if (TextErase.boxFill(sol, w, h) > 0.70f) m else sol
+            } catch (e: Throwable) { m }
+        }
         return if (lc == null) CoreInfo(letters, 0, 0, 0f) else CoreInfo(letters, lc.color and 0xFFFFFF, lc.haloColor and 0xFFFFFF, lc.haloPx)
     }
 
