@@ -50,6 +50,19 @@ class PagePipeline(
     /** Ce bloc revient-il à cette image ? (jonctions d'images empilées : un texte coupé est traduit par une seule des deux images voisines). */
     private val owns: (TextBlock) -> Boolean = { true },
 ) {
+    /** Vrai si presque tout le texte de la page est en majuscules (au moins trois blocs de 8 lettres ou plus, 70 % sans aucune minuscule). */
+    private fun isAllCapsPage(blocks: List<TextBlock>): Boolean {
+        val big = blocks.filter { b -> b.text.count { it.isLetter() } >= 8 }
+        if (big.size < 3) return false
+        return big.count { b -> b.text.none { it.isLowerCase() } } >= 0.7 * big.size
+    }
+
+    /** Fragment de une à trois lettres, en minuscules seulement (jamais « I », « OK » ou un mot en majuscules). */
+    private fun isLowercaseFragment(text: String): Boolean {
+        val letters = text.filter { it.isLetter() }
+        return letters.length in 1..3 && letters.all { it.isLowerCase() } && ScriptDetector.dominant(text) == "en"
+    }
+
     fun process(imageBytes: ByteArray, source: String, target: String): PageOutcome {
         val key = CacheKey(sha256Hex(imageBytes), source, target, engineId)
         if (useCache) cache.get(key)?.let { return PageOutcome.Done(it, fromCache = true) }
@@ -64,9 +77,11 @@ class PagePipeline(
         fun relH(b: TextBlock) = if (medianH > 0f) medianLineHeight(b) / medianH else 1f
         // une onomatopée collée à une phrase voisine (même bloc) : sa ligne est retirée du bloc, qui garde le reste ; l'image n'y touche pas
         val grouped = grouped0.mapNotNull { b -> withoutSfxLines(b, medianH) }
-        val blocks = grouped.filter { owns(it) && !TextNormalizer.isNoise(it.text) && !junk(it.text, relH(it), it.kind != BlockKind.FREE || it.zone != null) && !isSfx(it.text, it.kind, relH(it)) }
+        // page en majuscules : un petit fragment en minuscules (« in » lu dans une marque du dessin) n'est pas du texte de la page ; traduit avec ses voisins, il en absorbait le début de phrase
+        val capsPage = isAllCapsPage(grouped)
+        val blocks = grouped.filter { owns(it) && !TextNormalizer.isNoise(it.text) && !(capsPage && isLowercaseFragment(it.text)) && !junk(it.text, relH(it), it.kind != BlockKind.FREE || it.zone != null) && !isSfx(it.text, it.kind, relH(it)) }
         for (g in grouped) if (g !in blocks && !owns(g)) log("écarté « ${g.text.take(40)} » (traduit par l'image voisine, de l'autre côté de la jonction)")
-        for (g in grouped) if (g !in blocks && owns(g)) log("écarté « ${g.text.take(40)} » (${if (TextNormalizer.isNoise(g.text)) "bruit" else if (isSfx(g.text, g.kind, relH(g))) "onomatopée laissée telle quelle" else "débris, filigrane ou répété"}${if (g.kind != BlockKind.IN_BUBBLE && g.zone == null) ", hors zone" else ""})")
+        for (g in grouped) if (g !in blocks && owns(g)) log("écarté « ${g.text.take(40)} » (${if (TextNormalizer.isNoise(g.text)) "bruit" else if (capsPage && isLowercaseFragment(g.text)) "fragment en minuscules sur une page en majuscules" else if (isSfx(g.text, g.kind, relH(g))) "onomatopée laissée telle quelle" else "débris, filigrane ou répété"}${if (g.kind != BlockKind.IN_BUBBLE && g.zone == null) ", hors zone" else ""})")
         val clean = blocks.map { repair(it.text) }.toMutableList()
         reportDebug(ocrResult, grouped, blocks, emptySet())
         if (blocks.isEmpty()) return PageOutcome.NoText(ocrResult.imageWidth, ocrResult.imageHeight)

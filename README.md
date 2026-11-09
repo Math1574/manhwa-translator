@@ -29,7 +29,7 @@ Application Android : navigateur intégré qui traduit automatiquement les manga
 - **Correction manuelle** : un appui long sur une traduction l'ouvre pour correction ; on peut aussi fixer un nom ou un terme pour tout le chapitre. Les corrections sont mémorisées.
 - **Journal de traduction** (Réglages → Exporter) : texte lu, traduction et problèmes détectés, pour signaler des erreurs. Il reste sur le téléphone.
 - **Rendu** : le texte d'origine est effacé (aplat dans les bulles, fond lissé pour les dégradés, reconstruction sur les dessins) puis la traduction est mise en page **dans la forme réelle de la bulle**
-  (retours à la ligne équilibrés), avec une police choisie par **comparaison avec l'encre du lettrage d'origine** (Comic Neue, Kalam, Caveat Brush, Londrina, Noto Sans…),
+  (retours à la ligne équilibrés), avec une police choisie parmi **143 variantes de polices libres** par **comparaison de style avec l'encre du lettrage d'origine** (graisse, épaisseur des traits, contraste, forme des contours, largeur ; métrique apprise sur des pages synthétiques), cohérente d'un texte à l'autre et mémorisée par série,
   l'interligne d'origine, une double résolution pour la netteté et la typographie française. Polices libres (SIL OFL).
 - **Glossaire** local, cache des pages traduites, traitement page par page en file d'attente.
 

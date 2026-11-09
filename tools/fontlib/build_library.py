@@ -37,6 +37,15 @@ FILES = {
 # classes grossières : comic (lettrage de bulle rond ou gras), hand (écriture fine), brush (marqueur, pinceau), display (très gras de titre), condensed (condensé numérique),
 # sans (sans empattement neutre ou arrondi), serif, mono
 specs = []   # (id, fichier, axes dict, classe, inclinaison native)
+# polices choisies automatiquement : robustes, lisibles en français à toute taille, jamais fines ni décoratives (Rock Salt, Covered By Your Grace, Caveat fin, Patrick Hand, Kalam léger,
+# Comic Neue léger, Sniglet léger, machine à écrire, Cinzel… restent dans la bibliothèque mais ne sont jamais retenues : retour d'usage sur le build 110, qui les choisissait pour des bulles
+# au lettrage gras, avec des polices différentes d'une bulle à l'autre alors que l'original a la même)
+AUTO = {"comicneue-bold", "caveatbrush", "boogaloo", "chewy", "baloo2-w700", "fredoka-w600-d100", "recursive-c1-w800",    # script, comic, brush : lettrage de bulle
+        "anton", "oswald-w700", "oswald-w600", "archivo-w900-d62", "archivo-w700-d62", "bebasneue", "bangers",             # condensés numériques et cris
+        "notosans-w700-d100", "notosans-w600-d100", "archivo-w700-d100",                                                  # sans empattement neutres
+        "lora-w700", "notoserif-w700-d100"}                                                                               # empattement (narration, si les montants sont nettement plus épais que les barres)
+# pénalités douces (points de score) pour les polices qui plaisent moins quand une autre convient aussi
+PENALTY = {"bangers": 0.05, "recursive-c1-w800": 0.03}
 def S(i, f, cls, axes=None, italic=False): specs.append((i, f, axes or {}, cls, italic))
 def fmt(d): return str(d).rstrip('0').rstrip('.') if isinstance(d, float) else str(d)
 
@@ -91,10 +100,13 @@ def kotlin():
          "/** Candidats de police du texte traduit : un fichier de police et, pour une police variable, les valeurs de ses axes. Toutes sont libres (SIL OFL ou Apache 2.0). */",
          "object FontLibrary {",
          "    /** [cls] : classe de style grossière (comic, hand, brush, display, condensed, sans, serif, mono). [italic] : police nativement inclinée. */",
-         "    class Spec(val id: String, val file: String, val axes: String, val cls: String, val italic: Boolean = false)", "",
+         "    /** [auto] : choisie automatiquement (robuste et lisible) ; [penalty] : pénalité douce de score quand une autre police convient aussi. */",
+         "    class Spec(val id: String, val file: String, val axes: String, val cls: String, val italic: Boolean = false, val penalty: Float = 0f, val auto: Boolean = false)", "",
          "    val specs: List<Spec> = listOf("]
     for (i, f, a, c, it) in specs:
-        L.append(f'        Spec("{i}", "lib/{f}", "{axes_str(a)}", "{c}"' + (", true" if it else "") + "),")
+        pen = PENALTY.get(i, 0.0); au = i in AUTO
+        extra = (", true" if it else (", false" if (pen or au) else "")) + ((f", {pen}f" if pen else ", 0f") if au else (f", {pen}f" if pen else "")) + (", true" if au else "")
+        L.append(f'        Spec("{i}", "lib/{f}", "{axes_str(a)}", "{c}"' + extra + "),")
     L += ["    )", "", "    private val byId: Map<String, Spec> = specs.associateBy { it.id }", "    fun spec(id: String): Spec? = byId[id]", "}", ""]
     return "\n".join(L)
 

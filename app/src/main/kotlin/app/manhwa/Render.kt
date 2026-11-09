@@ -358,7 +358,7 @@ object PageRenderer {
     private class FontPick(val id: String, val slant: Float, val info: String)
 
     /** Police de la bibliothèque utilisée quand rien ne peut être mesuré. */
-    private const val DEFAULT_FONT = "comicneue-bold"
+    private const val DEFAULT_FONT = StyleMatcher.DEFAULT
 
     /**
      * Police de chaque bloc : celle de la bibliothèque (143 candidates libres) dont le style ressemble le plus au lettrage d'origine, mesuré sur son encre (graisse, montants, barres,
@@ -379,8 +379,8 @@ object PageRenderer {
             if (d == null || ScriptDetector.dominant(preps[i].block.source) != "en") null
             else {
                 val b = blocks[i]; val top = d.ranking.firstOrNull()
-                val info = if (b == null) "non mesuré (voisin)" else "poids %.3f · dist %.1f · forme %.2f · pén %.2f%s · alt %s".format(
-                    kotlin.math.exp(b.raw[0]), top?.dist ?: 0f, top?.shape ?: 0f, top?.penalty ?: 0f, if (d.fromMemory) " · série" else "",
+                val info = if (b == null) "non mesuré (voisin) · famille ${d.family}" else "famille %s · poids %.3f · dist %.1f · forme %.2f · pén %.2f%s · alt %s".format(
+                    d.family, kotlin.math.exp(b.raw[0]), top?.dist ?: 0f, top?.shape ?: 0f, top?.penalty ?: 0f, if (d.fromMemory) " · série" else "",
                     d.ranking.drop(1).take(2).joinToString(",") { it.id })
                 FontPick(d.id, b?.slant ?: 0f, info)
             }

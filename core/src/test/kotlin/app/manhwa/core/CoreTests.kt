@@ -153,6 +153,19 @@ fun pipelineTests() {
         val b = p.process(img, "en", "fr") as PageOutcome.Done
         T.ok(b.fromCache, "2e appel du cache"); T.eq(1, ocr.calls.get())
     }
+    T.test("pipeline: un fragment en minuscules lu dans le dessin d'une page en majuscules n'est pas traduit (il absorbait le début de la phrase voisine)") {
+        val seen = ArrayList<List<String>>()
+        val rec = TranslationEngine { tx, _, _ -> seen.add(tx); tx.map { it.uppercase() } }
+        val page = listOf(line("WAS LIVING THE MOST ORDINARY OF LIVES", 100f, 100f, 800f, 140f), line("in", 700f, 500f, 740f, 520f),
+            line("WHEN A MAN WHO LOOKED LIKE A NOBLE APPEARED", 100f, 900f, 800f, 940f), line("AND WITH THE SUN AT HIS BACK HE ASKED", 100f, 1500f, 800f, 1540f))
+        val o = PagePipeline(ResultCache(tmp()), FakeOcr(page), rec, "e").process(img, "en", "fr") as PageOutcome.Done
+        T.ok(seen.flatten().none { it == "in" }, "« in » ne doit pas être envoyé à la traduction : $seen")
+        T.eq(3, o.result.blocks.size, "blocs traduits")
+        // une page en minuscules garde ses petits mots
+        val mixed = listOf(line("Where are you going now", 100f, 100f, 800f, 140f), line("in", 700f, 500f, 740f, 520f), line("I will not go back there", 100f, 900f, 800f, 940f), line("Please stay with me tonight", 100f, 1500f, 800f, 1540f))
+        val o2 = PagePipeline(ResultCache(tmp()), FakeOcr(mixed), rec, "e").process(img, "en", "fr") as PageOutcome.Done
+        T.eq(4, o2.result.blocks.size, "page en minuscules : aucun bloc écarté")
+    }
     T.test("pipeline: erreur OCR → Failed(ocr) sans exception") {
         val o = PagePipeline(ResultCache(tmp()), FakeOcr(emptyList(), fail = true), up, "e").process(img, "ja", "fr")
         T.eq("ocr", (o as PageOutcome.Failed).stage)
@@ -2074,14 +2087,32 @@ fun fontPolicyTests() {
         T.eq(null, StyleMatcher.describe(List(3) { LineInk("X", BooleanArray(600 * 100) { true }, 600, 100) }, StyleMatcher.Regime.FLAT), "plaque pleine")
         T.ok(block(0.1f) != null, "lettrage correct")
     }
-    T.test("style : la police choisie suit la graisse de l'original et n'est jamais nettement plus grasse") {
+    T.test("style : la police choisie suit la graisse de l'original, sans jamais être plus fine que la plus légère des polices robustes ni démesurément plus grasse") {
+        val autoWeights = FontLibrary.specs.filter { it.auto }.map { StyleMatcher.weightOf(it.id) }
+        val lightest = autoWeights.min()
         var last = 0f
         for (t in listOf(0.06f, 0.10f, 0.15f)) {
             val b = block(t)!!; val d = StyleMatcher.decide(listOf(b), null, null, null)[0]!!
             val wc = StyleMatcher.weightOf(d.id); val wo = kotlin.math.exp(b.raw[0])
+            T.ok(FontLibrary.spec(d.id)?.auto == true, "police robuste : ${d.id}")
             T.ok(wc >= last - 1e-4f, "graisse de la police croissante : $last → $wc (${d.id})"); last = wc
-            T.ok(wc <= wo * 1.35f, "police ${d.id} (graisse $wc) plus grasse que l'original ($wo)")
+            T.ok(wc <= maxOf(wo * 1.6f, lightest * 1.05f), "police ${d.id} (graisse $wc) démesurément plus grasse que l'original ($wo)")
         }
+    }
+    T.test("style : la palette automatique est robuste (aucune écriture fine ou décorative) et couvre chaque famille de style") {
+        val auto = FontLibrary.specs.filter { it.auto }
+        T.ok(auto.all { StyleMatcher.weightOf(it.id) >= 0.105f }, "polices trop fines : " + auto.filter { StyleMatcher.weightOf(it.id) < 0.105f }.map { it.id })
+        T.ok(auto.none { it.cls == "hand" && !it.id.startsWith("kalam") } , "écriture manuscrite fine dans la palette")
+        for (id in listOf("rocksalt", "coveredbyyourgrace", "shadowsintolight", "patrickhand", "patrickhandsc", "caveat-w400", "sniglet", "comicneue-regular", "comicneue-light", "specialelite", "courierprime", "cinzel-w400"))
+            T.ok(FontLibrary.spec(id)?.auto != true, "$id ne doit pas être choisie automatiquement")
+        for (f in StyleMatcher.Family.values()) T.ok(auto.any { StyleMatcher.familyOf(it.cls) == f }, "aucune police automatique dans la famille $f")
+        T.ok(FontLibrary.spec(StyleMatcher.DEFAULT)?.auto == true, "la police par défaut doit être automatique")
+    }
+    T.test("style : une mesure hors norme (loin de toutes les polices connues) donne la police par défaut") {
+        val raw = FloatArray(StyleModel.DIM_IN) { if (it == 0) kotlin.math.ln(0.12f) else 0f }
+        val b = StyleMatcher.Block(emptyList(), raw, StyleMatcher.Regime.FLAT, FloatArray(StyleModel.DIM_OUT) { 80f }, FloatArray(StyleModel.DIM_OUT) { 80f }, 10.0, 1f, 0f)
+        val d = StyleMatcher.decide(listOf(b), null, null, null)[0]!!
+        T.eq(StyleMatcher.DEFAULT, d.id, "police par défaut"); T.eq("SCRIPT", d.family, "famille par défaut")
     }
     T.test("style : deux blocs de même style reçoivent la même police, un bloc de style très différent peut en recevoir une autre") {
         val a = block(0.10f)!!; val a2 = block(0.103f, lines = 2)!!; val heavy = block(0.20f)!!
@@ -2101,7 +2132,7 @@ fun fontPolicyTests() {
         val first = StyleMatcher.decide(listOf(block(0.12f)!!), null, mem, "serie-A")[0]!!
         for (t in listOf(0.115f, 0.125f, 0.118f, 0.122f)) T.eq(first.id, StyleMatcher.decide(listOf(block(t)!!), null, mem, "serie-A")[0]!!.id, "page à graisse $t")
         val other = StyleMatcher.decide(listOf(block(0.07f)!!), null, mem, "serie-B")[0]!!
-        T.ok(StyleMatcher.weightOf(other.id) < StyleMatcher.weightOf(first.id), "série B : ${other.id} contre ${first.id}")
+        T.eq(StyleMatcher.decide(listOf(block(0.07f)!!), null, null, null)[0]!!.id, other.id, "la série B décide seule, comme sans mémoire")
     }
     T.test("style : un bloc non mesurable reçoit la police de son voisin, rien n'est choisi s'il n'y a aucun voisin") {
         val d = StyleMatcher.decide(listOf(block(0.1f)!!, null), null, null, null)
