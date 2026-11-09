@@ -1,4 +1,6 @@
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/PageQueue.kt:31:24 This class is not recommended for use in Kotlin. Use 'kotlin.Any' instead.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/StyleMatcher.kt:117:47 Unnecessary non-null assertion (!!) on a non-null receiver of type 'LineInk'.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/StyleMatcher.kt:156:55 Unnecessary non-null assertion (!!) on a non-null receiver of type 'StyleMatcher.Memory.Exemplar'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/TranslationBatcher.kt:39:24 This class is not recommended for use in Kotlin. Use 'kotlin.Any' instead.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/BlockReading.kt:51:94 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/ComicDetector.kt:43:94 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
@@ -7,15 +9,15 @@ w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kot
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/MainActivity.kt:95:48 'var statusBarColor: Int' is deprecated. Deprecated in Java.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/MainActivity.kt:95:86 'var navigationBarColor: Int' is deprecated. Deprecated in Java.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/PaddleOcr.kt:131:94 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
-w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Render.kt:100:48 'fun computeBounds(p0: RectF, p1: Boolean): Unit' is deprecated. Deprecated in Java.
-w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Render.kt:258:39 Unnecessary safe call on a non-null receiver of type 'Erasure.Plan'.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Render.kt:112:48 'fun computeBounds(p0: RectF, p1: Boolean): Unit' is deprecated. Deprecated in Java.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Render.kt:277:39 Unnecessary safe call on a non-null receiver of type 'Erasure.Plan'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Screens.kt:254:64 Unnecessary non-null assertion (!!) on a non-null receiver of type 'String'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/SeamWindow.kt:33:92 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/SettingsScreens.kt:127:27 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/SettingsScreens.kt:191:31 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
-BUILD SUCCESSFUL in 1m 1s
-total 401948
-drwxr-xr-x 2 runner runner      4096 Nov  9 09:42 .
-drwxr-xr-x 3 runner runner      4096 Nov  9 09:42 ..
--rw-r--r-- 1 runner runner 411579800 Nov  9 09:42 app-debug.apk
--rw-r--r-- 1 runner runner       405 Nov  9 09:42 output-metadata.json
+BUILD SUCCESSFUL in 1m 9s
+total 409316
+drwxr-xr-x 2 runner runner      4096 Nov  9 15:07 .
+drwxr-xr-x 3 runner runner      4096 Nov  9 15:07 ..
+-rw-r--r-- 1 runner runner 419124484 Nov  9 15:07 app-debug.apk
+-rw-r--r-- 1 runner runner       405 Nov  9 15:07 output-metadata.json
