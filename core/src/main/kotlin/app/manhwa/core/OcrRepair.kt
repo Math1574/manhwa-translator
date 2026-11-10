@@ -43,13 +43,17 @@ object OcrRepair {
     fun repair(text: String, lex: EnglishLexicon, protect: Set<String> = emptySet()): String {
         if (ScriptDetector.dominant(text) != "en") return text
         var s = text.replace(Regex("([.!?])(?=[A-Za-z])"), "$1 ")         // « EVERYONE!IP » → « EVERYONE! IP »
+        // « I AND I ALSO HAVE… » : un « I » parasite (bord de bulle, pointe) lu devant « AND I » ; la traduction donnait « MOI ET MOI AVONS ». Seulement en majuscules, en tête de texte.
+        s = s.replace(Regex("^I (AND|BUT|SO|THEN|OR|YET) (I\\b)"), "$1 $2")
         s = s.replace(Regex("(?<![A-Za-z0-9])[Oo](?=[.,]\\d)"), "0")      // « SET TO O.1% » → « SET TO 0.1% » : un O collé à une décimale est un zéro
         val letters = s.filter { it.isLetter() }
         val caps = letters.length >= 4 && letters.count { it.isUpperCase() }.toFloat() / letters.length >= 0.5f
         val tokens = tokenRe.findAll(s).toList()
         val alphaTokens = tokens.count { t -> t.value.any { it.isLetter() } }
         // une chiffre isolé n'est corrigé que si la ligne contient d'autres signes d'erreur de lecture (mots inconnus)
-        val noisy = tokens.any { t -> val c = t.value.trim('\'', '’'); c.any { it.isLetter() } && c.none { it.isDigit() } && c.length >= 3 && !lex.known(c) && c.lowercase() !in protect }
+        // la lecture n'est pas jugée abîmée à cause d'un débris collé en fin de phrase (retiré ensuite par dropJunkTail) : « AS 36?! Taay sr4: In ) » n'a pas un nombre abîmé
+        val bodyTokens = tokenRe.findAll(dropJunkTail(s, lex)).toList()
+        val noisy = bodyTokens.any { t -> val c = t.value.trim('\'', '’'); c.any { it.isLetter() } && c.none { it.isDigit() } && c.length >= 3 && !lex.known(c) && c.lowercase() !in protect }
         val sb = StringBuilder(); var last = 0
         for (m in tokens) {
             sb.append(s, last, m.range.first); last = m.range.last + 1
@@ -67,11 +71,18 @@ object OcrRepair {
      * À appliquer au texte final : [repair] sert aussi à comparer des lectures, où retirer un débris ferait paraître plausible une lecture absurde.
      */
     fun dropJunkTail(text: String, lex: EnglishLexicon): String {
-        if (ScriptDetector.dominant(text) != "en") return text
-        val m = tailRe.find(text.trim()) ?: return text
+        val tail = junkTail(text, lex)
+        if (tail.isEmpty()) return text
+        return tailRe.find(text.trim())!!.groupValues[1]
+    }
+
+    /** Débris collé en fin de phrase (voir [dropJunkTail]) ; chaîne vide s'il n'y en a pas. */
+    fun junkTail(text: String, lex: EnglishLexicon): String {
+        if (ScriptDetector.dominant(text) != "en") return ""
+        val m = tailRe.find(text.trim()) ?: return ""
         val tail = m.groupValues[2].trim()
-        if (tail.any { !it.isLetter() && !it.isWhitespace() && it != '\'' && it != '’' && it != '-' } && JunkFilter.isDebris(tail, lex)) return m.groupValues[1]
-        return text
+        if (tail.any { !it.isLetter() && !it.isWhitespace() && it != '\'' && it != '’' && it != '-' } && JunkFilter.isDebris(tail, lex)) return tail
+        return ""
     }
 
     private fun recase(orig: String, cand: String, caps: Boolean): String = when {
@@ -87,7 +98,8 @@ object OcrRepair {
             // nombre seul : gardé (36, 20, 12, 25… sont de vrais nombres), sauf « 50 » → « SO » ou « 4 » → « A » dans une phrase dont la lecture est manifestement abîmée ;
             // chaque chiffre doit alors devenir une lettre (jamais supprimé : « 36 » ne devient pas « E »)
             if (alphaTokens < 3 || core.length > 2 || !noisy) return tok
-            return digitFix(core, lex, keepAll = true)?.takeIf { lex.isCommon(it) }?.let { recase(tok, it, caps) } ?: tok
+            // deux chiffres ne deviennent des lettres que si elles forment un petit mot courant (« 50 » → « SO ») : « 36 » ne devient jamais « EG »
+            return digitFix(core, lex, keepAll = true)?.takeIf { lex.isCommon(it) && (core.length < 2 || it.lowercase() in shortWords) }?.let { recase(tok, it, caps) } ?: tok
         }
         // nombre abîmé : « 1OO » → « 100 », « 2O0X » → « 200X » (O et I lus à la place de 0 et 1 dans un nombre)
         numberFix(core)?.let { return tok.replace(core, it) }

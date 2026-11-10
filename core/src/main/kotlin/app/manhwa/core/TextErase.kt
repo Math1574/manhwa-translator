@@ -561,12 +561,44 @@ object TextErase {
         return best
     }
 
+    /** (expérience) Composantes connexes d'un masque ayant la taille d'une lettre : nombre et part de la surface du masque qu'elles couvrent. */
+    fun letterLike(mask: BooleanArray, w: Int, h: Int, lh: Int): Pair<Int, Float> {
+        val seen = BooleanArray(w * h); val stack = IntArray(w * h); var total = 0; var letterArea = 0; var count = 0
+        for (st in 0 until w * h) {
+            if (!mask[st] || seen[st]) continue
+            var sp = 0; stack[sp++] = st; seen[st] = true
+            var minX = w; var maxX = 0; var minY = h; var maxY = 0; var area = 0
+            while (sp > 0) {
+                val i = stack[--sp]; val x = i % w; val y = i / w; area++
+                if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y
+                for (dy in -1..1) for (dx in -1..1) {
+                    val nx = x + dx; val ny = y + dy
+                    if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
+                    val j = ny * w + nx
+                    if (mask[j] && !seen[j]) { seen[j] = true; stack[sp++] = j }
+                }
+            }
+            total += area
+            val ch = maxY - minY + 1; val cw = maxX - minX + 1
+            val fillRatio = area.toFloat() / (ch * cw)
+            if (ch >= 0.3f * lh && ch <= 1.5f * lh && cw >= 0.05f * lh && cw <= 3f * lh && fillRatio in 0.15f..0.95f) { count++; letterArea += area }
+        }
+        return count to (if (total == 0) 0f else letterArea.toFloat() / total)
+    }
+
+    /** Arbitrage par l'épaisseur : le masque dont les surfaces pleines sont les plus épaisses (d'au moins 30 %, et 4 px) est celui des lettres ; sinon [current]. */
+    private fun depthPick(dMask: BooleanArray, bMask: BooleanArray, w: Int, h: Int, dd: Float, db: Float, current: Boolean): Boolean {
+        val dDeep = maxDepth(dMask, w, h); val bDeep = maxDepth(bMask, w, h)
+        Erasure.trace?.invoke("couleur du texte : sombre ${"%.2f".format(dd)} (épaisseur $dDeep px) / clair ${"%.2f".format(db)} (épaisseur $bDeep px)")
+        return if (dDeep >= 1.3f * bDeep && dDeep >= 4) false else if (bDeep >= 1.3f * dDeep && bDeep >= 4) true else current
+    }
+
     /**
      * Couleur des lettres d'origine : l'extrême de luminosité (très clair ou très foncé) le plus éloigné de la médiane. Quand les deux extrêmes sont loin de la médiane
      * (lettres noires cernées d'une lueur blanche sur un ciel sombre, ou l'inverse), le plus éloigné est souvent la lueur : les lettres sont alors celles dont les pixels extrêmes,
      * dans les boîtes de lecture ([tight], région [w] × [h]), forment les plus grosses surfaces pleines (la lueur est mince).
      */
-    fun extremeTextColor(pixels: IntArray, allowed: BooleanArray, tight: BooleanArray? = null, w: Int = 0, h: Int = 0): Int {
+    fun extremeTextColor(pixels: IntArray, allowed: BooleanArray, tight: BooleanArray? = null, w: Int = 0, h: Int = 0, lineH: Int = 0): Int {
         val idx = pixels.indices.filter { allowed[it] }
         if (idx.isEmpty()) return 0xFF000000.toInt()
         val sorted = idx.sortedBy { lum(pixels[it]) }
@@ -576,15 +608,22 @@ object TextErase {
         val med = lum(pixels[sorted[sorted.size / 2]])
         val dd = med - dark.map { lum(it) }.average().toFloat(); val db = bright.map { lum(it) }.average().toFloat() - med
         var pickBright = db >= dd
-        // les deux extrêmes doivent être nettement distincts de la médiane (un texte blanc sur fond sombre a un extrême sombre à peine plus sombre que le fond : pas d'ambiguïté)
-        if (tight != null && w > 0 && h > 0 && pixels.size == w * h && dd >= 0.12f && db >= 0.25f) {
+        // les deux extrêmes doivent être nettement distincts de la médiane pour qu'il y ait ambiguïté (un texte blanc sur fond sombre a un extrême sombre à peine plus sombre que le fond).
+        // Cas à départager : lettres noires cernées d'une lueur blanche sur un ciel (la lueur est l'extrême le plus éloigné) ; texte blanc fin sur un panneau holographique bleu aux plages
+        // sombres épaisses (ces plages passaient pour les lettres : le texte blanc n'était pas effacé du tout).
+        if (tight != null && w > 0 && h > 0 && pixels.size == w * h && dd >= 0.10f && db >= 0.25f) {
             // surfaces pleines de chaque extrême : tous les pixels des boîtes de lecture qui ont (à 0,12 près) la luminosité de cet extrême, pas seulement les 10 % les plus extrêmes
             val darkRef = (med - dd); val brightRef = (med + db)
             val dMask = BooleanArray(w * h); val bMask = BooleanArray(w * h)
             for (i in idx) if (tight[i]) { val l = lum(pixels[i]); if (l <= darkRef + 0.12f) dMask[i] = true; if (l >= brightRef - 0.12f) bMask[i] = true }
-            val dDeep = maxDepth(dMask, w, h); val bDeep = maxDepth(bMask, w, h)
-            Erasure.trace?.invoke("couleur du texte : sombre ${"%.2f".format(dd)} (épaisseur $dDeep px) / clair ${"%.2f".format(db)} (épaisseur $bDeep px)")
-            if (dDeep >= 1.3f * bDeep && dDeep >= 4) pickBright = false else if (bDeep >= 1.3f * dDeep && bDeep >= 4) pickBright = true
+            // 1) les lettres forment des composantes de la taille d'une lettre ; une lueur soudée ou un fond (plages sombres d'un panneau, ciel) n'en forme pas. Quand l'une des deux classes en forme
+            //    nettement plus que l'autre (au moins 15 points de la surface du masque), ce sont ses pixels les lettres.
+            if (lineH > 0) {
+                val sd = letterLike(dMask, w, h, lineH).second; val sb = letterLike(bMask, w, h, lineH).second
+                Erasure.trace?.invoke("couleur du texte : part de composantes de la taille d'une lettre : sombre ${"%.2f".format(sd)} / clair ${"%.2f".format(sb)}")
+                if (kotlin.math.abs(sd - sb) >= 0.15f) pickBright = sb > sd
+                else if (dd >= 0.24f) pickBright = depthPick(dMask, bMask, w, h, dd, db, pickBright)
+            } else if (dd >= 0.24f) pickBright = depthPick(dMask, bMask, w, h, dd, db, pickBright)
         }
         val pick = if (pickBright) bright else dark
         return pack(pick.sumOf { r(it) } / pick.size, pick.sumOf { g(it) } / pick.size, pick.sumOf { b(it) } / pick.size)

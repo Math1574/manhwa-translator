@@ -451,7 +451,7 @@ object Erasure {
         // texte sur dessin : seules les lettres (remplissage + contour) sont effacées et reconstruites, pas un rectangle entier
         val zoneArt = TextErase.rectMask(w, h, rects(), min(if (a.outlined) 30 else 18, max(4, (lh * (if (a.outlined) 0.35f else 0.25f)).toInt())))
         val tightForColor = TextErase.rectMask(w, h, lineBoxes.map { l -> intArrayOf((l.left * s).toInt() - x0, (l.top * s).toInt() - y0, (l.right * s).toInt() - x0, (l.bottom * s).toInt() - y0) }, 0)
-        val fillColor = TextErase.extremeTextColor(px, zoneArt, tightForColor, w, h)
+        val fillColor = TextErase.extremeTextColor(px, zoneArt, tightForColor, w, h, lh.toInt())
         // lettrage à lueur : on élargit le masque pour effacer aussi la lueur, de sorte que la reconstruction vienne des abords du halo
         // masque serré : lettres et contour, élargis de 2 à 4 px seulement. Un masque élargi à 14 px (ancienne règle, proportionnelle à la hauteur de ligne) fusionnait toutes
         // les lettres en un grand rectangle reconstruit par diffusion : un flou visible sur le dessin, avec des bords nets

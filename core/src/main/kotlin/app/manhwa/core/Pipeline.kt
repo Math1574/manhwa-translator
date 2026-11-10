@@ -38,6 +38,8 @@ class PagePipeline(
     private val junk: (text: String, relativeHeight: Float, anchored: Boolean) -> Boolean = { _, _, _ -> false },
     /** Répare les erreurs de lecture avant traduction (mots collés, chiffres ou minuscules parasites). */
     private val repair: (String) -> String = { it },
+    /** Débris collé en fin de texte (voir OcrRepair.junkTail) : sa boîte ne fait pas partie du bloc, sans quoi la boîte du bloc déborde de la bulle sur le texte voisin. */
+    private val junkTail: (String) -> String = { "" },
     /** Onomatopée à laisser telle quelle ? (texte, nature du bloc, hauteur relative à la médiane de la page). */
     private val isSfx: (text: String, kind: BlockKind, relativeHeight: Float) -> Boolean = { _, _, _ -> false },
     /** Relit les blocs douteux avec un modèle vision-langage (null = désactivé). */
@@ -50,6 +52,28 @@ class PagePipeline(
     /** Ce bloc revient-il à cette image ? (jonctions d'images empilées : un texte coupé est traduit par une seule des deux images voisines). */
     private val owns: (TextBlock) -> Boolean = { true },
 ) {
+    /**
+     * Retire d'un bloc les lignes (ou la fin de la dernière ligne) qui ne sont que le [tail] de débris collé en fin de texte : « …SI ÉLEVÉ ?! Taay sr4: In ) » est la dernière ligne d'une bulle
+     * suivie de caractères de la fenêtre holographique voisine, lus sur la même ligne. Leur boîte étirait celle du bloc jusque sur le dessin, et la traduction débordait de la bulle.
+     */
+    private fun withoutJunkTail(b: TextBlock, tail: String): TextBlock {
+        val t = tail.trim()
+        if (t.isEmpty() || b.vertical || b.lines.isEmpty()) return b
+        var remaining = t.length
+        val lines = b.lines.toMutableList()
+        while (remaining > 0 && lines.isNotEmpty()) {
+            val l = lines.last(); val lt = l.text.trim()
+            if (lt.isEmpty() || lt.length <= remaining + 1) { remaining -= lt.length + 1; lines.removeAt(lines.size - 1) }
+            else {
+                val keep = lt.length - remaining
+                val box = RectF(l.box.left, l.box.top, l.box.left + l.box.width * keep / lt.length, l.box.bottom)
+                lines[lines.size - 1] = l.copy(text = lt.substring(0, keep).trimEnd(), box = box); remaining = 0
+            }
+        }
+        if (lines.isEmpty() || lines.size == b.lines.size && lines.last() == b.lines.last()) return b
+        return b.copy(lines = lines, box = lines.map { it.box }.reduce { x, y -> x.union(y) }, text = lines.joinToString(" ") { it.text })
+    }
+
     /** Vrai si presque tout le texte de la page est en majuscules (au moins trois blocs de 8 lettres ou plus, 70 % sans aucune minuscule). */
     private fun isAllCapsPage(blocks: List<TextBlock>): Boolean {
         val big = blocks.filter { b -> b.text.count { it.isLetter() } >= 8 }
@@ -126,7 +150,8 @@ class PagePipeline(
         if (failedIds.isNotEmpty()) reportDebug(ocrResult, grouped, blocks, failedIds)
 
         val out = blocks.mapIndexedNotNull { i, b ->
-            translated[i]?.let { TranslatedBlock(b.id, b.box, b.text, it, b.vertical, medianLineHeight(b), b.lines.map { l -> l.box }, b.lines.map { l -> l.text }, if (clean[i] != b.text) clean[i] else "", b.kind.name.takeIf { b.kind != BlockKind.UNKNOWN } ?: "", b.container, b.zone) }
+            val bt = withoutJunkTail(b, junkTail(b.text))
+            translated[i]?.let { TranslatedBlock(b.id, bt.box, b.text, it, b.vertical, medianLineHeight(b), bt.lines.map { l -> l.box }, bt.lines.map { l -> l.text }, if (clean[i] != b.text) clean[i] else "", b.kind.name.takeIf { b.kind != BlockKind.UNKNOWN } ?: "", b.container, b.zone) }
         }
         val result = PageResult(ocrResult.imageWidth, ocrResult.imageHeight, out)
         if (errors == 0) cache.put(key, result) // une page partielle n'est pas mise en cache

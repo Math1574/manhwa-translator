@@ -153,6 +153,25 @@ fun pipelineTests() {
         val b = p.process(img, "en", "fr") as PageOutcome.Done
         T.ok(b.fromCache, "2e appel du cache"); T.eq(1, ocr.calls.get())
     }
+    T.test("regroupement: la dernière ligne d'une bulle, lue avec une confiance basse et hors de la zone du détecteur, est gardée si elle prolonge le bloc ; une ligne basse isolée reste écartée") {
+        val g = BlockGrouper()
+        val zone = Detection(RegionClass.TEXT_BUBBLE, RectF(60f, 380f, 400f, 520f), 0.9f)
+        val ls = listOf(line("HOWEVER, COMPLETING", 110f, 390f, 380f, 420f), line("THE JOB TRANSFER IN THE", 90f, 425f, 395f, 455f), line("FIRST STEP. THE NEXT", 100f, 460f, 390f, 490f),
+            line("THING TO DO IS...", 130f, 500f, 360f, 530f, c = 0.30f),                      // prolonge le bloc, sous la zone, confiance basse
+            line("SOMETHING ELSE ENTIRELY", 130f, 900f, 360f, 930f, c = 0.30f))               // isolée, confiance basse : écartée
+        val blocks = g.group(ls, listOf(zone))
+        T.eq(1, blocks.size, "un seul bloc"); T.eq(4, blocks[0].lines.size, "quatre lignes dans le bloc"); T.ok(blocks[0].text.contains("THING TO DO IS"), "dernière ligne gardée : ${blocks[0].text}")
+    }
+    T.test("pipeline: le débris collé en fin de bulle (texte voisin lu sur la même ligne) ne fait plus partie des boîtes du bloc : la traduction ne déborde plus de la bulle") {
+        val rec = TranslationEngine { tx, _, _ -> tx.map { it.uppercase() } }
+        val page = listOf(line("A NORMAL PERSON IS USUALLY AROUND TWENTY", 100f, 100f, 420f, 130f), line("HOW COME MY TOTAL IS SO HIGH AS 36?!", 100f, 140f, 440f, 170f), line("Taay sr4: In )", 470f, 140f, 560f, 170f))
+        val lxj = EnglishLexicon(listOf("a", "normal", "person", "is", "usually", "around", "twenty", "how", "come", "my", "total", "so", "high", "as"), listOf("a", "is", "so", "as", "my"))
+        val o = PagePipeline(ResultCache(tmp()), FakeOcr(page), rec, "e", repair = { OcrRepair.dropJunkTail(OcrRepair.repair(it, lxj), lxj) }, junkTail = { OcrRepair.junkTail(it, lxj) }).process(img, "en", "fr") as PageOutcome.Done
+        val b = o.result.blocks.single()
+        T.eq(2, b.lineBoxes.size, "lignes du bloc"); T.eq(2, b.lineTexts.size, "textes de lignes")
+        T.ok(b.box.right <= 445f, "la boîte du bloc ne s'étend plus jusqu'au débris : ${b.box.right}")
+        T.ok(b.lineTexts.none { it.contains("Taay") }, "débris absent des lignes : ${b.lineTexts}")
+    }
     T.test("pipeline: un fragment en minuscules lu dans le dessin d'une page en majuscules n'est pas traduit (il absorbait le début de la phrase voisine)") {
         val seen = ArrayList<List<String>>()
         val rec = TranslationEngine { tx, _, _ -> seen.add(tx); tx.map { it.uppercase() } }
@@ -763,6 +782,16 @@ fun repairTests() {
         for (keep in listOf("STOP IT! HAHA", "YOU KNOW? OK", "IT IS A QUIET LIFE. (SIGH)", "I'M LEVEL 100. I'M")) T.eq(keep, OcrRepair.dropJunkTail(q(keep), lx))
         // les corrections voulues restent faites
         T.eq("IT STINGS SO BADLY", r("IT STINGS 50 BADLY"))
+    }
+    T.test("réparation : « 36 » n'est jamais lu « EG » (même quand « eg » est un mot courant et qu'un débris de fin de phrase abîme la lecture), « I AND I » parasite corrigé") {
+        val lx2 = EnglishLexicon(listOf("a", "normal", "person's", "total", "attributes", "are", "so", "high", "as", "eg", "i", "and", "also", "have", "the", "second", "talent", "of", "super", "critical", "hit", "it", "badly", "so"),
+            listOf("the", "i", "you", "a", "to", "so", "is", "it", "as", "of", "eg", "and", "have"))
+        fun q2(t: String) = OcrRepair.dropJunkTail(OcrRepair.repair(t, lx2), lx2)
+        T.eq("A NORMAL PERSON'S TOTAL ATTRIBUTES ARE SO HIGH AS 36?!", q2("A NORMAL PERSON'S TOTAL ATTRIBUTES ARE SO HIGH AS 36?! Taay sr4: In )"))
+        T.eq("IT STINGS SO BADLY", OcrRepair.repair("IT STINGS 50 BADLY", lx2))      // une correction voulue reste faite : « 50 » → « SO »
+        T.eq("AND I ALSO HAVE THE SECOND TALENT OF SUPER CRITICAL HIT.", OcrRepair.repair("I AND I ALSO HAVE THE SECOND TALENT OF SUPER CRITICAL HIT.", lx2))
+        T.eq("BUT I ALSO HAVE THE SECOND TALENT", OcrRepair.repair("I BUT I ALSO HAVE THE SECOND TALENT", lx2))
+        T.eq("YOU AND I ALSO HAVE IT", OcrRepair.repair("YOU AND I ALSO HAVE IT", lx2))            // « you and I » : intact
     }
     T.test("réparation : mots collés et ponctuation collée") {
         T.eq("LET'S GO CHECK", r("LET'S GOCHECK"))
@@ -2160,7 +2189,7 @@ fun fontPolicyTests() {
     }
     T.test("couleur des lettres : lettres noires cernées d'une lueur blanche sur un ciel sombre → noires (et non le blanc de la lueur)") {
         val w = 160; val h = 70; val rnd = java.util.Random(3)
-        val px = IntArray(w * h) { rgb(20 + rnd.nextInt(6), 40 + rnd.nextInt(6), 90 + rnd.nextInt(6)) }
+        val px = IntArray(w * h) { rgb(70 + rnd.nextInt(6), 95 + rnd.nextInt(6), 150 + rnd.nextInt(6)) }
         // un nuage clair hors des boîtes de lecture, de grandes surfaces claires
         for (y in 0 until 12) for (x in 0 until w) px[y * w + x] = rgb(200, 210, 225)
         val letters = BooleanArray(w * h); val box = BooleanArray(w * h)
@@ -2182,7 +2211,7 @@ fun fontPolicyTests() {
         val ci = TextErase.extremeTextColor(inv, all, box, w, h); T.ok(((ci shr 16) and 0xFF) > 200, "blanc sur noir : ${"%06X".format(ci and 0xFFFFFF)}")
         // cœur des lettres : sans leur lueur
         val ink = BooleanArray(w * h) { letters[it] || halo[it] }
-        val lc = TextErase.letterCore(px, w, h, ink, rgb(22, 42, 92), c)!!
+        val lc = TextErase.letterCore(px, w, h, ink, rgb(72, 97, 152), c)!!
         val coreN = lc.mask.count { it }; val lettersN = letters.count { it }
         T.ok(coreN in (lettersN * 0.85).toInt()..(lettersN * 1.05).toInt(), "cœur : $coreN pixels pour $lettersN de lettres")
         T.ok(lc.haloPx in 2.5f..6f, "épaisseur de la lueur : ${lc.haloPx}")

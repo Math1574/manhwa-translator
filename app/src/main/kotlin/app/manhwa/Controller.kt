@@ -698,6 +698,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             junk = { t, rel, anchored -> s.source.code != "ja" && s.source.code != "ko" && s.source.code != "zh" && (JunkFilter.isWatermark(t) || ((rel < 1.6f || !anchored) && JunkFilter.isDebris(t, lexicon)) || repeatedAcrossPages(t, keysById[c.id]?.imageHash ?: c.id)) },
             isSfx = { t, kind, rel -> skipSfx && Onomatopoeia.isSfx(t, kind, rel, lexicon) },
             repair = { t -> try { OcrRepair.dropJunkTail(OcrRepair.repair(t, lexicon, graph.gemma.chapterNames()), lexicon) } catch (e: Throwable) { t } },
+            junkTail = { t -> try { OcrRepair.junkTail(t, lexicon) } catch (e: Throwable) { "" } },
             reader = if (rereadOn) graph.blockReader else null,
             // part de vrais mots anglais (noms propres du chapitre compris) : repère les lectures absurdes et vérifie les relectures
             plausibility = { t -> try { val names = graph.gemma.chapterNames(); OcrMerge.plausibility(t, lexicon, names) } catch (e: Throwable) { 1f } },

@@ -88,9 +88,9 @@ for path in sorted(glob.glob(f"{OUT}/reports/*.json")):
         for b in (im.get('overlay') or {}).get('blocks', []):
             f = b.get('family')
             if not f or f == 'noto': continue                      # source CJK : police calibrée
-            c = FONT_CLS.get(f, '?'); fam_count[f] = fam_count.get(f, 0) + 1; cls_count[c] = cls_count.get(c, 0) + 1; fs.append(f)
+            fcls = FONT_CLS.get(f, '?'); fam_count[f] = fam_count.get(f, 0) + 1; cls_count[fcls] = cls_count.get(fcls, 0) + 1; fs.append(f)       # (« c » est le dictionnaire des compteurs : ne pas l'écraser)
             if (b.get('embolden') or 0) > 0 or abs((b.get('scaleX') or 1) - 1) > 0.01: fam_bad += 1
-            if synth_latin and c in ('serif', 'mono'): odd += 1
+            if synth_latin and fcls in ('serif', 'mono'): odd += 1
         if name.startswith(("synth_en_caps", "synth_en_mixed")) and len(set(fs)) > 2: scattered += 1
     if fam_count:
         P(f"- police : {', '.join(f'{k}×{v}' for k, v in sorted(fam_count.items(), key=lambda kv: -kv[1]))} ; classes : {', '.join(f'{k}×{v}' for k, v in sorted(cls_count.items(), key=lambda kv: -kv[1]))}")

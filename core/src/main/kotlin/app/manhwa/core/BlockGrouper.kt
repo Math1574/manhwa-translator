@@ -69,7 +69,18 @@ class BlockGrouper(private val cfg: GrouperConfig = GrouperConfig()) {
             }
             return best
         }
-        val usable = lines.filter { l -> dropReason(l) == null || (anchorOf(l) >= 0 && dropReason(l, relaxed = true) == null) }
+        // une ligne qui prolonge directement un bloc confirmé par le détecteur (même colonne, interligne normal, taille voisine, au moins trois lettres) est acceptée avec le seuil assoupli, même
+        // hors de la zone : le détecteur coupe parfois la zone une ligne trop tôt (« THING TO DO IS… », dernière ligne d'une bulle, restait en anglais sous la traduction des quatre premières)
+        val confirmed = lines.filter { l -> anchorOf(l) >= 0 && (dropReason(l) == null || dropReason(l, relaxed = true) == null) }
+        fun continuesConfirmed(l: OcrLine): Boolean {
+            if (l.text.count { it.isLetter() } < 3 || dropReason(l, relaxed = true) != null) return false
+            val h = l.box.height
+            return confirmed.any { a ->
+                val ratio = if (a.box.height <= 0f || h <= 0f) 0f else max(a.box.height, h) / min(a.box.height, h)
+                a !== l && ratio <= 1.7f && shouldJoin(a, l) && l.box.top >= a.box.top
+            }
+        }
+        val usable = lines.filter { l -> dropReason(l) == null || (anchorOf(l) >= 0 && dropReason(l, relaxed = true) == null) || continuesConfirmed(l) }
         val kept = dedupe(usable)
         if (kept.isEmpty()) return emptyList()
         val byAnchor = HashMap<Int, MutableList<OcrLine>>(); var loose = ArrayList<OcrLine>()
