@@ -118,10 +118,12 @@ data class BlockEdit(
     val vertical: Boolean = false, val lineHeight: Float = 0f,
     val lineBoxes: List<RectF> = emptyList(), val lineTexts: List<String> = emptyList(),
     val blockKind: String = "", val bubble: RectF? = null,
+    /** Effacement précis : seules les lettres (et un léger contour) sont remplacées, pas toute la zone du texte (évite le grand rectangle clair derrière la traduction). */
+    val precise: Boolean = false,
 ) {
     /** Vrai si cette correction ne change rien (à ne pas conserver). */
     val isNeutral: Boolean
-        get() = kind == EditKind.ADJUST && translation == null && source == null && !hidden && dx == 0f && dy == 0f && scale == 1f && fontId == null
+        get() = kind == EditKind.ADJUST && translation == null && source == null && !hidden && dx == 0f && dy == 0f && scale == 1f && fontId == null && !precise
 }
 
 /** Ce que le rendu doit appliquer à un bloc en plus de sa mise en page automatique (coordonnées de la fenêtre traitée). */
@@ -131,6 +133,8 @@ class RenderEdit(
     val region: UserRegion?, val manual: Boolean, val editId: String,
     /** Ne pas traduire : l'image n'est pas touchée, mais le bloc reste (patch invisible) pour pouvoir être rouvert dans l'éditeur. */
     val hidden: Boolean = false,
+    /** Effacement précis des lettres seules (voir [BlockEdit.precise]). */
+    val precise: Boolean = false,
 ) {
     /** Position fixée par l'utilisateur : la mise en page automatique ne la déplace plus. */
     val pinned: Boolean get() = manual || dx != 0f || dy != 0f
@@ -170,7 +174,7 @@ object EditsCodec {
     fun encode(e: BlockEdit): String = listOf(
         "E", e.id, e.kind.name, rect(e.match), esc(e.matchSource), strokes(e.region), nstr(e.source), nstr(e.translation), if (e.hidden) "1" else "0",
         "${e.dx}", "${e.dy}", "${e.scale}", nstr(e.fontId), if (e.vertical) "1" else "0", "${e.lineHeight}",
-        e.lineBoxes.joinToString(";") { rect(it) }, e.lineTexts.joinToString(SEP.toString()) { esc(it) }, esc(e.blockKind), rect(e.bubble),
+        e.lineBoxes.joinToString(";") { rect(it) }, e.lineTexts.joinToString(SEP.toString()) { esc(it) }, esc(e.blockKind), rect(e.bubble), if (e.precise) "1" else "0",
     ).joinToString("\t")
 
     fun decode(line: String): BlockEdit? {
@@ -183,7 +187,7 @@ object EditsCodec {
                 hidden = f[8] == "1", dx = f[9].toFloat(), dy = f[10].toFloat(), scale = f[11].toFloat(), fontId = parseNstr(f[12]), vertical = f[13] == "1", lineHeight = f[14].toFloat(),
                 lineBoxes = if (f[15].isEmpty()) emptyList() else f[15].split(';').mapNotNull { parseRect(it) },
                 lineTexts = if (f[16].isEmpty()) emptyList() else f[16].split(SEP).map { unesc(it) },
-                blockKind = unesc(f[17]), bubble = parseRect(f[18]),
+                blockKind = unesc(f[17]), bubble = parseRect(f[18]), precise = f.getOrNull(19) == "1",
             )
         } catch (_: Exception) { null }
     }

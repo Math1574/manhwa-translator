@@ -95,7 +95,13 @@ private data class Candidate(
 }
 
 /** Bulle sélectionnée par appui long pour une correction manuelle. */
-data class EditTarget(val imageId: String, val bid: Int, val src: String, val tr: String)
+data class EditTarget(val imageId: String, val bid: Int, val src: String, val tr: String, val x: Float = -1f, val y: Float = -1f)
+
+/** Identifiant d'un texte à ajouter à la main (zone non traduite). */
+const val NEW_BLOCK_ID = -2
+
+/** Zone non traduite touchée longuement : coordonnées dans l'image d'origine. */
+class EmptySpot(val imageId: String, val x: Float, val y: Float)
 
 /** Ce que le contrôleur garde d'une page traitée pour pouvoir corriger ses blocs : fenêtre traitée, résultat avant et après corrections, empreinte de l'image. */
 class WorkInfo(
@@ -161,6 +167,9 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     /** Traduction dont on regarde l'original (appui long) : l'interface propose de la corriger pendant quelques secondes. */
     var peekTarget by mutableStateOf<EditTarget?>(null)
     private val clearPeek = Runnable { peekTarget = null }
+    /** Zone non traduite dont on touche longuement l'image : l'interface propose d'y ajouter un texte. */
+    var peekEmpty by mutableStateOf<EmptySpot?>(null)
+    private val clearPeekEmpty = Runnable { peekEmpty = null }
     /** Avancement à reprendre à l'ouverture de la page demandée (0 = aucun). */
     private var resumeTarget = 0
     private var resumeUrl = ""
@@ -525,6 +534,14 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
     /** Ouvre la correction de la traduction dont on vient de regarder l'original. */
     fun openPeekEdit() { peekTarget?.let { openEdit(it) }; peekTarget = null; main.removeCallbacks(clearPeek) }
+
+    /** Ajoute un texte à la main à l'endroit touché (zone non traduite) : l'éditeur s'ouvre sur un rectangle à ajuster. */
+    fun openNewEdit() {
+        val sp = peekEmpty ?: return
+        peekEmpty = null; main.removeCallbacks(clearPeekEmpty)
+        if (workInfo(sp.imageId) == null) return
+        editTarget = EditTarget(sp.imageId, NEW_BLOCK_ID, "", "", sp.x, sp.y)
+    }
     fun goHome() {
         val lib = graph.library.library
         fun esc(t: String) = android.text.Html.escapeHtml(t)
@@ -737,9 +754,15 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         }
         // corrections manuelles de l'utilisateur (zone, texte, position, taille, police) : réappliquées à chaque affichage, indépendamment du cache
         val imageKey = sha256Hex(bytes)
-        val applied: EditApplier.Applied? = if (out is PageOutcome.Done) try { EditApplier.apply(out.result, graph.edits.forImage(imageKey), ctxH.toFloat()) } catch (e: Throwable) { null } else null
-        if (out is PageOutcome.Done) synchronized(workInfos) {
-            workInfos[c.id] = WorkInfo(c.id, c.src, imageKey, workBytes, ctxH, out.result, applied ?: EditApplier.Applied(out.result, emptyMap(), emptyList(), emptyMap()), pageSeries)
+        // une page où rien n'a été détecté garde aussi sa fenêtre : on peut y ajouter un texte à la main
+        val basePage: PageResult? = when (out) {
+            is PageOutcome.Done -> out.result
+            is PageOutcome.NoText -> PageResult(out.imageWidth, out.imageHeight, emptyList())
+            else -> null
+        }
+        val applied: EditApplier.Applied? = if (basePage != null) try { EditApplier.apply(basePage, graph.edits.forImage(imageKey), ctxH.toFloat()) } catch (e: Throwable) { null } else null
+        if (basePage != null) synchronized(workInfos) {
+            workInfos[c.id] = WorkInfo(c.id, c.src, imageKey, workBytes, ctxH, basePage, applied ?: EditApplier.Applied(basePage, emptyMap(), emptyList(), emptyMap()), pageSeries)
         }
         var overlayForLog: JSONObject? = null
         var overlayUpForLog: JSONObject? = null
@@ -751,6 +774,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             val json = synchronized(renderLock) {
                 when {
                     out is PageOutcome.Done -> PageRenderer.render(fonts, workBytes, applied?.page ?: out.result, s, debug, graph.fontMemory, pageSeries, applied?.render ?: emptyMap())
+                    // page sans texte détecté mais avec des textes ajoutés à la main
+                    out is PageOutcome.NoText && applied != null && applied.page.blocks.isNotEmpty() -> PageRenderer.render(fonts, workBytes, applied.page, s, debug, graph.fontMemory, pageSeries, applied.render)
                     s.diagnostic && debug != null -> OverlayBuilder.debugOnly(debug!!)
                     else -> null
                 }
@@ -762,7 +787,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                 fontByBlock[c.id] = m
             }
             var own = json; var up: JSONObject? = null
-            if (json != null && window != null && out is PageOutcome.Done) {
+            if (json != null && window != null && (out is PageOutcome.Done || out is PageOutcome.NoText)) {
                 // la superposition couvre la fenêtre : la partie sous la jonction se pose sur cette image, celle au-dessus sur l'image du dessus
                 val sp = SeamOverlay.split(json, window.ctxH, window.width, window.imageH, c.prevH, c.prevId!!)
                 own = sp.own; up = sp.up
@@ -773,7 +798,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             if (own != null && out is PageOutcome.Done) journalLayout(c, pageUrl, out, own)
         }
         // correction demandée sur cette page alors qu'elle n'était plus en mémoire : l'éditeur peut s'ouvrir
-        pendingEdit?.let { pe -> if (pe.imageId == c.id && out is PageOutcome.Done) { pendingEdit = null; main.post { editTarget = pe } } }
+        pendingEdit?.let { pe -> if (pe.imageId == c.id && basePage != null) { pendingEdit = null; main.post { editTarget = pe } } }
         if (testing) logForTest(c, out, debug, overlayForLog, System.currentTimeMillis() - t0, if (window != null) window.width to window.imageH else null, overlayUpForLog)
         // les informations propres à cette page ne servent plus
         pageNotes.remove(c.id); pageTiming.remove(c.id); batchInfo.remove(c.id); fetchInfo.remove(c.id); stageInfo.remove(c.id)
@@ -827,7 +852,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     class RegionRead(val source: String, val translation: String, val lineBoxes: List<CRect>, val lineTexts: List<String>, val vertical: Boolean, val lineHeight: Float)
 
     /** Bloc en cours de correction : page traitée, bloc visé (dans la page corrigée), correction déjà enregistrée pour lui, nom de l'œuvre. */
-    class EditSession(val info: WorkInfo, val block: TranslatedBlock, val existing: BlockEdit?, val seriesName: String?)
+    class EditSession(val info: WorkInfo, val block: TranslatedBlock, val existing: BlockEdit?, val seriesName: String?, val isNew: Boolean = false)
 
     /** Aperçu en direct : couches d'effacement et de texte du bloc, mises en page avec la correction en cours. À recycler après usage. */
     class EditPreview(val sink: LayerSink, val blockId: Int)
@@ -835,7 +860,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     /** Champs saisis dans l'éditeur (coordonnées de la fenêtre traitée). */
     class EditFields(
         val src: String, val translation: String, val hidden: Boolean, val region: UserRegion?, val zoneChanged: Boolean, val read: RegionRead?,
-        val dx: Float, val dy: Float, val scale: Float, val fontId: String?,
+        val dx: Float, val dy: Float, val scale: Float, val fontId: String?, val precise: Boolean = false,
     )
 
     /** Police de la bibliothèque (aperçu des polices dans l'éditeur). */
@@ -857,8 +882,17 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
     fun editSession(t: EditTarget): EditSession? {
         val info = workInfo(t.imageId) ?: return null
-        val b = info.applied.page.blocks.firstOrNull { it.id == t.bid } ?: return null
         val name = currentSeriesKey?.let { SeriesHint.fromUrl(currentUrl) ?: it }
+        if (t.bid == NEW_BLOCK_ID) {
+            // texte à ajouter : rectangle de départ autour du point touché (coordonnées de l'image, décalées du contexte de la fenêtre)
+            val iw = info.result.imageWidth.toFloat(); val ih = info.result.imageHeight.toFloat()
+            val w = (iw * 0.45f).coerceIn(160f, 520f).coerceAtMost(iw); val h = kotlin.math.min(130f, ih)
+            val cx = (if (t.x >= 0f) t.x else iw / 2f); val cy = (if (t.y >= 0f) t.y else ih / 2f) + info.ctxH
+            val l = (cx - w / 2f).coerceIn(0f, kotlin.math.max(0f, iw - w)); val tp = (cy - h / 2f).coerceIn(0f, kotlin.math.max(0f, ih - h))
+            val box = CRect(l, tp, kotlin.math.min(iw, l + w), kotlin.math.min(ih, tp + h))
+            return EditSession(info, TranslatedBlock(NEW_BLOCK_ID, box, "", "", false, 40f, emptyList(), emptyList()), null, name, isNew = true)
+        }
+        val b = info.applied.page.blocks.firstOrNull { it.id == t.bid } ?: return null
         return EditSession(info, b, info.applied.editByBlock[b.id], name)
     }
 
@@ -872,7 +906,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val info = sn.info; val shift = info.ctxH
         val orig = info.result.blocks.firstOrNull { it.id == sn.block.id }          // bloc détecté (null pour un bloc défini à la main)
         val prev = sn.existing
-        val manual = prev?.kind == EditKind.MANUAL || f.zoneChanged
+        val manual = sn.isNew || prev?.kind == EditKind.MANUAL || f.zoneChanged
         val id = prev?.id ?: ("e" + java.util.UUID.randomUUID().toString().take(8))
         val shown = sn.block
         val newSrc = f.src.trim(); val newTr = f.translation.trim()
@@ -884,14 +918,14 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             val region = f.region?.shifted(-shift.toFloat()) ?: prev?.region ?: UserRegion(imageRect(shown.zone ?: shown.box, shift))
             BlockEdit(
                 id, EditKind.MANUAL, matchBox, matchSrc, region, newSrc, newTr, f.hidden, f.dx, f.dy, f.scale, f.fontId,
-                f.read?.vertical ?: shown.vertical, f.read?.lineHeight ?: shown.lineHeight, boxes, texts, shown.kind, shown.bubble?.let { imageRect(it, shift) },
+                f.read?.vertical ?: shown.vertical, f.read?.lineHeight ?: shown.lineHeight, boxes, texts, shown.kind, shown.bubble?.let { imageRect(it, shift) }, f.precise,
             )
         } else {
             BlockEdit(
                 id, EditKind.ADJUST, matchBox, matchSrc, null,
                 if (newSrc != shown.source.trim()) newSrc else prev?.source,
                 if (newTr != shown.translated.trim()) newTr.ifEmpty { null } else prev?.translation,
-                f.hidden, f.dx, f.dy, f.scale, f.fontId,
+                f.hidden, f.dx, f.dy, f.scale, f.fontId, precise = f.precise,
             )
         }
     }
@@ -964,6 +998,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     fun saveEdit(sn: EditSession, edit: BlockEdit, terms: List<GlossaryEntry>, termsForSeries: Boolean) {
         val info = sn.info
         editTarget = null
+        // un texte ajouté sans traduction n'a rien à afficher : on n'enregistre pas de zone vide
+        if (sn.isNew && edit.translation.isNullOrBlank()) return
         graph.edits.upsert(info.imageKey, edit)
         val series = info.series
         var termAdded = false
@@ -1204,7 +1240,13 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         @JavascriptInterface fun onProgress(percent: Int) { main.post { onProgressReported(percent) } }
         @JavascriptInterface fun onTap() { main.post { onPageTap() } }
         @JavascriptInterface fun onPeek(id: String, bid: String, src: String, tr: String) {
-            main.post { peekTarget = EditTarget(id, bid.toIntOrNull() ?: -1, src, tr); main.removeCallbacks(clearPeek); main.postDelayed(clearPeek, 7000) }
+            main.post { peekEmpty = null; peekTarget = EditTarget(id, bid.toIntOrNull() ?: -1, src, tr); main.removeCallbacks(clearPeek); main.postDelayed(clearPeek, 7000) }
+        }
+        // appui long sur une image sans traduction à cet endroit (texte non détecté, zone ignorée) : seulement si l'image a été traitée
+        @JavascriptInterface fun onPeekEmpty(id: String, x: Double, y: Double) {
+            main.post {
+                if (workInfo(id.removeSuffix("~up")) != null) { peekTarget = null; peekEmpty = EmptySpot(id.removeSuffix("~up"), x.toFloat(), y.toFloat()); main.removeCallbacks(clearPeekEmpty); main.postDelayed(clearPeekEmpty, 7000) }
+            }
         }
         @JavascriptInterface fun onImagesChanged() { main.post { if (active) start(false) } }
         @JavascriptInterface fun onViewport(y: Double, h: Double) { viewportY = y; if (h > 0) viewportH = h }

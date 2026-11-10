@@ -79,6 +79,20 @@ object Erasure {
         return Plan(p.mode, p.x0, p.y0, p.w, p.h, mask, layer, p.bg, p.textColor, p.outlined, p.bubbleArea, p.shape, p.strokePx, p.ink, meanFill(layer), p.glow, p.core, p.letterColor, p.haloColor, p.haloPx)
     }
 
+    /**
+     * Effacement précis : seules les lettres sont remplacées (encre d'origine élargie de [grow] pixels échantillonnés, pour les bords adoucis), le reste de la zone de texte reste intact.
+     * Plus de grand rectangle clair derrière la traduction ; si l'encre est inconnue ou vide, le plan est inchangé.
+     */
+    fun inkOnly(p: Plan, grow: Int): Plan {
+        val ink = p.ink ?: return p
+        val n = p.w * p.h
+        if (ink.size != n || ink.none { it }) return p
+        val d = TextErase.dilate(ink, p.w, p.h, max(1, grow))
+        val mask = BooleanArray(n) { p.mask[it] && d[it] }
+        val layer = IntArray(n) { if (mask[it]) p.layer[it] else 0 }
+        return Plan(p.mode, p.x0, p.y0, p.w, p.h, mask, layer, p.bg, p.textColor, p.outlined, p.bubbleArea, p.shape, p.strokePx, p.ink, meanFill(layer), p.glow, p.core, p.letterColor, p.haloColor, p.haloPx)
+    }
+
     /** @param exclude lignes de texte des AUTRES blocs (pixels de l'image) : un bloc n'efface jamais ce qui appartient à un voisin. */
     /** Cœur des lettres du plan : masque, couleur, couleur du halo, épaisseur du halo (zéros si l'encre est vide ou trop pauvre). */
     private class CoreInfo(val mask: BooleanArray?, val color: Int, val halo: Int, val haloPx: Float)

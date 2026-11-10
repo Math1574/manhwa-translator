@@ -2316,6 +2316,25 @@ fun blockEditTests() {
         val off = EditApplier.centerOffset(RectF(10f, 10f, 30f, 20f), EditApplier.centerTarget(RectF(0f, 0f, 100f, 60f), null, RectF(0f, 0f, 1f, 1f)))
         T.eq(30f, off.first); T.eq(15f, off.second)
     }
+    T.test("effacement précis : seules les lettres élargies sont remplacées, corrections avec l'option conservées") {
+        val w = 12; val h = 6
+        val ink = BooleanArray(w * h).also { it[2 * w + 5] = true; it[3 * w + 5] = true }       // une lettre de deux pixels
+        val plan = Erasure.Plan(Erasure.Mode.FLAT, 0, 0, w, h, BooleanArray(w * h) { true }, IntArray(w * h) { 0xFFF0F0F0.toInt() }, 0xFFF0F0F0.toInt(), 0xFF000000.toInt(), false, null, null, 0f, ink)
+        val r = Erasure.inkOnly(plan, 1)
+        val n = r.mask.count { it }
+        T.ok(n in 6..12 && r.mask[2 * w + 5] && r.mask[3 * w + 5] && !r.mask[0] && !r.mask[5 * w + 11], "lettres élargies seulement : $n pixels")
+        T.ok(r.layer[2 * w + 5] != 0 && r.layer[0] == 0, "couche : transparente hors des lettres")
+        val noInk = Erasure.Plan(Erasure.Mode.FLAT, 0, 0, w, h, BooleanArray(w * h) { true }, IntArray(w * h), 0, 0, false, null, null, 0f, null)
+        T.ok(Erasure.inkOnly(noInk, 1) === noInk, "plan sans encre inchangé")
+        val e = BlockEdit("p", EditKind.ADJUST, RectF(0f, 0f, 5f, 5f), "A", precise = true)
+        T.ok(!e.isNeutral, "l'effacement précis est une correction")
+        T.ok(EditsCodec.decode(EditsCodec.encode(e))!!.precise && !EditsCodec.decode(EditsCodec.encode(e.copy(precise = false)))!!.precise, "enregistrement")
+        // une ancienne ligne enregistrée (sans ce champ) se relit toujours
+        val old = EditsCodec.encode(e.copy(precise = false)).split('\t').dropLast(1).joinToString("\t")
+        T.ok(EditsCodec.decode(old)?.precise == false, "ancien format relu")
+        val page = PageResult(800, 1200, listOf(tb(0, 100f, 100f, 300f, 160f, "HELLO", "Bonjour")))
+        T.ok(EditApplier.apply(page, listOf(e.copy(match = RectF(100f, 100f, 300f, 160f), matchSource = "HELLO"))).render[0]!!.precise, "transmis au rendu")
+    }
     T.test("effacement restreint à la zone dessinée : rien n'est remplacé en dehors") {
         val w = 10; val h = 4
         val plan = Erasure.Plan(Erasure.Mode.FLAT, 0, 0, w, h, BooleanArray(w * h) { true }, IntArray(w * h) { 0xFFFFFFFF.toInt() }, 0xFFFFFFFF.toInt(), 0xFF000000.toInt(), false, null)

@@ -167,6 +167,18 @@ object PageScript {
     if (best) {
       best.style.visibility = 'hidden'; PK.el = best;
       try { AndroidMT.onPeek(bestId, best.getAttribute('data-bid'), best.getAttribute('data-src'), best.getAttribute('data-tr')); } catch(e) {}
+      return;
+    }
+    // aucune traduction sous le doigt : si c'est une image de la page déjà traitée, l'application propose d'y ajouter un texte (texte non détecté, zone ignorée)
+    if (!S.visible) return;
+    var imgs = document.images;
+    for (var j=0;j<imgs.length;j++){
+      var im = imgs[j]; if (im.getAttribute('data-mt-img') || !im.__mtid) continue;
+      var ir = im.getBoundingClientRect();
+      if (ir.width > 0 && ir.height > 0 && x >= ir.left && x <= ir.right && y >= ir.top && y <= ir.bottom) {
+        try { AndroidMT.onPeekEmpty(im.__mtid, (x - ir.left) / ir.width * im.naturalWidth, (y - ir.top) / ir.height * im.naturalHeight); } catch(e) {}
+        return;
+      }
     }
   }
   function unpeek(){ if (PK.el) { PK.el.style.visibility = ''; PK.el = null; } }

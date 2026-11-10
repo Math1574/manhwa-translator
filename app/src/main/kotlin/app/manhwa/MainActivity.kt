@@ -120,6 +120,7 @@ private fun Root(graph: AppGraph) {
     SideEffect { if (tab != 0) lastOther = tab }
 
     AppBackground(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize()) {
     Scaffold(
         containerColor = Color.Transparent, contentColor = MaterialTheme.colorScheme.onBackground,
         bottomBar = {
@@ -144,6 +145,9 @@ private fun Root(graph: AppGraph) {
                 }
             }
         }
+    }
+    // correction d'un texte traduit : éditeur plein écran posé sur toute l'application (zone, texte, position, police, glossaire)
+    c.editTarget?.let { et -> BlockEditor(graph, et) { c.dismissEdit() } }
     }
     }
 }

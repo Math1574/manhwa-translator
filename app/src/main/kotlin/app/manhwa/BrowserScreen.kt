@@ -88,9 +88,6 @@ fun BrowserScreen(graph: AppGraph) {
     val st = graph.settingsStore.settings
     val running = c.active && c.done + c.failed < c.total
 
-    // correction d'un texte traduit : éditeur plein écran (zone, texte, position, police, glossaire)
-    c.editTarget?.let { et -> BlockEditor(graph, et) { c.dismissEdit() } }
-
     Column(Modifier.fillMaxSize()) {
         // Barre d'adresse : visible à l'arrêt, se masque quand on lit en descendant et revient en remontant ou en touchant la page.
         AnimatedVisibility(visible = !c.fullscreen && !c.barsHidden, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
@@ -146,13 +143,14 @@ fun BrowserScreen(graph: AppGraph) {
                 ReaderOverlay(graph)
             }
             // propositions discrètes : reprendre le chapitre où l'on s'était arrêté ; corriger la traduction dont on regarde l'original
-            if (!(c.fullscreen && c.readerBar) && (c.resumeOffer > 0 || c.peekTarget != null || c.navBlocked != null)) {
+            if (!(c.fullscreen && c.readerBar) && (c.resumeOffer > 0 || c.peekTarget != null || c.peekEmpty != null || c.navBlocked != null)) {
                 Column(Modifier.align(Alignment.BottomCenter).padding(bottom = if (c.fullscreen) 28.dp else 20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (c.resumeOffer > 0) {
                         LaunchedEffect(c.resumeOffer) { delay(9000); c.dismissResumeOffer() }
                         Pill("Reprendre à ${c.resumeOffer} %", onClick = { c.resumeNow() }, onClose = { c.dismissResumeOffer() })
                     }
                     if (c.peekTarget != null) Pill("Corriger cette traduction", onClick = { c.openPeekEdit() })
+                    c.peekEmpty?.let { Pill("Ajouter une traduction ici", onClick = { c.openNewEdit() }, onClose = { c.peekEmpty = null }) }
                     c.navBlocked?.let { nb ->
                         if (nb.popup) Pill(nb.reason, onClick = { c.dismissNavBlocked() })
                         else Pill("Redirection bloquée vers ${android.net.Uri.parse(nb.url).host ?: "un autre site"} · Ouvrir", onClick = { c.openBlockedNav() }, onClose = { c.dismissNavBlocked() })

@@ -1,6 +1,7 @@
 package app.manhwa
 
 import android.graphics.Bitmap
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -12,13 +13,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -62,13 +62,12 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import app.manhwa.core.BrushStroke
 import app.manhwa.core.EditKind
 import app.manhwa.core.FontLibrary
@@ -104,18 +103,23 @@ private class EditorState(val sn: TranslationController.EditSession) {
     val iw = sn.info.result.imageWidth.toFloat()
     val ih = sn.info.result.imageHeight.toFloat()
 
-    var tab by mutableStateOf(EditorTab.TEXT)
+    var tab by mutableStateOf(if (sn.isNew) EditorTab.ZONE else EditorTab.TEXT)
     var src by mutableStateOf(block.source)
     var translation by mutableStateOf(block.translated)
     var hidden by mutableStateOf(existing?.hidden == true)
+    val isNew = sn.isNew
 
     // zone du texte (coordonnées de la fenêtre traitée)
     var zoneMode by mutableStateOf(ZoneMode.RECT)
     var rect by mutableStateOf(initialRect())
     val strokes = mutableStateListOf<BrushStroke>()
     var brush by mutableFloatStateOf(max(8f, min(40f, (block.lineHeight.takeIf { it > 0f } ?: 30f) * 0.6f)))
-    var zoneChanged by mutableStateOf(false)
+    var zoneChanged by mutableStateOf(sn.isNew)
     var read by mutableStateOf<TranslationController.RegionRead?>(null)
+    /** Après la lecture d'une zone, celle-ci est ajustée aux lignes lues (effacement plus précis). */
+    var autoFit by mutableStateOf(true)
+    /** Effacement précis : seules les lettres sont remplacées, pas toute la zone. */
+    var precise by mutableStateOf(existing?.precise == true)
 
     // position et taille du texte traduit
     var dx by mutableFloatStateOf(existing?.dx ?: 0f)
@@ -155,7 +159,8 @@ private class EditorState(val sn: TranslationController.EditSession) {
     private fun initialCrop(): RectF {
         var r = textBox().union(initialRect())
         block.bubble?.let { b -> if (b.area <= 4f * r.area) r = r.union(b) }
-        val px = max(70f, r.width * 0.35f); val py = max(70f, r.height * 0.35f)
+        val k = if (sn.isNew) 0.7f else 0.35f           // texte à ajouter : plus de contexte autour du rectangle de départ
+        val px = max(70f, r.width * k); val py = max(70f, r.height * k)
         return fit(RectF(r.left - px, r.top - py, r.right + px, r.bottom + py))
     }
 
@@ -181,15 +186,45 @@ private class EditorState(val sn: TranslationController.EditSession) {
 
     fun syncBrushRect() { if (strokes.isNotEmpty()) rect = UserRegion(rect, strokes.toList()).bounds }
 
-    fun resetZone() { strokes.clear(); rect = initialRect(); zoneChanged = false; read = null; zoneMode = ZoneMode.RECT }
+    fun resetZone() { strokes.clear(); rect = initialRect(); zoneChanged = sn.isNew; read = null; zoneMode = ZoneMode.RECT }
+
+    /** Lignes dont la zone peut épouser la forme : celles qui viennent d'être lues, sinon celles du texte détecté. */
+    fun fitLines(): List<RectF> = (read?.lineBoxes ?: block.lineBoxes)
+
+    /**
+     * Ajuste la zone aux lignes de texte : une barre arrondie par ligne (trait de pinceau le long de la ligne, un peu plus épais que le texte). La zone est ainsi plus précise qu'un
+     * grand rectangle, et l'effacement aussi ; l'effacement précis des lettres est activé.
+     */
+    fun snapToLines() {
+        val lines = fitLines()
+        if (lines.isEmpty()) return
+        val vertical = read?.vertical ?: block.vertical
+        strokes.clear()
+        for (b in lines) {
+            val thick = if (vertical) b.width else b.height
+            val pad = max(3f, thick * 0.25f)
+            val r = thick / 2f + pad
+            if (vertical) {
+                val y0 = b.top - pad + r; val y1 = max(y0, b.bottom + pad - r)
+                strokes.add(BrushStroke(listOf(Pt(b.centerX, y0), Pt(b.centerX, y1)), r))
+            } else {
+                val x0 = b.left - pad + r; val x1 = max(x0, b.right + pad - r)
+                strokes.add(BrushStroke(listOf(Pt(x0, b.centerY), Pt(x1, b.centerY)), r))
+            }
+        }
+        zoneMode = ZoneMode.BRUSH; zoneChanged = true; precise = true
+        syncBrushRect()
+    }
+
+    val canSave: Boolean get() = !(isNew && translation.isBlank())
 
     fun fields(forPreview: Boolean) = TranslationController.EditFields(
         src, translation, hidden && !forPreview, if (zoneChanged || existing?.kind == EditKind.MANUAL) region() else null, zoneChanged, read,
-        if (forPreview) 0f else dx, if (forPreview) 0f else dy, scale, fontId,
+        if (forPreview) 0f else dx, if (forPreview) 0f else dy, scale, fontId, precise,
     )
 
     /** Change à chaque modification qui demande un nouveau calcul de l'aperçu (le déplacement du texte, lui, se voit sans recalcul). */
-    val previewKey: Int get() = listOf(translation, fontId, scale, rect, strokes.size, zoneChanged, zoneMode).hashCode()
+    val previewKey: Int get() = listOf(translation, fontId, scale, rect, strokes.size, zoneChanged, zoneMode, precise).hashCode()
 
     fun hit(x: Float, y: Float, grab: Float): Handle {
         val r = norm(rect)
@@ -230,6 +265,7 @@ fun BlockEditor(graph: AppGraph, target: EditTarget, onClose: () -> Unit) {
     val st = remember(sn) { EditorState(sn) }
     val scope = rememberCoroutineScope()
     var base by remember { mutableStateOf<Pair<Bitmap, Float>?>(null) }
+    BackHandler(onBack = onClose)
 
     // vue : l'image d'origine autour du texte (recadrage de la fenêtre traitée)
     LaunchedEffect(st.crop) { base = withContext(Dispatchers.IO) { c.decodeCrop(sn.info.bytes, st.crop, 1600) } }
@@ -242,35 +278,38 @@ fun BlockEditor(graph: AppGraph, target: EditTarget, onClose: () -> Unit) {
         st.preview = p
     }
 
-    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Column(Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = onClose) { Text("Annuler") }
-                    Text("Corriger la traduction", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
-                    Button(onClick = { c.saveEdit(sn, c.makeEdit(sn, st.fields(false)), st.termList(), st.termsForSeries && sn.info.series != null) }) { Text("Enregistrer") }
-                }
-                EditCanvas(st, base, Modifier.weight(1f).fillMaxWidth())
-                Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (st.tab != EditorTab.ZONE) FilterChip(selected = st.showOriginal, onClick = { st.showOriginal = !st.showOriginal }, label = { Text("Voir l'original") })
-                    TextButton(onClick = { st.widen() }) { Text("Élargir la vue") }
-                    if (sn.existing != null) TextButton(onClick = { c.resetEdit(sn) }) { Text("Rétablir l'automatique") }
-                }
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    EditorTab.values().forEach { t -> FilterChip(selected = st.tab == t, onClick = { st.tab = t }, label = { Text(t.label) }) }
-                }
-                HorizontalDivider(Modifier.padding(top = 6.dp))
+    // posé sur toute l'application (même fenêtre, mêmes marges que le reste) ; la surface empêche les touchers de passer à la page dessous
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Column(Modifier.fillMaxSize().safeDrawingPadding()) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = onClose) { Text("Annuler") }
+                Text(
+                    if (st.isNew) "Ajouter une traduction" else "Corriger la traduction", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall,
+                    textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+                Button(onClick = { c.saveEdit(sn, c.makeEdit(sn, st.fields(false)), st.termList(), st.termsForSeries && sn.info.series != null) }, enabled = st.canSave) { Text("Enregistrer") }
+            }
+            EditCanvas(st, base, Modifier.weight(1f).fillMaxWidth())
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (st.tab != EditorTab.ZONE) FilterChip(selected = st.showOriginal, onClick = { st.showOriginal = !st.showOriginal }, label = { Text("Voir l'original") })
+                TextButton(onClick = { st.widen() }) { Text("Élargir la vue") }
+                if (sn.existing != null) TextButton(onClick = { c.resetEdit(sn) }) { Text("Rétablir l'automatique") }
+            }
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                EditorTab.values().forEach { t -> FilterChip(selected = st.tab == t, onClick = { st.tab = t }, label = { Text(t.label) }) }
+            }
+            HorizontalDivider(Modifier.padding(top = 6.dp))
+            // zone des réglages : elle prend la place restante et défile ; la marge du bas laisse remonter le dernier élément au-dessus du bord de l'écran
+            val panel = Modifier.weight(0.9f).fillMaxWidth()
+            if (st.tab == EditorTab.FONT) FontTab(c, st, panel)
+            else Column(panel.verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 when (st.tab) {
-                    EditorTab.FONT -> FontTab(c, st)
-                    else -> Column(Modifier.fillMaxWidth().heightIn(max = 300.dp).verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        when (st.tab) {
-                            EditorTab.TEXT -> TextTab(c, st, scope)
-                            EditorTab.ZONE -> ZoneTab(c, st, scope)
-                            EditorTab.POSITION -> PositionTab(st)
-                            else -> GlossaryTab(graph, st)
-                        }
-                    }
+                    EditorTab.TEXT -> TextTab(c, st, scope)
+                    EditorTab.ZONE -> ZoneTab(c, st, scope)
+                    EditorTab.POSITION -> PositionTab(st)
+                    else -> GlossaryTab(graph, st)
                 }
+                Spacer(Modifier.height(88.dp))
             }
         }
     }
@@ -373,6 +412,16 @@ private fun EditCanvas(st: EditorState, base: Pair<Bitmap, Float>?, modifier: Mo
     }
 }
 
+/** Interrupteur avec son texte, toute la ligne se touche. */
+@Composable
+private fun ToggleRow(checked: Boolean, onChange: (Boolean) -> Unit, text: String) {
+    Row(Modifier.fillMaxWidth().clickable { onChange(!checked) }, verticalAlignment = Alignment.CenterVertically) {
+        Switch(checked = checked, onCheckedChange = onChange)
+        Spacer(Modifier.width(10.dp))
+        Text(text, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
 @Composable
 private fun TextTab(c: TranslationController, st: EditorState, scope: kotlinx.coroutines.CoroutineScope) {
     OutlinedTextField(st.src, { st.src = it }, Modifier.fillMaxWidth(), label = { Text("Texte d'origine (tel que lu)") }, minLines = 1, maxLines = 4)
@@ -388,11 +437,7 @@ private fun TextTab(c: TranslationController, st: EditorState, scope: kotlinx.co
         enabled = st.src.isNotBlank() && !st.translating,
     ) { Text(if (st.translating) "Traduction en cours…" else "Retraduire le texte d'origine") }
     OutlinedTextField(st.translation, { st.translation = it }, Modifier.fillMaxWidth(), label = { Text("Traduction") }, minLines = 2, maxLines = 6)
-    Row(Modifier.fillMaxWidth().clickable { st.hidden = !st.hidden }, verticalAlignment = Alignment.CenterVertically) {
-        Switch(checked = st.hidden, onCheckedChange = { st.hidden = it })
-        Spacer(Modifier.width(10.dp))
-        Text("Ne pas traduire : laisser l'original tel quel", style = MaterialTheme.typography.bodyMedium)
-    }
+    if (!st.isNew) ToggleRow(st.hidden, { st.hidden = it }, "Ne pas traduire : laisser l'original tel quel")
     Text(
         "Votre traduction est reprise chaque fois que ce même texte est lu. Si le texte d'origine est mal lu, corrigez-le puis touchez « Retraduire », ou redessinez la zone (onglet Zone).",
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -402,6 +447,10 @@ private fun TextTab(c: TranslationController, st: EditorState, scope: kotlinx.co
 
 @Composable
 private fun ZoneTab(c: TranslationController, st: EditorState, scope: kotlinx.coroutines.CoroutineScope) {
+    if (st.isNew) Text(
+        "Placez le rectangle sur le texte à traduire (ou dessinez-le au pinceau), puis touchez « Lire le texte de cette zone ».",
+        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary,
+    )
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         FilterChip(selected = st.zoneMode == ZoneMode.RECT, onClick = { st.zoneMode = ZoneMode.RECT }, label = { Text("Rectangle") })
         FilterChip(selected = st.zoneMode == ZoneMode.BRUSH, onClick = { st.zoneMode = ZoneMode.BRUSH }, label = { Text("Pinceau libre") })
@@ -414,9 +463,11 @@ private fun ZoneTab(c: TranslationController, st: EditorState, scope: kotlinx.co
     if (st.zoneMode == ZoneMode.BRUSH) {
         Text("Taille du pinceau", style = MaterialTheme.typography.labelMedium)
         Slider(st.brush, { st.brush = it }, valueRange = 6f..90f)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { if (st.strokes.isNotEmpty()) { st.strokes.removeAt(st.strokes.lastIndex); st.syncBrushRect() } }, enabled = st.strokes.isNotEmpty()) { Text("Annuler le dernier trait") }
-            OutlinedButton(onClick = { st.strokes.clear() }, enabled = st.strokes.isNotEmpty()) { Text("Tout effacer") }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(
+                onClick = { if (st.strokes.isNotEmpty()) { st.strokes.removeAt(st.strokes.lastIndex); st.syncBrushRect() } }, enabled = st.strokes.isNotEmpty(), modifier = Modifier.weight(1f),
+            ) { Text("Annuler le trait", maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            OutlinedButton(onClick = { st.strokes.clear() }, enabled = st.strokes.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("Tout effacer", maxLines = 1, overflow = TextOverflow.Ellipsis) }
         }
     }
     Button(
@@ -427,16 +478,27 @@ private fun ZoneTab(c: TranslationController, st: EditorState, scope: kotlinx.co
                 val r = withContext(Dispatchers.IO) { try { c.readRegion(st.sn.info, region) } catch (e: Throwable) { null } }
                 st.reading = false
                 if (r == null) st.message = "Aucun texte n'a pu être lu dans cette zone. Agrandissez-la un peu, ou saisissez le texte à la main (onglet Texte)."
-                else { st.src = r.source; st.translation = r.translation; st.read = r; st.zoneChanged = true; st.tab = EditorTab.TEXT }
+                else {
+                    st.src = r.source; st.translation = r.translation; st.read = r; st.zoneChanged = true
+                    if (st.autoFit) st.snapToLines()       // la zone épouse les lignes lues : cadres verts = lignes lues
+                }
             }
         },
-        enabled = !st.reading,
+        enabled = !st.reading, modifier = Modifier.fillMaxWidth(),
     ) { Text(if (st.reading) "Lecture en cours…" else "Lire le texte de cette zone") }
-    OutlinedButton(onClick = { st.resetZone() }, enabled = st.zoneChanged) { Text("Rétablir la zone détectée") }
+    ToggleRow(st.autoFit, { st.autoFit = it }, "Ajuster automatiquement la zone aux lignes lues")
+    OutlinedButton(onClick = { st.snapToLines() }, enabled = st.fitLines().isNotEmpty(), modifier = Modifier.fillMaxWidth()) { Text("Ajuster la zone au texte lu") }
+    ToggleRow(st.precise, { st.precise = it }, "Effacer seulement les lettres (plus précis)")
     Text(
-        "La zone sert à lire le texte et à effacer l'original : rien n'est effacé en dehors. Les cadres verts sont les lignes lues dans la zone.",
+        "Ajustée aux lignes, la zone n'efface que le texte : plus de grand rectangle clair derrière la traduction. Si des restes de l'original apparaissent, désactivez l'effacement précis.",
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+    OutlinedButton(onClick = { st.resetZone() }, enabled = st.zoneChanged && !st.isNew || st.strokes.isNotEmpty(), modifier = Modifier.fillMaxWidth()) { Text("Rétablir la zone détectée") }
+    st.read?.let { r ->
+        Text("Texte lu : ${r.source}", style = MaterialTheme.typography.bodySmall)
+        if (r.translation.isNotBlank()) Text("Traduction : ${r.translation}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+        Text("Les cadres verts sur l'image sont les lignes lues. Corrigez le texte dans l'onglet Texte si besoin.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
     st.message?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
 }
 
@@ -445,22 +507,20 @@ private fun PositionTab(st: EditorState) {
     Text("Faites glisser le texte sur l'image (le cadre en pointillés montre sa place).", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     Text("Taille du texte : ${(st.scale * 100).roundToInt()} %", style = MaterialTheme.typography.labelMedium)
     Slider(st.scale, { st.scale = it }, valueRange = 0.5f..2f)
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        OutlinedButton(onClick = { st.dx -= 3f }) { Text("◀") }
-        OutlinedButton(onClick = { st.dy -= 3f }) { Text("▲") }
-        OutlinedButton(onClick = { st.dy += 3f }) { Text("▼") }
-        OutlinedButton(onClick = { st.dx += 3f }) { Text("▶") }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        OutlinedButton(onClick = { st.dx -= 3f }, modifier = Modifier.weight(1f)) { Text("◀") }
+        OutlinedButton(onClick = { st.dy -= 3f }, modifier = Modifier.weight(1f)) { Text("▲") }
+        OutlinedButton(onClick = { st.dy += 3f }, modifier = Modifier.weight(1f)) { Text("▼") }
+        OutlinedButton(onClick = { st.dx += 3f }, modifier = Modifier.weight(1f)) { Text("▶") }
     }
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(
-            onClick = {
-                val sink = st.preview?.sink; val b = sink?.baseRect; val t = sink?.target
-                if (b != null && t != null) { st.dx = t.first - b.centerX; st.dy = t.second - b.centerY }
-            },
-            enabled = st.preview != null,
-        ) { Text("Centrer dans la bulle") }
-        OutlinedButton(onClick = { st.dx = 0f; st.dy = 0f; st.scale = 1f }, enabled = st.dx != 0f || st.dy != 0f || st.scale != 1f) { Text("Réinitialiser") }
-    }
+    OutlinedButton(
+        onClick = {
+            val sink = st.preview?.sink; val b = sink?.baseRect; val t = sink?.target
+            if (b != null && t != null) { st.dx = t.first - b.centerX; st.dy = t.second - b.centerY }
+        },
+        enabled = st.preview != null, modifier = Modifier.fillMaxWidth(),
+    ) { Text("Centrer dans la bulle") }
+    OutlinedButton(onClick = { st.dx = 0f; st.dy = 0f; st.scale = 1f }, enabled = st.dx != 0f || st.dy != 0f || st.scale != 1f, modifier = Modifier.fillMaxWidth()) { Text("Réinitialiser position et taille") }
 }
 
 /** Familles du sélecteur de police, dans l'ordre d'affichage. */
@@ -489,7 +549,7 @@ private sealed class FontRow {
 }
 
 @Composable
-private fun FontTab(c: TranslationController, st: EditorState) {
+private fun FontTab(c: TranslationController, st: EditorState, modifier: Modifier) {
     val rows = remember {
         val l = ArrayList<FontRow>()
         l.add(FontRow.Auto())
@@ -502,7 +562,7 @@ private fun FontTab(c: TranslationController, st: EditorState) {
         l
     }
     val sample = st.translation.trim().replace('\n', ' ').take(36).ifBlank { "Aperçu du texte" }
-    LazyColumn(Modifier.fillMaxWidth().height(300.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp)) {
+    LazyColumn(modifier, contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 88.dp)) {
         items(rows) { row ->
             when (row) {
                 is FontRow.Header -> Text(row.text, Modifier.padding(top = 10.dp, bottom = 2.dp), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
@@ -535,10 +595,11 @@ private fun GlossaryTab(graph: AppGraph, st: EditorState) {
         "Ajoutez les noms ou les termes à toujours traduire de la même façon : le texte est retraduit avec eux dès l'enregistrement (sauf si vous avez saisi la traduction vous-même).",
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        FilterChip(selected = st.termsForSeries && series != null, onClick = { st.termsForSeries = true }, enabled = series != null, label = { Text(st.sn.seriesName?.let { "Cette œuvre : $it".take(34) } ?: "Cette œuvre (ouvrez-en une)") })
-        FilterChip(selected = !st.termsForSeries || series == null, onClick = { st.termsForSeries = false }, label = { Text("Toutes les œuvres") })
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilterChip(selected = st.termsForSeries && series != null, onClick = { st.termsForSeries = true }, enabled = series != null, label = { Text("Cette œuvre", maxLines = 1) })
+        FilterChip(selected = !st.termsForSeries || series == null, onClick = { st.termsForSeries = false }, label = { Text("Toutes les œuvres", maxLines = 1) })
     }
+    st.sn.seriesName?.let { Text("Œuvre : $it", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
     // mots du texte d'origine proposés d'un toucher (noms propres probables en premier)
     val words = remember(st.src) {
         Regex("[\\p{L}][\\p{L}'’-]{2,}").findAll(st.src).map { it.value }.distinctBy { it.lowercase() }
@@ -559,7 +620,7 @@ private fun GlossaryTab(graph: AppGraph, st: EditorState) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(t.src, { t.src = it }, Modifier.weight(1f), label = { Text("Dans l'original") }, singleLine = true)
             OutlinedTextField(t.tgt, { t.tgt = it }, Modifier.weight(1f), label = { Text("Traduction") }, singleLine = true)
-            if (st.terms.size > 1) TextButton(onClick = { st.terms.removeAt(i) }) { Text("✕") }
+            if (st.terms.size > 1) TextButton(onClick = { st.terms.removeAt(i) }, modifier = Modifier.width(44.dp)) { Text("✕", maxLines = 1) }
         }
     }
     OutlinedButton(onClick = { st.terms.add(TermRow()) }) { Text("Ajouter un autre terme") }

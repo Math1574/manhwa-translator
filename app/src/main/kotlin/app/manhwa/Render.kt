@@ -319,7 +319,9 @@ object PageRenderer {
         val plan0 = if (src != null) try { Erasure.plan(src, s, lineBoxes, lineH, iw, ih, others, bubble, outside.filter { isRect(it) }, free = bubble == null, outlines = if (bubble == null) neighborBubbles else emptyList(), extra = listOfNotNull(zone), protectRound = outside.filter { !isRect(it) }, confine = if (bubble == null) b.bubble?.takeIf { it.area >= 1.6f * lineBoxes.reduce { x, y -> x.union(y) }.area } else null, confineRect = b.bubble?.let { isRect(it) } ?: false) } catch (e: Throwable) { null } else null
         // zone dessinée par l'utilisateur : rien n'est effacé en dehors
         val userRegion = edit?.region
-        val plan = if (plan0 != null && userRegion != null) try { Erasure.restrict(plan0, userRegion.mask(plan0.x0, plan0.y0, plan0.w, plan0.h, s)) } catch (e: Throwable) { plan0 } else plan0
+        val plan1 = if (plan0 != null && userRegion != null) try { Erasure.restrict(plan0, userRegion.mask(plan0.x0, plan0.y0, plan0.w, plan0.h, s)) } catch (e: Throwable) { plan0 } else plan0
+        // effacement précis : seules les lettres sont remplacées (pas de grand rectangle clair derrière la traduction)
+        val plan = if (plan1 != null && edit?.precise == true) try { Erasure.inkOnly(plan1, max(2, (lineH * s * 0.08f).toInt())) } catch (e: Throwable) { plan1 } else plan1
         val flat = plan?.mode == Erasure.Mode.FLAT
         val rectangular = flat && plan?.shape == null && union.width > 2.2f * union.height && lineBoxes.size <= 2
         // hauteur de ligne pour le choix du style : mesurée sur les lettres (les boîtes d'une ligne inclinée sont gonflées)
