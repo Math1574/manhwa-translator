@@ -193,6 +193,7 @@ object PageRenderer {
             // bulles annoncées par le détecteur et confirmées par un contour visible (le texte libre sur page blanche ou noire n'en a pas)
             val verified = HashMap<Int, RectF?>()
             for (b in blocks) {
+                if (only != null && b.id != only) continue            // aperçu de l'éditeur : les bulles voisines gardent la boîte annoncée par le détecteur (plus rapide)
                 val bb = b.bubble ?: continue
                 val u = b.lineBoxes.ifEmpty { listOf(b.box) }.reduce { x, y -> x.union(y) }
                 verified[b.id] = if (src == null) bb else try { if (BubbleVerifier.verify(src, s, bb, u, iw, ih)) bb else null } catch (e: Throwable) { null }
