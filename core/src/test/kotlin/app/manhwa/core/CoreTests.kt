@@ -2270,10 +2270,11 @@ fun blockEditTests() {
         val tr = BlockEdit("e1", EditKind.ADJUST, RectF(100f, 100f, 300f, 160f), "HELLO THERE", translation = "Salut !", dx = 12f, dy = -5f, scale = 1.2f, fontId = "boogaloo")
         val hide = BlockEdit("e2", EditKind.ADJUST, RectF(102f, 398f, 298f, 462f), "SECOND ONE", hidden = true)            // boîte légèrement différente : retrouvé par recouvrement
         val a = EditApplier.apply(page, listOf(tr, hide))
-        T.eq(2, a.page.blocks.size, "blocs restants"); T.eq("Salut !", a.page.blocks.first { it.id == 0 }.translated); T.eq("Troisième", a.page.blocks.first { it.id == 2 }.translated)
+        T.eq(3, a.page.blocks.size, "tous les blocs restent (le bloc non traduit garde un patch invisible)"); T.eq("Salut !", a.page.blocks.first { it.id == 0 }.translated); T.eq("Troisième", a.page.blocks.first { it.id == 2 }.translated)
+        T.ok(a.render[1]!!.hidden && !a.render[0]!!.hidden, "bloc non traduit signalé au rendu")
         val r = a.render[0]!!
         T.ok(r.dx == 12f && r.dy == -5f && r.scale == 1.2f && r.fontId == "boogaloo" && r.pinned && !r.manual, "directives de rendu")
-        T.eq(null, a.render[2], "bloc non corrigé : aucune directive"); T.eq(1, a.removed.size)
+        T.eq(null, a.render[2], "bloc non corrigé : aucune directive"); T.eq(0, a.removed.size)
         // le texte a bougé de 300 px mais est le même : retrouvé par son texte s'il recouvre un peu la boîte conservée
         val moved = PageResult(800, 1200, listOf(tb(7, 150f, 130f, 330f, 190f, "HELLO  THERE", "x")))
         T.eq("Salut !", EditApplier.apply(moved, listOf(tr)).page.blocks.single().translated, "retrouvé par le texte")
@@ -2294,9 +2295,10 @@ fun blockEditTests() {
         T.eq("Bonjour, deuxième ligne", nb.translated); T.eq(region.bounds, nb.zone); T.eq(2, nb.lineBoxes.size); T.eq(30f, nb.lineHeight)
         T.ok(a.page.blocks.any { it.id == 2 }, "bloc éloigné conservé"); T.eq(2, a.removed.size, "deux blocs détectés retirés")
         val r = a.render[nb.id]!!; T.ok(r.manual && r.region != null && r.fontId == "anton" && r.pinned, "directives du bloc manuel")
-        // masqué : les blocs recouverts disparaissent, rien n'est ajouté
+        // non traduit : les blocs recouverts sont remplacés par un bloc invisible, que l'on peut rouvrir
         val h = EditApplier.apply(page, listOf(m.copy(hidden = true)))
-        T.eq(1, h.page.blocks.size, "masqué"); T.eq(2, h.removed.size)
+        T.eq(2, h.page.blocks.size, "bloc éloigné + bloc non traduit (patch invisible)"); T.eq(2, h.removed.size)
+        T.ok(h.render[h.page.blocks.first { it.id >= EditApplier.MANUAL_ID_BASE }.id]!!.hidden, "bloc manuel non traduit")
         // deux blocs manuels : identifiants distincts ; fenêtre décalée
         val m2 = m.copy(id = "m2", match = null, matchSource = "", region = UserRegion(RectF(500f, 700f, 700f, 760f)), lineBoxes = listOf(RectF(500f, 700f, 700f, 760f)), lineTexts = listOf("FAR AWAY"), translation = "Très loin")
         val shiftedPage = PageResult(800, 1300, page.blocks.map { it.copy(box = it.box.offset(0f, 100f), lineBoxes = it.lineBoxes.map { r -> r.offset(0f, 100f) }) })     // fenêtre : 100 px de contexte au-dessus

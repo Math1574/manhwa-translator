@@ -52,7 +52,17 @@ import app.manhwa.core.sha256Hex
 import app.manhwa.core.LlmModels
 import app.manhwa.core.PageJob
 import app.manhwa.core.PageOutcome
+import app.manhwa.core.BlockEdit
+import app.manhwa.core.BlockGrouper
 import app.manhwa.core.EditApplier
+import app.manhwa.core.EditKind
+import app.manhwa.core.OcrLine
+import app.manhwa.core.Protected
+import app.manhwa.core.RectF as CRect
+import app.manhwa.core.SeriesHint
+import app.manhwa.core.TextNormalizer
+import app.manhwa.core.TranslatedBlock
+import app.manhwa.core.UserRegion
 import app.manhwa.core.PagePipeline
 import app.manhwa.core.PageResult
 import app.manhwa.core.PageQueue
@@ -514,7 +524,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     fun dismissResumeOffer() { resumeOffer = 0 }
 
     /** Ouvre la correction de la traduction dont on vient de regarder l'original. */
-    fun openPeekEdit() { peekTarget?.let { editTarget = it }; peekTarget = null; main.removeCallbacks(clearPeek) }
+    fun openPeekEdit() { peekTarget?.let { openEdit(it) }; peekTarget = null; main.removeCallbacks(clearPeek) }
     fun goHome() {
         val lib = graph.library.library
         fun esc(t: String) = android.text.Html.escapeHtml(t)
@@ -746,6 +756,11 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                 }
             }
             stages[2] = SystemClock.uptimeMillis() - tRender
+            json?.optJSONArray("blocks")?.let { arr ->
+                val m = HashMap<Int, String>()
+                for (i in 0 until arr.length()) { val r = arr.getJSONObject(i); if (r.has("bid")) m[r.getInt("bid")] = r.optString("family") }
+                fontByBlock[c.id] = m
+            }
             var own = json; var up: JSONObject? = null
             if (json != null && window != null && out is PageOutcome.Done) {
                 // la superposition couvre la fenêtre : la partie sous la jonction se pose sur cette image, celle au-dessus sur l'image du dessus
@@ -806,24 +821,209 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         )
     }
 
-    /** Enregistre la correction manuelle (mémorisée dans le glossaire), la consigne au journal et retraduit la page concernée. */
-    fun saveCorrection(newText: String, termSource: String = "", termTarget: String = "") {
-        val t = editTarget ?: return
+    // ---------- éditeur de correction d'un texte ----------
+
+    /** Texte lu dans une zone dessinée, sa traduction et la géométrie de ses lignes (coordonnées de la fenêtre traitée). */
+    class RegionRead(val source: String, val translation: String, val lineBoxes: List<CRect>, val lineTexts: List<String>, val vertical: Boolean, val lineHeight: Float)
+
+    /** Bloc en cours de correction : page traitée, bloc visé (dans la page corrigée), correction déjà enregistrée pour lui, nom de l'œuvre. */
+    class EditSession(val info: WorkInfo, val block: TranslatedBlock, val existing: BlockEdit?, val seriesName: String?)
+
+    /** Aperçu en direct : couches d'effacement et de texte du bloc, mises en page avec la correction en cours. À recycler après usage. */
+    class EditPreview(val sink: LayerSink, val blockId: Int)
+
+    /** Champs saisis dans l'éditeur (coordonnées de la fenêtre traitée). */
+    class EditFields(
+        val src: String, val translation: String, val hidden: Boolean, val region: UserRegion?, val zoneChanged: Boolean, val read: RegionRead?,
+        val dx: Float, val dy: Float, val scale: Float, val fontId: String?,
+    )
+
+    /** Police de la bibliothèque (aperçu des polices dans l'éditeur). */
+    fun typeface(id: String): android.graphics.Typeface = fonts.family(id)
+
+    /** Police retenue par le dernier rendu de chaque bloc (page → bloc → police) : l'aperçu de l'éditeur montre la même que la page. */
+    private val fontByBlock = ConcurrentHashMap<String, Map<Int, String>>()
+
+    /** Ouvre l'éditeur sur un texte ; si la page n'est plus en mémoire, elle est d'abord retraitée (résultat en cache : quelques secondes). */
+    fun openEdit(t: EditTarget) {
+        val id = t.imageId.removeSuffix("~up")      // la partie d'un texte posée sur l'image du dessus a été traitée par cette image-ci
+        val tt = t.copy(imageId = id)
+        if (workInfo(id) != null) { editTarget = tt; return }
+        val cand = candidatesById[id]
+        if (cand == null) { lastError = "Cette page n'est plus en mémoire : rouvrez-la puis recommencez."; return }
+        pendingEdit = tt
+        queue.submit(PageJob(cand.id + "#edit" + System.nanoTime(), 0) { cancelled -> process(cand, cancelled) })
+    }
+
+    fun editSession(t: EditTarget): EditSession? {
+        val info = workInfo(t.imageId) ?: return null
+        val b = info.applied.page.blocks.firstOrNull { it.id == t.bid } ?: return null
+        val name = currentSeriesKey?.let { SeriesHint.fromUrl(currentUrl) ?: it }
+        return EditSession(info, b, info.applied.editByBlock[b.id], name)
+    }
+
+    /** Police automatique du bloc, telle que le dernier rendu de la page l'a choisie. */
+    fun autoFont(info: WorkInfo, blockId: Int): String? = fontByBlock[info.imageId]?.get(blockId)
+
+    private fun imageRect(r: CRect, ctxH: Int) = r.offset(0f, -ctxH.toFloat())
+
+    /** Correction correspondant aux champs saisis (coordonnées de l'image). */
+    fun makeEdit(sn: EditSession, f: EditFields): BlockEdit {
+        val info = sn.info; val shift = info.ctxH
+        val orig = info.result.blocks.firstOrNull { it.id == sn.block.id }          // bloc détecté (null pour un bloc défini à la main)
+        val prev = sn.existing
+        val manual = prev?.kind == EditKind.MANUAL || f.zoneChanged
+        val id = prev?.id ?: ("e" + java.util.UUID.randomUUID().toString().take(8))
+        val shown = sn.block
+        val newSrc = f.src.trim(); val newTr = f.translation.trim()
+        val boxes = (f.read?.lineBoxes ?: shown.lineBoxes).map { imageRect(it, shift) }
+        val texts = f.read?.lineTexts ?: shown.lineTexts
+        val matchBox = if (prev?.kind == EditKind.MANUAL) prev.match else (orig?.box?.let { imageRect(it, shift) } ?: prev?.match)
+        val matchSrc = if (prev?.kind == EditKind.MANUAL) prev.matchSource else (orig?.source ?: prev?.matchSource ?: "")
+        return if (manual) {
+            val region = f.region?.shifted(-shift.toFloat()) ?: prev?.region ?: UserRegion(imageRect(shown.zone ?: shown.box, shift))
+            BlockEdit(
+                id, EditKind.MANUAL, matchBox, matchSrc, region, newSrc, newTr, f.hidden, f.dx, f.dy, f.scale, f.fontId,
+                f.read?.vertical ?: shown.vertical, f.read?.lineHeight ?: shown.lineHeight, boxes, texts, shown.kind, shown.bubble?.let { imageRect(it, shift) },
+            )
+        } else {
+            BlockEdit(
+                id, EditKind.ADJUST, matchBox, matchSrc, null,
+                if (newSrc != shown.source.trim()) newSrc else prev?.source,
+                if (newTr != shown.translated.trim()) newTr.ifEmpty { null } else prev?.translation,
+                f.hidden, f.dx, f.dy, f.scale, f.fontId,
+            )
+        }
+    }
+
+    /** Aperçu du bloc avec la correction en cours : même chemin que l'affichage définitif (corrections appliquées au résultat de la page, puis rendu du seul bloc visé). */
+    fun renderEditPreview(sn: EditSession, draft: BlockEdit): EditPreview? {
+        val info = sn.info
+        val others = graph.edits.forImage(info.imageKey).filter { it.id != draft.id }
+        val withAuto = if (draft.fontId == null) autoFont(info, sn.block.id) else null            // police automatique du dernier rendu, pour que l'aperçu soit fidèle
+        val applied = EditApplier.apply(info.result, others + draft.copy(fontId = draft.fontId ?: withAuto, dx = 0f, dy = 0f), info.ctxH.toFloat())
+        val id = applied.editByBlock.entries.firstOrNull { it.value.id == draft.id }?.key ?: return null
+        val sink = LayerSink()
+        synchronized(renderLock) { PageRenderer.render(fonts, info.bytes, applied.page, graph.settingsStore.settings, null, null, null, applied.render, only = id, sink = sink) }
+        return if (sink.erase != null && sink.text != null && sink.rect != null) EditPreview(sink, id) else { sink.recycle(); null }
+    }
+
+    /** Traduction d'un texte, comme la page le ferait (corrections et glossaire de l'œuvre compris). */
+    fun translateText(text: String): String {
+        val s = graph.settingsStore.settings
+        val g = graph.glossary.current(currentSeriesKey)
+        g.correctionFor(text)?.let { return it }
+        val spec = LlmModels.specFor(s.engine)
+        val translator: TranslationEngine = if (spec == null) MlKitTranslation(graph.models) else graph.gemma
+        val llm = translator.usesGlossaryPrompt()
+        val prot = if (llm) Protected(TextNormalizer.fixCase(text), emptyMap()) else g.protect(text).let { it.copy(text = TextNormalizer.fixCase(it.text)) }
+        val terms = if (llm) g.terms().filter { t -> text.contains(t.source, ignoreCase = true) } else emptyList()
+        val out = (if (llm) translator.translateWithGlossary(listOf(prot.text), s.source.code, s.target.code, terms) else translator.translate(listOf(prot.text), s.source.code, s.target.code)).single()
+        val restored = if (llm) out else (g.restore(out, prot) ?: translator.translate(listOf(text), s.source.code, s.target.code).single())
+        return TextNormalizer.matchCase(text, restored)
+    }
+
+    /** Lit le texte d'une zone dessinée (lecture du texte sur un recadrage) puis le traduit ; null si rien n'a pu être lu. */
+    fun readRegion(info: WorkInfo, region: UserRegion): RegionRead? {
+        val iw = info.result.imageWidth.toFloat(); val ih = info.result.imageHeight.toFloat()
+        val b = region.bounds
+        val pad = kotlin.math.max(8f, 0.06f * kotlin.math.max(b.width, b.height))
+        val crop = CRect(kotlin.math.max(0f, b.left - pad), kotlin.math.max(0f, b.top - pad), kotlin.math.min(iw, b.right + pad), kotlin.math.min(ih, b.bottom + pad))
+        if (crop.width < 8f || crop.height < 8f) return null
+        val dec = decodeCrop(info.bytes, crop, 2400) ?: return null
+        var bmp = dec.first; var scale = dec.second
+        // petit recadrage : agrandi, la lecture du texte est bien meilleure sur des lettres de 25 px que de 10 px
+        if (kotlin.math.max(bmp.width, bmp.height) < 500) {
+            val k = 2f
+            val big = Bitmap.createScaledBitmap(bmp, (bmp.width * k).toInt(), (bmp.height * k).toInt(), true)
+            bmp.recycle(); bmp = big; scale *= k
+        }
+        val jpg = ByteArrayOutputStream().also { bmp.compress(Bitmap.CompressFormat.JPEG, 94, it) }.toByteArray()
+        bmp.recycle()
+        val s = graph.settingsStore.settings
+        val enhanced = s.enhancedOcr && graph.paddleModels.available
+        val lexicon = Lexicon.get(ctx)
+        val ocr = CombinedOcr(s.source, MlKitOcr(s.source), if (enhanced) graph.paddle else null, lexicon, parallel = !thermalHot)
+        val res = synchronized(ocrLock) { ocr.recognize(jpg) }
+        val lines = res.lines.map { l -> l.copy(box = CRect(crop.left + l.box.left / scale, crop.top + l.box.top / scale, crop.left + l.box.right / scale, crop.top + l.box.bottom / scale)) }
+            .filter { l -> l.text.any { it.isLetterOrDigit() } && region.contains(l.box.centerX, l.box.centerY) }
+        if (lines.isEmpty()) return null
+        val blocks = BlockGrouper().group(lines, emptyList())
+        val sorted: List<OcrLine> = blocks.flatMap { it.lines }
+        val raw = blocks.joinToString(" ") { it.text }.trim()
+        if (raw.isEmpty()) return null
+        val names = graph.gemma.chapterNames()
+        val text = try { OcrRepair.dropJunkTail(OcrRepair.repair(raw, lexicon, names), lexicon) } catch (e: Throwable) { raw }
+        val tr = try { translateText(text) } catch (e: Throwable) { "" }
+        val vertical = blocks.firstOrNull()?.vertical ?: false
+        val hs = sorted.map { if (vertical) it.box.width else it.lineHeight }.sorted()
+        return RegionRead(text, tr, sorted.map { it.box }, sorted.map { it.text }, vertical, if (hs.isEmpty()) 0f else hs[hs.size / 2])
+    }
+
+    /** Enregistre la correction, les termes du glossaire, la consigne au journal, puis redessine la page. */
+    fun saveEdit(sn: EditSession, edit: BlockEdit, terms: List<GlossaryEntry>, termsForSeries: Boolean) {
+        val info = sn.info
         editTarget = null
-        val clean = newText.trim()
-        val ts = termSource.trim(); val tt = termTarget.trim()
-        val textChanged = clean.isNotEmpty() && clean != t.tr
-        val termAdded = ts.isNotEmpty() && tt.isNotEmpty()
-        if (!textChanged && !termAdded) return
-        if (textChanged) graph.glossary.addCorrection(t.src, clean)
-        if (termAdded) graph.glossary.add(ts, tt)
+        graph.edits.upsert(info.imageKey, edit)
+        val series = info.series
+        var termAdded = false
+        for (t in terms) {
+            val a = t.source.trim(); val bb = t.target.trim()
+            if (a.isEmpty() || bb.isEmpty()) continue
+            if (termsForSeries && series != null) graph.glossary.addForSeries(series, a, bb) else graph.glossary.add(a, bb)
+            termAdded = true
+        }
+        // la même traduction est reprise partout où le même texte est lu (comme avant) ; la correction porte sur le texte détecté, pas sur celui que l'on vient de corriger à la main
+        val detected = info.result.blocks.firstOrNull { it.id == sn.block.id }?.source ?: sn.block.source
+        val manualTr = edit.translation
+        if (manualTr != null && manualTr.isNotBlank() && edit.kind == EditKind.ADJUST && detected.isNotBlank()) graph.glossary.addCorrection(detected, manualTr)
+        val summary = buildList {
+            if (edit.kind == EditKind.MANUAL) add("zone")
+            if (edit.translation != null) add("traduction")
+            if (edit.source != null) add("lecture")
+            if (edit.hidden) add("non traduit")
+            if (edit.dx != 0f || edit.dy != 0f) add("position %.0f,%.0f".format(java.util.Locale.ROOT, edit.dx, edit.dy))
+            if (edit.scale != 1f) add("taille %.2f".format(java.util.Locale.ROOT, edit.scale))
+            if (edit.fontId != null) add("police ${edit.fontId}")
+            if (termAdded) add("glossaire")
+        }.joinToString(", ")
         graph.journal.add(
-            JSONObject().put("t", System.currentTimeMillis()).put("type", "correction").put("url", currentUrl).put("src", t.src).put("before", t.tr).put("after", if (textChanged) clean else "")
-                .put("term", if (termAdded) "$ts = $tt" else ""),
+            JSONObject().put("t", System.currentTimeMillis()).put("type", "correction").put("url", currentUrl).put("src", sn.block.source).put("before", sn.block.translated)
+                .put("after", edit.translation ?: "").put("edit", summary).put("term", terms.filter { it.source.isNotBlank() && it.target.isNotBlank() }.joinToString("; ") { "${it.source} = ${it.target}" }),
         )
-        val cand = candidatesById[t.imageId] ?: return
-        keysById[t.imageId]?.let { graph.cache.remove(it) }
+        // des termes ajoutés sans traduction saisie : la page est retraduite avec eux ; sinon, le résultat en cache est repris et seul le rendu est refait (quelques instants)
+        if (termAdded && edit.translation == null) keysById[info.imageId]?.let { graph.cache.remove(it) }
+        reprocess(info.imageId)
+    }
+
+    /** Rétablit la détection et la traduction automatiques d'un bloc. */
+    fun resetEdit(sn: EditSession) {
+        val e = sn.existing ?: run { editTarget = null; return }
+        editTarget = null
+        graph.edits.remove(sn.info.imageKey, e.id)
+        graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "correction").put("url", currentUrl).put("src", sn.block.source).put("edit", "rétabli"))
+        reprocess(sn.info.imageId)
+    }
+
+    private fun reprocess(imageId: String) {
+        val cand = candidatesById[imageId] ?: return
         queue.submit(PageJob(cand.id + "#fix" + System.nanoTime(), 0) { cancelled -> process(cand, cancelled) })
+    }
+
+    /** Recadrage d'une image encodée (coordonnées de la fenêtre) ramené à [maxSide] pixels au plus : bitmap et échelle (pixels du bitmap par pixel de la fenêtre). */
+    fun decodeCrop(bytes: ByteArray, crop: CRect, maxSide: Int): Pair<Bitmap, Float>? {
+        return try {
+            val dec = android.graphics.BitmapRegionDecoder.newInstance(bytes, 0, bytes.size, false) ?: return null
+            try {
+                val l = crop.left.toInt().coerceIn(0, dec.width - 1); val t = crop.top.toInt().coerceIn(0, dec.height - 1)
+                val r = crop.right.toInt().coerceIn(l + 1, dec.width); val b = crop.bottom.toInt().coerceIn(t + 1, dec.height)
+                var sample = 1
+                while (kotlin.math.max(r - l, b - t) / sample > maxSide) sample *= 2
+                val opts = BitmapFactory.Options().apply { inSampleSize = sample; inPreferredConfig = Bitmap.Config.ARGB_8888 }
+                val bmp = dec.decodeRegion(android.graphics.Rect(l, t, r, b), opts) ?: return null
+                bmp to (bmp.width.toFloat() / (r - l))
+            } finally { dec.recycle() }
+        } catch (e: Throwable) { null }
     }
 
     fun dismissEdit() { editTarget = null }
@@ -1009,7 +1209,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         @JavascriptInterface fun onImagesChanged() { main.post { if (active) start(false) } }
         @JavascriptInterface fun onViewport(y: Double, h: Double) { viewportY = y; if (h > 0) viewportH = h }
         @JavascriptInterface fun onB64(id: String, data: String) { b64Waiters[id]?.complete(data) }
-        @JavascriptInterface fun onEdit(id: String, bid: String, src: String, tr: String) { main.post { editTarget = EditTarget(id, bid.toIntOrNull() ?: -1, src, tr) } }
+        @JavascriptInterface fun onEdit(id: String, bid: String, src: String, tr: String) { main.post { openEdit(EditTarget(id, bid.toIntOrNull() ?: -1, src, tr)) } }
         // script de garde du bloqueur
         @JavascriptInterface fun adsOn(host: String): Boolean {
             val st = graph.settingsStore.settings

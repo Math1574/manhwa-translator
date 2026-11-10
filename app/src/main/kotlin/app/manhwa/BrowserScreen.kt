@@ -88,28 +88,8 @@ fun BrowserScreen(graph: AppGraph) {
     val st = graph.settingsStore.settings
     val running = c.active && c.done + c.failed < c.total
 
-    c.editTarget?.let { et ->
-        var text by remember(et) { mutableStateOf(et.tr) }
-        var termSrc by remember(et) { mutableStateOf("") }
-        var termTgt by remember(et) { mutableStateOf("") }
-        AlertDialog(
-            onDismissRequest = { c.dismissEdit() },
-            title = { Text("Corriger la traduction") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Original : ${et.src}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    OutlinedTextField(text, { text = it }, Modifier.fillMaxWidth())
-                    Text("Votre version sera reprise chaque fois que ce texte apparaît, et enregistrée dans le journal.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    HorizontalDivider()
-                    Text("Nom ou terme à retenir pour tout le chapitre (facultatif) :", style = MaterialTheme.typography.bodySmall)
-                    OutlinedTextField(termSrc, { termSrc = it }, Modifier.fillMaxWidth(), label = { Text("Dans l'original (ex. Black One)") }, singleLine = true)
-                    OutlinedTextField(termTgt, { termTgt = it }, Modifier.fillMaxWidth(), label = { Text("Traduction (ex. Ombre 1)") }, singleLine = true)
-                }
-            },
-            confirmButton = { Button(onClick = { c.saveCorrection(text, termSrc, termTgt) }) { Text("Enregistrer") } },
-            dismissButton = { TextButton(onClick = { c.dismissEdit() }) { Text("Annuler") } },
-        )
-    }
+    // correction d'un texte traduit : éditeur plein écran (zone, texte, position, police, glossaire)
+    c.editTarget?.let { et -> BlockEditor(graph, et) { c.dismissEdit() } }
 
     Column(Modifier.fillMaxSize()) {
         // Barre d'adresse : visible à l'arrêt, se masque quand on lit en descendant et revient en remontant ou en touchant la page.

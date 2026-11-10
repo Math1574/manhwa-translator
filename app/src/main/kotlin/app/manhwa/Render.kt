@@ -184,7 +184,7 @@ object PageRenderer {
         val bmp = decodeSampled(imageBytes, result.imageWidth, result.imageHeight)
         val s = if (bmp == null) 1f else bmp.width.toFloat() / result.imageWidth
         val iw = result.imageWidth.toFloat(); val ih = result.imageHeight.toFloat()
-        val blocks = result.blocks.filter { it.translated.isNotBlank() }
+        val blocks = result.blocks.filter { it.translated.isNotBlank() || edits[it.id]?.hidden == true }
         val lineHs = blocks.map { lineHeightOf(it) }.sorted()
         val medianLine = if (lineHs.isEmpty()) 0f else lineHs[lineHs.size / 2]
         val patches = JSONArray(); val report = JSONArray()
@@ -206,6 +206,8 @@ object PageRenderer {
             for ((bi, b) in blocks.withIndex()) {
                 if (only != null && b.id != only) continue            // aperçu de l'éditeur : seul le bloc corrigé est mis en page
                 val edit = edits[b.id]
+                // « ne pas traduire » : l'image n'est pas touchée ; un patch invisible garde le bloc touchable (appui long) pour pouvoir le rétablir
+                if (edit?.hidden == true) { if (sink == null) patches.put(inertPatch(b)); skipped++; continue }
                 // traduction identique au texte lu (nom propre, interjection, décor lu comme du texte) : l'image n'est pas touchée (sauf dans l'aperçu de l'éditeur, qui montre toujours le texte)
                 if (sink == null && RenderGate.unchanged(b.source, b.translated)) { skipped++; continue }
                 // lignes des autres blocs : ce bloc ne doit pas les effacer
@@ -282,6 +284,19 @@ object PageRenderer {
         }
     }
 
+    /** Pixel transparent encodé en PNG : le patch d'un bloc que l'on ne traduit pas (invisible, mais repérable par l'appui long). */
+    private val transparentPng: String by lazy {
+        val bmp = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+        val out = ByteArrayOutputStream(); bmp.compress(Bitmap.CompressFormat.PNG, 100, out); bmp.recycle()
+        "data:image/png;base64," + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+    }
+
+    private fun inertPatch(b: TranslatedBlock): JSONObject {
+        val u = (b.zone ?: b.lineBoxes.ifEmpty { listOf(b.box) }.reduce { x, y -> x.union(y) })
+        return JSONObject().put("x", u.left.toDouble()).put("y", u.top.toDouble()).put("w", u.width.toDouble()).put("h", u.height.toDouble())
+            .put("bid", b.id).put("src", b.source).put("tr", b.translated).put("png", transparentPng)
+    }
+
     private fun lineHeightOf(b: TranslatedBlock): Float =
         if (b.lineHeight > 0f) b.lineHeight else if (b.vertical) b.box.width else b.box.height
 
@@ -303,7 +318,8 @@ object PageRenderer {
         val outside = neighborAll.filter { nb -> !containsMe(nb) }
         val plan0 = if (src != null) try { Erasure.plan(src, s, lineBoxes, lineH, iw, ih, others, bubble, outside.filter { isRect(it) }, free = bubble == null, outlines = if (bubble == null) neighborBubbles else emptyList(), extra = listOfNotNull(zone), protectRound = outside.filter { !isRect(it) }, confine = if (bubble == null) b.bubble?.takeIf { it.area >= 1.6f * lineBoxes.reduce { x, y -> x.union(y) }.area } else null, confineRect = b.bubble?.let { isRect(it) } ?: false) } catch (e: Throwable) { null } else null
         // zone dessinée par l'utilisateur : rien n'est effacé en dehors
-        val plan = if (plan0 != null && edit?.region != null) try { Erasure.restrict(plan0, edit.region.mask(plan0.x0, plan0.y0, plan0.w, plan0.h, s)) } catch (e: Throwable) { plan0 } else plan0
+        val userRegion = edit?.region
+        val plan = if (plan0 != null && userRegion != null) try { Erasure.restrict(plan0, userRegion.mask(plan0.x0, plan0.y0, plan0.w, plan0.h, s)) } catch (e: Throwable) { plan0 } else plan0
         val flat = plan?.mode == Erasure.Mode.FLAT
         val rectangular = flat && plan?.shape == null && union.width > 2.2f * union.height && lineBoxes.size <= 2
         // hauteur de ligne pour le choix du style : mesurée sur les lettres (les boîtes d'une ligne inclinée sont gonflées)
@@ -640,7 +656,7 @@ object PageRenderer {
             val patchJson = JSONObject().put("x", rect.left.toDouble()).put("y", rect.top.toDouble()).put("w", (rect.right - rect.left).toDouble()).put("h", (rect.bottom - rect.top).toDouble())
                 .put("bid", b.id).put("src", b.source).put("tr", b.translated)
                 .put("png", "data:image/png;base64," + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP))
-            val rep = JSONObject().put("x", l.toDouble()).put("y", t.toDouble()).put("w", (r - l).toDouble()).put("h", (bt - t).toDouble())
+            val rep = JSONObject().put("bid", b.id).put("x", l.toDouble()).put("y", t.toDouble()).put("w", (r - l).toDouble()).put("h", (bt - t).toDouble())
                 .put("t", fit.lines.joinToString("\n") { it.text }).put("fs", fit.size.toDouble()).put("style", p.style.name)
                 .put("fg", "#%06x".format(fg and 0xFFFFFF)).put("fillMean", "#%06x".format((plan?.fillMean ?: 0) and 0xFFFFFF)).put("planBg", "#%06x".format((plan?.bg ?: 0) and 0xFFFFFF))
                 .put("mode", plan?.mode?.name ?: "NONE").put("outlined", plan?.outlined ?: false)

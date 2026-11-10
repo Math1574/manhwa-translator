@@ -129,6 +129,8 @@ class RenderEdit(
     val dx: Float, val dy: Float, val scale: Float, val fontId: String?,
     /** Zone choisie à la main : l'effacement ne touche rien en dehors. */
     val region: UserRegion?, val manual: Boolean, val editId: String,
+    /** Ne pas traduire : l'image n'est pas touchée, mais le bloc reste (patch invisible) pour pouvoir être rouvert dans l'éditeur. */
+    val hidden: Boolean = false,
 ) {
     /** Position fixée par l'utilisateur : la mise en page automatique ne la déplace plus. */
     val pinned: Boolean get() = manual || dx != 0f || dy != 0f

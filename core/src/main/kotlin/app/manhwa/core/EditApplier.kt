@@ -13,7 +13,7 @@ object EditApplier {
     /** Les blocs définis à la main ont des identifiants à partir de cette valeur (les blocs détectés vont de 0 à quelques dizaines). */
     const val MANUAL_ID_BASE = 100_000
 
-    /** Résultat : page modifiée, directives de rendu par identifiant de bloc, blocs retirés (remplacés ou masqués), correction appliquée à chaque bloc. */
+    /** Résultat : page modifiée, directives de rendu par identifiant de bloc, blocs retirés (remplacés par un bloc défini à la main), correction appliquée à chaque bloc. */
     class Applied(val page: PageResult, val render: Map<Int, RenderEdit>, val removed: List<TranslatedBlock>, val editByBlock: Map<Int, BlockEdit>)
 
     fun apply(result: PageResult, edits: List<BlockEdit>, shiftY: Float = 0f): Applied {
@@ -25,10 +25,9 @@ object EditApplier {
         for (e in edits) {
             if (e.kind != EditKind.ADJUST) continue
             val target = findBlock(blocks, e, shiftY) ?: continue
-            if (e.hidden) { blocks.remove(target); removed.add(target); continue }
             val i = blocks.indexOf(target)
             blocks[i] = target.copy(source = e.source ?: target.source, translated = e.translation ?: target.translated)
-            render[target.id] = RenderEdit(e.dx, e.dy, e.scale, e.fontId, null, false, e.id)
+            render[target.id] = RenderEdit(e.dx, e.dy, e.scale, e.fontId, null, false, e.id, e.hidden)
             byBlock[target.id] = e
         }
         // 2) blocs définis à la main : ils remplacent le bloc détecté qu'ils corrigent et ceux qu'ils recouvrent
@@ -40,7 +39,6 @@ object EditApplier {
             if (replaced != null) { blocks.remove(replaced); removed.add(replaced) }
             val zone = region.bounds
             for (b in blocks.filter { it.id < MANUAL_ID_BASE && insideFraction(it.box, zone) >= 0.5f }) { blocks.remove(b); removed.add(b) }
-            if (e.hidden) continue
             val boxes = e.lineBoxes.map { it.offset(0f, shiftY) }.ifEmpty { listOf(zone) }
             val box = boxes.reduce { a, b -> a.union(b) }
             val heights = boxes.map { if (e.vertical) it.width else it.height }.sorted()
@@ -52,7 +50,7 @@ object EditApplier {
                     e.blockKind, e.bubble?.offset(0f, shiftY), zone,
                 ),
             )
-            render[id] = RenderEdit(e.dx, e.dy, e.scale, e.fontId, region, true, e.id)
+            render[id] = RenderEdit(e.dx, e.dy, e.scale, e.fontId, region, true, e.id, e.hidden)
             byBlock[id] = e
         }
         return Applied(PageResult(result.imageWidth, result.imageHeight, blocks), render, removed, byBlock)
