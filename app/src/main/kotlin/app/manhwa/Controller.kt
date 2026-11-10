@@ -52,7 +52,9 @@ import app.manhwa.core.sha256Hex
 import app.manhwa.core.LlmModels
 import app.manhwa.core.PageJob
 import app.manhwa.core.PageOutcome
+import app.manhwa.core.EditApplier
 import app.manhwa.core.PagePipeline
+import app.manhwa.core.PageResult
 import app.manhwa.core.PageQueue
 import app.manhwa.core.QueueListener
 import org.json.JSONArray
@@ -84,6 +86,12 @@ private data class Candidate(
 
 /** Bulle sélectionnée par appui long pour une correction manuelle. */
 data class EditTarget(val imageId: String, val bid: Int, val src: String, val tr: String)
+
+/** Ce que le contrôleur garde d'une page traitée pour pouvoir corriger ses blocs : fenêtre traitée, résultat avant et après corrections, empreinte de l'image. */
+class WorkInfo(
+    val imageId: String, val imageSrc: String, val imageKey: String, val bytes: ByteArray, val ctxH: Int,
+    val result: PageResult, val applied: EditApplier.Applied, val series: String?,
+)
 
 /** Navigateur + orchestration de la traduction (collecte des images, file d'attente, overlay). */
 class TranslationController(private val ctx: Context, private val graph: AppGraph) {
@@ -150,6 +158,13 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     var resumeOffer by mutableIntStateOf(0)
     private val candidatesById = ConcurrentHashMap<String, Candidate>()
     private val keysById = ConcurrentHashMap<String, CacheKey>()
+    /** Pages récemment traitées, avec de quoi corriger leurs blocs (éditeur) : les plus anciennes sont oubliées. */
+    private val workInfos = object : LinkedHashMap<String, WorkInfo>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, WorkInfo>?): Boolean = size > 12
+    }
+    /** Correction demandée sur une page qui n'est plus en mémoire : l'éditeur s'ouvre quand elle a été retraitée. */
+    @Volatile private var pendingEdit: EditTarget? = null
+    fun workInfo(imageId: String): WorkInfo? = synchronized(workInfos) { workInfos[imageId] }
 
     // ---------- blocage des publicités ----------
     /** Ancienne liste de domaines : filet de sécurité pendant que le moteur de filtres se charge. */
@@ -710,6 +725,12 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         if (out is PageOutcome.Done && s.source.code != "ja" && s.source.code != "ko" && s.source.code != "zh") {
             try { synchronized(graph.names) { graph.names.observe(pageSeries, c.id, out.result.blocks.map { it.source }, lexicon) } } catch (_: Throwable) {}
         }
+        // corrections manuelles de l'utilisateur (zone, texte, position, taille, police) : réappliquées à chaque affichage, indépendamment du cache
+        val imageKey = sha256Hex(bytes)
+        val applied: EditApplier.Applied? = if (out is PageOutcome.Done) try { EditApplier.apply(out.result, graph.edits.forImage(imageKey), ctxH.toFloat()) } catch (e: Throwable) { null } else null
+        if (out is PageOutcome.Done) synchronized(workInfos) {
+            workInfos[c.id] = WorkInfo(c.id, c.src, imageKey, workBytes, ctxH, out.result, applied ?: EditApplier.Applied(out.result, emptyMap(), emptyList(), emptyMap()), pageSeries)
+        }
         var overlayForLog: JSONObject? = null
         var overlayUpForLog: JSONObject? = null
         BatchContext.lastBatch.get()?.let { batchInfo[c.id] = it }
@@ -719,7 +740,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             val tRender = SystemClock.uptimeMillis()
             val json = synchronized(renderLock) {
                 when {
-                    out is PageOutcome.Done -> PageRenderer.render(fonts, workBytes, out.result, s, debug, graph.fontMemory, pageSeries)
+                    out is PageOutcome.Done -> PageRenderer.render(fonts, workBytes, applied?.page ?: out.result, s, debug, graph.fontMemory, pageSeries, applied?.render ?: emptyMap())
                     s.diagnostic && debug != null -> OverlayBuilder.debugOnly(debug!!)
                     else -> null
                 }
@@ -736,6 +757,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             overlayForLog = own; overlayUpForLog = up
             if (own != null && out is PageOutcome.Done) journalLayout(c, pageUrl, out, own)
         }
+        // correction demandée sur cette page alors qu'elle n'était plus en mémoire : l'éditeur peut s'ouvrir
+        pendingEdit?.let { pe -> if (pe.imageId == c.id && out is PageOutcome.Done) { pendingEdit = null; main.post { editTarget = pe } } }
         if (testing) logForTest(c, out, debug, overlayForLog, System.currentTimeMillis() - t0, if (window != null) window.width to window.imageH else null, overlayUpForLog)
         // les informations propres à cette page ne servent plus
         pageNotes.remove(c.id); pageTiming.remove(c.id); batchInfo.remove(c.id); fetchInfo.remove(c.id); stageInfo.remove(c.id)

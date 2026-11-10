@@ -67,6 +67,18 @@ object Erasure {
         return if (n == 0L) 0 else (0xFF shl 24) or ((r / n).toInt() shl 16) or ((g / n).toInt() shl 8) or (b / n).toInt()
     }
 
+    /**
+     * Restreint l'effacement d'un plan à une zone choisie à la main : [keep] (même taille que la région du plan) dit quels pixels peuvent être remplacés ; rien n'est remplacé en dehors,
+     * ce que le plan avait décidé à l'intérieur reste inchangé.
+     */
+    fun restrict(p: Plan, keep: BooleanArray): Plan {
+        val n = p.w * p.h
+        if (keep.size != n) return p
+        val mask = BooleanArray(n) { p.mask[it] && keep[it] }
+        val layer = IntArray(n) { if (keep[it]) p.layer[it] else 0 }
+        return Plan(p.mode, p.x0, p.y0, p.w, p.h, mask, layer, p.bg, p.textColor, p.outlined, p.bubbleArea, p.shape, p.strokePx, p.ink, meanFill(layer), p.glow, p.core, p.letterColor, p.haloColor, p.haloPx)
+    }
+
     /** @param exclude lignes de texte des AUTRES blocs (pixels de l'image) : un bloc n'efface jamais ce qui appartient à un voisin. */
     /** Cœur des lettres du plan : masque, couleur, couleur du halo, épaisseur du halo (zéros si l'encre est vide ou trop pauvre). */
     private class CoreInfo(val mask: BooleanArray?, val color: Int, val halo: Int, val haloPx: Float)

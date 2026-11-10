@@ -8,6 +8,9 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import app.manhwa.core.AppSettings
+import app.manhwa.core.BlockEdit
+import app.manhwa.core.EditApplier
+import app.manhwa.core.EditsCodec
 import app.manhwa.core.BrowsingLibrary
 import app.manhwa.core.Glossary
 import app.manhwa.core.GlossaryEntry
@@ -66,6 +69,8 @@ class AppGraph(ctx: Context) {
     val models = TranslationModels(ctx)
     val library = LibraryStore(File(ctx.filesDir, "library.tsv"))
     val journal = TranslationJournal(File(ctx.filesDir, "journal.jsonl"))
+    /** Corrections manuelles des textes (zone, texte, position, taille, police), par image. */
+    val edits = EditStore(File(ctx.filesDir, "edits.txt"))
     init {
         library.onChanged = { ResumeShortcut.update(ctx, it) }
         ResumeShortcut.update(ctx, library.library)
@@ -153,6 +158,42 @@ class SettingsStore(ctx: Context) {
     fun update(f: (AppSettings) -> AppSettings) {
         settings = f(settings).sanitized()
         prefs.edit().putString("settings", settings.serialize()).apply()
+    }
+}
+
+/**
+ * Corrections manuelles par image (clé : empreinte de l'image) : zone du texte, texte, position, taille, police. Conservées sur disque, indépendamment du cache des résultats ; les images
+ * les plus anciennes sont oubliées au-delà de [maxImages].
+ */
+class EditStore(private val file: File, private val maxImages: Int = 400) {
+    private val images = LinkedHashMap<String, Pair<Long, MutableList<BlockEdit>>>()
+
+    init { try { if (file.exists()) images.putAll(EditsCodec.parse(file.readText())) } catch (_: Throwable) {} }
+
+    @Synchronized fun forImage(key: String): List<BlockEdit> = images[key]?.second?.toList() ?: emptyList()
+
+    @Synchronized fun upsert(key: String, edit: BlockEdit) {
+        val next = EditApplier.upsert(images[key]?.second ?: emptyList(), edit)
+        images.remove(key)
+        if (next.isNotEmpty()) images[key] = System.currentTimeMillis() to next.toMutableList()
+        while (images.size > maxImages) images.remove(images.keys.first())
+        save()
+    }
+
+    @Synchronized fun remove(key: String, editId: String) {
+        val cur = images[key] ?: return
+        val next = cur.second.filter { it.id != editId }
+        images.remove(key)
+        if (next.isNotEmpty()) images[key] = System.currentTimeMillis() to next.toMutableList()
+        save()
+    }
+
+    private fun save() {
+        try {
+            val tmp = File(file.path + ".tmp")
+            tmp.writeText(EditsCodec.serialize(images))
+            if (!tmp.renameTo(file)) { file.writeText(tmp.readText()); tmp.delete() }
+        } catch (_: Throwable) {}
     }
 }
 

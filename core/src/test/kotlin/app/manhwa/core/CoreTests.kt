@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); queueBatchTests(); readingOrderTests(); eraseWhiteBandTests(); fontPolicyTests(); seamTests(); modelTests(); settingsTests(); utilTests(); textTests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests(); openBubbleTests(); barrierShapeTests(); safetyTests(); artEraseTests()
+    groupingTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); queueBatchTests(); readingOrderTests(); eraseWhiteBandTests(); fontPolicyTests(); blockEditTests(); seamTests(); modelTests(); settingsTests(); utilTests(); textTests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests(); openBubbleTests(); barrierShapeTests(); safetyTests(); artEraseTests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -2215,6 +2215,112 @@ fun fontPolicyTests() {
         val coreN = lc.mask.count { it }; val lettersN = letters.count { it }
         T.ok(coreN in (lettersN * 0.85).toInt()..(lettersN * 1.05).toInt(), "cœur : $coreN pixels pour $lettersN de lettres")
         T.ok(lc.haloPx in 2.5f..6f, "épaisseur de la lueur : ${lc.haloPx}")
+    }
+}
+
+// ---------- corrections manuelles d'un bloc : zone (rectangle, pinceau), enregistrement, application ----------
+fun blockEditTests() {
+    fun tb(id: Int, l: Float, t: Float, r: Float, b: Float, src: String, tr: String) = TranslatedBlock(id, RectF(l, t, r, b), src, tr, false, (b - t) / 2f, listOf(RectF(l, t, r, b)), listOf(src))
+
+    T.test("zone choisie : rectangle (débord de 2 px), forme peinte, gomme, boîte englobante") {
+        val rect = UserRegion(RectF(10f, 10f, 20f, 20f))
+        val m = rect.mask(0, 0, 40, 40, 1f)
+        T.ok(m[15 * 40 + 15] && m[9 * 40 + 9] && !m[30 * 40 + 30], "rectangle")
+        T.ok(rect.contains(15f, 15f) && !rect.contains(25f, 15f), "contient (rectangle)")
+        // trait horizontal de rayon 4 : y de 16 à 24 sur x de 10 à 50
+        val brush = UserRegion(RectF(0f, 0f, 1f, 1f), listOf(BrushStroke(listOf(Pt(10f, 20f), Pt(50f, 20f)), 4f)))
+        val mb = brush.mask(0, 0, 60, 40, 1f)
+        T.ok(brush.painted && mb[20 * 60 + 30] && mb[17 * 60 + 30] && !mb[10 * 60 + 30] && !mb[20 * 60 + 56], "forme peinte")
+        T.ok(brush.contains(30f, 20f) && !brush.contains(30f, 30f), "contient (pinceau)")
+        val b = brush.bounds
+        T.ok(b.left == 6f && b.right == 54f && b.top == 16f && b.bottom == 24f, "boîte englobante : $b")
+        // gomme au milieu : un trou
+        val erased = UserRegion(RectF(0f, 0f, 1f, 1f), listOf(BrushStroke(listOf(Pt(10f, 20f), Pt(50f, 20f)), 4f), BrushStroke(listOf(Pt(30f, 20f)), 3f, erase = true)))
+        val me = erased.mask(0, 0, 60, 40, 1f)
+        T.ok(!me[20 * 60 + 30] && me[20 * 60 + 20] && me[20 * 60 + 42], "gomme")
+        T.ok(!erased.contains(30f, 20f) && erased.contains(20f, 20f), "gomme (contient)")
+        // échelle d'échantillonnage et décalage de la région
+        val ms = brush.mask(5, 10, 40, 30, 0.5f)       // pixel échantillonné (x, y) = image (2(x+5), 2(y+10))
+        T.ok(ms[1 * 40 + 10] && !ms[10 * 40 + 10], "échelle 0,5")
+        T.ok(brush.shifted(100f).contains(30f, 120f) && !brush.shifted(100f).contains(30f, 20f), "décalage")
+    }
+    T.test("corrections : enregistrement et relecture sans perte (texte à tabulations et retours, zone peinte, lignes, plusieurs images)") {
+        val e1 = BlockEdit("a1", EditKind.ADJUST, RectF(1f, 2f, 3f, 4f), "SOURCE\twith tab", null, "Texte « corrigé »\nsur deux lignes", "Traduction\t\"ok\"", false, 5.5f, -3f, 1.25f, "anton")
+        val region = UserRegion(RectF(10f, 20f, 110f, 80f), listOf(BrushStroke(listOf(Pt(10f, 20f), Pt(30f, 40f)), 6f), BrushStroke(listOf(Pt(15f, 25f)), 2f, true)))
+        val e2 = BlockEdit("m9", EditKind.MANUAL, null, "", region, "AB", null, true, 0f, 0f, 1f, null, true, 21f, listOf(RectF(10f, 20f, 50f, 40f), RectF(10f, 45f, 50f, 70f)), listOf("A\tB", "C"), "IN_BUBBLE", RectF(0f, 0f, 200f, 100f))
+        for (e in listOf(e1, e2)) {
+            val d = EditsCodec.decode(EditsCodec.encode(e))!!
+            T.eq(e.id, d.id); T.eq(e.kind, d.kind); T.eq(e.match, d.match); T.eq(e.matchSource, d.matchSource); T.eq(e.source, d.source); T.eq(e.translation, d.translation)
+            T.eq(e.hidden, d.hidden); T.eq(e.dx, d.dx); T.eq(e.dy, d.dy); T.eq(e.scale, d.scale); T.eq(e.fontId, d.fontId); T.eq(e.vertical, d.vertical); T.eq(e.lineHeight, d.lineHeight)
+            T.eq(e.lineBoxes, d.lineBoxes); T.eq(e.lineTexts, d.lineTexts); T.eq(e.blockKind, d.blockKind); T.eq(e.bubble, d.bubble)
+            T.eq(e.region?.rect, d.region?.rect); T.eq(e.region?.strokes?.size, d.region?.strokes?.size)
+        }
+        val dr = EditsCodec.decode(EditsCodec.encode(e2))!!.region!!
+        T.ok(dr.strokes[0].points == region.strokes[0].points && dr.strokes[0].radius == 6f && !dr.strokes[0].erase && dr.strokes[1].erase, "traits conservés")
+        val all = linkedMapOf("img1" to (100L to listOf(e1)), "img2" to (200L to listOf(e2, e1.copy(id = "a2"))))
+        val back = EditsCodec.parse(EditsCodec.serialize(all))
+        T.eq(2, back.size); T.eq(2, back["img2"]!!.second.size); T.eq(200L, back["img2"]!!.first); T.eq("a2", back["img2"]!!.second[1].id)
+        // lignes abîmées ignorées, le reste est lu
+        val dirty = "n'importe quoi\nI\timgX\t5\nE\tcassée\nE\tx\tADJUST\nI\timgY\t7\n" + EditsCodec.encode(e1) + "\n"
+        val p = EditsCodec.parse(dirty)
+        T.eq(0, p["imgX"]!!.second.size); T.eq(1, p["imgY"]!!.second.size)
+    }
+    T.test("application : traduction remplacée, bloc masqué, position, taille et police transmises au rendu ; bloc retrouvé même déplacé") {
+        val page = PageResult(800, 1200, listOf(tb(0, 100f, 100f, 300f, 160f, "HELLO THERE", "Bonjour"), tb(1, 100f, 400f, 300f, 460f, "SECOND ONE", "Deuxième"), tb(2, 500f, 700f, 700f, 760f, "THIRD ONE", "Troisième")))
+        val tr = BlockEdit("e1", EditKind.ADJUST, RectF(100f, 100f, 300f, 160f), "HELLO THERE", translation = "Salut !", dx = 12f, dy = -5f, scale = 1.2f, fontId = "boogaloo")
+        val hide = BlockEdit("e2", EditKind.ADJUST, RectF(102f, 398f, 298f, 462f), "SECOND ONE", hidden = true)            // boîte légèrement différente : retrouvé par recouvrement
+        val a = EditApplier.apply(page, listOf(tr, hide))
+        T.eq(2, a.page.blocks.size, "blocs restants"); T.eq("Salut !", a.page.blocks.first { it.id == 0 }.translated); T.eq("Troisième", a.page.blocks.first { it.id == 2 }.translated)
+        val r = a.render[0]!!
+        T.ok(r.dx == 12f && r.dy == -5f && r.scale == 1.2f && r.fontId == "boogaloo" && r.pinned && !r.manual, "directives de rendu")
+        T.eq(null, a.render[2], "bloc non corrigé : aucune directive"); T.eq(1, a.removed.size)
+        // le texte a bougé de 300 px mais est le même : retrouvé par son texte s'il recouvre un peu la boîte conservée
+        val moved = PageResult(800, 1200, listOf(tb(7, 150f, 130f, 330f, 190f, "HELLO  THERE", "x")))
+        T.eq("Salut !", EditApplier.apply(moved, listOf(tr)).page.blocks.single().translated, "retrouvé par le texte")
+        // aucun bloc ne correspond : correction ignorée
+        val far = PageResult(800, 1200, listOf(tb(7, 600f, 900f, 780f, 960f, "UNRELATED", "x")))
+        T.eq("x", EditApplier.apply(far, listOf(tr)).page.blocks.single().translated, "correction orpheline ignorée")
+        // fenêtre de jonction : les corrections sont dans les coordonnées de l'image, le résultat dans celles de la fenêtre (contexte de 300 px au-dessus)
+        val win = PageResult(800, 1500, listOf(tb(0, 100f, 400f, 300f, 460f, "HELLO THERE", "Bonjour")))
+        T.eq("Salut !", EditApplier.apply(win, listOf(tr), 300f).page.blocks.single().translated, "décalage de fenêtre")
+    }
+    T.test("application : bloc défini à la main (remplace le bloc corrigé et ceux qu'il recouvre, garde les autres), masqué, identifiants distincts") {
+        val page = PageResult(800, 1200, listOf(tb(0, 100f, 100f, 300f, 160f, "HELLO THERE", "Bonjour"), tb(1, 110f, 170f, 290f, 215f, "SECOND LINE", "Deuxième"), tb(2, 500f, 700f, 700f, 760f, "FAR AWAY", "Loin")))
+        val region = UserRegion(RectF(90f, 90f, 310f, 230f))
+        val m = BlockEdit("m1", EditKind.MANUAL, RectF(100f, 100f, 300f, 160f), "HELLO THERE", region, "HELLO THERE SECOND LINE", "Bonjour, deuxième ligne", false, 0f, 0f, 1f, "anton", false, 30f,
+            listOf(RectF(100f, 100f, 300f, 130f), RectF(110f, 170f, 290f, 200f)), listOf("HELLO THERE", "SECOND LINE"), "FREE", null)
+        val a = EditApplier.apply(page, listOf(m))
+        T.eq(2, a.page.blocks.size, "bloc remplacé + bloc éloigné"); val nb = a.page.blocks.first { it.id >= EditApplier.MANUAL_ID_BASE }
+        T.eq("Bonjour, deuxième ligne", nb.translated); T.eq(region.bounds, nb.zone); T.eq(2, nb.lineBoxes.size); T.eq(30f, nb.lineHeight)
+        T.ok(a.page.blocks.any { it.id == 2 }, "bloc éloigné conservé"); T.eq(2, a.removed.size, "deux blocs détectés retirés")
+        val r = a.render[nb.id]!!; T.ok(r.manual && r.region != null && r.fontId == "anton" && r.pinned, "directives du bloc manuel")
+        // masqué : les blocs recouverts disparaissent, rien n'est ajouté
+        val h = EditApplier.apply(page, listOf(m.copy(hidden = true)))
+        T.eq(1, h.page.blocks.size, "masqué"); T.eq(2, h.removed.size)
+        // deux blocs manuels : identifiants distincts ; fenêtre décalée
+        val m2 = m.copy(id = "m2", match = null, matchSource = "", region = UserRegion(RectF(500f, 700f, 700f, 760f)), lineBoxes = listOf(RectF(500f, 700f, 700f, 760f)), lineTexts = listOf("FAR AWAY"), translation = "Très loin")
+        val shiftedPage = PageResult(800, 1300, page.blocks.map { it.copy(box = it.box.offset(0f, 100f), lineBoxes = it.lineBoxes.map { r -> r.offset(0f, 100f) }) })     // fenêtre : 100 px de contexte au-dessus
+        val two = EditApplier.apply(shiftedPage, listOf(m, m2), 100f)
+        val ids = two.page.blocks.filter { it.id >= EditApplier.MANUAL_ID_BASE }.map { it.id }
+        T.eq(2, ids.size); T.eq(2, ids.toSet().size, "identifiants distincts"); T.ok(two.page.blocks.none { it.translated == "Loin" }, "bloc recouvert remplacé")
+        T.ok(two.page.blocks.first { it.translated == "Très loin" }.box.top >= 800f - 1f, "décalage de fenêtre appliqué")
+    }
+    T.test("corrections : remplacement par identifiant, une correction sans effet est retirée, centrage") {
+        val a = BlockEdit("x", EditKind.ADJUST, RectF(0f, 0f, 10f, 10f), "A", translation = "B")
+        val l1 = EditApplier.upsert(emptyList(), a)
+        T.eq(1, l1.size); T.eq("C", EditApplier.upsert(l1, a.copy(translation = "C")).single().translation, "remplacée")
+        T.eq(0, EditApplier.upsert(l1, a.copy(translation = null)).size, "neutre retirée")
+        T.eq(2, EditApplier.upsert(l1, BlockEdit("y", EditKind.ADJUST, RectF(0f, 0f, 10f, 10f), "A", dx = 4f)).size, "seconde correction ajoutée")
+        val off = EditApplier.centerOffset(RectF(10f, 10f, 30f, 20f), EditApplier.centerTarget(RectF(0f, 0f, 100f, 60f), null, RectF(0f, 0f, 1f, 1f)))
+        T.eq(30f, off.first); T.eq(15f, off.second)
+    }
+    T.test("effacement restreint à la zone dessinée : rien n'est remplacé en dehors") {
+        val w = 10; val h = 4
+        val plan = Erasure.Plan(Erasure.Mode.FLAT, 0, 0, w, h, BooleanArray(w * h) { true }, IntArray(w * h) { 0xFFFFFFFF.toInt() }, 0xFFFFFFFF.toInt(), 0xFF000000.toInt(), false, null)
+        val keep = BooleanArray(w * h) { (it % w) < 5 }
+        val r = Erasure.restrict(plan, keep)
+        T.ok(r.mask[0] && !r.mask[9] && r.layer[0] != 0 && r.layer[9] == 0, "masque et couche restreints"); T.eq(plan.bg, r.bg)
+        T.eq(plan, Erasure.restrict(plan, BooleanArray(3)), "taille incompatible : plan inchangé")
     }
 }
 
