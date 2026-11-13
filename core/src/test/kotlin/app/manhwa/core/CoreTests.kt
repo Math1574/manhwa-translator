@@ -732,6 +732,36 @@ fun checkTests() {
         T.ok("long" in codes("Run away now please.", "Il faut absolument que tu t'enfuies maintenant très vite, sans attendre une seconde de plus, je t'en supplie, vraiment, maintenant."), "long")
         T.ok("format" in codes("Hello there friend.", "1| Salut mon ami."), "format")
     }
+    T.test("contrôles : possessif d'une autre personne (« our » → « votre », « his » → « mon »)") {
+        T.ok("personne" in codes("This is our home.", "Ceci est votre maison."), "our → votre")
+        T.ok("personne" in codes("Take his sword.", "Prends mon épée."), "his → mon")
+        T.ok("personne" in codes("Your sword is broken.", "Son épée est cassée."), "your → son")
+        T.ok("personne" in codes("I protect my sister.", "Je protège sa sœur."), "my → sa")
+        for ((en, fr) in listOf(
+            "This is our home." to "C'est notre maison.", "Take his sword." to "Prends son épée.", "My master and your sword." to "Mon maître et ton épée.", "Your Majesty." to "Votre Majesté.",
+            "I protect my sister." to "Je protège ma sœur.", "Their swords." to "Leurs épées.", "Hey kid, look at that!" to "Hé mon gars, regarde ça !",
+            "He said it in his calm tone." to "Il l'a dit sur un ton calme.", "Give me a hand, buddy." to "Donne-moi un coup de main, mon vieux.",
+        )) T.ok("personne" !in codes(en, fr), "« $en » → « $fr » ne doit pas être signalé")
+        T.ok(TranslationChecks.problems("This is our home.", "Ceci est votre maison.", "fr").first { it.code == "personne" }.detail.contains("notre/nos"), "la consigne dit quelle forme employer")
+    }
+    T.test("contrôles : futur ou conditionnel sans marque dans l'original (« I have… » → « j'aurai… »)") {
+        T.ok("temps" in codes("I have...", "J'aurai..."), "I have → j'aurai")
+        T.ok("temps" in codes("You have to go.", "Tu iras."), "have to go → tu iras")
+        T.ok("temps" in codes("I have no choice.", "Je n'aurais pas le choix."), "conditionnel")
+        for ((en, fr) in listOf(
+            "I have a plan." to "J'ai un plan.", "I will have it." to "J'aurai ça.", "When I have time, I'll come." to "Quand j'aurai le temps, je viendrai.", "We leave tomorrow." to "Nous partirons demain.",
+            "I would like that." to "Je voudrais ça.", "If I had wings..." to "Si j'avais des ailes...", "We are going to win." to "Nous allons gagner.", "Someday I will see it." to "Un jour, je le verrai.",
+        )) T.ok("temps" !in codes(en, fr), "« $en » → « $fr » ne doit pas être signalé")
+    }
+    T.test("contrôles : négation perdue") {
+        T.ok("négation" in codes("I can't do it.", "Je peux le faire."), "can't → affirmatif")
+        T.ok("négation" in codes("Don't go there.", "Vas-y donc."), "interdiction inversée")
+        T.ok("négation" in codes("There is nothing here.", "Il y a quelque chose ici."), "nothing")
+        for ((en, fr) in listOf(
+            "I can't do it." to "Je ne peux pas le faire.", "I can't do it." to "Je peux pas le faire.", "Nothing happened." to "Rien ne s'est passé.", "Never mind." to "Laisse tomber.", "No!" to "Non !",
+            "Without a word." to "Sans un mot.", "No way." to "Pas question.", "He never came back." to "Il n'est jamais revenu.", "Nobody knows." to "Personne ne sait.",
+        )) T.ok("négation" !in codes(en, fr), "« $en » → « $fr » ne doit pas être signalé")
+    }
     T.test("mémoire du chapitre : un nom vu deux fois, identique dans la traduction, est conservé") {
         val m = ChapterMemory()
         m.observe("Cheon Mu-gang is coming.", "Cheon Mu-gang arrive.")
@@ -739,6 +769,13 @@ fun checkTests() {
         m.observe("Where is Cheon Mu-gang?", "Où est Cheon Mu-gang ?")
         T.ok("Cheon" in m.namesToKeep() && "Mu-gang" in m.namesToKeep(), "noms ${m.namesToKeep()}")
         m.reset(); T.eq(emptyList<String>(), m.namesToKeep())
+    }
+    T.test("llm: consignes de personne et de temps, contexte des lignes voisines pour la reprise d'une ligne") {
+        val sys = LlmPrompt.system("en", "fr")
+        T.ok(sys.contains("notre/nos") && sys.contains("never \"votre\"") && sys.contains("J'ai un plan") && sys.contains("ONLY when the source has will"), "règles de personne et de temps dans le gabarit courant")
+        val f = LlmPrompt.fixUser("I have...", "J'aurai...", listOf("temps: wrong tense"), emptyList(), emptyList(), emptyList(), listOf("Where were you?" to "Où étais-tu ?"), listOf("...been waiting for you."))
+        T.ok(f.contains("Lines just before it") && f.contains("Where were you? => Où étais-tu ?") && f.contains("Lines just after it") && f.contains("...been waiting for you.") && f.contains("tense of the source"), "contexte avant et après")
+        T.ok(LlmPrompt.user(listOf("I have...", "...a plan."), emptyList(), emptyList()).contains("continues in the next one"), "lignes consécutives signalées")
     }
     T.test("llm: prompt de correction et noms à conserver") {
         val f = LlmPrompt.fixUser("Hello you", "Hello you", listOf("non-traduit : mots anglais : hello"), emptyList(), emptyList(), listOf("Hwang"))
@@ -1478,12 +1515,26 @@ fun artEraseTests() {
         T.ok(!sfx("DUDUDUK", BlockKind.IN_BUBBLE, 2.0f), "mot inconnu : jamais écarté dans une bulle")
         T.ok(!sfx("HMPH", BlockKind.IN_BUBBLE) && !sfx("HAHAHA", BlockKind.IN_BUBBLE), "rires et soupirs dans une bulle : traduits")
     }
-    T.test("onomatopées : bruitage romanisé seulement en gros lettrage et sans mot anglais") {
-        T.ok(sfx("DUDUDUK", BlockKind.FREE, 2.0f), "gros lettrage inconnu")
-        T.ok(!sfx("DUDUDUK", BlockKind.FREE, 1.0f), "taille normale : on ne tente pas")
+    T.test("onomatopées : un bruitage inventé est reconnu à sa forme (étiré, sans voyelle, syllabe répétée), pas parce qu'un mot est inconnu") {
+        for (t in listOf("DUDUDUK", "KRAAAK", "GRRRR", "SHHHH", "TCH", "HMPH", "PFFT", "BRRRR", "TATATA", "KYAAAA")) T.ok(sfx(t, BlockKind.FREE, 1.0f), "« $t » hors bulle : bruitage, même en taille normale")
+        T.ok(sfx("DUDUDUK", BlockKind.UNKNOWN, 1.4f), "sans détecteur de bulles : la forme suffit")
+        T.ok(!sfx("DUDUDUK", BlockKind.IN_BUBBLE, 2.0f), "dans une bulle, un mot inconnu n'est jamais écarté")
+        val lexCries = EnglishLexicon(listOf("no", "ah"), emptyList())
+        T.ok(!Onomatopoeia.isSfx("NOOOOO", BlockKind.FREE, 1.0f, lexCries) && !Onomatopoeia.isSfx("AAAAAH", BlockKind.FREE, 1.0f, lexCries), "« NOOOOO » (= no), « AAAAAH » (= ah) : des cris, traduits (le traducteur les laisse tels quels s'ils n'ont pas d'équivalent)"); T.ok(!sfx("NO NO NO"), "réplique répétée : traduite"); T.ok(!sfx("NONONO"), "« NO » répété : traduit")
         T.ok(!sfx("SEOUL KOREA", BlockKind.FREE, 1.0f), "légende de lieu : traduite")
-        T.ok(sfx("DUDUDUK", BlockKind.UNKNOWN, 2.0f) && !sfx("DUDUDUK", BlockKind.UNKNOWN, 1.4f), "sans détecteur de bulles : seulement en très gros lettrage")
-        T.ok(!sfx("DUDUDUK DUDUDUK DUDUDUK DUK", BlockKind.FREE, 2.0f), "plus de deux mots : pas un bruitage romanisé")
+        T.ok(!sfx("DUDUDUK DUDUDUK DUDUDUK DUK", BlockKind.FREE, 2.0f), "plus de trois mots : pas un bruitage")
+    }
+    T.test("onomatopées : un mot rare ou un nom en grand lettrage n'est plus écarté ; seulement un très gros mot unique inconnu") {
+        for (t in listOf("BLOODLUST", "SENSEI", "JINWOO", "SHENGYAO", "ASURA")) { T.ok(!sfx(t, BlockKind.FREE, 1.5f), "« $t » en grand lettrage : traduit (ou laissé par le traducteur)"); T.ok(!sfx(t, BlockKind.FREE, 1.0f), "« $t » en taille normale : traduit") }
+        T.ok(sfx("SHENGYAO", BlockKind.FREE, 2.4f), "très gros mot unique inconnu : laissé tel quel (décor)")
+        T.ok(!sfx("SHENGYAO CITY", BlockKind.FREE, 2.4f), "deux mots : pas un bruitage")
+    }
+    T.test("onomatopées : les bruitages qui sont aussi de vrais mots ne sont écartés qu'en gros lettrage ou répétés") {
+        for (t in listOf("SLASH", "CLICK", "SIGH", "SNAP", "POP", "SMASH", "KNOCK", "ZOOM")) { T.ok(!sfx(t, BlockKind.FREE, 1.0f), "« $t » seul en taille normale : traduit"); T.ok(sfx(t, BlockKind.FREE, 1.5f), "« $t » en gros lettrage : bruitage") }
+        for (t in listOf("CLAP CLAP", "KNOCK KNOCK", "SLASH SLASH")) T.ok(sfx(t, BlockKind.FREE, 1.0f), "« $t » répété : bruitage")
+        T.ok(!sfx("SIGH", BlockKind.IN_BUBBLE, 1.0f), "dans une bulle de taille normale : réplique")
+        for (t in listOf("CRACK", "CRASH", "THUD", "BOOM", "WHOOSH", "TSK", "GULP", "DRIP", "TICK")) T.ok(sfx(t, BlockKind.FREE, 1.0f), "« $t » : bruitage à toute taille")
+        T.ok(sfx("TICK TOCK", BlockKind.FREE, 1.0f) && sfx("PAT PAT", BlockKind.FREE, 1.0f) && sfx("TAP TAP", BlockKind.FREE, 1.0f), "bruitages de pas répétés")
     }
     T.test("onomatopées : le japonais, le coréen et le chinois ne sont pas concernés") {
         T.ok(!sfx("ドン"), "katakana"); T.ok(!sfx("쿵"), "hangul"); T.ok(!sfx("轰"), "han")
@@ -2315,6 +2366,41 @@ fun blockEditTests() {
         T.eq(2, EditApplier.upsert(l1, BlockEdit("y", EditKind.ADJUST, RectF(0f, 0f, 10f, 10f), "A", dx = 4f)).size, "seconde correction ajoutée")
         val off = EditApplier.centerOffset(RectF(10f, 10f, 30f, 20f), EditApplier.centerTarget(RectF(0f, 0f, 100f, 60f), null, RectF(0f, 0f, 1f, 1f)))
         T.eq(30f, off.first); T.eq(15f, off.second)
+    }
+    T.test("taille choisie : la mise en page est agrandie ou réduite autour de son centre, retours à la ligne et centre des lignes inchangés") {
+        val fit = ShapeFit(20f, 24f, listOf(PlacedLine("BONJOUR", 200f, 100f, 80f), PlacedLine("LE MONDE", 205f, 124f, 90f)), true)
+        val big = fit.scaled(1.5f)
+        T.eq(30f, big.size); T.eq(36f, big.lineStep); T.eq(120f, big.lines[0].width); T.eq(135f, big.lines[1].width)
+        T.eq(200f, big.lines[0].cx); T.eq(205f, big.lines[1].cx); T.eq("BONJOUR", big.lines[0].text)
+        val c0 = (fit.lines.first().top + fit.lines.last().top + fit.lineStep) / 2f; val c1 = (big.lines.first().top + big.lines.last().top + big.lineStep) / 2f
+        T.ok(Math.abs(c0 - c1) < 0.01f, "centre vertical conservé : $c0 / $c1")
+        val small = fit.scaled(0.5f); T.eq(10f, small.size); T.eq(12f, small.lineStep)
+        T.ok(fit.scaled(1.001f) === fit, "facteur voisin de 1 : inchangé")
+    }
+    T.test("recentrage : le centre du corps d'une bulle ignore la queue, et le texte y est ramené sans sortir de la forme") {
+        val ell = RowShape.ellipse(100f, 100f, 500f, 400f)
+        val bc = ShapeLayout.bodyCenter(ell)!!
+        T.ok(Math.abs(bc[0] - 300f) < 3f && Math.abs(bc[1] - 250f) < 3f, "ellipse : centre ${bc[0]},${bc[1]}")
+        // bulle ronde avec une queue étroite qui descend à droite : le centre du corps ne bouge pas
+        val rows = 400; val l = FloatArray(rows); val r = FloatArray(rows)
+        for (i in 0 until rows) { val dy = (i - 150f) / 150f; if (i <= 300) { val half = 200f * Math.sqrt(Math.max(0.0, 1.0 - dy * dy)).toFloat(); l[i] = 300f - half; r[i] = 300f + half } else { l[i] = 380f - (i - 300) * 0.3f; r[i] = 420f - (i - 300) * 0.3f } }
+        val tail = RowShape(100f, 1f, l, r)
+        val bt = ShapeLayout.bodyCenter(tail)!!
+        T.ok(Math.abs(bt[0] - 300f) < 6f && Math.abs(bt[1] - 250f) < 12f, "avec queue : centre ${bt[0]},${bt[1]}")
+        // texte décalé de 25 px vers le haut et 20 vers la gauche : recentré sur le centre de la bulle
+        val fit = ShapeFit(24f, 28f, listOf(PlacedLine("PREMIÈRE LIGNE", 280f, 205f, 160f), PlacedLine("SECONDE", 280f, 233f, 100f)), true)
+        val c = ShapeLayout.recenter(fit, ell, bc[0], bc[1], 6f)
+        val t = c.lines.first().top; val b = c.lines.last().top + c.lineStep
+        T.ok(Math.abs((t + b) / 2f - bc[1]) < 1f, "centre vertical : ${(t + b) / 2f}")
+        T.ok(Math.abs(c.lines.map { it.cx }.average().toFloat() - bc[0]) < 21f && c.lines[0].cx > 280f, "décalé vers la droite : ${c.lines[0].cx}")
+        // un texte déjà centré ne bouge pas
+        val cent = ShapeFit(24f, 28f, listOf(PlacedLine("CENTRÉ", bc[0], bc[1] - 14f, 100f)), true)
+        T.ok(ShapeLayout.recenter(cent, ell, bc[0], bc[1], 6f) === cent, "déjà centré")
+        // le décalage est réduit pour ne pas sortir de la forme : forme étroite, cible hors de portée
+        val narrow = RowShape.rect(100f, 100f, 200f, 300f)
+        val wide = ShapeFit(20f, 24f, listOf(PlacedLine("TRÈS LARGE LIGNE", 150f, 190f, 90f)), true)
+        val kept = ShapeLayout.recenter(wide, narrow, 175f, 200f, 6f)
+        T.ok(kept.lines[0].cx - 45f >= 100f + 3f && kept.lines[0].cx + 45f <= 200f - 3f, "reste dans la forme : ${kept.lines[0].cx}")
     }
     T.test("effacement précis : seules les lettres élargies sont remplacées, corrections avec l'option conservées") {
         val w = 12; val h = 6

@@ -535,6 +535,28 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     /** Ouvre la correction de la traduction dont on vient de regarder l'original. */
     fun openPeekEdit() { peekTarget?.let { openEdit(it) }; peekTarget = null; main.removeCallbacks(clearPeek) }
 
+    /**
+     * Supprime la traduction touchée longuement (petit artefact pris pour du texte) sans passer par l'éditeur : l'original est rétabli à cet endroit. Le bloc reste repérable (appui long)
+     * pour pouvoir être rétabli, et la suppression est conservée avec les autres corrections de l'image.
+     */
+    fun deletePeek() {
+        val t = peekTarget ?: return
+        peekTarget = null; main.removeCallbacks(clearPeek)
+        val id = t.imageId.removeSuffix("~up")
+        val info = workInfo(id) ?: return
+        val shown = info.applied.page.blocks.firstOrNull { it.id == t.bid } ?: return
+        val prev = info.applied.editByBlock[shown.id]
+        val orig = info.result.blocks.firstOrNull { it.id == shown.id } ?: shown
+        val edit = prev?.copy(hidden = true) ?: BlockEdit(
+            "e" + java.util.UUID.randomUUID().toString().take(8), EditKind.ADJUST, imageRect(orig.box, info.ctxH), orig.source, hidden = true,
+        )
+        graph.edits.upsert(info.imageKey, edit)
+        graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "correction").put("url", currentUrl).put("src", shown.source).put("before", shown.translated).put("edit", "supprimé"))
+        // le patch disparaît tout de suite ; la page est ensuite redessinée sans lui (résultat en cache)
+        webView?.evaluateJavascript("window.__mt&&window.__mt.dropPatch(${JSONObject.quote(t.imageId)},${t.bid})", null)
+        reprocess(id)
+    }
+
     /** Ajoute un texte à la main à l'endroit touché (zone non traduite) : l'éditeur s'ouvre sur un rectangle à ajuster. */
     fun openNewEdit() {
         val sp = peekEmpty ?: return

@@ -182,6 +182,12 @@ object PageScript {
     }
   }
   function unpeek(){ if (PK.el) { PK.el.style.visibility = ''; PK.el = null; } }
+  // suppression demandée par l'application : le patch disparaît tout de suite (la page est ensuite redessinée sans lui)
+  function dropPatch(id, bid){
+    var e = S.entries[id]; if (!e) return;
+    var kids = e.div.children;
+    for (var i=0;i<kids.length;i++){ var k = kids[i]; if (k.getAttribute && k.getAttribute('data-bid') === String(bid)) k.style.display = 'none'; }
+  }
   document.addEventListener('touchstart', function(e){
     if (e.touches.length !== 1) { clearTimeout(LP.timer); unpeek(); return; }
     LP.x = e.touches[0].clientX; LP.y = e.touches[0].clientY; clearTimeout(LP.timer);
@@ -250,7 +256,7 @@ object PageScript {
       setTimeout(tick, 400);
     })();
   }
-  window.__mt = {collect:collect, apply:apply, setVisible:setVisible, clear:clear, getB64:getB64, resumeTo:resumeTo, forget:forget};
+  window.__mt = {collect:collect, apply:apply, setVisible:setVisible, clear:clear, getB64:getB64, resumeTo:resumeTo, forget:forget, dropPatch:dropPatch};
 })();
 """
 }

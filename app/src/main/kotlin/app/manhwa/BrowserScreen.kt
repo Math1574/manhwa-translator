@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.displayCutoutPadding
@@ -30,6 +31,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -149,7 +151,11 @@ fun BrowserScreen(graph: AppGraph) {
                         LaunchedEffect(c.resumeOffer) { delay(9000); c.dismissResumeOffer() }
                         Pill("Reprendre à ${c.resumeOffer} %", onClick = { c.resumeNow() }, onClose = { c.dismissResumeOffer() })
                     }
-                    if (c.peekTarget != null) Pill("Corriger cette traduction", onClick = { c.openPeekEdit() })
+                    if (c.peekTarget != null) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Pill("Corriger cette traduction", onClick = { c.openPeekEdit() })
+                        // supprimer d'un geste (petits artefacts pris pour du texte) : l'original est rétabli à cet endroit
+                        RoundPill(Icons.Filled.Delete, "Supprimer cette traduction") { c.deletePeek() }
+                    }
                     c.peekEmpty?.let { Pill("Ajouter une traduction ici", onClick = { c.openNewEdit() }, onClose = { c.peekEmpty = null }) }
                     c.navBlocked?.let { nb ->
                         if (nb.popup) Pill(nb.reason, onClick = { c.dismissNavBlocked() })
@@ -159,6 +165,15 @@ fun BrowserScreen(graph: AppGraph) {
             }
         }
     }
+}
+
+/** Petit bouton rond de la même teinte que [Pill] : une action d'un geste, sans texte. */
+@Composable
+private fun RoundPill(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, onClick: () -> Unit) {
+    Box(
+        Modifier.size(44.dp).clip(CircleShape).background(Brush.horizontalGradient(listOf(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.secondaryContainer))).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) { Icon(icon, description, tint = MaterialTheme.colorScheme.onPrimaryContainer) }
 }
 
 @Composable
