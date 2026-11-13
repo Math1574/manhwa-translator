@@ -1,0 +1,34 @@
+name: Cle de signature
+# À lancer une seule fois (bouton « Run workflow ») : crée la clé qui signera toutes les versions de l'application, pour que chaque nouvelle version
+# s'installe par-dessus la précédente sans désinstaller. La clé est fabriquée sur le serveur de compilation et rangée dans une publication BROUILLON
+# du dépôt (visible seulement par le propriétaire du dépôt, jamais publiée). Si elle existe déjà, ce workflow ne fait rien.
+# Ne jamais supprimer ce brouillon : sans lui, la prochaine version serait signée avec une autre clé et il faudrait désinstaller une fois de plus.
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  create:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Créer la clé si elle n'existe pas encore
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          NAME="Cle de signature (privee, ne pas publier ni supprimer)"
+          existing=$(gh api "repos/$REPO/releases?per_page=100" --jq "[.[] | select(.draft == true and .name == \"$NAME\")] | length")
+          if [ "$existing" != "0" ]; then echo "La clé existe déjà : rien à faire."; exit 0; fi
+          PASS=$(openssl rand -hex 24)
+          echo "::add-mask::$PASS"
+          keytool -genkeypair -storetype PKCS12 -keystore release.p12 -alias manhwa -keyalg RSA -keysize 3072 -validity 36500 \
+            -storepass "$PASS" -keypass "$PASS" -dname "CN=Manhwa Translator, O=Math1574, C=FR" 2>/dev/null
+          printf '%s' "$PASS" > release.pass
+          gh release create signing-key-private release.p12 release.pass --draft \
+            --title "$NAME" \
+            --notes "Clé de signature de l'application. Brouillon privé : ne pas publier, ne pas supprimer. Utilisée par le workflow Build."
+          echo "Clé créée et rangée dans un brouillon privé."
+          # contrôle : le brouillon doit être retrouvable, avec ses deux fichiers
+          n=$(gh api "repos/$REPO/releases?per_page=100" --jq "[.[] | select(.draft == true and .name == \"$NAME\")][0].assets | length")
+          [ "$n" = "2" ] || { echo "::error::le brouillon ne contient pas les deux fichiers ($n)"; exit 1; }
