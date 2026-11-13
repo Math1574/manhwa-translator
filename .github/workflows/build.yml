@@ -55,29 +55,79 @@ jobs:
           curl -sSfL --retry 3 -o app/src/main/assets/ocr/ko_v5_dict.txt $K5/dict.txt
           # lecteur unifié PP-OCRv5 mobile (officiel Paddle, Apache-2.0) : japonais
           curl -sSfL --retry 3 -o app/src/main/assets/ocr/ppocrv5_unified_rec_infer.onnx https://huggingface.co/PaddlePaddle/PP-OCRv5_mobile_rec_onnx/resolve/main/inference.onnx
-          # japonais vertical : manga-ocr quantifié (Apache-2.0) et son vocabulaire
-          MO=https://huggingface.co/onnx-community/manga-ocr-base-ONNX/resolve/main/onnx
-          curl -sSfL --retry 3 -o app/src/main/assets/ocr/manga_ocr_encoder_u8.onnx $MO/encoder_model_uint8.onnx
-          curl -sSfL --retry 3 -o app/src/main/assets/ocr/manga_ocr_decoder_u8.onnx $MO/decoder_model_uint8.onnx
-          curl -sSfL --retry 3 -o app/src/main/assets/ocr/manga_ocr_vocab.txt https://huggingface.co/kha-white/manga-ocr-base/resolve/main/vocab.txt
+          # japonais vertical : manga-ocr, voir l'étape suivante (module téléchargé à la demande, plus embarqué dans l'APK du téléphone)
           # détecteur de bulles et de texte de bande dessinée (RT-DETR, Apache-2.0, version quantifiée 11 Mo)
           mkdir -p app/src/main/assets/detector
           curl -sSfL --retry 3 -o app/src/main/assets/detector/detector-v4-s_int8.onnx https://huggingface.co/ogkalu/comic-text-and-bubble-detector/resolve/main/detector-v4-s_int8.onnx
           ls -la app/src/main/assets/ocr app/src/main/assets/detector
-      - name: Compiler l'APK debug
+      - name: "Module japonais (manga-ocr, Apache-2.0), publié une fois en Release et repris de là ensuite"
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/ja-pack
+          if gh release view models-ja-v1 >/dev/null 2>&1; then
+            gh release download models-ja-v1 --dir /tmp/ja-pack --clobber
+          else
+            MO=https://huggingface.co/onnx-community/manga-ocr-base-ONNX/resolve/main/onnx
+            curl -sSfL --retry 3 -o /tmp/ja-pack/manga_ocr_encoder_u8.onnx $MO/encoder_model_uint8.onnx
+            curl -sSfL --retry 3 -o /tmp/ja-pack/manga_ocr_decoder_u8.onnx $MO/decoder_model_uint8.onnx
+            curl -sSfL --retry 3 -o /tmp/ja-pack/manga_ocr_vocab.txt https://huggingface.co/kha-white/manga-ocr-base/resolve/main/vocab.txt
+            BASE="https://github.com/${{ github.repository }}/releases/download/models-ja-v1"
+            ( cd /tmp/ja-pack
+              echo "# nom taille sha256 adresse (écrit par la compilation en ligne)" > ja.txt
+              for f in manga_ocr_encoder_u8.onnx manga_ocr_decoder_u8.onnx manga_ocr_vocab.txt; do
+                echo "$f $(stat -c %s "$f") $(sha256sum "$f" | cut -d' ' -f1) $BASE/$f" >> ja.txt
+              done )
+            gh release create models-ja-v1 /tmp/ja-pack/manga_ocr_encoder_u8.onnx /tmp/ja-pack/manga_ocr_decoder_u8.onnx /tmp/ja-pack/manga_ocr_vocab.txt /tmp/ja-pack/ja.txt \
+              --title "Module japonais (manga-ocr)" --notes "Modèles du lecteur de japonais vertical, téléchargés par l'application à la demande (Réglages, Modèles). Ne pas supprimer."
+          fi
+          cat /tmp/ja-pack/ja.txt
+          # contrôle : chaque fichier correspond à son manifeste
+          grep -v '^#' /tmp/ja-pack/ja.txt | while read -r name size sha url; do
+            [ "$(stat -c %s "/tmp/ja-pack/$name")" = "$size" ] && [ "$(sha256sum "/tmp/ja-pack/$name" | cut -d' ' -f1)" = "$sha" ] || { echo "::error::$name ne correspond pas à son manifeste"; exit 1; }
+          done
+      - name: Clé de signature fixe (brouillon privé du dépôt)
+        env: { GH_TOKEN: "${{ github.token }}", GH_REPO: "${{ github.repository }}" }
+        run: |
+          set -euo pipefail
+          REL=$(gh api "repos/${{ github.repository }}/releases?per_page=100" --jq '[.[] | select(.draft == true and (.name | startswith("Cle de signature")))][0].id')
+          if [ -z "$REL" ] || [ "$REL" = "null" ]; then echo "::error::Clé de signature introuvable : lancer une fois le workflow « Cle de signature »."; exit 1; fi
+          for f in release.p12 release.pass; do
+            id=$(gh api "repos/${{ github.repository }}/releases/$REL/assets" --jq ".[] | select(.name == \"$f\") | .id")
+            gh api -H "Accept: application/octet-stream" "repos/${{ github.repository }}/releases/assets/$id" > "$RUNNER_TEMP/$f"
+          done
+          PASS=$(cat "$RUNNER_TEMP/release.pass"); echo "::add-mask::$PASS"
+          { echo "SIGNING_KEYSTORE_FILE=$RUNNER_TEMP/release.p12"; echo "SIGNING_STORE_PASSWORD=$PASS"; echo "SIGNING_KEY_PASSWORD=$PASS"; echo "SIGNING_KEY_ALIAS=manhwa"; } >> "$GITHUB_ENV"
+          keytool -list -storetype PKCS12 -keystore "$RUNNER_TEMP/release.p12" -storepass "$PASS" 2>/dev/null | grep -E "manhwa|Certificate fingerprint" | sed 's/^/clé : /' | head -3 || true
+      - name: Compiler l'APK de test pour l'émulateur (x86_64, avec le lecteur de japonais intégré)
         run: |
           set -o pipefail
-          gradle :app:assembleDebug --no-daemon --stacktrace 2>&1 | tee /tmp/apk.log
+          mkdir -p app/src/main/assets/packs
+          cp /tmp/ja-pack/ja.txt app/src/main/assets/packs/ja.txt
+          cp /tmp/ja-pack/manga_ocr_* app/src/main/assets/ocr/
+          gradle :app:assembleDebug --no-daemon --stacktrace -PbuildNumber=${{ github.run_number }} -Pabis=x86_64 2>&1 | tee /tmp/apk.log
+          mkdir -p apk-e2e && cp app/build/outputs/apk/debug/app-debug.apk apk-e2e/app-debug.apk
+      - name: Compiler l'APK du téléphone (arm64 seul, lecteur de japonais en module à part)
+        run: |
+          set -o pipefail
+          rm -f app/src/main/assets/ocr/manga_ocr_*
+          gradle :app:assembleDebug --no-daemon --stacktrace -PbuildNumber=${{ github.run_number }} -Pabis=arm64-v8a 2>&1 | tee -a /tmp/apk.log
+          cp app/build/outputs/apk/debug/app-debug.apk ManhwaTranslator-debug.apk
+          ls -la ManhwaTranslator-debug.apk apk-e2e/app-debug.apk
+          # signature : l'empreinte du certificat doit être celle de la clé fixe (même valeur à chaque build)
+          $ANDROID_HOME/build-tools/$(ls $ANDROID_HOME/build-tools | sort -V | tail -1)/apksigner verify --print-certs ManhwaTranslator-debug.apk | grep -E "Signer #1 certificate SHA-256|Verifies" | tee /tmp/cert.txt || true
       - uses: actions/upload-artifact@v4
         with:
           name: ManhwaTranslator-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          path: apk-e2e/app-debug.apk
       - name: Publier l'APK dans les Releases
         if: github.event_name == 'push'
         env: { GH_TOKEN: "${{ github.token }}" }
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk ManhwaTranslator-debug.apk
-          gh release create "build-${{ github.run_number }}" ManhwaTranslator-debug.apk --title "Build ${{ github.run_number }} (debug)" --notes "APK debug, commit ${GITHUB_SHA}. Voir docs/STATUS.md pour les limites connues."
+          # les nouveautés montrées dans l'application sont le message de la modification (sans les mentions techniques de fin)
+          git log -1 --pretty=%B | grep -v -i -E '^(Co-Authored-By|Claude-Session|Signed-off-by):|^🤖' > /tmp/notes.txt || true
+          [ -s /tmp/notes.txt ] || echo "Build ${{ github.run_number }}" > /tmp/notes.txt
+          gh release create "build-${{ github.run_number }}" ManhwaTranslator-debug.apk --title "Build ${{ github.run_number }}" --notes-file /tmp/notes.txt
       - name: Publier le journal (branche ci-logs)
         if: always()
         run: |

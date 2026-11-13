@@ -78,7 +78,7 @@ class MainActivity : ComponentActivity() {
 private fun Root(graph: AppGraph) {
     var tab by remember { mutableIntStateOf(0) }
     val c = graph.controller
-    val tabs = listOf(NavTab("Lecture", AppIcons.Book), NavTab("Bibliothèque", AppIcons.Library), NavTab("Réglages", Icons.Filled.Settings))
+    val tabs = listOf(NavTab("Lecture", AppIcons.Book), NavTab("Bibliothèque", AppIcons.Library), NavTab("Réglages", Icons.Filled.Settings, badge = graph.updater.hasNews()))
 
     // Retour : plein écran, puis onglet courant, puis historique du navigateur, sinon sortie.
     BackHandler(enabled = c.fullscreen || tab != 0 || c.canGoBack) {
@@ -148,6 +148,8 @@ private fun Root(graph: AppGraph) {
     }
     // correction d'un texte traduit : éditeur plein écran posé sur toute l'application (zone, texte, position, police, glossaire)
     c.editTarget?.let { et -> BlockEditor(graph, et) { c.dismissEdit() } }
+    // nouveautés de la version qui vient d'être installée (une seule fois)
+    UpdateHost(graph)
     }
     }
 }

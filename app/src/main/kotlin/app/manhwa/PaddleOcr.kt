@@ -35,7 +35,7 @@ object OcrDebug {
     @Volatile var timing: String = ""
 }
 
-class PaddleModels(private val ctx: Context) {
+class PaddleModels(private val ctx: Context, private val jaPack: JapanesePack? = null) {
     class Rec(val session: OrtSession, val charset: List<String>, val imgH: Int)
 
     private val env: OrtEnvironment by lazy { OrtEnvironment.getEnvironment() }
@@ -53,7 +53,7 @@ class PaddleModels(private val ctx: Context) {
     val detector: ComicDetector by lazy { ComicDetector(ctx, env) }
 
     /** Lecture du japonais vertical (manga-ocr) : appelée pour les colonnes que la lecture horizontale ne sait pas traiter. */
-    val manga: MangaOcrReader by lazy { MangaOcrReader(ctx, env) }
+    val manga: MangaOcrReader by lazy { MangaOcrReader(ctx, env, jaPack) }
 
     private fun session(asset: String): OrtSession {
         val bytes = ctx.assets.open(asset).use { it.readBytes() }

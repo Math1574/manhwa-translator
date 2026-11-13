@@ -30,6 +30,7 @@ class App : Application() {
         super.onCreate()
         graph = AppGraph(this)
         ExitReasons.record(this, graph.journal)
+        graph.updater.onStart()
     }
 }
 
@@ -76,7 +77,11 @@ class AppGraph(ctx: Context) {
         ResumeShortcut.update(ctx, library.library)
     }
     val llm = LlmModelsManager(ctx)
-    val paddleModels = PaddleModels(ctx)
+    /** Module optionnel de lecture du japonais vertical (téléchargé à la demande). */
+    val jaPack = JapanesePack(ctx)
+    /** Mise à jour intégrée de l'application (vérification des publications, nouveautés, téléchargement, installation). */
+    val updater = UpdateManager(ctx)
+    val paddleModels = PaddleModels(ctx, jaPack)
     val paddle = PaddleOcr(paddleModels)
     val gemma = GemmaTranslator(ctx, llm) { settingsStore.settings }
     /** Traductions de plusieurs pages regroupées en un seul appel au moteur (le surcoût fixe de chaque appel est partagé). */

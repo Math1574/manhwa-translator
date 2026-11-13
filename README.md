@@ -7,6 +7,15 @@ Application Android : navigateur intégré qui traduit automatiquement les manga
 1. Ouvrez la page **Releases** du dépôt et téléchargez le dernier `ManhwaTranslator-debug.apk`.
 2. Installez-le (autorisez l'installation depuis cette source si Android le demande).
 
+## Mises à jour
+- Toutes les versions publiées sont signées avec **la même clé fixe**, rangée dans un brouillon privé du dépôt (workflow « Cle de signature », à lancer une seule fois) :
+  une nouvelle version s'installe **par-dessus la précédente, sans désinstaller**, et garde réglages, bibliothèque, glossaire, corrections et modèles.
+- Réglages → carte **Mise à jour de l'application** : vérification au lancement (au plus toutes les six heures), nouveautés, téléchargement (reprise possible,
+  taille et somme de contrôle vérifiées), puis installation par Android. Rien ne se télécharge sans appui sur le bouton. Une pastille signale une version disponible.
+- L'APK du téléphone ne contient que l'architecture arm64. Le lecteur de japonais vertical (manga-ocr, environ 100 Mo) est un **module facultatif**, téléchargé à la demande
+  (Réglages → Modèles de traduction) depuis la Release `models-ja-v1`.
+- Sur le téléphone, la première installation d'une version signée avec la clé fixe demande de désinstaller l'ancienne une seule fois ; les suivantes non.
+
 ## Première utilisation
 1. Onglet **Modèles** : téléchargez **Gemma 4 E2B** (2,6 Go, Wi-Fi recommandé, gardez l'application ouverte ; le téléchargement est vérifié
    par somme de contrôle et peut être repris). Il est choisi automatiquement. **Gemma 4 E4B** (3,7 Go) est un peu plus lent, de qualité comparable.

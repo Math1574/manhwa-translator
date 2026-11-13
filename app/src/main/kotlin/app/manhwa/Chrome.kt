@@ -57,7 +57,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 
-class NavTab(val label: String, val icon: ImageVector)
+class NavTab(val label: String, val icon: ImageVector, val badge: Boolean = false)
 
 /**
  * Barre d'onglets flottante : une pastille de verre arrondie ; l'onglet choisi s'élargit en douceur (ressort) et affiche son nom sur une pastille à dégradé d'accent.
@@ -90,7 +90,11 @@ fun GlowNavBar(tabs: List<NavTab>, selected: Int, onSelect: (Int) -> Unit) {
                         .clickable(interactionSource = src, indication = null) { if (!sel) { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onSelect(i) } },
                     horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(t.icon, t.label, tint = if (sel) cs.onPrimaryContainer else cs.onSurfaceVariant, modifier = Modifier.size(24.dp))
+                    Box {
+                        Icon(t.icon, t.label, tint = if (sel) cs.onPrimaryContainer else cs.onSurfaceVariant, modifier = Modifier.size(24.dp))
+                        // pastille : quelque chose attend (par exemple une mise à jour de l'application)
+                        if (t.badge) Box(Modifier.align(Alignment.TopEnd).offset(x = 3.dp, y = (-2).dp).size(10.dp).clip(CircleShape).background(cs.tertiary).border(1.5.dp, cs.surface, CircleShape))
+                    }
                     AnimatedVisibility(visible = sel, enter = fadeIn() + expandHorizontally(), exit = fadeOut() + shrinkHorizontally()) {
                         Row { Spacer(Modifier.width(8.dp)); Text(t.label, style = MaterialTheme.typography.labelLarge, color = cs.onPrimaryContainer, maxLines = 1) }
                     }

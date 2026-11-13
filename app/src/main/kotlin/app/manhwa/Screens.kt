@@ -85,7 +85,7 @@ import java.util.Locale
 @Composable
 fun ModelsScreen(graph: AppGraph) {
     val m = graph.models
-    LaunchedEffect(Unit) { m.refresh(); graph.llm.refresh() }
+    LaunchedEffect(Unit) { m.refresh(); graph.llm.refresh(); graph.jaPack.refresh() }
     val llm = graph.llm
     val ctxForRam = LocalContext.current
     var confirm by remember { mutableStateOf<ModelSpec?>(null) }
@@ -135,9 +135,10 @@ fun ModelsScreen(graph: AppGraph) {
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
             Column(Modifier.padding(12.dp)) {
                 Text("Reconnaissance du texte (OCR)", style = MaterialTheme.typography.titleMedium)
-                Text("Prête : modèles japonais, coréen, chinois et latin intégrés à l'application.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Prête : modèles coréen, chinois, latin et japonais horizontal intégrés à l'application. Le japonais vertical (manga) est un module à part, plus bas.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+        JapanesePackCard(graph)
         m.languages.forEach { (code, name) ->
             val st = m.status[code] ?: "absent"
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -198,6 +199,51 @@ private fun GemmaCard(spec: ModelSpec, llm: LlmModelsManager, onAskDownload: () 
                 busy -> OutlinedButton(onClick = { llm.cancel(spec) }) { Text("Annuler") }
                 ready -> OutlinedButton(onClick = { llm.delete(spec) }) { Text("Supprimer") }
                 else -> Button(onClick = onAskDownload) { Text(if (err != null) "Reprendre" else "Télécharger") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun JapanesePackCard(graph: AppGraph) {
+    val pack = graph.jaPack
+    var confirm by remember { mutableStateOf(false) }
+    val size = String.format(Locale.FRANCE, "%.0f", pack.totalBytes / 1_048_576.0)
+    if (confirm) {
+        AlertDialog(
+            onDismissRequest = { confirm = false },
+            title = { Text("Télécharger le lecteur de japonais vertical ?") },
+            text = { Text("Le module pèse environ $size Mo. Utilisez le Wi-Fi et gardez l'application ouverte ; le téléchargement reprend s'il est interrompu. Ensuite la lecture reste 100 % locale.") },
+            confirmButton = { Button(onClick = { pack.download(); confirm = false }) { Text("Télécharger") } },
+            dismissButton = { TextButton(onClick = { confirm = false }) { Text("Annuler") } },
+        )
+    }
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Japonais vertical (manga-ocr)", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Lit les colonnes de texte vertical des mangas japonais. Facultatif : sans lui, le japonais est lu par PaddleOCR et ML Kit. Module de $size Mo, téléchargé à la demande.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
+                )
+                Text(
+                    when {
+                        pack.bundled -> "Intégré à cette version"
+                        pack.busy -> "Téléchargement : ${String.format(Locale.FRANCE, "%.1f", pack.progress * 100)} %"
+                        pack.ready -> "Prêt"
+                        pack.error != null -> "Erreur : ${pack.error}"
+                        !pack.offered -> "Indisponible dans cette version"
+                        else -> "Non téléchargé"
+                    },
+                    color = if (pack.error != null && !pack.busy) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                )
+                if (pack.busy) LinearProgressIndicator(progress = { pack.progress }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+            }
+            when {
+                pack.bundled || !pack.offered -> {}
+                pack.busy -> OutlinedButton(onClick = { pack.cancel() }) { Text("Annuler") }
+                pack.ready -> OutlinedButton(onClick = { try { graph.paddleModels.manga.close() } catch (_: Throwable) {}; pack.delete() }) { Text("Supprimer") }
+                else -> Button(onClick = { confirm = true }) { Text(if (pack.error != null) "Reprendre" else "Télécharger") }
             }
         }
     }

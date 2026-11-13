@@ -162,6 +162,7 @@ private fun SettingsHome(graph: AppGraph, open: (SettingsPage) -> Unit) {
     val readyModels = listOf(LlmModels.E2B, LlmModels.E4B).count { graph.llm.ready[it.id] == true }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         ScreenHeader("Réglages", "Lecture, traduction et apparence")
+        UpdateCard(graph)
         SectionRow(AppIcons.Translate, "Traduction", "${sourceNames.getValue(s.source)} → ${targetNames.getValue(s.target)} · $engine") { open(SettingsPage.TRANSLATION) }
         SectionRow(AppIcons.Eye, "Lecture", "Texte ×${String.format(Locale.FRANCE, "%.1f", s.textScale)} · ${s.maxPrefetchPages} page(s) en avance" + if (s.hideBarsWhileReading) " · barres masquées" else "") { open(SettingsPage.READING) }
         SectionRow(AppIcons.Palette, "Apparence", "${mascotName(s.themeMascot)} · accent ${accentName(s.themeAccent)} · fond ${backgroundName(s.themeBackground)}" + if (s.reducedMotion) " · animations réduites" else "") { open(SettingsPage.APPEARANCE) }

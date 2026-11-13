@@ -19,3 +19,9 @@
 - Navigateur : blocage des publicités (liste AdAway, CC BY 3.0), bibliothèque (favoris, historique, reprise de lecture par œuvre).
 - Écarté après mesure : MI-GAN (gain négligeable), détection PP-OCRv5 mobile (moins bon rappel).
 - Reste à faire : japonais vertical (manga-ocr), détecteur de bulles, onglets multiples, gestion des chapitres, NPU.
+
+## Mise à jour intégrée et APK allégé
+- Clé de signature fixe (brouillon privé du dépôt, créée par le workflow « Cle de signature ») : plus de désinstallation entre deux versions.
+- APK du téléphone en arm64 seul ; lecteur de japonais vertical en module facultatif (Release `models-ja-v1`). La compilation pour l'émulateur reste en x86_64 avec ce lecteur intégré, pour que les tests le couvrent.
+- Réglages : carte de mise à jour (vérification, nouveautés, téléchargement reprenable et vérifié, installation) ; les nouveautés sont le message de la modification publiée.
+- Non vérifié par le développeur : l'installation sur un vrai téléphone (autorisation « Installer des applications inconnues », écran d'installation du constructeur) et l'APK arm64 allégé (les tests en ligne tournent en x86_64).

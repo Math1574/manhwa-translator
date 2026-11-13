@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Seule permission : accès réseau pour charger les sites et télécharger les modèles de traduction. -->
+    <!-- Accès réseau : charger les sites, télécharger les modèles de traduction, vérifier et télécharger les mises à jour de l'application. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Installer soi-même une mise à jour téléchargée : Android demande encore, une fois, d'autoriser cette application dans « Installer des applications inconnues ». -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:name=".App"

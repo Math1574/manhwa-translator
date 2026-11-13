@@ -6,6 +6,11 @@ plugins {
 
 kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
 
+// Paramètres de la compilation en ligne : numéro du build (la mise à jour intégrée le compare à celui des publications) et architectures à embarquer
+// (le téléphone est en arm64 seul ; le test sur émulateur compile en x86_64). Sans paramètre : toutes les architectures, numéro 0.
+val buildNumber = (project.findProperty("buildNumber") as String?)?.trim()?.toIntOrNull() ?: 0
+val abiList = (project.findProperty("abis") as String?)?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
+
 android {
     namespace = "app.manhwa"
     compileSdk = 35
@@ -14,15 +19,34 @@ android {
         applicationId = "app.manhwa.translator"
         minSdk = 26
         targetSdk = 35
+        // Le code de version reste à 1 : Android accepte alors la réinstallation de n'importe quel build par-dessus un autre (retour en arrière compris).
+        // La mise à jour intégrée compare BUILD_NUMBER, pas ce code.
         versionCode = 1
         versionName = "0.1.0"
+        buildConfigField("int", "BUILD_NUMBER", buildNumber.toString())
+        if (abiList.isNotEmpty()) ndk { abiFilters += abiList }
+    }
+    // Clé de signature fixe : la compilation en ligne la récupère dans un espace privé du dépôt et la donne par variables d'environnement.
+    // Sans elle (compilation locale), Android Studio signe avec sa clé de débogage habituelle. Toujours la même clé = mises à jour sans désinstaller.
+    val keystorePath = System.getenv("SIGNING_KEYSTORE_FILE")
+    if (!keystorePath.isNullOrBlank() && file(keystorePath).exists()) {
+        signingConfigs {
+            create("fixed") {
+                storeFile = file(keystorePath)
+                storeType = "pkcs12"
+                storePassword = System.getenv("SIGNING_STORE_PASSWORD")
+                keyAlias = System.getenv("SIGNING_KEY_ALIAS")
+                keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+            }
+        }
+        buildTypes { getByName("debug") { signingConfig = signingConfigs.getByName("fixed") } }
     }
     buildTypes { release { isMinifyEnabled = false } }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
 }
 
