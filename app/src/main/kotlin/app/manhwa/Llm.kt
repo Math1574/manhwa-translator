@@ -176,10 +176,7 @@ class GemmaTranslator(
             var retried = false; var fixed = false
             if (probs.isNotEmpty()) {
                 retried = true
-                // lignes voisines de la page : une phrase coupée se lit avec la précédente et la suivante
-                val before = ((i - 2).coerceAtLeast(0) until i).map { texts[it] to out[it] }
-                val after = ((i + 1)..(i + 2).coerceAtMost(texts.lastIndex)).filter { it <= texts.lastIndex }.map { texts[it] }
-                val again = try { askFix(eng, texts[i], out[i], probs.map { "${it.code}: ${it.detail}" }, source, target, glossary, names, before, after) } catch (e: Throwable) { null }
+                val again = try { askFix(eng, texts[i], out[i], probs.map { "${it.code}: ${it.detail}" }, source, target, glossary, names) } catch (e: Throwable) { null }
                 if (again != null) {
                     val p2 = TranslationChecks.problems(texts[i], again, target, names)
                     if (p2.size < probs.size) { out[i] = again; fixed = p2.isEmpty(); probs = p2 }
@@ -191,14 +188,14 @@ class GemmaTranslator(
         return out
     }
 
-    private fun askFix(eng: Engine, text: String, previous: String, problems: List<String>, source: String, target: String, glossary: List<GlossaryEntry>, names: List<String>, before: List<Pair<String, String>> = emptyList(), after: List<String> = emptyList()): String? {
+    private fun askFix(eng: Engine, text: String, previous: String, problems: List<String>, source: String, target: String, glossary: List<GlossaryEntry>, names: List<String>): String? {
         val config = ConversationConfig(
             systemInstruction = Contents.of(LlmPrompt.system(source, target, promptVariant)),
             samplerConfig = SamplerConfig(topK = 20, topP = 0.9, temperature = 0.1),
             maxOutputToken = LlmPrompt.maxOutputTokens(listOf(text)),
         )
         val reply = eng.createConversation(config).use { conv ->
-            withWatchdog(conv) { textOf(conv.sendMessage(LlmPrompt.fixUser(text, previous, problems, history.toList(), glossary, names, before, after))) }
+            withWatchdog(conv) { textOf(conv.sendMessage(LlmPrompt.fixUser(text, previous, problems, history.toList(), glossary, names))) }
         }
         return LlmPrompt.parse(reply, 1).firstOrNull()
     }
@@ -414,6 +411,6 @@ class GemmaTranslator(
         const val IDLE_RELEASE_MS = 10 * 60 * 1000L
         /** Une génération normale dure moins de 20 s : au-delà d'une minute, elle est interrompue (la réponse partielle reste exploitable ligne par ligne). */
         const val GENERATION_TIMEOUT_MS = 60 * 1000L
-        fun engineId(spec: ModelSpec) = "${spec.id}-ctx2"          // ctx2 : consignes de personne et de temps, contrôles de possessifs, de temps et de négation
+        fun engineId(spec: ModelSpec) = "${spec.id}-ctx1"
     }
 }

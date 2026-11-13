@@ -41,89 +41,11 @@ object TranslationChecks {
         // répétition anormale d'un mot (« de de de »)
         val words = toks(t)
         for (i in 2 until words.size) if (words[i] == words[i - 1] && words[i] == words[i - 2] && words[i].length > 1) { out.add(Problem("répétition", "mot répété : ${words[i]}")); break }
-        // personne, temps et négation : les erreurs typiques d'un petit modèle (« our » → « votre », « his » → « mon », « I have » → « j'aurai »)
-        if (target == "fr") { personProblem(src, t)?.let { out.add(it) }; tenseProblem(src, t)?.let { out.add(it) }; negationProblem(src, t)?.let { out.add(it) } }
         // verbosité excessive
         if (sLetters >= 10 && t.count { it.isLetter() } > 3.2f * sLetters) out.add(Problem("long", "beaucoup plus long que l'original"))
         // reste de format
         if (Regex("^\\s*\\d+\\s*\\|").containsMatchIn(t) || t.contains("**") || t.startsWith("```")) out.add(Problem("format", "résidu de mise en forme"))
         return out
-    }
-
-    // ---------- personne, temps, négation ----------
-
-    private val enTok = Regex("[a-z]+(?:'[a-z]+)?")
-    private fun enWords(s: String) = enTok.findAll(s.lowercase().replace('’', '\'')).map { it.value }.toList()
-
-    /** Personnes présentes dans l'original (1 = je, 2 = nous, 3 = tu/vous, 4 = il/elle/ils) d'après les pronoms et possessifs anglais. */
-    private val enPerson: Map<String, Int> = buildMap {
-        for (w in listOf("i", "i'm", "i've", "i'll", "i'd", "me", "my", "mine", "myself")) put(w, 1)
-        for (w in listOf("we", "we're", "we've", "we'll", "we'd", "us", "our", "ours", "ourselves", "let's")) put(w, 2)
-        for (w in listOf("you", "you're", "you've", "you'll", "you'd", "your", "yours", "yourself", "yourselves", "y'all")) put(w, 3)
-        for (w in listOf("he", "he's", "he'll", "he'd", "him", "his", "himself", "she", "she's", "she'll", "she'd", "her", "hers", "herself", "it", "it's", "its", "itself", "they", "they're", "they've", "they'll", "they'd", "them", "their", "theirs", "themselves")) put(w, 4)
-    }
-    /** Possessifs anglais → personne, avec les formes françaises attendues. */
-    private val enPossessive: Map<String, Pair<Int, String>> = mapOf(
-        "my" to (1 to "mon/ma/mes"), "our" to (2 to "notre/nos"), "your" to (3 to "ton/ta/tes or votre/vos"), "his" to (4 to "son/sa/ses"), "her" to (4 to "son/sa/ses"), "its" to (4 to "son/sa/ses"), "their" to (4 to "son/sa/ses or leur/leurs"),
-    )
-    /** Déterminants possessifs français → personne. « ton » et « son » sont aussi des noms (le ton, le son) : ignorés après un article. */
-    private val frPossessive: Map<String, Int> = mapOf("mon" to 1, "ma" to 1, "mes" to 1, "notre" to 2, "nos" to 2, "ton" to 3, "ta" to 3, "tes" to 3, "votre" to 3, "vos" to 3, "son" to 4, "sa" to 4, "ses" to 4)
-    private val nounPreceders = setOf("le", "un", "ce", "du", "au", "ce", "d'un", "sur", "ce", "mon", "ton", "son")
-    private val personName = mapOf(1 to "I/me/my", 2 to "we/us/our", 3 to "you/your", 4 to "he/she/they")
-
-    /** Possessif français d'une autre personne que celles de l'original : « our » rendu par « votre », « his » par « mon ». */
-    private fun personProblem(src: String, tr: String): Problem? {
-        val sw = enWords(src)
-        val present = sw.mapNotNull { enPerson[it] }.toSet()
-        val poss = sw.mapNotNull { w -> enPossessive[w]?.let { w to it } }
-        if (poss.isEmpty()) return null                       // sans possessif dans l'original, le français peut en employer un (« mon vieux », « mon pote »)
-        val frToks = tr.lowercase().replace('’', '\'').split(Regex("[^\\p{L}']+")).filter { it.isNotEmpty() }
-        for ((i, w) in frToks.withIndex()) {
-            val person = frPossessive[w] ?: continue
-            if ((w == "son" || w == "ton") && i > 0 && frToks[i - 1] in nounPreceders) continue
-            if (person in present) continue
-            val (word, info) = poss.first()
-            return Problem("personne", "wrong person: the source has '$word' (${personName[info.first]}) but the translation uses '$w'; translate '$word' with ${info.second}")
-        }
-        return null
-    }
-
-    private val frSubj = "(?:j['’]|je\\s|tu\\s|il\\s|elle\\s|on\\s|nous\\s|vous\\s|ils\\s|elles\\s)(?:(?:ne|n['’])\\s*)?"
-    private val frStems = "(?:aur|ser|ir|fer|pourr|voudr|devr|saur|verr|viendr|tiendr|faudr|mourr|enverr|deviendr)"
-    private val frFuture = Regex("(?i)(?<![\\p{L}'’])$frSubj${frStems}(?:ai|as|a|ons|ez|ont)(?![\\p{L}])")
-    private val frConditional = Regex("(?i)(?<![\\p{L}'’])$frSubj${frStems}(?:ais|ait|ions|iez|aient)(?![\\p{L}])")
-    private val futureTriggers = setOf(
-        "will", "won't", "shall", "gonna", "going", "would", "wouldn't", "could", "couldn't", "should", "shouldn't", "might", "may", "tomorrow", "tonight", "soon", "later", "next", "someday",
-        "after", "until", "before", "once", "when", "if", "then", "promise", "swear", "wish", "perhaps", "maybe",
-    )
-    private val conditionalTriggers = setOf("would", "wouldn't", "could", "couldn't", "should", "shouldn't", "might", "may", "if", "wish", "unless", "maybe", "perhaps", "like")
-
-    /** Futur ou conditionnel dans la traduction alors que l'original est au présent ou au passé (« I have… » → « j'aurai… »). */
-    private fun tenseProblem(src: String, tr: String): Problem? {
-        val sw = enWords(src)
-        if (sw.isEmpty()) return null
-        val hasWill = sw.any { it in futureTriggers || it.endsWith("'ll") || it.endsWith("'d") } || src.lowercase().replace('’', '\'').contains("one day") || src.lowercase().contains("from now on")
-        frFuture.find(tr)?.let { m -> if (!hasWill) return Problem("temps", "wrong tense: the source has no future marker (will, 'll, going to...) but the translation uses the future ('${m.value.trim()}'); keep the tense of the source (present stays present, e.g. \"I have\" = \"j'ai\")") }
-        val hasCond = sw.any { it in conditionalTriggers || it.endsWith("'d") }
-        frConditional.find(tr)?.let { m -> if (!hasCond) return Problem("temps", "wrong tense: the source has no conditional marker (would, could, should, 'd, if...) but the translation uses the conditional ('${m.value.trim()}'); keep the tense of the source") }
-        return null
-    }
-
-    private val enNegation = setOf("not", "no", "never", "nothing", "nobody", "none", "neither", "nor", "without", "cannot", "nowhere", "hardly")
-    private val frNegation = setOf("ne", "n'", "pas", "jamais", "rien", "personne", "aucun", "aucune", "nul", "nulle", "ni", "sans", "non", "plus", "nulle part", "guère")
-    private val noNegation = listOf("never mind", "no way", "no matter", "no wonder", "no one", "nobody", "no kidding")
-
-    /** Négation de l'original perdue dans la traduction : le sens est inversé. */
-    private fun negationProblem(src: String, tr: String): Problem? {
-        val low = src.lowercase().replace('’', '\'')
-        if (noNegation.any { low.contains(it) }) return null
-        val sw = enWords(src)
-        val negated = sw.any { it in enNegation || it.endsWith("n't") }
-        if (!negated) return null
-        val ft = tr.lowercase().replace('’', '\'').split(Regex("[^\\p{L}']+")).filter { it.isNotEmpty() }
-        if (ft.any { it in frNegation || it.startsWith("n'") || it.startsWith("jamais") }) return null
-        if (ft.size < 2) return null
-        return Problem("négation", "lost negation: the source is negative ('${sw.first { it in enNegation || it.endsWith("n't") }}') but the translation has no negation (ne…pas, jamais, rien, sans, non); keep the meaning")
     }
 
     private fun toks(s: String) = tokenRe.findAll(s).map { it.value.lowercase() }.toList()

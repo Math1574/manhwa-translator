@@ -171,47 +171,6 @@ class ShapeFit(val size: Float, val lineStep: Float, val lines: List<PlacedLine>
 object ShapeLayout {
 
     /**
-     * Centre du « corps » d'une forme de bulle : milieu des rangées les plus larges (au moins 80 % de la plus large), sans la queue ni les renflements étroits. Pour une ellipse ou un
-     * rectangle, c'est leur centre. Renvoie (x, y, largeur max, hauteur) ou null si la forme est vide.
-     */
-    fun bodyCenter(shape: RowShape): FloatArray? {
-        var maxW = 0f
-        for (i in 0 until shape.rows) if (shape.left[i] <= shape.right[i]) maxW = max(maxW, shape.right[i] - shape.left[i])
-        if (maxW <= 0f) return null
-        var first = -1; var last = -1; var sx = 0f; var n = 0
-        for (i in 0 until shape.rows) {
-            if (shape.left[i] > shape.right[i] || shape.right[i] - shape.left[i] < 0.8f * maxW) continue
-            if (first < 0) first = i
-            last = i; sx += (shape.left[i] + shape.right[i]) / 2f; n++
-        }
-        if (n == 0) return null
-        val cy = shape.top + shape.rowH * ((first + last + 1) / 2f)
-        return floatArrayOf(sx / n, cy, maxW, shape.bottom - shape.top)
-    }
-
-    /**
-     * Recentre un bloc de lignes sur ([cx], [cy]) : tout le bloc est décalé, d'une fraction (1, ¾, ½ puis ¼) réduite au besoin pour que chaque ligne reste dans [shape] (à [margin] près).
-     * Renvoie la mise en page décalée, ou l'originale si le bloc est déjà centré ou si aucun décalage ne convient.
-     */
-    fun recenter(fit: ShapeFit, shape: RowShape?, cx: Float, cy: Float, margin: Float): ShapeFit {
-        if (fit.lines.isEmpty()) return fit
-        val l = fit.lines.minOf { it.cx - it.width / 2f }; val r = fit.lines.maxOf { it.cx + it.width / 2f }
-        val t = fit.lines.first().top; val b = fit.lines.last().top + fit.lineStep
-        val dx0 = cx - (l + r) / 2f; val dy0 = cy - (t + b) / 2f
-        for (f in floatArrayOf(1f, 0.75f, 0.5f, 0.25f)) {
-            val dx = dx0 * f; val dy = dy0 * f
-            if (kotlin.math.abs(dx) < 0.5f && kotlin.math.abs(dy) < 0.5f) return fit
-            val moved = fit.lines.map { PlacedLine(it.text, it.cx + dx, it.top + dy, it.width) }
-            val inside = shape == null || moved.all { ln ->
-                val sp = shape.span(ln.top, ln.top + fit.lineStep - 0.01f)
-                sp != null && ln.cx - ln.width / 2f >= sp[0] + margin * 0.5f && ln.cx + ln.width / 2f <= sp[1] - margin * 0.5f
-            }
-            if (inside) return ShapeFit(fit.size, fit.lineStep, moved, fit.fits)
-        }
-        return fit
-    }
-
-    /**
      * @param stepRatio interligne (pas entre deux lignes / taille de police)
      * @param margin marge libre à gauche et à droite de chaque ligne, en pixels de l'image
      * @param minSize taille minimale ; en dessous, la meilleure mise en page possible est renvoyée avec fits = false

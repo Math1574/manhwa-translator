@@ -58,28 +58,20 @@ Additional rules:
 11. Pick the meaning that fits the setting, not the commonest everyday one: storage / storehouse -> entrepôt or réserve; a drunk -> un ivrogne; nerve / guts -> culot; "to handle" -> s'occuper de; "to teach someone a lesson" -> donner une leçon à quelqu'un; "I wouldn't bet my life on it" -> "je n'en mettrais pas ma main au feu"; "play dumb" -> faire l'innocent; "through hell and back" -> revenir de l'enfer.
 12. Prefer the shortest natural wording; use contractions and everyday vocabulary in casual speech, and a more formal register only for formal characters. Avoid stiff phrases such as "Voulez-vous que nous..." when "On lui..." sounds more natural between fighters.
 12bis. Translate a sentence cut across two bubbles as one coherent sentence, but keep one output line per input line.
-13. Grammatical person and possessives never change. my -> mon/ma/mes, our -> notre/nos, your -> ton/ta/tes (tu) or votre/vos (vous), his/her/its -> son/sa/ses, their -> leur/leurs; I -> je, we -> nous, you -> tu/vous, he -> il, she -> elle, they -> ils/elles. "Our sect is in danger." -> "Notre secte est en danger." (never "votre"); "Take his sword." -> "Prends son épée." (never "mon").
-14. Tense never changes. The present stays present ("I have a plan." -> "J'ai un plan."; "We know." -> "Nous savons."), a past tense stays past (passé composé or imparfait), and the future or the conditional is used ONLY when the source has will, 'll, shall, going to, would, 'd, could or should. A line that stops in the middle of a sentence ("I have...", "If you...") continues in the next line: read both lines together, then translate the first one in ITS OWN tense so that it joins naturally with the next ("I have..." / "...been waiting for you." -> "J'ai..." / "...attendu pour toi.").
 """.trimEnd() else "")
     }
 
     /** Seconde passe optionnelle : relecture du brouillon (variante « r »). */
     /** Demande de correction d'une seule ligne dont la première traduction a échoué aux contrôles automatiques. */
-    fun fixUser(
-        text: String, previous: String, problems: List<String>, history: List<Pair<String, String>>, glossary: List<GlossaryEntry>, names: List<String>,
-        before: List<Pair<String, String>> = emptyList(), after: List<String> = emptyList(),
-    ): String = buildString {
+    fun fixUser(text: String, previous: String, problems: List<String>, history: List<Pair<String, String>>, glossary: List<GlossaryEntry>, names: List<String>): String = buildString {
         if (names.isNotEmpty()) { appendLine("Names and terms to keep exactly as written: ${names.joinToString(", ")}"); appendLine() }
         if (history.isNotEmpty()) { appendLine("Previous dialogue (context only):"); history.takeLast(6).forEach { (a, b) -> appendLine("- ${oneLine(a)} => ${oneLine(b)}") }; appendLine() }
         if (glossary.isNotEmpty()) { appendLine("Glossary (use exactly):"); glossary.forEach { appendLine("${it.source} = ${it.target}") }; appendLine() }
-        // les lignes voisines de la même page : une phrase coupée se lit avec la précédente et la suivante
-        if (before.isNotEmpty()) { appendLine("Lines just before it on the same page (context only):"); before.forEach { (a, b) -> appendLine("- ${oneLine(a)} => ${oneLine(b)}") }; appendLine() }
-        if (after.isNotEmpty()) { appendLine("Lines just after it on the same page (context only: the sentence may continue there):"); after.forEach { appendLine("- ${oneLine(it)}") }; appendLine() }
         appendLine("Your previous translation of the line below was rejected by an automatic check.")
         appendLine("Problems: ${problems.joinToString("; ")}")
         appendLine("Previous attempt: ${oneLine(previous)}")
         appendLine()
-        appendLine("Translate this line again, completely and faithfully, in natural French (every word translated except names and set terms), keeping the person, the possessives and the tense of the source:")
+        appendLine("Translate this line again, completely and faithfully, in natural French (every word translated except names and set terms):")
         appendLine("1| ${oneLine(text)}")
     }.trim()
 
@@ -112,7 +104,7 @@ You are a senior French editor of professionally published manhwa. You receive s
             glossary.forEach { appendLine("${it.source} = ${it.target}") }
             appendLine()
         }
-        appendLine("Lines to translate (consecutive lines of one page: a line that ends with \"...\" or has no final punctuation continues in the next one; keep each line's own tense and person):")
+        appendLine("Lines to translate:")
         texts.forEachIndexed { i, t -> appendLine("${i + 1}| ${oneLine(t)}") }
     }.trim()
 

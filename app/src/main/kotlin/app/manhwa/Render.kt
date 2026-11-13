@@ -525,14 +525,7 @@ object PageRenderer {
         val fpFit = if (b.vertical) null else ShapeLayout.fit(origRect, centerY, p.text, measurer, emInk * 3f, max(5f, emInk * 0.3f), step, marginInk)
         val sFp = if (fpFit != null && fpFit.fits && fpFit.lines.isNotEmpty()) fpFit.size else 0f
         val lineCap = 1.05f * max(max(lineH, pitch), 1f)
-        // Dans une bulle, c'est la bulle qui borne le texte, pas l'emprise du texte d'origine : la traduction (plus longue) garde la taille des lettres d'origine et n'est réduite que si elle
-        // ne tient pas dans la bulle. Avant, elle était plafonnée à la taille tenant dans l'ancienne emprise, donc plus petite que l'original alors que la bulle avait de la place.
-        val inBubble = (plan?.shape ?: bubbleShape) != null
-        val emRaw = when {
-            inBubble && inkTrusted -> min(emInk, lineCap).coerceAtLeast(5f)
-            sFp > 0f -> min(min(max(emInk, 0.85f * sFp), 1.1f * sFp), lineCap).coerceAtLeast(5f)
-            else -> emInk
-        }
+        val emRaw = if (sFp > 0f) min(min(max(emInk, 0.85f * sFp), 1.1f * sFp), lineCap).coerceAtLeast(5f) else emInk
         val em = if (inkTrusted) min(emRaw, 1.15f * emInk).coerceAtLeast(5f) else emRaw
         val margin = max(4f, em * 0.14f)
         val fixedShape = plan?.shape ?: bubbleShape
@@ -550,8 +543,7 @@ object PageRenderer {
         } catch (e: Throwable) { null } else null
         // bulle ronde confirmée : jamais au-delà de son ellipse (un contour ouvert laisse la forme relevée déborder sur la page)
         val ellipseLimit: RowShape? = limitBox?.takeIf { !p.bubbleRect }?.let { c -> RowShape.ellipse(c.left + c.width * 0.015f, c.top + c.height * 0.015f, c.right - c.width * 0.015f, c.bottom - c.height * 0.015f) }
-        var usedShape: RowShape? = null
-        val fit0: ShapeFit = if (fixedShape != null) {
+        val fit: ShapeFit = if (fixedShape != null) {
             // l'emprise d'origine reste toujours disponible dans la bulle (le texte d'origine y tenait), bornée par l'ellipse un peu élargie : la forme relevée, parfois trop
             // étroite (bords en dégradé, lueur), ne doit pas imposer un texte plus petit que l'original
             val origInBubble = limitBox?.takeIf { !p.bubbleRect }?.let { c -> origRect.intersect(RowShape.ellipse(c.left - c.width * 0.06f, c.top - c.height * 0.06f, c.right + c.width * 0.06f, c.bottom + c.height * 0.06f)) } ?: origRect
@@ -562,9 +554,7 @@ object PageRenderer {
             if (guard != null) constrained = constrained?.intersect(guard)
             val alt = if (constrained != null && constrained !== widened) ShapeLayout.fit(constrained, centerY, p.text, measurer, em, max(5f, em * 0.4f), step, margin) else null
             // on garde la mise en page contrainte si elle tient (ou si l'autre ne tenait pas) sans rétrécir le texte de plus de moitié
-            val useAlt = alt != null && alt.lines.isNotEmpty() && (alt.fits || !base.fits) && alt.size >= 0.55f * base.size
-            usedShape = if (useAlt) constrained else widened
-            if (useAlt) alt!! else base
+            if (alt != null && alt.lines.isNotEmpty() && (alt.fits || !base.fits) && alt.size >= 0.55f * base.size) alt else base
         } else {
             var best: ShapeFit? = null
             for (g in floatArrayOf(if (art) 0.08f else 0.05f, 0.16f, 0.3f, 0.55f)) {
@@ -591,11 +581,7 @@ object PageRenderer {
             }
             best ?: ShapeLayout.fit(RowShape.rect(union.left, union.top, union.right, union.bottom), centerY, p.text, measurer, em, max(5f, em * 0.4f), step, margin)
         }
-        if (fit0.lines.isEmpty()) return null
-        // Dans une bulle dont le texte d'origine était à peu près centré (à 15 % près), la traduction est centrée sur le corps de la bulle : elle ne garde plus le décalage d'une lecture
-        // partielle, d'une ligne manquante ou d'une forme dissymétrique (queue de la bulle). Le décalage est réduit pour que chaque ligne reste dans la bulle.
-        val body = if (fixedShape != null && !b.vertical) ShapeLayout.bodyCenter(fixedShape) else null
-        val fit = if (body != null && kotlin.math.abs(union.centerX - body[0]) <= 0.15f * body[2] && kotlin.math.abs(union.centerY - body[1]) <= 0.15f * body[3]) ShapeLayout.recenter(fit0, usedShape, body[0], body[1], margin) else fit0
+        if (fit.lines.isEmpty()) return null
         val lay = "encre=%.0f emprise=%.0f ligne=%.0f pas=%.0f cible=%.0f taille=%.0f forme=%s".format(emInk, sFp, lineH, pitch, em, fit.size, if (fixedShape == null) "libre" else if (plan?.shape != null) "relevée" else "ellipse")
         return Laid(font, paint, fit, art, allCaps, em, stepRatio, lay)
     }
