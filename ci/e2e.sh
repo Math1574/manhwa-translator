@@ -611,6 +611,7 @@ print(1 if b[0]<=c[0] and b[1]<=c[1] and b[2]>=c[2] and b[3]>=c[3] and (b[2]-b[0
   appcmd "twopan $((-140 * vdir)) 0"; sleep 3; appstate
   l3=$(stv edCropL)
   chk "éditeur : deux doigts qui glissent déplacent la vue, sans changer le zoom" $([ $(( (l3 - l2) * vdir )) -ge 5 ] && [ "$(stv edCropW)" = "$w1" ] && echo 1 || echo 0)
+  say "éditeur : bord gauche de la vue $l1 → $l2 (un doigt) → $l3 (deux doigts), largeur $w1 → $(stv edCropW), sens $vdir, fenêtre de $iw px"
   appcmd "pinch 0.4"; sleep 3.5; appstate
   chk "éditeur : deux doigts qui se rapprochent éloignent la vue" $([ "$(stv edCropW)" -gt "$w1" ] && echo 1 || echo 0)
   uidump ed3; tapt ed3 "=Vue d'origine" 1; sleep 2.5; appstate
