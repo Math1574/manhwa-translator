@@ -1,0 +1,80 @@
+11-14 06:39:20.506 11301 11432 I tflite  : Initialized TensorFlow Lite runtime.
+11-14 06:39:20.534 11301 11431 I native  : I0000 00:00:1794638360.534538   11431 tflite_lstm_client_base.cc:371] Resizing interpreter pool to 4
+11-14 06:39:20.568 11301 11432 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+11-14 06:39:20.615 11301 11432 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 06:39:20.630 11301 11442 I native  : I0000 00:00:1794638360.630784   11442 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/conv_model.fb
+11-14 06:39:20.633 11301 11442 I native  : I0000 00:00:1794638360.633607   11442 tflite_model_pooled_runner.cc:636] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/lstm_model.fb
+11-14 06:39:20.639 11301 11432 I native  : I0000 00:00:1794638360.639170   11432 tflite_detector_client_with_shape_cache.cc:105] Caching size: 10
+11-14 06:39:20.647 11301 11442 I native  : I0000 00:00:1794638360.647692   11442 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 4
+11-14 06:39:20.651 11301 11432 I native  : I0000 00:00:1794638360.647586   11432 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_splitting_custom_ops/model.tflite
+11-14 06:39:20.658 11301 11432 I native  : I0000 00:00:1794638360.658873   11432 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-14 06:39:20.659 11301 11432 I native  : I0000 00:00:1794638360.659311   11432 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_clustering_custom_ops/model.tflite
+11-14 06:39:20.661 11301 11432 I native  : I0000 00:00:1794638360.661892   11432 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-14 06:39:20.799 11301 11431 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 06:39:22.216 11301 11431 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 06:39:22.292 11301 11431 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 06:39:22.364 11301 11431 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 06:39:25.455 11301 11432 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 06:39:25.599 11301 11432 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 06:39:25.712 11301 11432 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 06:39:26.005 11301 11432 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 06:39:26.741 11301 11432 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 06:39:37.101 11301 11330 I MT      : écarté « SHHSHH » (bruit, hors zone)
+11-14 06:39:37.107 11301 11330 I MT      : écarté « w » (bruit, hors zone)
+11-14 06:39:37.107 11301 11330 I MT      : écarté « 24 » (bruit, hors zone)
+11-14 06:39:37.107 11301 11330 I MT      : écarté « PLOP » (onomatopée laissée telle quelle, hors zone)
+11-14 06:39:37.108 11301 11330 I MT      : écarté « PLOP » (onomatopée laissée telle quelle, hors zone)
+11-14 06:39:37.534 11301 11426 I tflite  : Initialized TensorFlow Lite runtime.
+11-14 06:39:37.534 11301 11426 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+11-14 06:39:49.265 11301 11332 I MT      : écarté « KOMONA! » (débris, filigrane ou répété)
+11-14 06:39:49.265 11301 11332 I MT      : écarté « ...but? » (bruit)
+11-14 06:39:49.266 11301 11332 I MT      : écarté « quc? » (débris, filigrane ou répété)
+11-14 06:39:49.399 11301 11431 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 06:39:49.687 11301 11431 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 06:39:50.565 11301 11431 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 06:39:51.095 11301 11431 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 06:39:51.824 11301 11431 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 06:39:51.851 11301 11431 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 06:39:56.243 11301 11333 I MT      : écarté « ASH » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-14 06:39:56.243 11301 11333 I MT      : écarté « 18 » (bruit, hors zone)
+11-14 06:39:56.244 11301 11333 I MT      : écarté « 05/2014 » (bruit)
+11-14 06:40:02.449 11301 11331 I MT      : écarté « PLOR » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-14 06:40:02.450 11301 11331 I MT      : écarté « PLOP » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-14 06:40:02.450 11301 11331 I MT      : écarté « 3 » (bruit, hors zone)
+11-14 06:40:11.063 11301 11330 I MT      : écarté « ...but? » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-14 06:40:11.063 11301 11330 I MT      : écarté « Where am I ?!? » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-14 06:40:11.063 11301 11330 I MT      : écarté « gunck? » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-14 06:40:20.020 11301 11332 I MT      : écarté « Fan-tas-tic! » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-14 06:40:20.020 11301 11332 I MT      : écarté « You even thought of bringing a potion, m » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-14 06:40:20.020 11301 11332 I MT      : écarté « ...let's see which potion you brought. » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-14 06:40:28.038 11301 11333 I MT      : écarté « Nomon » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-14 06:40:28.038 11301 11333 I MT      : écarté « for this first edition. » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-14 06:40:28.038 11301 11333 I MT      : écarté « Please give a huge round of applause: » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-14 06:40:28.038 11301 11333 I MT      : écarté « 7 » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-14 06:40:28.038 11301 11333 I MT      : écarté « 3 » (bruit, hors zone)
+11-14 06:40:28.038 11301 11333 I MT      : écarté « SHHSHH » (bruit, hors zone)
+11-14 06:40:28.038 11301 11333 I MT      : écarté « PLOP » (onomatopée laissée telle quelle, hors zone)
+11-14 06:40:28.039 11301 11333 I MT      : écarté « PLOP » (onomatopée laissée telle quelle, hors zone)
+11-14 06:40:32.224 11301 11432 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 06:40:32.595 11532 11579 D cevx    : Starting download: https://www.gstatic.com/messages/smarts/smart_actions_emotive_models/emotion_reply_model_replicate_extended.tflite
+11-14 06:40:32.595 11532 11579 V cevx    : Is http uri, downloading (uri: https://www.gstatic.com/messages/smarts/smart_actions_emotive_models/emotion_reply_model_replicate_extended.tflite)
+11-14 06:40:32.877 11532 11634 D cevx    : Starting download: https://www.gstatic.com/messages/smarts/smart_actions_emotive_models/emotion_complete_model_replicate.tflite_1589263783992
+11-14 06:40:32.877 11532 11634 V cevx    : Is http uri, downloading (uri: https://www.gstatic.com/messages/smarts/smart_actions_emotive_models/emotion_complete_model_replicate.tflite_1589263783992)
+11-14 06:40:33.016 11532 11579 D cevx    : Starting download: https://www.gstatic.com/messages/smarts/smart_actions_emotive_models/emotion_complete_model_replicate_extended.tflite
+11-14 06:40:33.016 11532 11579 V cevx    : Is http uri, downloading (uri: https://www.gstatic.com/messages/smarts/smart_actions_emotive_models/emotion_complete_model_replicate_extended.tflite)
+11-14 06:40:33.093 11532 11633 D cevx    : Starting download: https://www.gstatic.com/messages/smarts/smart_actions_emotive_models/emotion_complete_model_replicate_winter.tflite
+11-14 06:40:33.093 11532 11633 V cevx    : Is http uri, downloading (uri: https://www.gstatic.com/messages/smarts/smart_actions_emotive_models/emotion_complete_model_replicate_winter.tflite)
+11-14 06:40:33.279 11532 11634 D cevx    : Starting download: https://www.gstatic.com/messages/smarts/smart_actions_ml_models//emotions_tflite_model_1579310142.tflite
+11-14 06:40:33.279 11532 11634 V cevx    : Is http uri, downloading (uri: https://www.gstatic.com/messages/smarts/smart_actions_ml_models//emotions_tflite_model_1579310142.tflite)
+11-14 06:40:33.358 11301 11432 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 06:40:33.619 11301 11432 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 06:40:33.671 11301 11432 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 06:40:36.526 11301 11331 I MT      : écarté « PLOR » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-14 06:40:36.526 11301 11331 I MT      : écarté « PLOP » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-14 06:40:36.526 11301 11331 I MT      : écarté « 3 » (bruit, hors zone)
+11-14 06:40:38.532 11532 11579 D cevx    : Starting download: https://www.gstatic.com/messages/smarts/multitask_experiment/multi_lite_9head_20200301_model.tflite_1584573658696
+11-14 06:40:38.532 11532 11579 V cevx    : Is http uri, downloading (uri: https://www.gstatic.com/messages/smarts/multitask_experiment/multi_lite_9head_20200301_model.tflite_1584573658696)
+11-14 06:40:39.226 11532 11579 D cevx    : Starting download: https://www.gstatic.com/messages/smarts/multitask_experiment/multi_lite_9heads_plus_photo_suggest_20201118.tflite_1605907326457
+11-14 06:40:39.226 11532 11579 V cevx    : Is http uri, downloading (uri: https://www.gstatic.com/messages/smarts/multitask_experiment/multi_lite_9heads_plus_photo_suggest_20201118.tflite_1605907326457)
+11-14 06:40:40.189 11532 11579 D cevx    : Starting download: https://www.gstatic.com/messages/smarts/nudge/nudge_question_classifier_v2.tflite_1639164115205
+11-14 06:40:40.189 11532 11579 V cevx    : Is http uri, downloading (uri: https://www.gstatic.com/messages/smarts/nudge/nudge_question_classifier_v2.tflite_1639164115205)

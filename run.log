@@ -1,0 +1,65 @@
+Performing Streamed Install
+Success
+Physical size: 1080x2400
+[e2e 06:22:10] === prep (index.html, MLKIT, EN→FR)
+[e2e 06:24:06] terminé : prep (116 s)
+[e2e 06:24:06] aucune image traitée : nouvel essai de prep
+[e2e 06:24:06] === prep (index.html, MLKIT, EN→FR)
+[e2e 06:25:01] terminé : prep (54 s)
+[e2e 06:25:01] === pc_en_mlkit (pc_en.html, MLKIT, EN→FR)
+[e2e 06:26:19] terminé : pc_en_mlkit (77 s)
+[e2e 06:26:19] === synth_en_caps_mlkit (synth_en_caps.html, MLKIT, EN→FR)
+[e2e 06:27:08] terminé : synth_en_caps_mlkit (49 s)
+[e2e 06:27:08] === synth_en_mixed_mlkit (synth_en_mixed.html, MLKIT, EN→FR)
+[e2e 06:27:57] terminé : synth_en_mixed_mlkit (49 s)
+[e2e 06:27:57] === synth_en_variety_combined (synth_en_variety.html, MLKIT, EN→FR)
+[e2e 06:28:53] terminé : synth_en_variety_combined (55 s)
+[e2e 06:28:53] === adblock_mlkit (adtest.html, MLKIT, EN→FR)
+[e2e 06:29:48] terminé : adblock_mlkit (55 s)
+[e2e 06:29:48] === synth_layouts_combined (synth_layouts.html, MLKIT, EN→FR)
+[e2e 06:31:20] terminé : synth_layouts_combined (92 s)
+[e2e 06:31:20] === synth_atypical_combined (synth_atypical.html, MLKIT, EN→FR)
+[e2e 06:32:34] terminé : synth_atypical_combined (74 s)
+[e2e 06:32:34] === synth_en_fancy_mlkitonly (synth_en_fancy.html, MLKIT, EN→FR)
+[e2e 06:33:17] terminé : synth_en_fancy_mlkitonly (43 s)
+[e2e 06:33:17] === synth_en_fancy_combined (synth_en_fancy.html, MLKIT, EN→FR)
+[e2e 06:34:13] terminé : synth_en_fancy_combined (55 s)
+[e2e 06:34:13] === pc_en_ref_mlkit (pc_en_ref.html, MLKIT, EN→FR)
+[e2e 06:35:29] terminé : pc_en_ref_mlkit (76 s)
+[e2e 06:35:29] === seam_mlkit (seam_cut.html, MLKIT, EN→FR)
+[e2e 06:36:49] terminé : seam_mlkit (79 s)
+[e2e 06:36:49] === seam_off_mlkit (seam_cut.html, MLKIT, EN→FR)
+[e2e 06:38:02] terminé : seam_off_mlkit (73 s)
+[e2e 06:38:02] === pc_en_batch_mlkit (pc_en.html, MLKIT, EN→FR)
+[e2e 06:39:14] terminé : pc_en_batch_mlkit (71 s)
+[e2e 06:39:14] === pc_en_long_mlkit (pc_en_long.html, MLKIT, EN→FR)
+[e2e 06:43:33] terminé : pc_en_long_mlkit (259 s)
+[e2e 06:43:33] === pc_en_toggle_mlkit (pc_en_toggle.html, MLKIT, EN→FR)
+[e2e 06:46:08] terminé : pc_en_toggle_mlkit (155 s)
+[e2e 06:46:08] === pc_en_once_mlkit (pc_en_once.html, MLKIT, EN→FR)
+[e2e 06:47:20] terminé : pc_en_once_mlkit (71 s)
+[e2e 06:47:20] === pc_en_strict_mlkit (pc_en_strict.html, MLKIT, EN→FR)
+[e2e 06:48:31] terminé : pc_en_strict_mlkit (71 s)
+[e2e 06:48:31] === pc_en_lazy_mlkit (pc_en_lazy.html, MLKIT, EN→FR)
+[e2e 06:49:48] terminé : pc_en_lazy_mlkit (77 s)
+[e2e 06:49:48] === synth_ko_mlkit (synth_ko.html, MLKIT, KO→FR)
+[e2e 06:50:37] terminé : synth_ko_mlkit (49 s)
+[e2e 06:50:37] === synth_ja_vert_mlkit (synth_ja_vertical.html, MLKIT, JA→FR)
+[e2e 06:51:32] terminé : synth_ja_vert_mlkit (55 s)
+[e2e 06:51:32] === synth_zh_mlkit (synth_zh.html, MLKIT, ZH_HANS→FR)
+[e2e 06:52:21] terminé : synth_zh_mlkit (49 s)
+[e2e 06:52:21] === pc_ja_mlkit (pc_ja.html, MLKIT, JA→FR)
+[e2e 06:53:38] terminé : pc_ja_mlkit (77 s)
+[e2e 06:53:38] === bloqueur de publicités
+[e2e 06:54:16] bloqueur terminé (6132 octets de rapport)
+[e2e 06:54:16] === interface
+  [avant appui]   mCurrentFocus=Window{42e82bd u0 com.google.android.apps.nexuslauncher/com.google.android.apps.nexuslauncher.NexusLauncherActivity}
+  [avant appui]   mCurrentFocus=Window{80cf152 u0 app.manhwa.translator/app.manhwa.MainActivity}
+  [avant appui]     topResumedActivity=ActivityRecord{35223bf u0 app.manhwa.translator/app.manhwa.MainActivity t33}
+  [avant appui]   ResumedActivity: ActivityRecord{35223bf u0 app.manhwa.translator/app.manhwa.MainActivity t33}
+  [après appui]   mCurrentFocus=Window{42e82bd u0 com.google.android.apps.nexuslauncher/com.google.android.apps.nexuslauncher.NexusLauncherActivity}
+  mCurrentFocus=Window{42e82bd u0 com.google.android.apps.nexuslauncher/com.google.android.apps.nexuslauncher.NexusLauncherActivity}
+        InsetsSource id=b2ff0000 type=statusBars frame=[0,0][1080,63] visible=true flags= insetsRoundedCornerFrame=false
+        mSource=InsetsSource id=b2ff0000 type=statusBars frame=[0,0][1080,63] visible=true flags= insetsRoundedCornerFrame=false
+  [journal système] 30 ligne(s) d'ANR ou de plantage
+[e2e 07:01:17] toutes les scènes sont terminées
