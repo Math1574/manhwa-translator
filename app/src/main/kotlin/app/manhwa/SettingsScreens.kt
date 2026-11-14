@@ -117,6 +117,7 @@ private val searchIndex: List<Pair<SearchEntry, Target>> = listOf(
     SearchEntry("sites", "Sites sans bloqueur", "Navigation › Sites sans bloqueur", "exceptions rétablir autorisés destination") to Target(SettingsPage.BROWSING, "sites"),
     SearchEntry("cache", "Cache de traductions", "Données › Stockage", "vider effacer espace disque taille modèles gemma stockés") to Target(SettingsPage.DATA, "stockage"),
     SearchEntry("gpu", "Accélération GPU (expérimental)", "Avancé › Performance", "processeur cpu tester gemma vitesse") to Target(SettingsPage.ADVANCED, "performance"),
+    SearchEntry("fastllm", "Traduction accélérée (essai)", "Avancé › Performance", "gemma vitesse rapide plus vite chauffe batterie consignes mémoire comparer") to Target(SettingsPage.ADVANCED, "performance"),
     SearchEntry("diag", "Diagnostic de la détection", "Avancé › Diagnostic", "cadres vert rouge ocr rejeté signaler problème") to Target(SettingsPage.ADVANCED, "diagnostic"),
     SearchEntry("journal", "Journal de traduction", "Avancé › Diagnostic", "exporter effacer erreurs signaler partager") to Target(SettingsPage.ADVANCED, "diagnostic"),
     SearchEntry("filters", "Listes de filtres", "Avancé › Bloqueur de publicités", "ublock easylist hagezi mise à jour règles") to Target(SettingsPage.ADVANCED, "bloqueur"),
@@ -719,6 +720,15 @@ private fun AdvancedSettings(graph: AppGraph, focus: String?) {
                 if (graph.gpuTest.running) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
             }
             if (graph.gpuTest.summary.isNotEmpty()) Hint(graph.gpuTest.summary)
+            HorizontalDivider()
+            SwitchRow("Traduction accélérée (essai)", "Gemma garde en mémoire les consignes de traduction au lieu de les relire à chaque page : moins de calcul, donc en théorie plus rapide et moins chaud. Le texte peut changer un peu. Lancez d'abord la comparaison ci-dessous ; si la copie échoue trop souvent, l'application coupe l'essai toute seule.", s.fastLlm) { v -> store.update { it.copy(fastLlm = v) } }
+            SwitchRow("Sans décodage spéculatif", "Avec l'essai, coupe le décodage spéculatif (une accélération interne qui ne s'entend pas toujours avec la copie). La copie est plus régulière, mais l'écriture de la traduction est plus lente. À n'activer que si la comparaison le recommande.", s.fastLlmNoSpec, enabled = s.fastLlm) { v -> store.update { it.copy(fastLlmNoSpec = v) } }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                GhostButton("Comparer normal / accéléré", { graph.reuseTest.run() }, enabled = !graph.reuseTest.running)
+                if (graph.reuseTest.running) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+            }
+            if (graph.reuseTest.summary.isNotEmpty()) Hint(graph.reuseTest.summary)
+            if (graph.gemma.reuseStatus.isNotEmpty()) Hint(graph.gemma.reuseStatus, cs.error)
         }
         SettingsGroup("Diagnostic", "diagnostic") {
             var journalTick by remember { mutableStateOf(0) }

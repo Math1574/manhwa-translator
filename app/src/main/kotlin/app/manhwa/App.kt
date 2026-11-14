@@ -107,6 +107,12 @@ class AppGraph(ctx: Context) {
         }
     }
     val gpuTest = GpuTester(ctx, this)
+    /** Comparaison « normale / accélérée » de la traduction (réglages › Avancé). */
+    val reuseTest = ReuseTester(this)
+    init {
+        // l'essai de traduction accélérée a fait planter l'application au lancement précédent : on le désactive
+        if (gemma.reuseCrashed) settingsStore.update { it.copy(fastLlm = false, fastLlmNoSpec = false) }
+    }
     val blockReader = GemmaBlockReader(gemma) { settingsStore.settings }
     val visionTest = VisionTester(ctx, gemma)
     /** Noms propres probables repérés pendant la lecture (propositions du glossaire) ; remis à zéro quand l'application redémarre. */

@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); queueBatchTests(); readingOrderTests(); eraseWhiteBandTests(); fontPolicyTests(); blockEditTests(); seamTests(); modelTests(); settingsTests(); utilTests(); textTests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests(); openBubbleTests(); barrierShapeTests(); safetyTests(); artEraseTests(); updateTests(); settingsSearchTests(); ignoredTests(); termRefreshTests(); discardedTests(); correctionsTests(); libraryViewTests(); homeViewTests(); aniListTests(); editorViewTests()
+    groupingTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); queueBatchTests(); readingOrderTests(); eraseWhiteBandTests(); fontPolicyTests(); blockEditTests(); seamTests(); modelTests(); settingsTests(); utilTests(); textTests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests(); openBubbleTests(); barrierShapeTests(); safetyTests(); artEraseTests(); updateTests(); settingsSearchTests(); ignoredTests(); termRefreshTests(); discardedTests(); correctionsTests(); libraryViewTests(); homeViewTests(); aniListTests(); editorViewTests(); speedReportTests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -333,6 +333,15 @@ fun settingsTests() {
         T.eq(AppSettings(), AppSettings.parse(null)); T.eq(AppSettings(), AppSettings.parse("%%%"))
         val s = AppSettings.parse("textScale=99\nmaxPrefetchPages=-4\nsource=KLINGON\ncacheMaxMb=1")
         T.eq(2.0f, s.textScale); T.eq(0, s.maxPrefetchPages); T.eq(SourceLang.AUTO, s.source); T.eq(10, s.cacheMaxMb)
+    }
+    T.test("paramètres: traduction accélérée (essai) désactivée par défaut, conservée, ignorée si illisible") {
+        T.ok(!AppSettings().fastLlm, "défaut")
+        T.ok(!AppSettings.parse("textScale=1.0").fastLlm, "anciens réglages : désactivée")
+        T.ok(AppSettings.parse(AppSettings(fastLlm = true).serialize()).fastLlm, "choix conservé")
+        T.ok(!AppSettings.parse("fastLlm=peut-être").fastLlm, "valeur illisible : désactivée")
+        T.ok(!AppSettings().fastLlmNoSpec && !AppSettings.parse("textScale=1.0").fastLlmNoSpec, "sans décodage spéculatif : désactivé par défaut")
+        T.ok(AppSettings.parse(AppSettings(fastLlm = true, fastLlmNoSpec = true).serialize()).fastLlmNoSpec, "choix conservé")
+        T.ok(!AppSettings.parse("fastLlmNoSpec=oui").fastLlmNoSpec, "valeur illisible : désactivé")
     }
 }
 

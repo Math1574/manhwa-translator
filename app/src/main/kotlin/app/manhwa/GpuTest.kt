@@ -64,3 +64,27 @@ class GpuTester(ctx: Context, private val graph: AppGraph) {
         }.start()
     }
 }
+
+/**
+ * Comparaison de la traduction « normale » et « accélérée » (consignes réutilisées) avec le moteur et le processeur choisis dans les réglages : mêmes répliques,
+ * durées mesurées, texte comparé. Le résultat dit s'il vaut la peine d'activer l'essai. Un plantage éventuel est détecté au lancement suivant (voir GemmaTranslator).
+ */
+class ReuseTester(private val graph: AppGraph) {
+    private val main = Handler(Looper.getMainLooper())
+    var running by mutableStateOf(false)
+        private set
+    var summary by mutableStateOf("")
+        private set
+
+    fun run() {
+        if (running) return
+        running = true; summary = "Comparaison en cours (deux à cinq minutes : le moteur est rechargé une fois), ne traduisez pas pendant ce temps…"
+        Thread {
+            val text = try {
+                val r = graph.gemma.compareReuse()
+                r.outcome?.let { app.manhwa.core.SpeedReport.describe(it) } ?: r.note
+            } catch (t: Throwable) { "Comparaison impossible : ${t.message ?: t.javaClass.simpleName}" }
+            main.post { summary = text; running = false }
+        }.start()
+    }
+}
