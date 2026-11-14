@@ -5,10 +5,14 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,10 +29,15 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AssistChip
+import androidx.compose.material.icons.materialIcon
+import androidx.compose.material.icons.materialPath
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -39,28 +48,48 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerId
+import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
@@ -70,13 +99,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.manhwa.core.BrushStroke
 import app.manhwa.core.EditKind
+import app.manhwa.core.EditorView
 import app.manhwa.core.FontLibrary
 import app.manhwa.core.GlossaryEntry
+import app.manhwa.core.History
 import app.manhwa.core.RectF
 import app.manhwa.core.Pt
 import app.manhwa.core.UserRegion
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
@@ -111,6 +143,8 @@ private class EditorState(val sn: TranslationController.EditSession) {
 
     // zone du texte (coordonnées de la fenêtre traitée)
     var zoneMode by mutableStateOf(ZoneMode.RECT)
+    /** Pinceau libre : la gomme retire la zone peinte là où l'on passe, au lieu d'en ajouter. */
+    var erasing by mutableStateOf(false)
     var rect by mutableStateOf(initialRect())
     val strokes = mutableStateListOf<BrushStroke>()
     var brush by mutableFloatStateOf(max(8f, min(40f, (block.lineHeight.takeIf { it > 0f } ?: 30f) * 0.6f)))
@@ -138,7 +172,36 @@ private class EditorState(val sn: TranslationController.EditSession) {
     var translating by mutableStateOf(false)
     var message by mutableStateOf<String?>(null)
     var showOriginal by mutableStateOf(false)
-    var crop by mutableStateOf(initialCrop())
+    private val crop0: RectF = initialCrop()
+    /** Vue affichée (pixels de la fenêtre traitée) : se déplace et se zoome à deux doigts. */
+    var crop by mutableStateOf(crop0)
+    /** Vrai quand la vue n'est plus celle du départ (calculé à part : l'écran ne se redessine que lorsque ce changement-là survient, pas à chaque pas du geste). */
+    val zoomed: Boolean by derivedStateOf { crop != crop0 }
+    fun resetView() { crop = crop0 }
+
+    // historique « défaire / refaire » des gestes sur la zone et la position du texte (le texte lui-même a son propre défaire, au clavier)
+    private class Geo(val rect: RectF, val strokes: List<BrushStroke>, val brush: Boolean, val zoneChanged: Boolean, val precise: Boolean, val dx: Float, val dy: Float, val scale: Float)
+    private val history = History<Geo>(80)
+    var undoCount by mutableIntStateOf(0)
+    var redoCount by mutableIntStateOf(0)
+    /** Vrai pendant qu'un curseur de taille est tiré : un seul état est enregistré pour tout le glissement. */
+    var sliding = false
+
+    private fun geo() = Geo(rect, strokes.toList(), zoneMode == ZoneMode.BRUSH, zoneChanged, precise, dx, dy, scale)
+
+    private fun restore(g: Geo) {
+        rect = g.rect; strokes.clear(); strokes.addAll(g.strokes); zoneMode = if (g.brush) ZoneMode.BRUSH else ZoneMode.RECT
+        zoneChanged = g.zoneChanged; precise = g.precise; dx = g.dx; dy = g.dy; scale = g.scale
+    }
+
+    private fun syncHistory() { undoCount = history.undoCount; redoCount = history.redoCount }
+
+    /** À appeler juste avant un changement de zone ou de position : l'état d'avant pourra être rétabli. */
+    fun mark() { history.record(geo()); syncHistory() }
+    fun undo() { history.undo(geo())?.let { restore(it) }; syncHistory() }
+    fun redo() { history.redo(geo())?.let { restore(it) }; syncHistory() }
+    /** Geste interrompu aussitôt (un second doigt se pose) : l'état d'avant le geste revient, sans rien laisser à refaire. */
+    fun revert() { history.revert()?.let { restore(it) }; syncHistory() }
 
     init {
         val reg = existing?.region
@@ -186,7 +249,7 @@ private class EditorState(val sn: TranslationController.EditSession) {
 
     fun syncBrushRect() { if (strokes.isNotEmpty()) rect = UserRegion(rect, strokes.toList()).bounds }
 
-    fun resetZone() { strokes.clear(); rect = initialRect(); zoneChanged = sn.isNew; read = null; zoneMode = ZoneMode.RECT }
+    fun resetZone() { mark(); strokes.clear(); rect = initialRect(); zoneChanged = sn.isNew; read = null; zoneMode = ZoneMode.RECT }
 
     /** Lignes dont la zone peut épouser la forme : celles qui viennent d'être lues, sinon celles du texte détecté. */
     fun fitLines(): List<RectF> = (read?.lineBoxes ?: block.lineBoxes)
@@ -198,6 +261,7 @@ private class EditorState(val sn: TranslationController.EditSession) {
     fun snapToLines() {
         val lines = fitLines()
         if (lines.isEmpty()) return
+        mark()
         val vertical = read?.vertical ?: block.vertical
         strokes.clear()
         for (b in lines) {
@@ -224,7 +288,7 @@ private class EditorState(val sn: TranslationController.EditSession) {
     )
 
     /** Change à chaque modification qui demande un nouveau calcul de l'aperçu (le déplacement du texte, lui, se voit sans recalcul). */
-    val previewKey: Int get() = listOf(translation, fontId, scale, rect, strokes.size, zoneChanged, zoneMode, precise).hashCode()
+    val previewKey: Int get() = listOf(translation, fontId, scale, rect, strokes.fold(0) { h, s -> h * 31 + s.points.size * 2 + (if (s.erase) 1 else 0) }, zoneChanged, zoneMode, precise).hashCode()
 
     fun hit(x: Float, y: Float, grab: Float): Handle {
         val r = norm(rect)
@@ -254,6 +318,18 @@ private class EditorState(val sn: TranslationController.EditSession) {
         rect = RectF(l.coerceIn(0f, iw), t.coerceIn(0f, ih), r.coerceIn(0f, iw), b.coerceIn(0f, ih))
     }
 
+    /** Relevé pour les scénarios d'interface (voir [EditorProbe]) : l'éditeur ouvert, sa vue, ses traits, son historique. [covers] : région couverte par l'image décodée. */
+    fun probe(covers: RectF?): Map<String, Any> {
+        fun f(r: RectF) = "${r.left.roundToInt()},${r.top.roundToInt()},${r.right.roundToInt()},${r.bottom.roundToInt()}"
+        val area = EditorProbe.windowArea
+        return mapOf(
+            "edTab" to tab.name, "edMode" to zoneMode.name, "edErasing" to erasing, "edStrokes" to strokes.count { !it.erase }, "edErase" to strokes.count { it.erase },
+            "edUndo" to undoCount, "edRedo" to redoCount, "edCrop" to f(crop), "edCropW" to crop.width.roundToInt(), "edCropL" to crop.left.roundToInt(), "edCropT" to crop.top.roundToInt(),
+            "edZoomed" to zoomed, "edBase" to (covers?.let { f(it) } ?: ""), "edRect" to f(rect), "edDx" to dx.roundToInt(), "edDy" to dy.roundToInt(), "edScale" to scale,
+            "edArea" to (area?.joinToString(",") { it.roundToInt().toString() } ?: ""), "edWin" to "${iw.roundToInt()},${ih.roundToInt()}",
+        )
+    }
+
     fun termList(): List<GlossaryEntry> = terms.filter { it.src.isNotBlank() && it.tgt.isNotBlank() }.map { GlossaryEntry(it.src.trim(), it.tgt.trim()) }
 }
 
@@ -264,11 +340,23 @@ fun BlockEditor(graph: AppGraph, target: EditTarget, onClose: () -> Unit) {
     if (sn == null) { LaunchedEffect(target) { onClose() }; return }
     val st = remember(sn) { EditorState(sn) }
     val scope = rememberCoroutineScope()
-    var base by remember { mutableStateOf<Pair<Bitmap, Float>?>(null) }
+    var base by remember { mutableStateOf<EditBase?>(null) }
     BackHandler(onBack = onClose)
 
-    // vue : l'image d'origine autour du texte (recadrage de la fenêtre traitée)
-    LaunchedEffect(st.crop) { base = withContext(Dispatchers.IO) { c.decodeCrop(sn.info.bytes, st.crop, 1600) } }
+    // vue : l'image d'origine autour du texte (recadrage de la fenêtre traitée). Pendant un geste à deux doigts la vue bouge sans cesse : l'image déjà décodée suit le geste, et
+    // le décodage plus net n'a lieu que quand la vue s'est posée.
+    LaunchedEffect(st) {
+        snapshotFlow { st.crop }.collectLatest { crop ->
+            if (base != null) delay(90)
+            val region = EditorView.decodeRegion(crop, st.iw, st.ih)
+            val dec = withContext(Dispatchers.IO) { c.decodeCrop(sn.info.bytes, region, 1600) }
+            if (dec != null) base = EditBase(dec.first, region)
+        }
+    }
+    DisposableEffect(st) {
+        EditorProbe.info = { st.probe(base?.covers) }
+        onDispose { EditorProbe.info = null; EditorProbe.host = null; EditorProbe.rootArea = null; EditorProbe.windowArea = null }
+    }
     // aperçu en direct, recalculé 250 ms après la dernière modification
     LaunchedEffect(st.previewKey) {
         delay(250)
@@ -293,6 +381,7 @@ fun BlockEditor(graph: AppGraph, target: EditTarget, onClose: () -> Unit) {
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (st.tab != EditorTab.ZONE) FilterChip(selected = st.showOriginal, onClick = { st.showOriginal = !st.showOriginal }, label = { Text("Voir l'original") })
                 TextButton(onClick = { st.widen() }) { Text("Élargir la vue") }
+                if (st.zoomed) TextButton(onClick = { st.resetView() }) { Text("Vue d'origine") }
                 if (sn.existing != null) TextButton(onClick = { c.resetEdit(sn) }) { Text("Rétablir l'automatique") }
             }
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -315,100 +404,260 @@ fun BlockEditor(graph: AppGraph, target: EditTarget, onClose: () -> Unit) {
     }
 }
 
+/** Image sur laquelle on travaille : le recadrage décodé et la région de la fenêtre qu'il couvre (la vue a pu bouger depuis : l'image est alors posée là où elle va). */
+private class EditBase(val bitmap: Bitmap, val covers: RectF)
+
+/** Ce que fait le geste en cours : rien encore, un doigt qui travaille (rectangle, pinceau, gomme, texte), la vue qui se déplace ou se zoome, ou un doigt de trop (ignoré). */
+private enum class Act { NONE, DRAG, XFORM, IGNORE }
+
+/** Un second doigt qui se pose dans ce délai après le premier (en ms) annule le trait ou le glissement commencé : c'était le début d'un zoom. */
+private const val PINCH_GRACE_MS = 250L
+
+/**
+ * Gestes sur l'image. Un doigt : selon l'onglet, rectangle de zone, pinceau ou gomme, déplacement du texte ; dans les autres onglets il déplace la vue. Deux doigts : pincer pour zoomer,
+ * glisser pour déplacer la vue, dans tous les onglets. Un doigt qui travaille depuis un moment n'est pas interrompu par un second doigt posé par mégarde.
+ */
+private suspend fun PointerInputScope.editGestures(st: EditorState) {
+    awaitEachGesture {
+        val down = awaitFirstDown()
+        val slop = viewConfiguration.touchSlop
+        val tStart = down.uptimeMillis
+        var act = Act.NONE
+        val mainId: PointerId = down.id
+        val anchor = down.position           // là où le premier doigt s'est posé
+        var last = anchor                    // dernière position traitée de ce doigt
+        var handle = Handle.NONE
+        var pts: MutableList<Pt>? = null
+
+        fun layout() = EditorView.layout(st.crop, size.width.toFloat(), size.height.toFloat())
+
+        /** Commence l'action du doigt à l'endroit où il s'est posé ; faux si l'onglet n'a rien à faire à un doigt. */
+        fun startDrag(): Boolean {
+            val lay = layout()
+            val x = lay.imageX(anchor.x, st.crop); val y = lay.imageY(anchor.y, st.crop)
+            when (st.tab) {
+                EditorTab.ZONE -> {
+                    st.mark(); st.zoneChanged = true
+                    if (st.zoneMode == ZoneMode.RECT) {
+                        handle = st.hit(x, y, 32.dp.toPx() / lay.scale)
+                        if (handle == Handle.NONE) { st.rect = RectF(x, y, x, y); handle = Handle.BR }
+                    } else {
+                        val p = mutableListOf(Pt(x, y)); pts = p
+                        st.strokes.add(BrushStroke(p.toList(), st.brush, st.erasing))
+                    }
+                    return true
+                }
+                EditorTab.POSITION -> { st.mark(); return true }
+                else -> return false
+            }
+        }
+
+        fun dragTo(pos: Offset) {
+            val lay = layout()
+            when (st.tab) {
+                EditorTab.ZONE -> if (st.zoneMode == ZoneMode.RECT) st.dragRect(handle, (pos.x - last.x) / lay.scale, (pos.y - last.y) / lay.scale) else {
+                    val p = pts
+                    if (p != null) {
+                        p.add(Pt(lay.imageX(pos.x, st.crop), lay.imageY(pos.y, st.crop)))
+                        st.strokes[st.strokes.lastIndex] = BrushStroke(p.toList(), st.brush, st.erasing)
+                    }
+                }
+                EditorTab.POSITION -> { st.dx += (pos.x - last.x) / lay.scale; st.dy += (pos.y - last.y) / lay.scale }
+                else -> {}
+            }
+            last = pos
+        }
+
+        fun endDrag(cancel: Boolean) {
+            if (cancel) st.revert() else if (st.tab == EditorTab.ZONE) { st.normalizeRect(); st.syncBrushRect() }
+            handle = Handle.NONE; pts = null
+        }
+
+        while (true) {
+            val event = awaitPointerEvent()
+            val pressed = event.changes.count { it.pressed }
+            if (pressed == 0) { if (act == Act.DRAG) endDrag(false); break }
+
+            if (act != Act.XFORM && pressed >= 2) {
+                val young = event.changes.first().uptimeMillis - tStart < PINCH_GRACE_MS
+                if (act == Act.NONE || (act == Act.DRAG && young)) {
+                    if (act == Act.DRAG) endDrag(true)
+                    act = Act.XFORM
+                }
+            }
+
+            when (act) {
+                Act.NONE -> {
+                    val ch = event.changes.firstOrNull { it.id == mainId } ?: continue
+                    if ((ch.position - anchor).getDistance() > slop) {
+                        if (startDrag()) act = Act.DRAG else act = Act.XFORM
+                    }
+                }
+                else -> {}
+            }
+
+            when (act) {
+                Act.DRAG -> {
+                    val ch = event.changes.firstOrNull { it.id == mainId }
+                    if (ch == null || !ch.pressed) { endDrag(false); act = Act.IGNORE }
+                    else if (ch.position != last) { dragTo(ch.position); ch.consume() }
+                }
+                Act.XFORM -> {
+                    val zoom = event.calculateZoom(); val pan = event.calculatePan(); val from = event.calculateCentroid(useCurrent = false)
+                    if (from.isSpecified && (zoom != 1f || pan != Offset.Zero)) {
+                        st.crop = EditorView.transform(st.crop, size.width.toFloat(), size.height.toFloat(), from.x, from.y, from.x + pan.x, from.y + pan.y, zoom, st.iw, st.ih)
+                    }
+                    event.changes.forEach { if (it.positionChanged()) it.consume() }
+                }
+                else -> {}
+            }
+        }
+    }
+}
+
 @Composable
-private fun EditCanvas(st: EditorState, base: Pair<Bitmap, Float>?, modifier: Modifier) {
-    val baseImage: ImageBitmap? = remember(base) { base?.first?.asImageBitmap() }
+private fun EditCanvas(st: EditorState, base: EditBase?, modifier: Modifier) {
+    val baseImage: ImageBitmap? = remember(base) { base?.bitmap?.asImageBitmap() }
     val pv = st.preview
     val eraseImage: ImageBitmap? = remember(pv) { pv?.sink?.erase?.asImageBitmap() }
     val textImage: ImageBitmap? = remember(pv) { pv?.sink?.text?.asImageBitmap() }
     val primary = MaterialTheme.colorScheme.primary
-    BoxWithConstraints(modifier.background(Color(0xFF1C1C1C)), contentAlignment = Alignment.Center) {
-        val crop = st.crop
-        val view = min(constraints.maxWidth.toFloat() / crop.width, constraints.maxHeight.toFloat() / crop.height)
-        val density = LocalDensity.current
-        val wDp = with(density) { (crop.width * view).toDp() }
-        val hDp = with(density) { (crop.height * view).toDp() }
-        Canvas(
-            Modifier.size(wDp, hDp).pointerInput(st.tab, st.zoneMode, view, crop) {
-                var handle = Handle.NONE
-                var pts: MutableList<Pt>? = null
-                val grab = 32.dp.toPx() / view
-                detectDragGestures(
-                    onDragStart = { o ->
-                        val x = crop.left + o.x / view; val y = crop.top + o.y / view
-                        if (st.tab == EditorTab.ZONE) {
-                            st.zoneChanged = true
-                            if (st.zoneMode == ZoneMode.RECT) {
-                                handle = st.hit(x, y, grab)
-                                if (handle == Handle.NONE) { st.rect = RectF(x, y, x, y); handle = Handle.BR }
-                            } else {
-                                pts = mutableListOf(Pt(x, y))
-                                st.strokes.add(BrushStroke(listOf(Pt(x, y)), st.brush))
-                            }
-                        }
-                    },
-                    onDrag = { change, delta ->
-                        change.consume()
-                        when (st.tab) {
-                            EditorTab.ZONE -> if (st.zoneMode == ZoneMode.RECT) st.dragRect(handle, delta.x / view, delta.y / view) else {
-                                val p = pts
-                                if (p != null) {
-                                    p.add(Pt(crop.left + change.position.x / view, crop.top + change.position.y / view))
-                                    st.strokes[st.strokes.lastIndex] = BrushStroke(p.toList(), st.brush)
+    val host = LocalView.current
+    Box(
+        modifier.background(Color(0xFF1C1C1C)).clipToBounds()
+            .onGloballyPositioned { EditorProbe.place(host, it) }
+            .semantics { contentDescription = "Zone de dessin de l'image" }
+            .pointerInput(st) { editGestures(st) },
+    ) {
+        Canvas(Modifier.fillMaxSize()) {
+            val crop = st.crop
+            val lay = EditorView.layout(crop, size.width, size.height)
+            val view = lay.scale
+            fun vx(x: Float) = lay.screenX(x, crop)
+            fun vy(y: Float) = lay.screenY(y, crop)
+            clipRect(lay.offX, lay.offY, lay.offX + crop.width * view, lay.offY + crop.height * view) {
+                val b = base
+                if (baseImage != null && b != null) {
+                    val cv = b.covers
+                    drawImage(baseImage, dstOffset = IntOffset(vx(cv.left).roundToInt(), vy(cv.top).roundToInt()), dstSize = IntSize((cv.width * view).roundToInt(), (cv.height * view).roundToInt()))
+                }
+                val sink = pv?.sink
+                val r = sink?.rect
+                if (sink != null && r != null && eraseImage != null && textImage != null && st.tab != EditorTab.ZONE && !st.showOriginal) {
+                    val ox = vx(r.left).roundToInt(); val oy = vy(r.top).roundToInt()
+                    val sz = IntSize((r.width * view).roundToInt(), (r.height * view).roundToInt())
+                    drawImage(eraseImage, dstOffset = IntOffset(ox, oy), dstSize = sz)
+                    drawImage(textImage, dstOffset = IntOffset(ox + (st.dx * view).roundToInt(), oy + (st.dy * view).roundToInt()), dstSize = sz)
+                }
+                if (st.tab == EditorTab.ZONE) {
+                    st.read?.lineBoxes?.forEach { lb ->
+                        drawRect(Color(0xFF19E36B), Offset(vx(lb.left), vy(lb.top)), Size(lb.width * view, lb.height * view), style = Stroke(1.dp.toPx()))
+                    }
+                    if (st.zoneMode == ZoneMode.BRUSH && st.strokes.isNotEmpty()) {
+                        // la zone peinte est dessinée d'un bloc (une seule transparence, les traits qui se recouvrent ne foncent pas) ; la gomme y creuse des trous
+                        drawIntoCanvas { canvas ->
+                            canvas.saveLayer(androidx.compose.ui.geometry.Rect(Offset.Zero, size), Paint().apply { alpha = 0.45f })
+                            for (s in st.strokes) {
+                                val mode = if (s.erase) BlendMode.Clear else BlendMode.SrcOver
+                                if (s.points.size == 1) drawCircle(primary, s.radius * view, Offset(vx(s.points[0].x), vy(s.points[0].y)), blendMode = mode)
+                                else {
+                                    val path = Path()
+                                    s.points.forEachIndexed { i, p -> if (i == 0) path.moveTo(vx(p.x), vy(p.y)) else path.lineTo(vx(p.x), vy(p.y)) }
+                                    drawPath(path, primary, style = Stroke(s.radius * 2f * view, cap = StrokeCap.Round, join = StrokeJoin.Round), blendMode = mode)
                                 }
                             }
-                            EditorTab.POSITION -> { st.dx += delta.x / view; st.dy += delta.y / view }
-                            else -> {}
+                            canvas.restore()
                         }
-                    },
-                    onDragEnd = { handle = Handle.NONE; pts = null; st.normalizeRect(); st.syncBrushRect() },
-                    onDragCancel = { handle = Handle.NONE; pts = null; st.normalizeRect(); st.syncBrushRect() },
-                )
-            },
-        ) {
-            fun vx(x: Float) = (x - crop.left) * view
-            fun vy(y: Float) = (y - crop.top) * view
-            if (baseImage != null) drawImage(baseImage, dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()))
-            val sink = pv?.sink
-            val r = sink?.rect
-            if (sink != null && r != null && eraseImage != null && textImage != null && st.tab != EditorTab.ZONE && !st.showOriginal) {
-                val ox = vx(r.left).roundToInt(); val oy = vy(r.top).roundToInt()
-                val sz = IntSize((r.width * view).roundToInt(), (r.height * view).roundToInt())
-                drawImage(eraseImage, dstOffset = IntOffset(ox, oy), dstSize = sz)
-                drawImage(textImage, dstOffset = IntOffset(ox + (st.dx * view).roundToInt(), oy + (st.dy * view).roundToInt()), dstSize = sz)
-            }
-            if (st.tab == EditorTab.ZONE) {
-                st.read?.lineBoxes?.forEach { b ->
-                    drawRect(Color(0xFF19E36B), Offset(vx(b.left), vy(b.top)), Size(b.width * view, b.height * view), style = Stroke(1.dp.toPx()))
-                }
-                if (st.zoneMode == ZoneMode.BRUSH && st.strokes.isNotEmpty()) {
-                    for (s in st.strokes) {
-                        val w = s.radius * 2f * view
-                        if (s.points.size == 1) drawCircle(primary.copy(alpha = 0.45f), s.radius * view, Offset(vx(s.points[0].x), vy(s.points[0].y)))
-                        else {
-                            val path = Path()
-                            s.points.forEachIndexed { i, p -> if (i == 0) path.moveTo(vx(p.x), vy(p.y)) else path.lineTo(vx(p.x), vy(p.y)) }
-                            drawPath(path, primary.copy(alpha = 0.45f), style = Stroke(w, cap = StrokeCap.Round, join = StrokeJoin.Round))
-                        }
+                    } else {
+                        val q = RectF(min(st.rect.left, st.rect.right), min(st.rect.top, st.rect.bottom), max(st.rect.left, st.rect.right), max(st.rect.top, st.rect.bottom))
+                        val tl = Offset(vx(q.left), vy(q.top)); val sz = Size(q.width * view, q.height * view)
+                        drawRect(primary.copy(alpha = 0.16f), tl, sz)
+                        drawRect(primary, tl, sz, style = Stroke(2.dp.toPx()))
+                        val hs = listOf(q.left to q.top, q.centerX to q.top, q.right to q.top, q.right to q.centerY, q.right to q.bottom, q.centerX to q.bottom, q.left to q.bottom, q.left to q.centerY)
+                        for ((hx, hy) in hs) { drawCircle(Color.White, 8.dp.toPx(), Offset(vx(hx), vy(hy))); drawCircle(primary, 5.5.dp.toPx(), Offset(vx(hx), vy(hy))) }
                     }
-                } else {
-                    val q = RectF(min(st.rect.left, st.rect.right), min(st.rect.top, st.rect.bottom), max(st.rect.left, st.rect.right), max(st.rect.top, st.rect.bottom))
-                    val tl = Offset(vx(q.left), vy(q.top)); val sz = Size(q.width * view, q.height * view)
-                    drawRect(primary.copy(alpha = 0.16f), tl, sz)
-                    drawRect(primary, tl, sz, style = Stroke(2.dp.toPx()))
-                    val hs = listOf(q.left to q.top, q.centerX to q.top, q.right to q.top, q.right to q.centerY, q.right to q.bottom, q.centerX to q.bottom, q.left to q.bottom, q.left to q.centerY)
-                    for ((hx, hy) in hs) { drawCircle(Color.White, 8.dp.toPx(), Offset(vx(hx), vy(hy))); drawCircle(primary, 5.5.dp.toPx(), Offset(vx(hx), vy(hy))) }
                 }
-            }
-            if (st.tab == EditorTab.POSITION && sink != null) {
-                val b = sink.baseRect
-                if (b != null) {
-                    val tl = Offset(vx(b.left + st.dx), vy(b.top + st.dy)); val sz = Size(b.width * view, b.height * view)
-                    drawRect(primary, tl, sz, style = Stroke(1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 10f))))
+                if (st.tab == EditorTab.POSITION && sink != null) {
+                    val bx = sink.baseRect
+                    if (bx != null) {
+                        val tl = Offset(vx(bx.left + st.dx), vy(bx.top + st.dy)); val sz = Size(bx.width * view, bx.height * view)
+                        drawRect(primary, tl, sz, style = Stroke(1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 10f))))
+                    }
                 }
             }
         }
+        Row(Modifier.align(Alignment.TopStart).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            HistoryButton(UndoIcon, "Défaire", st.undoCount > 0) { st.undo() }
+            HistoryButton(RedoIcon, "Refaire", st.redoCount > 0) { st.redo() }
+        }
         if (st.busy || st.reading || st.translating) CircularProgressIndicator(Modifier.align(Alignment.TopEnd).padding(8.dp).size(26.dp), strokeWidth = 2.5.dp)
+    }
+}
+
+/** Petit bouton rond posé sur l'image : défaire / refaire. */
+@Composable
+private fun HistoryButton(icon: ImageVector, label: String, enabled: Boolean, onClick: () -> Unit) {
+    IconButton(
+        onClick = onClick, enabled = enabled, modifier = Modifier.size(40.dp),
+        colors = IconButtonDefaults.iconButtonColors(
+            containerColor = Color(0xB3000000), contentColor = Color.White, disabledContainerColor = Color(0x59000000), disabledContentColor = Color(0x73FFFFFF),
+        ),
+    ) { Icon(icon, label) }
+}
+
+// icônes « défaire » et « refaire » (tracés Material, absents de la bibliothèque d'icônes de base)
+private val UndoIcon: ImageVector by lazy {
+    materialIcon(name = "Filled.Undo") {
+        materialPath {
+            moveTo(12.5f, 8f)
+            curveToRelative(-2.65f, 0f, -5.05f, 0.99f, -6.9f, 2.6f)
+            lineTo(2f, 7f)
+            verticalLineToRelative(9f)
+            horizontalLineToRelative(9f)
+            lineToRelative(-3.62f, -3.62f)
+            curveToRelative(1.39f, -1.16f, 3.16f, -1.88f, 5.12f, -1.88f)
+            curveToRelative(3.54f, 0f, 6.55f, 2.31f, 7.6f, 5.5f)
+            lineToRelative(2.37f, -0.78f)
+            curveTo(21.08f, 11.03f, 17.15f, 8f, 12.5f, 8f)
+            close()
+        }
+    }
+}
+
+private val RedoIcon: ImageVector by lazy {
+    materialIcon(name = "Filled.Redo") {
+        materialPath {
+            moveTo(18.4f, 10.6f)
+            curveTo(16.55f, 8.99f, 14.15f, 8f, 11.5f, 8f)
+            curveToRelative(-4.65f, 0f, -8.58f, 3.03f, -9.96f, 7.22f)
+            lineTo(3.9f, 16f)
+            curveToRelative(1.05f, -3.19f, 4.05f, -5.5f, 7.6f, -5.5f)
+            curveToRelative(1.95f, 0f, 3.73f, 0.72f, 5.12f, 1.88f)
+            lineTo(13f, 16f)
+            horizontalLineToRelative(9f)
+            verticalLineTo(7f)
+            lineToRelative(-3.6f, 3.6f)
+            close()
+        }
+    }
+}
+
+/**
+ * Relevé de l'éditeur pour les scénarios d'interface automatiques (lecture seule : rien n'agit sur l'application). [info] décrit l'éditeur ouvert ; [host] et les zones permettent à un
+ * test d'envoyer de vrais gestes à deux doigts sur l'image (builds debug).
+ */
+internal object EditorProbe {
+    @Volatile var info: (() -> Map<String, Any>)? = null
+    @Volatile var host: android.view.View? = null
+    /** Zone de l'image dans la vue de l'application (pour envoyer des gestes) et dans la fenêtre (pour des gestes par adb) : gauche, haut, droite, bas. */
+    @Volatile var rootArea: FloatArray? = null
+    @Volatile var windowArea: FloatArray? = null
+
+    fun place(view: android.view.View, c: LayoutCoordinates) {
+        host = view
+        val r = c.boundsInRoot(); val w = c.boundsInWindow()
+        rootArea = floatArrayOf(r.left, r.top, r.right, r.bottom)
+        windowArea = floatArrayOf(w.left, w.top, w.right, w.bottom)
     }
 }
 
@@ -457,18 +706,21 @@ private fun ZoneTab(c: TranslationController, st: EditorState, scope: kotlinx.co
     }
     Text(
         if (st.zoneMode == ZoneMode.RECT) "Glissez les poignées pour ajuster le rectangle, glissez à l'intérieur pour le déplacer, ou tracez-en un nouveau en dehors."
-        else "Dessinez du doigt sur le texte à traduire : seule la zone peinte est lue et effacée.",
+        else "Dessinez du doigt sur le texte à traduire : seule la zone peinte est lue et effacée. La gomme retire la zone peinte là où vous passez.",
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Text(
+        "À deux doigts : pincez pour zoomer, glissez pour déplacer la vue. Les flèches en haut à gauche de l'image défont et refont vos gestes.",
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     if (st.zoneMode == ZoneMode.BRUSH) {
-        Text("Taille du pinceau", style = MaterialTheme.typography.labelMedium)
-        Slider(st.brush, { st.brush = it }, valueRange = 6f..90f)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(
-                onClick = { if (st.strokes.isNotEmpty()) { st.strokes.removeAt(st.strokes.lastIndex); st.syncBrushRect() } }, enabled = st.strokes.isNotEmpty(), modifier = Modifier.weight(1f),
-            ) { Text("Annuler le trait", maxLines = 1, overflow = TextOverflow.Ellipsis) }
-            OutlinedButton(onClick = { st.strokes.clear() }, enabled = st.strokes.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("Tout effacer", maxLines = 1, overflow = TextOverflow.Ellipsis) }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = !st.erasing, onClick = { st.erasing = false }, label = { Text("Peindre") })
+            FilterChip(selected = st.erasing, onClick = { st.erasing = true }, label = { Text("Gommer") })
         }
+        Text(if (st.erasing) "Taille de la gomme" else "Taille du pinceau", style = MaterialTheme.typography.labelMedium)
+        Slider(st.brush, { st.brush = it }, valueRange = 6f..90f)
+        OutlinedButton(onClick = { st.mark(); st.strokes.clear() }, enabled = st.strokes.isNotEmpty(), modifier = Modifier.fillMaxWidth()) { Text("Tout effacer", maxLines = 1, overflow = TextOverflow.Ellipsis) }
     }
     Button(
         onClick = {
@@ -505,22 +757,26 @@ private fun ZoneTab(c: TranslationController, st: EditorState, scope: kotlinx.co
 @Composable
 private fun PositionTab(st: EditorState) {
     Text("Faites glisser le texte sur l'image (le cadre en pointillés montre sa place).", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Text(
+        "À deux doigts : pincez pour zoomer, glissez pour déplacer la vue. Les flèches en haut à gauche de l'image défont et refont vos gestes.",
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
     Text("Taille du texte : ${(st.scale * 100).roundToInt()} %", style = MaterialTheme.typography.labelMedium)
-    Slider(st.scale, { st.scale = it }, valueRange = 0.5f..2f)
+    Slider(st.scale, { if (!st.sliding) { st.mark(); st.sliding = true }; st.scale = it }, onValueChangeFinished = { st.sliding = false }, valueRange = 0.5f..2f)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        OutlinedButton(onClick = { st.dx -= 3f }, modifier = Modifier.weight(1f)) { Text("◀") }
-        OutlinedButton(onClick = { st.dy -= 3f }, modifier = Modifier.weight(1f)) { Text("▲") }
-        OutlinedButton(onClick = { st.dy += 3f }, modifier = Modifier.weight(1f)) { Text("▼") }
-        OutlinedButton(onClick = { st.dx += 3f }, modifier = Modifier.weight(1f)) { Text("▶") }
+        OutlinedButton(onClick = { st.mark(); st.dx -= 3f }, modifier = Modifier.weight(1f)) { Text("◀") }
+        OutlinedButton(onClick = { st.mark(); st.dy -= 3f }, modifier = Modifier.weight(1f)) { Text("▲") }
+        OutlinedButton(onClick = { st.mark(); st.dy += 3f }, modifier = Modifier.weight(1f)) { Text("▼") }
+        OutlinedButton(onClick = { st.mark(); st.dx += 3f }, modifier = Modifier.weight(1f)) { Text("▶") }
     }
     OutlinedButton(
         onClick = {
             val sink = st.preview?.sink; val b = sink?.baseRect; val t = sink?.target
-            if (b != null && t != null) { st.dx = t.first - b.centerX; st.dy = t.second - b.centerY }
+            if (b != null && t != null) { st.mark(); st.dx = t.first - b.centerX; st.dy = t.second - b.centerY }
         },
         enabled = st.preview != null, modifier = Modifier.fillMaxWidth(),
     ) { Text("Centrer dans la bulle") }
-    OutlinedButton(onClick = { st.dx = 0f; st.dy = 0f; st.scale = 1f }, enabled = st.dx != 0f || st.dy != 0f || st.scale != 1f, modifier = Modifier.fillMaxWidth()) { Text("Réinitialiser position et taille") }
+    OutlinedButton(onClick = { st.mark(); st.dx = 0f; st.dy = 0f; st.scale = 1f }, enabled = st.dx != 0f || st.dy != 0f || st.scale != 1f, modifier = Modifier.fillMaxWidth()) { Text("Réinitialiser position et taille") }
 }
 
 /** Familles du sélecteur de police, dans l'ordre d'affichage. */

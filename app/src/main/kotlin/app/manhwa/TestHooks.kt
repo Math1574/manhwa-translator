@@ -5,7 +5,10 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
+import android.view.InputDevice
+import android.view.MotionEvent
 import app.manhwa.core.LlmPrompt
 import app.manhwa.core.QualityMode
 import app.manhwa.core.SourceLang
@@ -33,7 +36,8 @@ object TestHooks {
      * erasetap (appui simple au centre de la première traduction visible), discard [off] (active ou coupe les textes écartés), disctap (appui simple au centre du premier cadre visible), testcache [off] (le résultat en cache est repris, pour vérifier la mise à jour ciblée à l'affichage),
      * termadd <terme>|<traduction>[|direct] (ajout d'un terme comme Réglages › Glossaire, avec aperçu ; « direct » : sans aperçu, comme « Garder tel quel »), termsave <terme>|<traduction> (comme « Enregistrer » de l'éditeur), termdel <terme>,
      * savetr <texte> (« Enregistrer » de l'éditeur avec une traduction écrite : correction rangée sous la page ouverte, traduction retenue), fixadd <texte>|<traduction> (traduction retenue sans correction),
-     * libseed (trois œuvres de démonstration dans la bibliothèque : Zulu Quest, Mid Tale, Alpha Saga), libsort <recent|title|read> (tri de la bibliothèque), home (retour à l'accueil), anilist <adresse> (faux serveur pour les suggestions de noms, sans argument : le vrai), termconfirm, termcancel (boutons de l'aperçu), state (écrit seulement l'état).
+     * libseed (trois œuvres de démonstration dans la bibliothèque : Zulu Quest, Mid Tale, Alpha Saga), libsort <recent|title|read> (tri de la bibliothèque), home (retour à l'accueil), anilist <adresse> (faux serveur pour les suggestions de noms, sans argument : le vrai), termconfirm, termcancel (boutons de l'aperçu),
+     edit (ouvre l'éditeur sur la première traduction), pinch <facteur> (deux doigts qui s'écartent ou se rapprochent au centre de l'image de l'éditeur : vrais événements tactiles), twopan <dx> <dy> (deux doigts qui glissent ensemble, en pixels), state (écrit seulement l'état).
      */
     private fun startWatcher(ctx: Context, graph: AppGraph) {
         if (watching) return
@@ -73,12 +77,40 @@ object TestHooks {
                         "anilist" -> AniListClient.endpoint = arg.trim().ifEmpty { app.manhwa.core.AniList.ENDPOINT }
                         "termconfirm" -> main.post { c.confirmTermPreview() }
                         "termcancel" -> main.post { c.cancelTermPreview() }
+                        "edit" -> main.post { c.testEdit() }
+                        "pinch" -> { val f = arg.trim().toFloatOrNull() ?: 2f; main.post { twoFingers(main, 240f, 240f * f, 0f, 0f) } }
+                        "twopan" -> { val p = arg.trim().split(' ').mapNotNull { it.toFloatOrNull() }; if (p.size >= 2) main.post { twoFingers(main, 240f, 240f, p[0], p[1]) } }
                     }
                     Thread.sleep(300)   // laisse les gestes lancés sur le fil principal s'appliquer avant de relever l'état
                     writeState(ctx, graph)
                 } catch (_: Throwable) {}
             }
         }
+    }
+
+    /**
+     * Geste à deux doigts envoyé à la vue de l'application : de vrais événements tactiles (un doigt se pose, un second le rejoint, ils bougent, puis se lèvent) au centre de l'image de
+     * l'éditeur ouvert. Les doigts, écartés de [d0] pixels, finissent écartés de [d1] pixels, et leur centre a glissé de ([mx], [my]) pixels.
+     */
+    private fun twoFingers(main: Handler, d0: Float, d1: Float, mx: Float, my: Float) {
+        val view = EditorProbe.host ?: return
+        val a = EditorProbe.rootArea ?: return
+        val cx = (a[0] + a[2]) / 2f; val cy = (a[1] + a[3]) / 2f
+        val t0 = SystemClock.uptimeMillis()
+        val steps = 14
+        fun send(action: Int, count: Int, f: Float) {
+            val d = d0 + (d1 - d0) * f
+            val props = Array(count) { i -> MotionEvent.PointerProperties().apply { id = i; toolType = MotionEvent.TOOL_TYPE_FINGER } }
+            val coords = Array(count) { i -> MotionEvent.PointerCoords().apply { x = cx + mx * f + (if (i == 0) -d / 2f else d / 2f); y = cy + my * f; pressure = 1f; size = 1f } }
+            val ev = MotionEvent.obtain(t0, SystemClock.uptimeMillis(), action, count, props, coords, 0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_TOUCHSCREEN, 0)
+            view.dispatchTouchEvent(ev); ev.recycle()
+        }
+        val second = 1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT
+        send(MotionEvent.ACTION_DOWN, 1, 0f)
+        main.postDelayed({ send(MotionEvent.ACTION_POINTER_DOWN or second, 2, 0f) }, 60)
+        for (k in 1..steps) main.postDelayed({ send(MotionEvent.ACTION_MOVE, 2, k / steps.toFloat()) }, 120L + k * 40L)
+        main.postDelayed({ send(MotionEvent.ACTION_POINTER_UP or second, 2, 1f) }, 120L + (steps + 1) * 40L)
+        main.postDelayed({ send(MotionEvent.ACTION_UP, 1, 1f) }, 120L + (steps + 2) * 40L)
     }
 
     /** État relevé pour les scénarios d'interface : bandeau « Annuler » proposé, nombre de blocs, de blocs supprimés et de corrections, traduction de la première correction. */
@@ -109,6 +141,9 @@ object TestHooks {
             .put("corr", graph.edits.count()).put("corrOrig", graph.edits.originsSnapshot().size).put("fixes", graph.glossary.corrections.size)
             .put("terms", graph.glossary.terms.size + graph.glossary.seriesTerms.size).put("seriesTermSrc", graph.glossary.seriesTerms.map { it.source }.sorted().joinToString("|")).put("glossRev", graph.glossary.revision).put("refreshed", c.testRefreshed.get()).put("patched", c.testPatched.get())
             .put("tpv", c.termPreview?.let { if (it.computing) "computing" else "ready" } ?: "none").put("tpvRows", c.termPreview?.rows?.size ?: 0).put("tpvOthers", c.termPreview?.others ?: 0).put("trs", trs.sorted().joinToString("\u001f"))
+        val ed = EditorProbe.info
+        o.put("edOpen", ed != null)
+        ed?.invoke()?.forEach { (k, v) -> o.put(k, v) }
         val tmp = File(ctx.filesDir, "state.json.tmp"); tmp.writeText(o.toString()); tmp.renameTo(File(ctx.filesDir, "state.json"))
     }
 
