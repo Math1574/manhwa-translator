@@ -6,6 +6,8 @@ private fun grid(seed: Long): IntArray { val r = Random(seed); return IntArray(F
 
 private fun fp(w: Int, h: Int, g: IntArray) = Fingerprint.fromGrid(w, h, g)
 
+private fun blk(id: Int, l: Float, t: Float, r: Float, b: Float, src: String, tr: String) = TranslatedBlock(id, RectF(l, t, r, b), src, tr, false, (b - t) / 2f, listOf(RectF(l, t, r, b)), listOf(src))
+
 fun ignoredTests() {
     T.test("ignorés: la comparaison des textes ne retient que lettres et chiffres, sans casse ni accents") {
         T.eq("translatedbyxscans", IgnoredMatch.normalize("Translated by: X-Scans!"))
@@ -102,5 +104,20 @@ fun ignoredTests() {
         val back = IgnoreRules.parse(damaged)
         T.eq(2, back.texts.size); T.eq(0, back.images.size)
         T.ok(IgnoreRules.parse("").isEmpty, "fichier vide")
+    }
+    T.test("ignorés: la règle masque le texte même corrigé à la main, sans toucher les autres blocs, y compris dans une fenêtre de jonction") {
+        val shift = 300f                                       // contexte de 300 px au-dessus : le résultat est dans les coordonnées de la fenêtre
+        val page = PageResult(800, 1500, listOf(blk(0, 100f, 400f, 300f, 460f, "TRANSLATED BY XYZ SCANS", "Traduit par XYZ"), blk(1, 100f, 700f, 300f, 760f, "SECOND ONE", "Deuxième")))
+        val rules = IgnoreRules().withText(IgnoredText.EVERYWHERE, "Translated by XYZ Scans")
+        val user = BlockEdit("e1", EditKind.ADJUST, RectF(100f, 100f, 300f, 160f), "TRANSLATED BY XYZ SCANS", translation = "Bonjour", dx = 12f, scale = 1.3f)
+        val ign = page.blocks.filter { rules.textIgnored(null, it.source) }.map { BlockEdit("ign:" + it.id, EditKind.ADJUST, it.box.offset(0f, -shift), it.source, hidden = true) }
+        T.eq(1, ign.size)
+        val a = EditApplier.apply(page, listOf(user) + ign, shift)
+        T.ok(a.render[0]!!.hidden, "texte ignoré : masqué malgré la correction")
+        T.eq("ign:0", a.editByBlock[0]!!.id)
+        T.ok(a.render[1] == null, "l'autre bloc n'est pas touché")
+        T.eq(2, a.page.blocks.size, "les blocs restent (patch invisible, toujours repérable)")
+        val without = EditApplier.apply(page, listOf(user), shift)
+        T.ok(!without.render[0]!!.hidden && without.page.blocks.first { it.id == 0 }.translated == "Bonjour", "sans la règle, la correction s'applique")
     }
 }
