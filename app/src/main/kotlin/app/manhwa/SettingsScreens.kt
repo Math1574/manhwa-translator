@@ -1,5 +1,6 @@
 package app.manhwa
 
+import android.graphics.BitmapFactory
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
@@ -8,6 +9,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -61,7 +63,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
@@ -69,7 +73,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.manhwa.core.IgnoredText
 import app.manhwa.core.LlmModels
 import app.manhwa.core.SearchEntry
 import app.manhwa.core.SettingsSearch
@@ -81,7 +87,7 @@ import kotlinx.coroutines.delay
 import java.util.Locale
 import kotlin.math.roundToInt
 
-private enum class SettingsPage { HOME, TRANSLATION, READING, APPEARANCE, OCR, BROWSING, DATA, ADVANCED, MODELS, GLOSSARY }
+private enum class SettingsPage { HOME, TRANSLATION, READING, APPEARANCE, OCR, BROWSING, DATA, ADVANCED, MODELS, GLOSSARY, IGNORED }
 
 /** Où mène un résultat de recherche : une page et, dans cette page, le groupe à montrer (null : le haut de la page). */
 private class Target(val page: SettingsPage, val anchor: String?)
@@ -117,6 +123,7 @@ private val searchIndex: List<Pair<SearchEntry, Target>> = listOf(
     SearchEntry("blocklog", "Journal du bloqueur", "Avancé › Bloqueur de publicités", "règles bloquées image n'apparaît pas pop-up") to Target(SettingsPage.ADVANCED, "bloqueur"),
     SearchEntry("models", "Modèles de traduction", "Traduction › Modèles", "télécharger supprimer gemma ml kit langues japonais vertical manga-ocr module") to Target(SettingsPage.MODELS, null),
     SearchEntry("glossary", "Glossaire", "Traduction › Glossaire", "noms personnages termes œuvre remplacer") to Target(SettingsPage.GLOSSARY, null),
+    SearchEntry("ignored", "Textes et images ignorés", "Texte et modèles › Textes et images ignorés", "ignorer bandeau filigrane crédit scan publicité ne pas traduire laisser tel quel retirer rétablir règle") to Target(SettingsPage.IGNORED, null),
     SearchEntry("update", "Mise à jour de l'application", "Application", "version nouveautés télécharger installer build") to Target(SettingsPage.HOME, null),
 )
 private val searchEntries: List<SearchEntry> = searchIndex.map { it.first }
@@ -144,6 +151,7 @@ fun SettingsRoot(graph: AppGraph) {
             SettingsPage.ADVANCED -> SubPageBody("Avancé", back) { AdvancedSettings(graph, focus) }
             SettingsPage.MODELS -> SubPageBody("Modèles de traduction", back) { ModelsScreen(graph) }
             SettingsPage.GLOSSARY -> SubPageBody("Glossaire", back) { GlossaryScreen(graph) }
+            SettingsPage.IGNORED -> SubPageBody("Textes et images ignorés", back) { IgnoredSettings(graph, focus) }
         }
     }
 }
@@ -311,6 +319,7 @@ private fun SettingsHome(graph: AppGraph, query: String, onQuery: (String) -> Un
             SectionLabel("Texte et modèles")
             SectionRow(Icons.Filled.Search, "Reconnaissance du texte", (if (s.enhancedOcr && graph.paddleModels.available) "Lecture renforcée" else "Lecture standard") + (if (s.autoReread) " · relecture Gemma" else "")) { open(SettingsPage.OCR, null) }
             SectionRow(AppIcons.Bookmark, "Glossaire", "${graph.glossary.terms.size + graph.glossary.seriesTerms.size} terme(s)") { open(SettingsPage.GLOSSARY, null) }
+            SectionRow(AppIcons.Block, "Textes et images ignorés", if (graph.ignored.texts.isEmpty() && graph.ignored.images.isEmpty()) "Rien d'ignoré pour l'instant" else "${graph.ignored.texts.size} texte(s) · ${graph.ignored.images.size} image(s)") { open(SettingsPage.IGNORED, null) }
             SectionRow(AppIcons.CloudDownload, "Modèles de traduction", if (readyModels > 0) "$readyModels modèle(s) Gemma prêt(s)" else "Aucun modèle Gemma téléchargé") { open(SettingsPage.MODELS, null) }
             SectionLabel("Application")
             SectionRow(AppIcons.Globe, "Navigation", if (s.blockAds) "Publicités bloquées" else "Publicités autorisées") { open(SettingsPage.BROWSING, null) }
@@ -586,6 +595,73 @@ private fun BrowsingSettings(graph: AppGraph, focus: String?) {
                 for (site in targets) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(site, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                     TextButton(onClick = { store.update { st -> st.copy(adAllowTargets = (st.adAllowTargetSet - site).joinToString(",")) } }) { Text("Retirer") }
+                }
+            }
+        }
+    }
+}
+
+/** Libellé de la portée d'une règle de texte : toutes les œuvres, ou une œuvre (clé « site|titre en minuscules »). */
+private fun ignoredScopeLabel(scope: String): String {
+    if (scope == IgnoredText.EVERYWHERE) return "Toutes les œuvres"
+    val title = scope.substringAfter('|').split(' ').filter { it.isNotBlank() }.joinToString(" ") { w -> w.replaceFirstChar { it.uppercase() } }
+    val host = if ('|' in scope) scope.substringBefore('|') else ""
+    return "Cette œuvre : " + title.ifBlank { scope } + (if (host.isNotBlank()) " ($host)" else "")
+}
+
+/** Vignette d'une image ignorée (petit fichier gardé à côté de la règle) ; une case vide si elle manque. */
+@Composable
+private fun IgnoredThumb(file: java.io.File) {
+    val bmp = remember(file.path, file.lastModified()) { try { BitmapFactory.decodeFile(file.path)?.asImageBitmap() } catch (_: Throwable) { null } }
+    Box(Modifier.size(width = 72.dp, height = 54.dp).clip(RoundedCornerShape(8.dp)).background(Color.White.copy(alpha = 0.06f)), contentAlignment = Alignment.Center) {
+        if (bmp != null) Image(bmp, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+    }
+}
+
+/** Textes et images laissés tels quels (règles posées par un appui long sur une traduction ou sur une image) : la liste, avec de quoi retirer chaque règle. */
+@Composable
+private fun IgnoredSettings(graph: AppGraph, focus: String?) {
+    val store = graph.ignored
+    val c = graph.controller
+    val ctx = LocalContext.current
+    val cs = MaterialTheme.colorScheme
+    val dateFormat = remember { java.text.SimpleDateFormat("d MMM yyyy", Locale.FRANCE) }
+    PageScroll(focus) {
+        SettingsGroup("Textes", "textes") {
+            Hint("Ces textes restent tels quels sur les pages : ils ne sont pas traduits. Pour en ajouter, appui long sur une traduction puis « Ignorer ce texte… ».")
+            if (store.texts.isEmpty()) Text("Aucun texte ignoré.", style = MaterialTheme.typography.bodyMedium)
+            store.texts.toList().forEachIndexed { i, r ->
+                if (i > 0) HorizontalDivider()
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f).padding(end = 8.dp)) {
+                        Text(r.text.replace('\n', ' '), style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                        Text(ignoredScopeLabel(r.scope), style = MaterialTheme.typography.labelSmall, color = cs.primary)
+                    }
+                    TextButton(onClick = {
+                        store.removeText(r.scope, r.text); c.reprocessForText(r.text)
+                        Toast.makeText(ctx, "Texte rétabli", Toast.LENGTH_SHORT).show()
+                    }) { Text("Retirer") }
+                }
+            }
+        }
+        SettingsGroup("Images", "images") {
+            Hint("Bandeaux de début ou de fin de chapitre : l'image n'est ni lue ni traduite. Pour en ajouter, appui long sur l'image puis « Ne jamais traduire cette image ».")
+            if (store.images.isEmpty()) Text("Aucune image ignorée.", style = MaterialTheme.typography.bodyMedium)
+            store.images.toList().forEachIndexed { i, r ->
+                if (i > 0) HorizontalDivider()
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    IgnoredThumb(store.thumbFile(r.id))
+                    Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                        Text("${r.width} × ${r.height}", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            (if (r.bits.isNotEmpty()) "Reconnue même légèrement modifiée" else "Reconnue seulement si elle est identique") + (if (r.addedAt > 0) " · ${dateFormat.format(java.util.Date(r.addedAt))}" else ""),
+                            style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant,
+                        )
+                    }
+                    TextButton(onClick = {
+                        store.removeImage(r.id); c.reprocessForImages()
+                        Toast.makeText(ctx, "Image rétablie", Toast.LENGTH_SHORT).show()
+                    }) { Text("Retirer") }
                 }
             }
         }

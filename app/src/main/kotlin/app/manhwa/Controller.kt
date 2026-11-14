@@ -56,6 +56,9 @@ import app.manhwa.core.BlockEdit
 import app.manhwa.core.BlockGrouper
 import app.manhwa.core.EditApplier
 import app.manhwa.core.EditKind
+import app.manhwa.core.IgnoredImage
+import app.manhwa.core.IgnoredMatch
+import app.manhwa.core.IgnoredText
 import app.manhwa.core.OcrLine
 import app.manhwa.core.Protected
 import app.manhwa.core.RectF as CRect
@@ -103,11 +106,8 @@ const val NEW_BLOCK_ID = -2
 /** Zone non traduite touchée longuement : coordonnées dans l'image d'origine. */
 class EmptySpot(val imageId: String, val x: Float, val y: Float)
 
-/**
- * Suppression d'une traduction qui peut encore être annulée : la page, l'image, la correction écrite pour la supprimer et celle qui existait avant
- * (null : le bloc n'avait aucune correction). [src] sert au journal.
- */
-class DeletedBlock(val imageId: String, val imageKey: String, val editId: String, val previous: BlockEdit?, val src: String)
+/** Geste qui peut encore être défait : texte du bandeau (« Traduction supprimée ») et ce qu'il faut faire pour l'annuler. */
+class UndoBanner(val message: String, val undo: () -> Unit)
 
 /** Ce que le contrôleur garde d'une page traitée pour pouvoir corriger ses blocs : fenêtre traitée, résultat avant et après corrections, empreinte de l'image. */
 class WorkInfo(
@@ -176,9 +176,9 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     /** Zone non traduite dont on touche longuement l'image : l'interface propose d'y ajouter un texte. */
     var peekEmpty by mutableStateOf<EmptySpot?>(null)
     private val clearPeekEmpty = Runnable { peekEmpty = null }
-    /** Dernière traduction supprimée d'un geste (corbeille de l'appui long) : l'interface propose de l'annuler pendant [undoWindowMs]. */
-    var undoDelete by mutableStateOf<DeletedBlock?>(null)
-    private val clearUndo = Runnable { undoDelete = null }
+    /** Dernier geste qui peut être défait (suppression d'une traduction, texte ou image ignorés) : l'interface propose « Annuler » pendant [undoWindowMs]. */
+    var undoBanner by mutableStateOf<UndoBanner?>(null)
+    private val clearUndo = Runnable { undoBanner = null }
     /** Durée de la proposition d'annulation (3 s) ; allongée seulement par les tests automatiques pour laisser le temps de lire l'écran. */
     @Volatile var undoWindowMs = UNDO_MS
     /** Avancement à reprendre à l'ouverture de la page demandée (0 = aucun). */
@@ -189,6 +189,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     private val candidatesById = ConcurrentHashMap<String, Candidate>()
     /** Change à chaque nouvelle page : un rafraîchissement différé (file pleine) d'une page quittée est abandonné. */
     @Volatile private var pageEpoch = 0
+    /** Images laissées telles quelles parce que l'utilisateur ne veut jamais les voir traduites (identifiant de l'image de la page → règle qui la vise) : retraitées si la règle est retirée. */
+    private val skipped = ConcurrentHashMap<String, IgnoredImage>()
     private val keysById = ConcurrentHashMap<String, CacheKey>()
     /** Pages récemment traitées, avec de quoi corriger leurs blocs (éditeur) : les plus anciennes sont oubliées. */
     private val workInfos = object : LinkedHashMap<String, WorkInfo>(16, 0.75f, true) {
@@ -329,10 +331,12 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             if (outcome is PageOutcome.Failed && failEntries.incrementAndGet() <= 60) {
                 graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "fail").put("img", id).put("stage", outcome.stage).put("message", outcome.message.take(300)).put("sys", diag()))
             }
+            // un retraitement demandé après coup (correction, suppression, règle « ignorer ») n'est pas une image de plus à traduire : il ne compte pas dans l'avancement
+            val extra = id.contains('#')
             main.post {
                 when (outcome) {
-                    is PageOutcome.Done -> done++
-                    is PageOutcome.NoText -> { done++; noText++ }
+                    is PageOutcome.Done -> if (!extra) done++
+                    is PageOutcome.NoText -> if (!extra) { done++; noText++ }
                     is PageOutcome.Failed -> {
                         failed++; lastError = "${outcome.stage} : ${outcome.message}"
                         if (outcome.message.contains("Modèle de traduction")) {
@@ -464,7 +468,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                 graph.gemma.seriesTitle = if (url.startsWith("http")) app.manhwa.core.SeriesHint.fromUrl(url) else null
                 loading = true
                 nearBottom = false
-                barsHidden = false; pageProgress = 0; showReaderBar(false); resumeOffer = 0; peekTarget = null; undoDelete = null
+                barsHidden = false; pageProgress = 0; showReaderBar(false); resumeOffer = 0; peekTarget = null; undoBanner = null
                 pageError = null
                 resetSession()
                 view.evaluateJavascript(PageScript.INJECT, null)
@@ -559,7 +563,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val id = t.imageId.removeSuffix("~up")
         val info = workInfo(id) ?: return
         val shown = info.applied.page.blocks.firstOrNull { it.id == t.bid } ?: return
-        val prev = info.applied.editByBlock[shown.id]
+        val prev = info.applied.editByBlock[shown.id]?.takeUnless { it.id.startsWith(IGNORE_EDIT_PREFIX) }      // une règle « ignorer » n'est pas une correction : jamais enregistrée comme telle
         val orig = info.result.blocks.firstOrNull { it.id == shown.id } ?: shown
         val edit = prev?.copy(hidden = true) ?: BlockEdit(
             "e" + java.util.UUID.randomUUID().toString().take(8), EditKind.ADJUST, imageRect(orig.box, info.ctxH), orig.source, hidden = true,
@@ -570,29 +574,153 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         webView?.evaluateJavascript("window.__mt&&window.__mt.dropPatch(${JSONObject.quote(t.imageId)},${t.bid})", null)
         reprocess(id)
         // la suppression reste annulable quelques secondes : un bandeau « Annuler » est proposé, puis il disparaît et la suppression est définitive
-        undoDelete = DeletedBlock(id, info.imageKey, edit.id, prev, shown.source)
+        showUndo("Traduction supprimée") {
+            if (prev != null) graph.edits.upsert(info.imageKey, prev) else graph.edits.remove(info.imageKey, edit.id)
+            graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "correction").put("url", currentUrl).put("src", shown.source).put("edit", "suppression annulée"))
+            reprocess(id)
+        }
+    }
+
+    /** Propose « Annuler » pendant [undoWindowMs] ; la proposition précédente est remplacée (son geste devient définitif). */
+    fun showUndo(message: String, undo: () -> Unit) {
+        undoBanner = UndoBanner(message, undo)
         main.removeCallbacks(clearUndo); main.postDelayed(clearUndo, undoWindowMs)
     }
 
-    /** Annule la dernière suppression : le bloc retrouve la correction qu'il avait avant (ou aucune), puis la page est redessinée. */
-    fun undoDeletion() {
-        val u = undoDelete ?: return
-        undoDelete = null; main.removeCallbacks(clearUndo)
-        if (u.previous != null) graph.edits.upsert(u.imageKey, u.previous) else graph.edits.remove(u.imageKey, u.editId)
-        graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "correction").put("url", currentUrl).put("src", u.src).put("edit", "suppression annulée"))
-        reprocess(u.imageId)
+    /** Défait le dernier geste proposé par le bandeau. */
+    fun runUndo() {
+        val u = undoBanner ?: return
+        undoBanner = null; main.removeCallbacks(clearUndo)
+        u.undo()
+    }
+
+    // ---------- ignorer un texte ou une image ----------
+
+    /** Pages dont les blocs sont gardés en mémoire (les plus récentes). */
+    fun workIds(): List<String> = synchronized(workInfos) { workInfos.keys.toList() }
+
+    /** Redessine les pages en mémoire qui portent ce texte (résultat en cache : quelques instants) : après l'ajout ou le retrait d'une règle de texte. */
+    fun reprocessForText(text: String) {
+        val n = IgnoredMatch.normalize(text)
+        for (id in workIds()) {
+            val info = workInfo(id) ?: continue
+            if (info.result.blocks.any { IgnoredMatch.same(IgnoredMatch.normalize(it.source), n) }) reprocess(id)
+        }
+    }
+
+    /** Redessine les images données, celles qui ont les mêmes octets et celles laissées telles quelles : après l'ajout ou le retrait d'une règle d'image. */
+    fun reprocessForImages(ids: List<String> = emptyList()) {
+        val keys = ids.mapNotNull { workInfo(it)?.imageKey }.toSet()
+        val all = LinkedHashSet<String>(ids)
+        for (id in workIds()) if (workInfo(id)?.imageKey in keys) all.add(id)
+        all.addAll(skipped.keys)
+        for (id in all) reprocess(id)
+    }
+
+    /** Le texte touché longuement est-il ignoré par une règle ? L'interface propose alors de le rétablir plutôt que de le corriger. */
+    fun peekIgnored(): Boolean {
+        val t = peekTarget ?: return false
+        val info = workInfo(t.imageId.removeSuffix("~up")) ?: return false
+        return info.applied.editByBlock[t.bid]?.id?.startsWith(IGNORE_EDIT_PREFIX) == true
+    }
+
+    /** Garde la proposition « Corriger / supprimer » affichée pendant le choix « Ignorer ce texte… » (sinon elle s'effacerait au bout de 7 s). */
+    fun holdPeek() { main.removeCallbacks(clearPeek) }
+
+    /** Texte lu du bloc touché avant toute correction : c'est celui que les règles « ignorer » comparent au texte lu sur la page (une correction manuelle du texte n'y change rien). */
+    private fun readSource(info: WorkInfo, bid: Int, fallback: String): String =
+        (info.result.blocks.firstOrNull { it.id == bid }?.source ?: info.applied.page.blocks.firstOrNull { it.id == bid }?.source ?: fallback).trim()
+
+    /** La règle peut-elle se limiter à cette œuvre ? (la page ouverte doit être reconnue comme une œuvre) */
+    fun peekHasSeries(): Boolean {
+        val t = peekTarget ?: return false
+        return workInfo(t.imageId.removeSuffix("~up"))?.series != null
+    }
+
+    /** Ne plus traduire ce texte, dans cette œuvre ou partout : la règle est enregistrée, les pages ouvertes sont redessinées et « Annuler » est proposé. */
+    fun ignorePeekText(everywhere: Boolean) {
+        val t = peekTarget ?: return
+        peekTarget = null; main.removeCallbacks(clearPeek)
+        val info = workInfo(t.imageId.removeSuffix("~up")) ?: return
+        val src = readSource(info, t.bid, t.src)
+        val scope = if (everywhere) IgnoredText.EVERYWHERE else (info.series ?: IgnoredText.EVERYWHERE)
+        if (src.isEmpty() || !graph.ignored.addText(scope, src)) return
+        graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "correction").put("url", currentUrl).put("src", src).put("edit", if (scope == IgnoredText.EVERYWHERE) "texte ignoré partout" else "texte ignoré dans l'œuvre"))
+        webView?.evaluateJavascript("window.__mt&&window.__mt.dropPatch(${JSONObject.quote(t.imageId)},${t.bid})", null)
+        reprocessForText(src)
+        showUndo("Texte ignoré") { graph.ignored.removeText(scope, src); reprocessForText(src) }
+    }
+
+    /** Rétablit un texte ignoré (appui long sur son emplacement) : toutes les règles qui le visent sont retirées. */
+    fun unignorePeek() {
+        val t = peekTarget ?: return
+        peekTarget = null; main.removeCallbacks(clearPeek)
+        val info = workInfo(t.imageId.removeSuffix("~up")) ?: return
+        val src = readSource(info, t.bid, t.src)
+        val n = IgnoredMatch.normalize(src)
+        val hits = graph.ignored.rules.texts.filter { r -> (r.scope == IgnoredText.EVERYWHERE || r.scope == info.series) && IgnoredMatch.same(n, IgnoredMatch.normalize(r.text)) }
+        if (hits.isEmpty()) return
+        for (r in hits) graph.ignored.removeText(r.scope, r.text)
+        reprocessForText(src)
+        showUndo("Texte rétabli") { for (r in hits) graph.ignored.addText(r.scope, r.text); reprocessForText(src) }
+    }
+
+    /** Page de l'image touchée longuement, avec ou sans traduction à cet endroit. */
+    private fun peekImageId(): String? = (peekTarget?.imageId ?: peekEmpty?.imageId)?.removeSuffix("~up")
+
+    /** Ne jamais traduire cette image (bandeau de début ou de fin de chapitre) : empreinte et vignette enregistrées, la traduction qu'elle portait est retirée et « Annuler » est proposé. */
+    fun ignorePeekImage() {
+        val id = peekImageId() ?: return
+        peekTarget = null; peekEmpty = null; main.removeCallbacks(clearPeek); main.removeCallbacks(clearPeekEmpty)
+        val info = workInfo(id) ?: return
+        // octets d'origine : ceux de la fenêtre traitée, sauf si elle porte le bas de l'image du dessus (on reprend alors l'image telle qu'elle a été téléchargée)
+        val orig = if (info.ctxH == 0) info.bytes else synchronized(recentBytes) { recentBytes[info.imageSrc] }
+        val fp = orig?.let { ImagePrint.of(it) }
+        val w = fp?.width ?: info.applied.page.imageWidth
+        val h = fp?.height ?: (info.applied.page.imageHeight - info.ctxH)
+        val rule = IgnoredImage("g" + java.util.UUID.randomUUID().toString().take(8), info.imageKey, w, h, if (fp != null && fp.usable) fp.hex() else "", "", System.currentTimeMillis())
+        graph.ignored.addImage(rule, orig?.let { ImagePrint.thumbnail(it) })
+        graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "correction").put("url", currentUrl).put("src", info.imageSrc.takeLast(120)).put("edit", "image ignorée ${w}×$h"))
+        reprocessForImages(listOf(id))
+        showUndo("Image ignorée") { graph.ignored.removeImage(rule.id); reprocessForImages() }
+    }
+
+    /** L'image touchée longuement est-elle ignorée ? Elle est alors laissée telle quelle : on propose de la rétablir plutôt que d'y ajouter une traduction. */
+    fun peekImageIgnored(): Boolean = peekImageId()?.let { skipped.containsKey(it) } == true
+
+    /** Rétablit l'image ignorée touchée longuement : sa règle est retirée, la page est traduite à nouveau et « Annuler » est proposé. */
+    fun unignorePeekImage() {
+        val id = peekImageId() ?: return
+        peekTarget = null; peekEmpty = null; main.removeCallbacks(clearPeek); main.removeCallbacks(clearPeekEmpty)
+        val rule = skipped[id] ?: return
+        val thumb = try { graph.ignored.thumbFile(rule.id).takeIf { it.exists() }?.readBytes() } catch (_: Throwable) { null }
+        graph.ignored.removeImage(rule.id)
+        graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "correction").put("url", currentUrl).put("src", rule.sha.takeLast(12)).put("edit", "image rétablie"))
+        reprocessForImages(listOf(id))
+        showUndo("Image rétablie") { graph.ignored.addImage(rule, thumb); reprocessForImages(listOf(id)) }
     }
 
     // ---------- tests automatiques (builds debug) : gestes de l'appui long rejoués sans toucher la page ----------
 
-    /** Pages dont les blocs sont gardés en mémoire (les plus récentes). */
-    fun testWorkIds(): List<String> = synchronized(workInfos) { workInfos.keys.toList() }
+    fun testWorkIds(): List<String> = workIds()
+
+    /** Comme un appui long sur une image sans traduction : la première image laissée telle quelle (sinon la première page en mémoire) ; la proposition s'affiche 30 s. Faux s'il n'y a aucune image. */
+    fun testPeekEmpty(): Boolean {
+        val id = skipped.keys.firstOrNull() ?: testWorkIds().firstOrNull() ?: return false
+        peekTarget = null; peekEmpty = EmptySpot(id, 0f, 0f)
+        main.removeCallbacks(clearPeekEmpty); main.postDelayed(clearPeekEmpty, 30_000)
+        return true
+    }
+
+    /** Nombre d'images de la page actuellement laissées telles quelles par une règle d'image. */
+    fun testSkippedCount(): Int = skipped.size
 
     /** Comme un appui long sur la première traduction non supprimée : la proposition « Corriger / supprimer » s'affiche 30 s. Faux s'il n'y a aucune traduction. */
-    fun testPeek(): Boolean {
+    fun testPeek(ignored: Boolean = false): Boolean {
         for (id in testWorkIds()) {
             val info = workInfo(id) ?: continue
-            val b = info.applied.page.blocks.firstOrNull { info.applied.editByBlock[it.id]?.hidden != true } ?: continue
+            // première traduction non supprimée ; avec [ignored], premier texte masqué par une règle « ignorer »
+            val b = info.applied.page.blocks.firstOrNull { val e = info.applied.editByBlock[it.id]; if (ignored) e?.id?.startsWith(IGNORE_EDIT_PREFIX) == true else e?.hidden != true } ?: continue
             peekEmpty = null; peekTarget = EditTarget(id, b.id, b.source, b.translated)
             main.removeCallbacks(clearPeek); main.postDelayed(clearPeek, 30_000)
             return true
@@ -606,7 +734,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             val info = workInfo(id) ?: continue
             val shown = info.applied.page.blocks.firstOrNull { info.applied.editByBlock[it.id]?.hidden != true } ?: continue
             val orig = info.result.blocks.firstOrNull { it.id == shown.id } ?: shown
-            val prev = info.applied.editByBlock[shown.id]
+            val prev = info.applied.editByBlock[shown.id]?.takeUnless { it.id.startsWith(IGNORE_EDIT_PREFIX) }
             val edit = prev?.copy(translation = text) ?: BlockEdit("e" + java.util.UUID.randomUUID().toString().take(8), EditKind.ADJUST, imageRect(orig.box, info.ctxH), orig.source, translation = text)
             graph.edits.upsert(info.imageKey, edit); reprocess(id)
             return true
@@ -706,7 +834,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     }
 
     private fun resetSession() {
-        stopWork(); resetCounters(); active = false; overlaysVisible = true
+        stopWork(); resetCounters(); skipped.clear(); active = false; overlaysVisible = true
         graph.gemma.resetContext()
     }
 
@@ -774,6 +902,17 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             return f
         }
         if (cancelled()) return PageOutcome.Failed("annulé", "")
+        // image que l'utilisateur ne veut jamais voir traduite (bandeau de début ou de fin de chapitre) : ni lecture ni traduction, et la traduction qu'elle portait est retirée
+        val ignoreRules = graph.ignored.rules
+        if (ignoreRules.images.isNotEmpty()) {
+            val hit = ignoreRules.imageMatch(sha256Hex(bytes), app.manhwa.ImagePrint.of(bytes))
+            if (hit != null) {
+                candidatesById[c.id] = c; skipped[c.id] = hit
+                if (!cancelled()) sendOverlay(c.id, JSONObject().put("w", hit.width).put("h", hit.height).put("patches", JSONArray()))
+                return PageOutcome.NoText(hit.width, hit.height)
+            }
+        }
+        skipped.remove(c.id)
         val s = graph.settingsStore.settings
         val t0 = System.currentTimeMillis()
         // jonction avec l'image du dessus : l'image est traitée avec le bas de celle du dessus collé au-dessus d'elle, pour lire en entier un texte que le découpage a coupé en deux ;
@@ -781,7 +920,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         synchronized(recentBytes) { recentBytes[c.src] = bytes }
         val imageH = if (c.naturalH > 0) c.naturalH else boundsHeight(bytes)
         val nextTakes = !testNoSeam && Seams.nextTakesOver(c.nextH)
-        val ctxWanted = if (testNoSeam || c.prevSrc == null || c.prevId == null) 0 else Seams.windowContext(imageH, c.prevH.takeIf { it > 0 })
+        // (une image ignorée du dessus, bandeau de début de chapitre par exemple, ne sert pas de contexte : son texte ne doit pas être lu avec la page)
+        val ctxWanted = if (testNoSeam || c.prevSrc == null || c.prevId == null || c.prevId?.let { skipped.containsKey(it) } == true) 0 else Seams.windowContext(imageH, c.prevH.takeIf { it > 0 })
         val window: SeamWindow? = if (ctxWanted > 0) {
             runStage[c.id] = "assemblage avec l'image du dessus"
             val prevSrc = c.prevSrc!!; val prevId = c.prevId!!
@@ -848,7 +988,11 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             is PageOutcome.NoText -> PageResult(out.imageWidth, out.imageHeight, emptyList())
             else -> null
         }
-        val applied: EditApplier.Applied? = if (basePage != null) try { EditApplier.apply(basePage, graph.edits.forImage(imageKey), ctxH.toFloat()) } catch (e: Throwable) { null } else null
+        // textes ignorés (dans cette œuvre ou partout) : même effet qu'une suppression, sans rien écrire dans les corrections ni toucher au résultat en cache ; la règle se retire à tout moment
+        val ignoreEdits = if (basePage != null && ignoreRules.texts.isNotEmpty()) {
+            basePage.blocks.filter { ignoreRules.textIgnored(pageSeries, it.source) }.map { b -> BlockEdit(IGNORE_EDIT_PREFIX + b.id, EditKind.ADJUST, imageRect(b.box, ctxH), b.source, hidden = true) }
+        } else emptyList()
+        val applied: EditApplier.Applied? = if (basePage != null) try { EditApplier.apply(basePage, graph.edits.forImage(imageKey) + ignoreEdits, ctxH.toFloat()) } catch (e: Throwable) { null } else null
         if (basePage != null) synchronized(workInfos) {
             workInfos[c.id] = WorkInfo(c.id, c.src, imageKey, workBytes, ctxH, basePage, applied ?: EditApplier.Applied(basePage, emptyMap(), emptyList(), emptyMap()), pageSeries)
         }
@@ -981,7 +1125,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             return EditSession(info, TranslatedBlock(NEW_BLOCK_ID, box, "", "", false, 40f, emptyList(), emptyList()), null, name, isNew = true)
         }
         val b = info.applied.page.blocks.firstOrNull { it.id == t.bid } ?: return null
-        return EditSession(info, b, info.applied.editByBlock[b.id], name)
+        return EditSession(info, b, info.applied.editByBlock[b.id]?.takeUnless { it.id.startsWith(IGNORE_EDIT_PREFIX) }, name)
     }
 
     /** Police automatique du bloc, telle que le dernier rendu de la page l'a choisie. */
@@ -1336,7 +1480,9 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         // appui long sur une image sans traduction à cet endroit (texte non détecté, zone ignorée) : seulement si l'image a été traitée
         @JavascriptInterface fun onPeekEmpty(id: String, x: Double, y: Double) {
             main.post {
-                if (workInfo(id.removeSuffix("~up")) != null) { peekTarget = null; peekEmpty = EmptySpot(id.removeSuffix("~up"), x.toFloat(), y.toFloat()); main.removeCallbacks(clearPeekEmpty); main.postDelayed(clearPeekEmpty, 7000) }
+                // (une image ignorée n'a pas de résultat en mémoire, mais on peut la rétablir d'un appui long dessus)
+                val bare = id.removeSuffix("~up")
+                if (workInfo(bare) != null || skipped.containsKey(bare)) { peekTarget = null; peekEmpty = EmptySpot(bare, x.toFloat(), y.toFloat()); main.removeCallbacks(clearPeekEmpty); main.postDelayed(clearPeekEmpty, 7000) }
             }
         }
         @JavascriptInterface fun onImagesChanged() { main.post { if (active) start(false) } }
@@ -1453,6 +1599,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     companion object {
         /** Une traduction supprimée d'un geste peut être rétablie pendant 3 secondes. */
         const val UNDO_MS = 3000L
+        /** Les corrections issues d'un texte ignoré ne sont jamais enregistrées : leur identifiant commence ainsi. */
+        const val IGNORE_EDIT_PREFIX = "ign:"
         const val MAX_IMAGE_BYTES = 30 * 1024 * 1024
         /** Une page bloquée depuis 1 min est signalée au journal ; depuis 4 min, son fil est abandonné et remplacé. */
         const val STALL_REPORT_MS = 60_000L

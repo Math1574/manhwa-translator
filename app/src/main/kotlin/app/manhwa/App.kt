@@ -72,6 +72,8 @@ class AppGraph(ctx: Context) {
     val journal = TranslationJournal(File(ctx.filesDir, "journal.jsonl"))
     /** Corrections manuelles des textes (zone, texte, position, taille, police), par image. */
     val edits = EditStore(File(ctx.filesDir, "edits.txt"))
+    /** Textes (dans une œuvre ou partout) et images (bandeaux de début ou de fin de chapitre) que l'utilisateur ne veut plus voir traduits. */
+    val ignored = IgnoreStore(File(ctx.filesDir, "ignored.txt"), File(ctx.filesDir, "ignored"))
     init {
         library.onChanged = { ResumeShortcut.update(ctx, it) }
         ResumeShortcut.update(ctx, library.library)

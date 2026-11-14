@@ -93,6 +93,8 @@ fun BrowserScreen(graph: AppGraph) {
     val running = c.active && c.done + c.failed < c.total
     // réglages rapides (appui long sur le bouton Original | Traduit, ou sur l'interrupteur du plein écran)
     var quick by remember { mutableStateOf(false) }
+    // choix « Ignorer ce texte… » (appui long sur une traduction)
+    var ignoreDialog by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize()) {
         // Barre d'adresse : visible à l'arrêt, se masque quand on lit en descendant et revient en remontant ou en touchant la page.
@@ -150,20 +152,34 @@ fun BrowserScreen(graph: AppGraph) {
                 ReaderOverlay(graph, onQuickSettings = { quick = true })
             }
             // propositions discrètes : reprendre le chapitre où l'on s'était arrêté ; corriger la traduction dont on regarde l'original
-            if (!(c.fullscreen && c.readerBar) && (c.resumeOffer > 0 || c.peekTarget != null || c.peekEmpty != null || c.navBlocked != null || c.undoDelete != null)) {
+            if (!(c.fullscreen && c.readerBar) && (c.resumeOffer > 0 || c.peekTarget != null || c.peekEmpty != null || c.navBlocked != null || c.undoBanner != null)) {
                 Column(Modifier.align(Alignment.BottomCenter).padding(bottom = if (c.fullscreen) 28.dp else 20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (c.resumeOffer > 0) {
                         LaunchedEffect(c.resumeOffer) { delay(9000); c.dismissResumeOffer() }
                         Pill("Reprendre à ${c.resumeOffer} %", onClick = { c.resumeNow() }, onClose = { c.dismissResumeOffer() })
                     }
-                    if (c.peekTarget != null) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Pill("Corriger cette traduction", onClick = { c.openPeekEdit() })
-                        // supprimer d'un geste (petits artefacts pris pour du texte) : l'original est rétabli à cet endroit
-                        RoundPill(Icons.Filled.Delete, "Supprimer cette traduction") { c.deletePeek() }
+                    if (c.peekTarget != null && c.peekIgnored()) {
+                        // texte laissé tel quel par une règle : on le rétablit plutôt que de le corriger
+                        Pill("Texte ignoré · Rétablir", onClick = { c.unignorePeek() })
+                    } else if (c.peekTarget != null) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Pill("Corriger cette traduction", onClick = { c.openPeekEdit() })
+                            // supprimer d'un geste (petits artefacts pris pour du texte) : l'original est rétabli à cet endroit
+                            RoundPill(Icons.Filled.Delete, "Supprimer cette traduction") { c.deletePeek() }
+                        }
+                        Pill("Ignorer ce texte…", onClick = { c.holdPeek(); ignoreDialog = true })
                     }
-                    // suppression d'un geste : trois secondes pour la défaire (le bandeau se referme ensuite et la suppression est définitive)
-                    if (c.undoDelete != null) Pill("Traduction supprimée · Annuler", onClick = { c.undoDeletion() })
-                    c.peekEmpty?.let { Pill("Ajouter une traduction ici", onClick = { c.openNewEdit() }, onClose = { c.peekEmpty = null }) }
+                    // geste qui se défait : trois secondes pour l'annuler (le bandeau se referme ensuite et le geste est définitif)
+                    c.undoBanner?.let { Pill("${it.message} · Annuler", onClick = { c.runUndo() }) }
+                    c.peekEmpty?.let {
+                        if (c.peekImageIgnored()) {
+                            Pill("Image ignorée · Rétablir", onClick = { c.unignorePeekImage() }, onClose = { c.peekEmpty = null })
+                        } else {
+                            Pill("Ajouter une traduction ici", onClick = { c.openNewEdit() }, onClose = { c.peekEmpty = null })
+                            // bandeau de début ou de fin de chapitre : l'image n'est plus jamais lue ni traduite
+                            Pill("Ne jamais traduire cette image", onClick = { c.ignorePeekImage() })
+                        }
+                    }
                     c.navBlocked?.let { nb ->
                         if (nb.popup) Pill(nb.reason, onClick = { c.dismissNavBlocked() })
                         else Pill("Redirection bloquée vers ${android.net.Uri.parse(nb.url).host ?: "un autre site"} · Ouvrir", onClick = { c.openBlockedNav() }, onClose = { c.dismissNavBlocked() })
@@ -171,6 +187,25 @@ fun BrowserScreen(graph: AppGraph) {
                 }
             }
             if (quick) QuickSettings(graph) { quick = false }
+            if (ignoreDialog) {
+                val target = c.peekTarget
+                if (target == null) LaunchedEffect(Unit) { ignoreDialog = false }      // la proposition a disparu entre-temps (autre page) : la fenêtre se referme
+                else AlertDialog(
+                    onDismissRequest = { ignoreDialog = false; c.peekTarget = null },
+                    title = { Text("Ne plus traduire…") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("« ${target.src.replace('\n', ' ').take(90)} »", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (c.peekHasSeries()) TextButton(onClick = { ignoreDialog = false; c.ignorePeekText(false) }, modifier = Modifier.fillMaxWidth()) { Text("Ce texte, dans cette œuvre") }
+                            TextButton(onClick = { ignoreDialog = false; c.ignorePeekText(true) }, modifier = Modifier.fillMaxWidth()) { Text("Ce texte, dans toutes les œuvres") }
+                            TextButton(onClick = { ignoreDialog = false; c.ignorePeekImage() }, modifier = Modifier.fillMaxWidth()) { Text("Toute cette image (bandeau)") }
+                            Text("Un texte ou une image ignorés restent tels quels. La liste se trouve dans Réglages › Textes et images ignorés.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    },
+                    confirmButton = {},
+                    dismissButton = { TextButton(onClick = { ignoreDialog = false; c.peekTarget = null }) { Text("Annuler") } },
+                )
+            }
         }
     }
 }
