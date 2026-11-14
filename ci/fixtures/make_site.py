@@ -73,6 +73,25 @@ if os.path.exists(f"{S}/synth/en_mixed.png"):
         "<h3 style='padding:8px'>Test Series</h3>"
         '<img src="/comics/test-series-1a2b3c/other.png" alt="Another Story" class="thumb" style="width:80px">'
         '<img src="/comics/test-series-1a2b3c/cover.png" alt="Test Series" style="width:160px"></body></html>')
+    # autres œuvres, pour les illustrations (page de chapitre : pour qu'elles entrent dans la bibliothèque)
+    def work(slug, title):
+        os.makedirs(f"{S}/comics/{slug}/chapter", exist_ok=True)
+        open(f"{S}/comics/{slug}/chapter/1.html", "w").write(HEAD % f"{title} - Chapter 1" + f"<h3 style='padding:8px'>{title} - Chapter 1</h3></body></html>")
+    # (a) page construite par son propre script : l'image de partage est celle du site (« og-image »), l'illustration au titre de l'œuvre n'apparaît que 1,8 s après le chargement
+    work("spa-series-7a7a7a", "Spa Series")
+    sp = f"{S}/comics/spa-series-7a7a7a"
+    open(f"{sp}/cover.png", "wb").write(png(240, 360, lambda x, y: (200 - x * 100 // 240, 60 + y * 120 // 360, 90)))
+    open(f"{sp}/og-image.png", "wb").write(png(600, 315, lambda x, y: (60, 60, 180)))
+    open(f"{sp}/index.html", "w").write('<!doctype html><html><head><meta charset="utf-8"><title>Spa Series</title><meta property="og:image" content="/comics/spa-series-7a7a7a/og-image.png"></head>'
+        '<body><h3>Spa Series</h3><script>setTimeout(function(){var i=new Image();i.alt="Spa Series";i.src="/comics/spa-series-7a7a7a/cover.png";i.width=160;document.body.appendChild(i)},1800)</script></body></html>')
+    # (b) le site n'a aucune image pour l'œuvre : seul l'annuaire (faux serveur, /anilist) en a une
+    work("anilist-only-5e5e5e", "Anilist Only")
+    open(f"{S}/comics/anilist-only-5e5e5e/cover.png", "wb").write(png(240, 360, lambda x, y: (60, 160 + y * 60 // 360, 90 + x * 100 // 240)))
+    # (c) la page de l'œuvre n'annonce que l'image du site : aucune illustration (la pastille reste)
+    work("generic-only-8c8c8c", "Generic Only")
+    gd = f"{S}/comics/generic-only-8c8c8c"
+    open(f"{gd}/og-image.png", "wb").write(png(600, 315, lambda x, y: (180, 60, 60)))
+    open(f"{gd}/index.html", "w").write('<!doctype html><html><head><meta charset="utf-8"><title>Generic Only</title><meta property="og:image" content="/comics/generic-only-8c8c8c/og-image.png"></head><body><h3>Generic Only</h3></body></html>')
 # banc du bloqueur : page piégée + faux sites tiers (noms en « .test », servis par l'application depuis /__sites/<nom>/ en mode test)
 if os.path.exists(f"{S}/synth/en_caps.png"):
     import shutil

@@ -107,7 +107,7 @@ class AppGraph(ctx: Context) {
     val favicons = FaviconStore(File(ctx.filesDir, "favicons"))
     /** Illustrations des œuvres de la bibliothèque (l'image que la page de l'œuvre annonce), et leur recherche en arrière-plan. */
     val covers = CoverStore(File(ctx.filesDir, "covers"))
-    val coverFetcher = CoverFetcher(ctx, covers, { library.library }, { controller.translating })
+    val coverFetcher = CoverFetcher(ctx, covers, { library.library }, { controller.translating }, { settingsStore.settings.coversOnline }, { journal.add(it) })
     val journal = TranslationJournal(File(ctx.filesDir, "journal.jsonl"))
     /** Corrections manuelles des textes (zone, texte, position, taille, police), par image. */
     val edits = EditStore(File(ctx.filesDir, "edits.txt"), originsFile = File(ctx.filesDir, "edit_origins.txt"))

@@ -159,7 +159,7 @@ done
 adb shell am force-stop $PKG
 adb shell "run-as $PKG rm -f files/ui.json"
 adb shell am start -n $PKG/app.manhwa.MainActivity --es mt_url "http://10.0.2.2:8000/comics/test-series-1a2b3c/chapter/1.html" --es mt_engine MLKIT --es mt_source EN \
-   --es mt_target FR --es mt_models "fr" --es mt_timeout 200 --es mt_report ui.json --es mt_fullscreen true --es mt_watch true --es mt_undo_ms 20000 >/dev/null
+   --es mt_target FR --es mt_models "fr" --es mt_timeout 200 --es mt_report ui.json --es mt_fullscreen true --es mt_watch true --es mt_undo_ms 20000 --es mt_anilist "http://10.0.2.2:8000/anilist" >/dev/null
 for i in $(seq 1 40); do sleep 6; adb shell "run-as $PKG ls files/ui.json" 2>/dev/null | grep -q ui.json && break; done
 adb exec-out "run-as $PKG cat files/ui.json" > $OUT/reports/fs.json
 sleep 5
@@ -708,6 +708,32 @@ echo "  [journal système] $(wc -l < $OUT/reports/ui_logcat.txt) ligne(s) d'ANR 
 # raccourci « Reprendre la lecture » de l'icône : publié d'après la dernière œuvre lue
 adb shell dumpsys shortcut > $OUT/reports/shortcut.txt 2>/dev/null
 chk "raccourci : « Reprendre la lecture » publié pour l'œuvre lue" $([ "$(grep -c 'id=resume' $OUT/reports/shortcut.txt)" -gt 0 ] && grep -q 'Test Series' $OUT/reports/shortcut.txt && echo 1 || echo 0)
+
+# illustrations : trois œuvres de plus. (a) la page de l'œuvre annonce l'image du site (« og-image ») et construit l'illustration au titre de l'œuvre 1,8 s après son chargement ;
+# (b) le site n'a aucune image pour l'œuvre mais l'annuaire (faux serveur) en a une ; (c) la page de l'œuvre n'annonce que l'image du site et l'annuaire ne la connaît pas : la pastille doit rester.
+# Ordre des visites : la plus récente est cherchée en premier (a), puis (b) et (c) ; la page (a) passe donc avant les échecs de (b) et (c).
+say "=== illustrations : page construite par son script, annuaire, image de site seule"
+for p in generic-only-8c8c8c anilist-only-5e5e5e spa-series-7a7a7a; do appcmd "goto http://10.0.2.2:8000/comics/$p/chapter/1.html"; sleep 4; done
+appcmd home; sleep 1.5; uidump cv0
+tapt cv0 "=Bibliothèque" 1; sleep 2
+for k in $(seq 1 40); do uidump cv1; [ "$(has cv1 'Illustration de Spa Series')" = 1 ] && [ "$(has cv1 'Illustration de Anilist Only')" = 1 ] && break; sleep 3; done
+sleep 12; uidump cv2; shot ui 72
+adb exec-out "run-as $PKG cat files/journal.jsonl" > $OUT/reports/journal_covers.jsonl 2>/dev/null
+grep '"type":"cover"' $OUT/reports/journal_covers.jsonl | cut -c1-400 >> $OUT/run.log
+chk "illustrations : une page d'œuvre qui construit son illustration par script (image de partage générique) affiche l'image au titre de l'œuvre" $(has cv2 'Illustration de Spa Series')
+chk "illustrations : l'illustration de cette œuvre vient du site (journal)" $(grep '"series":"Spa Series"' $OUT/reports/journal_covers.jsonl | grep -q '"source":"site"' && echo 1 || echo 0)
+chk "illustrations : l'annuaire donne l'illustration d'une œuvre dont le site n'a aucune image" $(has cv2 'Illustration de Anilist Only')
+chk "illustrations : celle-ci vient de l'annuaire (journal)" $(grep '"series":"Anilist Only"' $OUT/reports/journal_covers.jsonl | grep -q '"source":"annuaire"' && echo 1 || echo 0)
+chk "illustrations : une page qui n'annonce que l'image du site ne donne aucune illustration (la pastille reste)" $([ "$(hasnot cv2 'Illustration de Generic Only')" = 1 ] && grep '"series":"Generic Only"' $OUT/reports/journal_covers.jsonl | grep -q '"ok":false' && echo 1 || echo 0)
+chk "illustrations : l'échec est expliqué au journal" $(grep '"series":"Generic Only"' $OUT/reports/journal_covers.jsonl | grep -q 'aucune image retenue' && echo 1 || echo 0)
+# réglage « annuaire AniList » coupé : l'œuvre qui n'avait d'illustration que par l'annuaire n'en cherche plus (la demande de recherche n'interroge plus le faux annuaire)
+appcmd "coversonline off"; sleep 4
+before=$(grep -c "\[anilist\]" /tmp/server.log 2>/dev/null; true)
+appcmd coverretry; sleep 25
+after=$(grep -c "\[anilist\]" /tmp/server.log 2>/dev/null; true)
+say "illustrations : demandes à l'annuaire avant / après la recherche avec le réglage coupé : $before / $after"
+chk "illustrations : avec le réglage « annuaire » coupé, l'annuaire n'est plus interrogé" $([ "$after" = "$before" ] && echo 1 || echo 0)
+appcmd "coversonline on"
 
 fi # fin des scénarios web (absents de la suite lab)
 

@@ -39,7 +39,7 @@ object TestHooks {
      * libseed (trois œuvres de démonstration dans la bibliothèque : Zulu Quest, Mid Tale, Alpha Saga), libsort <recent|title|read> (tri de la bibliothèque), home (retour à l'accueil), termconfirm, termcancel (boutons de l'aperçu),
      evict (vide la mémoire des pages traitées), probe (relève où poser un doigt : tx, ty sur une traduction, ex, ey sur une zone sans traduction),
      edit (ouvre l'éditeur sur la première traduction), pinch <facteur> (deux doigts qui s'écartent ou se rapprochent au centre de l'image de l'éditeur : vrais événements tactiles), twopan <dx> <dy> (deux doigts qui glissent ensemble, en pixels), holdgemma <ms> (le moteur de langage reste occupé ce temps, comme une traduction en cours), goto <adresse> (ouvre la page, comme « Chapitre suivant »),
-     * crashrenderer (le processus qui dessine la page disparaît, comme un manque de mémoire), state (écrit seulement l'état).
+     * crashrenderer (le processus qui dessine la page disparaît, comme un manque de mémoire), coverretry (cherche de nouveau les illustrations manquantes), coversonline <on|off> (réglage « annuaire AniList »), state (écrit seulement l'état).
      */
     private fun startWatcher(ctx: Context, graph: AppGraph) {
         if (watching) return
@@ -85,6 +85,8 @@ object TestHooks {
                         "holdgemma" -> graph.gemma.testBusy(arg.trim().toLongOrNull() ?: 10_000L)
                         "goto" -> main.post { c.load(arg.trim()) }
                         "crashrenderer" -> main.post { c.testCrashRenderer() }
+                        "coverretry" -> main.post { graph.coverFetcher.retry(graph.library.library.series()) }
+                        "coversonline" -> main.post { graph.settingsStore.update { it.copy(coversOnline = arg.trim() != "off") } }
                         "twopan" -> { val p = arg.trim().split(' ').mapNotNull { it.toFloatOrNull() }; if (p.size >= 2) main.post { twoFingers(main, 240f, 240f, p[0], p[1]) } }
                     }
                     Thread.sleep(300)   // laisse les gestes lancés sur le fil principal s'appliquer avant de relever l'état
@@ -148,7 +150,7 @@ object TestHooks {
             .put("works", ids.size).put("blocks", blocks).put("hidden", hidden).put("edits", edits).put("editTr", editTr)
             .put("ign", graph.ignored.rules.texts.size).put("ignImg", graph.ignored.rules.images.size).put("skipped", c.testSkippedCount()).put("banner", c.undoBanner?.message ?: "").put("eraser", c.eraser)
             .put("peekE", c.peekEmpty != null).put("peekT", c.peekTarget != null).put("discMode", c.discardMode).put("disc", discCounts.first).put("discKnown", discCounts.second)
-            .put("coverOk", graph.covers.book.records.count { it.ok }).put("coverFail", graph.covers.book.records.count { !it.ok }).put("coverWhy", graph.coverFetcher.lastWhy).put("libSeries", graph.library.library.series().size).put("libFinished", graph.library.library.series().count { it.finished }).put("libSort", graph.settingsStore.settings.librarySort)
+            .put("coverOk", graph.covers.book.records.count { it.ok }).put("coverFail", graph.covers.book.records.count { !it.ok }).put("coverWhy", graph.coverFetcher.lastWhy).put("coverSrc", graph.coverFetcher.lastSource).put("libSeries", graph.library.library.series().size).put("libFinished", graph.library.library.series().count { it.finished }).put("libSort", graph.settingsStore.settings.librarySort)
             .put("home", c.currentUrl.isEmpty()).put("homeSites", app.manhwa.core.HomeView.sites(graph.library.library, app.manhwa.core.HomeView.pinned(graph.settingsStore.settings), app.manhwa.core.HomeView.hidden(graph.settingsStore.settings)).size)
             .put("homePinned", app.manhwa.core.HomeView.pinned(graph.settingsStore.settings).size).put("homeHidden", app.manhwa.core.HomeView.hidden(graph.settingsStore.settings).size)
             .put("corr", graph.edits.count()).put("corrOrig", graph.edits.originsSnapshot().size).put("fixes", graph.glossary.corrections.size)
@@ -164,6 +166,7 @@ object TestHooks {
     fun maybeRun(ctx: Context, graph: AppGraph, intent: Intent) {
         val debuggable = (ctx.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
         if (debuggable && intent.getStringExtra("mt_watch") == "true") startWatcher(ctx, graph)
+        if (debuggable) intent.getStringExtra("mt_anilist")?.let { graph.coverFetcher.directory = it }   // faux annuaire des illustrations (serveur de test)
         if (debuggable) intent.getStringExtra("mt_undo_ms")?.toLongOrNull()?.let { graph.controller.undoWindowMs = it }   // bandeau « Annuler » plus long pour laisser le temps de lire l'écran
         if (debuggable && intent.getStringExtra("mt_lab") != null && !running) { runLab(ctx, graph, intent); return }
         if (debuggable && intent.getStringExtra("mt_adtest") != null && !running) { runAdTest(ctx, graph, intent); return }

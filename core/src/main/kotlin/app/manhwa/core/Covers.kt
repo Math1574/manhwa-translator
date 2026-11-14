@@ -9,7 +9,7 @@ data class CoverImg(val src: String, val alt: String = "", val cls: String = "",
  * Ce que la page d'une œuvre annonce comme illustration, lu par le navigateur dans la page chargée (adresses déjà complètes).
  * [shared] : balises de partage (og:image, twitter:image, image_src), dans l'ordre de confiance ; [structured] : images des données structurées ; [images] : images de la page.
  */
-data class CoverCandidates(val shared: List<String> = emptyList(), val structured: List<String> = emptyList(), val images: List<CoverImg> = emptyList())
+data class CoverCandidates(val shared: List<String> = emptyList(), val structured: List<String> = emptyList(), val images: List<CoverImg> = emptyList(), val pageTitle: String = "")
 
 /** Choix de l'illustration d'une œuvre : où la chercher, quelle image retenir, à quelle condition on la garde. */
 object CoverPick {
@@ -23,30 +23,92 @@ object CoverPick {
     fun acceptable(url: String): Boolean =
         url.length in 12..1500 && (url.startsWith("https://") || url.startsWith("http://")) && !badFormat.containsMatchIn(url) && !notCover.containsMatchIn(url)
 
-    /**
-     * L'image à retenir pour l'œuvre [title] : d'abord ce que la page annonce pour le partage (c'est fait pour représenter la page), puis les données structurées,
-     * enfin, faute de mieux, une image de la page dont le texte alternatif porte le titre de l'œuvre (les vignettes des autres œuvres n'en font pas partie).
-     * Null si rien ne convient : mieux vaut une pastille qu'une image qui ne correspond pas.
-     */
-    fun choose(c: CoverCandidates, title: String): String? {
-        c.shared.firstOrNull { acceptable(it) }?.let { return it }
-        c.structured.firstOrNull { acceptable(it) }?.let { return it }
-        val words = LibraryView.words(title).filter { it.length >= 3 }
-        if (words.isEmpty()) return null
-        var best: String? = null
-        var bestScore = 0
-        for (im in c.images) {
-            if (!acceptable(im.src)) continue
-            val alt = LibraryView.fold(im.alt)
-            if (words.count { alt.contains(it) } * 2 < words.size) continue
-            var s = 3
-            if (coverClass.containsMatchIn(im.cls)) s += 2
-            if (coverUrl.containsMatchIn(im.src)) s += 1
-            if (im.w >= 200 && im.h >= 200) s += 2 else if ((im.w in 1..99) || (im.h in 1..99)) s -= 2
-            if (s > bestScore) { best = im.src; bestScore = s }
-        }
-        return if (bestScore >= 3) best else null
+    /** Adresses qui disent « image du site » (partage générique, bandeau, en-tête) plutôt qu'« illustration de l'œuvre ». */
+    private val generic = Regex("(?i)(?<![a-z])(og|opengraph|open[-_]?graph|social|share|sharing|banner|hero|header|site[-_]?image|default|fallback|splash)(?![a-z])")
+
+    /** Mots qui peuvent suivre le titre dans une adresse d'image sans en faire une autre œuvre (format, taille, qualité). */
+    private val tail = setOf(
+        "jpg", "jpeg", "png", "webp", "avif", "cover", "covers", "poster", "thumb", "thumbnail", "large", "small", "medium", "optimized", "full", "original", "orig",
+        "img", "image", "images", "mobile", "desktop", "min", "compressed", "opt", "new", "hd",
+    )
+
+    /** Le titre réduit à ses lettres et chiffres (sans accents ni majuscules) : « Solo Leveling: Ragnarok » et « solo-leveling-ragnarok » se valent. */
+    fun compact(s: String): String = LibraryView.fold(s).replace(" ", "")
+
+    /** Deux titres désignent la même œuvre : mêmes lettres et chiffres, à l'article initial près (« The Beginning After the End » / « Beginning After The End »). */
+    fun sameTitle(a: String, b: String): Boolean {
+        val x = compact(a); val y = compact(b)
+        if (x.length < 3 || y.length < 3) return false
+        return x == y || x.removePrefix("the") == y.removePrefix("the")
     }
+
+    /**
+     * L'adresse d'une image porte le titre de l'œuvre en entier, suivi seulement d'un code, d'une taille ou d'une extension : « …/covers/logging-out-is-too-hard.5c1851-400.webp » est celle de
+     * « Logging Out Is Too Hard » ; « solo-leveling-ragnarok.jpg » n'est pas celle de « Solo Leveling » (d'autres mots suivent : c'est une autre œuvre).
+     */
+    fun urlNamesTitle(url: String, title: String): Boolean {
+        val tw = LibraryView.words(title)
+        if (tw.isEmpty() || compact(title).length < 4) return false
+        val raw = url.substringAfter("://", url).substringBefore('?').substringBefore('#')
+        val path = try { java.net.URLDecoder.decode(raw, "UTF-8") } catch (_: Throwable) { raw }
+        val tokens = LibraryView.words(path)
+        val whole = compact(title)
+        if (tokens.any { it == whole }) return true
+        for (i in 0..tokens.size - tw.size) {
+            if (tw.indices.all { tokens[i + it] == tw[it] }) {
+                val next = tokens.getOrNull(i + tw.size)
+                if (next == null || !(next.length >= 3 && next.all { it.isLetter() } && next !in tail)) return true
+            }
+        }
+        return false
+    }
+
+    /** Une image candidate et sa note ; [evidenced] : son texte alternatif ou son adresse porte le titre de l'œuvre. */
+    data class Ranked(val url: String, val score: Int, val evidenced: Boolean)
+
+    /** En dessous de cette note, une image n'est pas proposée : mieux vaut une pastille qu'une image qui ne correspond pas. */
+    const val MIN_SCORE = 30
+
+    /**
+     * Les images à essayer pour l'œuvre [title], la meilleure d'abord. Ce que la page annonce pour le partage (balises og:image…) est fait pour représenter la page, donc d'abord ; puis les données
+     * structurées ; enfin les images de la page, qui ne comptent que si leur texte alternatif ou leur adresse porte le titre de l'œuvre (les vignettes des autres œuvres n'en font pas partie).
+     * Une adresse qui parle de l'image du site (« og-image », « banner »…) perd des points ; une image qui porte le titre en gagne. Rien sous [MIN_SCORE].
+     */
+    fun rank(c: CoverCandidates, title: String): List<Ranked> {
+        val tWords = LibraryView.words(title)
+        val key = compact(title)
+        val best = LinkedHashMap<String, Ranked>()
+        fun add(url: String, base: Int, alt: String = "", cls: String = "", w: Int = 0, h: Int = 0, needsEvidence: Boolean = false) {
+            if (!acceptable(url)) return
+            var s = base
+            var evidence = false
+            if (key.length >= 3 && alt.isNotBlank()) {
+                val aw = LibraryView.words(alt)
+                if (compact(alt) == key) { s += 35; evidence = true }
+                else if (tWords.isNotEmpty() && tWords.all { it in aw } && aw.size <= tWords.size + 3) { s += 25; evidence = true }
+            }
+            if (urlNamesTitle(url, title)) { s += 30; evidence = true }
+            if (coverClass.containsMatchIn(cls)) s += 8
+            if (coverUrl.containsMatchIn(url)) s += 8
+            if (generic.containsMatchIn(url.substringAfter("://", url))) s -= 30
+            if (w > 0 && h > 0) { if (h * 100 >= w * 115) s += 8 else if (w * 100 >= h * 130) s -= 15 }
+            if ((w in 1..99) || (h in 1..99)) s -= 20 else if (w >= 200 && h >= 200) s += 4
+            if (needsEvidence && !evidence) return          // une image de la page ne compte que si elle porte le titre de l'œuvre (une classe « cover » ne suffit pas : les autres œuvres en ont aussi)
+            val old = best[url]
+            if (old == null || s > old.score) best[url] = Ranked(url, s, evidence || old?.evidenced == true)
+        }
+        c.shared.forEachIndexed { i, u -> add(u, if (i == 0) 50 else 44) }
+        c.structured.forEach { add(it, 40) }
+        c.images.forEach { add(it.src, 10, it.alt, it.cls, it.w, it.h, needsEvidence = true) }
+        return best.values.filter { it.score >= MIN_SCORE }.sortedByDescending { it.score }
+    }
+
+    /** La meilleure image pour l'œuvre [title], ou null si rien ne convient. */
+    fun choose(c: CoverCandidates, title: String): String? = rank(c, title).firstOrNull()?.url
+
+    /** Page d'attente d'un site protégé (« Just a moment… », « Un instant… ») : elle n'annonce rien de fiable et ne se résout pas sans une personne. */
+    fun looksLikeChallenge(pageTitle: String): Boolean =
+        Regex("(?i)(just a moment|un instant|attention required|checking your browser|verifying you are human|vérification|cloudflare|ddos|access denied|accès refusé)").containsMatchIn(pageTitle)
 
     /**
      * Pages où chercher l'illustration d'une œuvre, d'après les adresses lues : d'abord les pages de l'œuvre elles-mêmes (celles qui ne sont pas des chapitres),
@@ -60,6 +122,9 @@ object CoverPick {
 
     /** Une fois téléchargée : assez grande et pas démesurément large ou haute (un logo, un bandeau de publicité, un pixel). */
     fun plausible(width: Int, height: Int): Boolean = width >= 80 && height >= 80 && width.toFloat() / height in 0.2f..4.0f
+
+    /** Une illustration d'œuvre est en hauteur ou carrée : une image large n'est gardée que si son adresse ou son texte alternatif porte le titre (un bandeau de site est large). */
+    fun fits(width: Int, height: Int, evidenced: Boolean): Boolean = plausible(width, height) && (evidenced || width * 100 <= height * 130)
 
     /** Nom de fichier stable d'une œuvre (la clé contient le site et des caractères qu'un nom de fichier n'aime pas). */
     fun fileKey(seriesKey: String): String {
@@ -85,10 +150,16 @@ class CoverBook(val records: List<CoverRecord> = emptyList(), val banned: Set<St
     fun has(key: String): Boolean = byKey[key]?.ok == true
     fun urlOf(key: String): String? = byKey[key]?.takeIf { it.ok }?.url
 
-    /** À chercher : jamais essayée, ou essayée sans succès il y a longtemps et pas trop souvent. */
+    /** À chercher : jamais essayée, ou essayée sans succès depuis assez longtemps et pas trop souvent (d'abord vite : le site ou le réseau n'était peut-être pas prêt). */
     fun wanted(key: String, now: Long): Boolean {
         val r = byKey[key] ?: return true
-        return !r.ok && r.tries < MAX_TRIES && now - r.lastTry >= RETRY_MS
+        return !r.ok && r.tries < MAX_TRIES && now - r.lastTry >= retryAfter(r.tries)
+    }
+
+    /** Une œuvre qu'on avait renoncé à chercher, ou dont l'essai est trop récent, est de nouveau cherchée tout de suite (demande de l'utilisateur) ; son illustration trouvée, elle, reste. */
+    fun again(key: String): CoverBook {
+        val r = byKey[key] ?: return this
+        return if (r.ok) this else CoverBook(records.filter { it.key != key }, banned)
     }
 
     /** Une œuvre se reconnaît à son titre (la clé est « site|titre ») : la même œuvre sur deux adresses du même site garde sa même image. */
@@ -97,10 +168,11 @@ class CoverBook(val records: List<CoverRecord> = emptyList(), val banned: Set<St
     /** Image trouvée pour [key] : gardée, sauf si c'est celle du site (voir plus haut). */
     fun saved(key: String, url: String, now: Long): Saved {
         if (url in banned) return Saved(failed(key, now), false, emptyList())
-        val same = records.filter { it.ok && it.url == url && it.key != key && titleOf(it.key) != titleOf(key) }.map { it.key }
+        val same = records.filter { it.ok && it.url == url && it.key != key && titleOf(it.key) != titleOf(key) && !CoverPick.sameTitle(titleOf(it.key), titleOf(key)) }.map { it.key }
         if (same.isEmpty()) return Saved(CoverBook(records.filter { it.key != key } + CoverRecord(key, url, true, 0, now), banned), true, emptyList())
         val gone = same.toSet() + key
-        val marks = gone.map { CoverRecord(it, "", false, MAX_TRIES, now) }
+        // (ces œuvres seront cherchées de nouveau un peu plus tard : l'adresse bannie est alors écartée et une autre image peut convenir)
+        val marks = gone.map { CoverRecord(it, "", false, 1, now) }
         return Saved(CoverBook(records.filter { it.key !in gone } + marks, banned + url), false, same)
     }
 
@@ -119,8 +191,16 @@ class CoverBook(val records: List<CoverRecord> = emptyList(), val banned: Set<St
     }
 
     companion object {
-        const val MAX_TRIES = 5
-        const val RETRY_MS = 12L * 3600_000L
+        const val MAX_TRIES = 8
+
+        /** Attente avant le prochain essai, selon le nombre d'essais ratés : 10 min, 30 min, 2 h, 6 h, puis un jour. */
+        fun retryAfter(tries: Int): Long = when {
+            tries <= 1 -> 10L * 60_000L
+            tries == 2 -> 30L * 60_000L
+            tries == 3 -> 2L * 3600_000L
+            tries == 4 -> 6L * 3600_000L
+            else -> 24L * 3600_000L
+        }
 
         private fun esc(s: String) = s.replace("\\", "\\\\").replace("\t", "\\t").replace("\n", "\\n").replace("\r", "")
         private fun unesc(s: String): String {
