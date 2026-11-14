@@ -189,7 +189,7 @@ fun BrowserScreen(graph: AppGraph) {
             if (quick) QuickSettings(graph) { quick = false }
             if (ignoreDialog) {
                 val target = c.peekTarget
-                if (target == null) ignoreDialog = false
+                if (target == null) LaunchedEffect(Unit) { ignoreDialog = false }      // la proposition a disparu entre-temps (autre page) : la fenêtre se referme
                 else AlertDialog(
                     onDismissRequest = { ignoreDialog = false; c.peekTarget = null },
                     title = { Text("Ne plus traduire…") },

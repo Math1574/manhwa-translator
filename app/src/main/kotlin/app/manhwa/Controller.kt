@@ -911,7 +911,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         synchronized(recentBytes) { recentBytes[c.src] = bytes }
         val imageH = if (c.naturalH > 0) c.naturalH else boundsHeight(bytes)
         val nextTakes = !testNoSeam && Seams.nextTakesOver(c.nextH)
-        val ctxWanted = if (testNoSeam || c.prevSrc == null || c.prevId == null) 0 else Seams.windowContext(imageH, c.prevH.takeIf { it > 0 })
+        // (une image ignorée du dessus, bandeau de début de chapitre par exemple, ne sert pas de contexte : son texte ne doit pas être lu avec la page)
+        val ctxWanted = if (testNoSeam || c.prevSrc == null || c.prevId == null || c.prevId?.let { skipped.containsKey(it) } == true) 0 else Seams.windowContext(imageH, c.prevH.takeIf { it > 0 })
         val window: SeamWindow? = if (ctxWanted > 0) {
             runStage[c.id] = "assemblage avec l'image du dessus"
             val prevSrc = c.prevSrc!!; val prevId = c.prevId!!
