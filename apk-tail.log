@@ -23,8 +23,8 @@ Solution: Please update the Gradle version to at least Gradle 8.14.4.
 > Task :app:mapDebugSourceSetPaths
 > Task :app:generateDebugResources
 > Task :app:packageDebugResources
-> Task :app:mergeDebugResources
 > Task :app:createDebugCompatibleScreenManifests
+> Task :app:mergeDebugResources
 > Task :app:extractDeepLinksDebug
 > Task :app:parseDebugLocalResources
 > Task :app:processDebugMainManifest
@@ -39,9 +39,9 @@ Solution: Please update the Gradle version to at least Gradle 8.14.4.
 > Task :app:desugarDebugFileDependencies
 > Task :app:mergeDebugJniLibFolders
 > Task :app:validateSigningDebug
-> Task :app:checkDebugDuplicateClasses
 > Task :app:writeDebugAppMetadata
 > Task :app:writeDebugSigningConfigVersions
+> Task :app:checkDebugDuplicateClasses
 > Task :app:compressDebugAssets
 > Task :app:mergeExtDexDebug
 > Task :core:compileKotlin
@@ -82,16 +82,16 @@ w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kot
 
 > Task :app:compileDebugJavaWithJavac
 > Task :app:dexBuilderDebug
-> Task :app:mergeDebugGlobalSynthetics
 > Task :app:processDebugJavaRes
+> Task :app:mergeDebugGlobalSynthetics
 > Task :app:mergeProjectDexDebug
 > Task :app:mergeDebugJavaResource
 > Task :app:packageDebug
 > Task :app:createDebugApkListingFileRedirect
 > Task :app:assembleDebug
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_4-1794621425009.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_4-1794621876492.json
 
-BUILD SUCCESSFUL in 1m 24s
+BUILD SUCCESSFUL in 1m 31s
 39 actionable tasks: 39 executed
 To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.10.2/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
 Daemon will be stopped at the end of the build 
@@ -137,8 +137,8 @@ Solution: Please update the Gradle version to at least Gradle 8.14.4.
 > Task :app:compileDebugShaders NO-SOURCE
 > Task :app:generateDebugAssets UP-TO-DATE
 > Task :app:mergeDebugAssets
-> Task :app:desugarDebugFileDependencies UP-TO-DATE
 > Task :app:compressDebugAssets
+> Task :app:desugarDebugFileDependencies UP-TO-DATE
 > Task :app:dexBuilderDebug UP-TO-DATE
 > Task :app:mergeDebugGlobalSynthetics UP-TO-DATE
 > Task :app:processDebugJavaRes UP-TO-DATE
@@ -156,7 +156,7 @@ Solution: Please update the Gradle version to at least Gradle 8.14.4.
 > Task :app:packageDebug
 > Task :app:createDebugApkListingFileRedirect UP-TO-DATE
 > Task :app:assembleDebug
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_5-1794621509034.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_5-1794621965888.json
 
-BUILD SUCCESSFUL in 11s
+BUILD SUCCESSFUL in 12s
 39 actionable tasks: 3 executed, 36 up-to-date
