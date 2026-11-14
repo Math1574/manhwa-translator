@@ -251,12 +251,14 @@ orb_on=$(has nav 'Traduction activ')
 { holdt nav "Traduction activ" || holdt nav "Traduire"; }; sleep 1.5; uidump qs; shot ui 12
 chk "réglages rapides : un appui long sur le bouton rond ouvre le panneau" $(has qs 'glages rapides')
 chk "réglages rapides : langue, taille du texte, onomatopées et retraduction y sont" $([ "$(has qs 'Langue du texte')" = 1 ] && [ "$(has qs 'Traduire vers')" = 1 ] && [ "$(has qs 'Taille du texte')" = 1 ] && [ "$(has qs 'onomatop')" = 1 ] && [ "$(has qs 'Retraduire la page')" = 1 ] && echo 1 || echo 0)
-chk "réglages rapides : l'appui long ne bascule pas la traduction" $([ "$(has qs 'Traduction activ')" = "$orb_on" ] && echo 1 || echo 0)
 if [ "$(has qs 'glages rapides')" = 1 ]; then
   tapt qs "=Coréen" 1; sleep 1
   adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump qs2
+  # le bouton rond est caché sous le panneau tant qu'il est ouvert : son état se compare une fois le panneau refermé
+  chk "réglages rapides : l'appui long ne bascule pas la traduction (même état du bouton avant et après)" $([ "$(has qs2 'Traduction activ')" = "$orb_on" ] && echo 1 || echo 0)
   chk "réglages rapides : le retour referme le panneau, la page reste affichée" $([ "$(hasnot qs2 'glages rapides')" = 1 ] && [ "$(has qs2 'Biblioth')" = 1 ] && echo 1 || echo 0)
 else
+  chk "réglages rapides : l'appui long ne bascule pas la traduction (même état du bouton avant et après)" 0
   chk "réglages rapides : le retour referme le panneau, la page reste affichée" 0
 fi
 tapt nav "=Bibliothèque" 1; sleep 2; uidump lib; shot ui 2
@@ -274,7 +276,7 @@ hs() { if [ "$(has set "$1")" = 1 ] || [ "$(has setb "$1")" = 1 ]; then echo 1; 
 chk "réglages : la page « Textes et images ignorés » est proposée à l'accueil" $(hs 'Textes et images ignor')
 chk "réglages : une carte par thème" $([ "$(hs 'Reconnaissance du texte')" = 1 ] && [ "$(hs 'Navigation')" = 1 ] && [ "$(hs 'Donn')" = 1 ] && [ "$(hs 'Glossaire')" = 1 ] && [ "$(hs 'Mod.*les de traduction')" = 1 ] && [ "$(hs 'Avanc')" = 1 ] && echo 1 || echo 0)
 chk "réglages rapides : la langue choisie dans le panneau est enregistrée (résumé de Réglages)" $(has set 'Cor[^"]*Fran[^"]*ML Kit')
-chk "réglages : champ de recherche, carte de mise à jour et numéro de version sur l'accueil" $([ "$(has set 'Rechercher un r.*glage')" = 1 ] && [ "$(has set 'Mise .*jour de')" = 1 ] && [ "$(has set 'build [0-9]')" = 1 ] && echo 1 || echo 0)
+chk "réglages : champ de recherche, carte de mise à jour et numéro de version sur l'accueil" $([ "$(has set 'widget.EditText')" = 1 ] && [ "$(has set 'Mise .*jour de')" = 1 ] && [ "$(has set 'build [0-9]')" = 1 ] && echo 1 || echo 0)
 tapt set "=Traduction" 1 top; sleep 2; uidump settr
 chk "réglages : la carte Traduction ouvre ses options (langues)" $(has settr 'Langue du texte')
 tapt settr "=Anglais" 1 top; sleep 1
@@ -289,19 +291,19 @@ tapt setap "=Hibou savant" 1; sleep 1.5; uidump setap2; shot ui 8
 chk "réglages : choisir une autre mascotte met à jour sa présentation" $(has setap2 'Hibou savant : il relit')
 # recherche dans les réglages : un résultat ouvre la page Avancé ; un second mène à un groupe du bas de la page, vers lequel elle doit défiler
 adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump set4
-tapt set4 "Rechercher un r" 1; sleep 1; adb shell input text gpu; sleep 2; uidump srch; shot ui 9
+tapt set4 "@EditText" 1; sleep 1; adb shell input text gpu; sleep 2; uidump srch; shot ui 9
 chk "réglages : la recherche « gpu » propose l'accélération GPU, rangée dans Avancé" $([ "$(has srch 'GPU')" = 1 ] && [ "$(has srch 'Avanc')" = 1 ] && echo 1 || echo 0)
 tapt srch "=Accélération GPU (expérimental)" 1; sleep 3; uidump adv; shot ui 10
 chk "réglages : un résultat de recherche ouvre la page Avancé" $([ "$(has adv 'Tester CPU')" = 1 ] && echo 1 || echo 0)
 adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump set5
 tapt set5 "Effacer la recherche" 1; sleep 1; uidump set6
-tapt set6 "Rechercher un r" 1; sleep 1; adb shell input text filtres; sleep 2; uidump srch2
+tapt set6 "@EditText" 1; sleep 1; adb shell input text filtres; sleep 2; uidump srch2
 tapt srch2 "=Listes de filtres" 1; sleep 3; uidump adv2; shot ui 11
 chk "réglages : la recherche fait défiler la page jusqu'au groupe trouvé (bas de la page Avancé)" $([ "$(has adv2 'Voir le journal')" = 1 ] && echo 1 || echo 0)
 # page « Textes et images ignorés » : atteinte par la recherche, elle liste la règle posée en lisant (texte, toutes les œuvres) et permet de la retirer
 adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump set7
 tapt set7 "Effacer la recherche" 1; sleep 1; uidump set8
-tapt set8 "Rechercher un r" 1; sleep 1; adb shell input text ignor; sleep 2; uidump srch3
+tapt set8 "@EditText" 1; sleep 1; adb shell input text ignor; sleep 2; uidump srch3
 tapt srch3 "=Textes et images ignorés" 1; sleep 2.5; uidump ign1; shot ui 22
 chk "ignorés : la recherche « ignor » ouvre la page « Textes et images ignorés »" $([ "$(has ign1 'Aucune image ignor')" = 1 ] && echo 1 || echo 0)
 chk "ignorés : la règle posée en lisant (toutes les œuvres) y est listée avec « Retirer »" $([ "$(has ign1 'Toutes les [^ ]*uvres')" = 1 ] && [ "$(has ign1 'Retirer')" = 1 ] && echo 1 || echo 0)

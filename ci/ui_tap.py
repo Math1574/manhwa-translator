@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """Centre du n-ième nœud (texte ou description) correspondant au motif, d'après un export uiautomator : affiche « x y », sinon code de sortie 1.
-Usage : ui_tap.py export.xml motif [n] [top]   — motif préfixé de « = » : égalité exacte ; « top » : les nœuds sont classés du plus haut au plus bas de l'écran."""
+Usage : ui_tap.py export.xml motif [n] [top]   — motif préfixé de « = » : égalité exacte ; préfixé de « @ » : nœuds dont la classe contient le motif (ex. @EditText : un champ de saisie,
+dont le texte d'invite n'apparaît pas dans l'export) ; « top » : les nœuds sont classés du plus haut au plus bas de l'écran."""
 import re, sys
 import xml.etree.ElementTree as ET
 xml, pat = sys.argv[1], sys.argv[2]
 nth = int(sys.argv[3]) if len(sys.argv) > 3 else 1
 top = len(sys.argv) > 4 and sys.argv[4] == "top"
 exact = pat.startswith("=")
-pat = pat[1:].lower() if exact else pat.lower()
+byclass = pat.startswith("@")
+pat = pat[1:].lower() if (exact or byclass) else pat.lower()
 try:
     root = ET.parse(xml).getroot()
 except Exception:
@@ -15,7 +17,8 @@ except Exception:
 found = []
 for n in root.iter("node"):
     texts = [(n.get("text") or "").strip().lower(), (n.get("content-desc") or "").strip().lower()]
-    ok = any(t == pat for t in texts) if exact else any(pat in t for t in texts)
+    if byclass: ok = pat in (n.get("class") or "").lower()
+    else: ok = any(t == pat for t in texts) if exact else any(pat in t for t in texts)
     if not ok: continue
     m = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", n.get("bounds") or "")
     if not m: continue
