@@ -1,0 +1,12 @@
+Performing Streamed Install
+Success
+Physical size: 1080x2400
+[e2e 13:45:49] envoi du modèle gemma-4-E4B-it.litertlm sur l'émulateur
+total 3573792
+drwxrwxrwx 2 u0_a192 u0_a192       4096 2026-11-14 13:46 .
+drwxrwxrwx 3 u0_a192 u0_a192       4096 2026-11-14 13:46 ..
+-rw-rw-rw- 1 u0_a192 u0_a192 3659530240 2026-11-14 13:46 gemma-4-E4B-it.litertlm
+-rw-rw-rw- 1 u0_a192 u0_a192         64 2026-11-14 13:46 gemma-4-E4B-it.litertlm.ok
+[e2e 13:46:44] === banc d'essai de traduction : e4b (GEMMA_E4B, variantes v3o,v3co)
+[e2e 13:59:51] banc d'essai terminé : e4b (787 s)
+[e2e 13:59:51] toutes les scènes sont terminées
