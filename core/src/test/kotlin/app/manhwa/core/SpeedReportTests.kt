@@ -28,7 +28,13 @@ fun speedReportTests() {
     T.test("vitesse : texte qui change à cause de l'option → laissée désactivée") {
         val t = SpeedReport.describe(ReuseOutcome(7_000, 5_000, 4, 6, 6))
         T.ok(t.contains("Texte différent sur 2 ligne(s) sur 6."), t)
-        T.ok(t.endsWith("mieux vaut la laisser désactivée."), t)
+        T.ok(t.endsWith("active-la seulement si l'accélérée te paraît aussi bonne."), t)
+        val d = SpeedReport.describe(ReuseOutcome(7_000, 5_000, 2, 6, 6, diffs = listOf(
+            LineDiff("A", "a1", "a2"), LineDiff("B", "b1", "b2"), LineDiff("C", "c1", "c2"), LineDiff("D", "d1", "d2"), LineDiff("E", "e1", "e2"))))
+        T.ok(d.contains("• « A »\n   Normale : a1\n   Accélérée : a2") && d.contains("• « C »") && !d.contains("• « D »"), "trois lignes montrées au plus : $d")
+        T.ok(d.indexOf("• « A »") < d.indexOf("active-la seulement"), "les lignes précèdent la conclusion : $d")
+        val same = SpeedReport.describe(ReuseOutcome(7_000, 5_000, 6, 6, 6, diffs = listOf(LineDiff("A", "a1", "a2"))))
+        T.ok(!same.contains("• « A »"), "texte identique : aucune ligne montrée : $same")
     }
 
     T.test("vitesse : le modèle varie déjà sans l'option → comparaison indicative, à refaire") {
@@ -46,7 +52,7 @@ fun speedReportTests() {
         val none = SpeedReport.describe(ReuseOutcome(10_000, 6_000, 6, 6, 6, failed = 0, tries = 4))
         T.ok(!none.contains("a échoué") && none.endsWith("Gain net, texte identique : tu peux l'activer."), none)
         val changed = SpeedReport.describe(ReuseOutcome(10_000, 6_000, 4, 6, 6, failed = 3, tries = 4))
-        T.ok(changed.endsWith("Le texte change avec l'option : mieux vaut la laisser désactivée."), "le texte prime : $changed")
+        T.ok(changed.endsWith("active-la seulement si l'accélérée te paraît aussi bonne."), "le texte prime : $changed")
         val absurd = SpeedReport.describe(ReuseOutcome(10_000, 6_000, 6, 6, 6, failed = 9, tries = 2))
         T.ok(absurd.contains("a échoué 2 fois sur 2"), "échecs bornés par les essais : $absurd")
     }

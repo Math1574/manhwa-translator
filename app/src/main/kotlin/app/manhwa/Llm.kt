@@ -9,6 +9,7 @@ import app.manhwa.core.ConfirmationRequired
 import app.manhwa.core.GlossaryEntry
 import app.manhwa.core.InsufficientSpace
 import app.manhwa.core.ChapterMemory
+import app.manhwa.core.LineDiff
 import app.manhwa.core.LlmModels
 import app.manhwa.core.TranslationChecks
 import app.manhwa.core.LlmPrompt
@@ -341,7 +342,11 @@ class GemmaTranslator(
             val base = lines.indices.count { n1.out[it] == n2.out[it] }
             val normalMs = (n1.ms + n2.ms) / 2
             val fastMs = fast.map { it.ms }.average().toLong()
-            return ReuseCompareResult(ReuseOutcome(normalMs, fastMs, same, base, lines.size, failed, tries), "")
+            val diffs = lines.indices.mapNotNull { i ->
+                val other = fast.map { it.out[i] }.firstOrNull { it != n1.out[i] } ?: return@mapNotNull null
+                LineDiff(lines[i], n1.out[i].orEmpty(), other.orEmpty())
+            }
+            return ReuseCompareResult(ReuseOutcome(normalMs, fastMs, same, base, lines.size, failed, tries, diffs), "")
         } catch (t: Throwable) {
             return ReuseCompareResult(null, "Comparaison impossible : ${t.message?.lineSequence()?.firstOrNull { it.isNotBlank() }?.take(160) ?: t.javaClass.simpleName}")
         } finally {
