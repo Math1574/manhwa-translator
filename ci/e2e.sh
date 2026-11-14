@@ -265,7 +265,14 @@ chk "image ignorée : « Annuler » rétablit l'image (règle retirée, page de 
 # même geste, puis rétablissement par un appui long sur l'image ignorée (« Image ignorée · Rétablir »)
 appcmd peek; uidump ig8b; tapt ig8b "Ignorer ce texte" 1; sleep 1.5; uidump ig9b; tapt ig9b "Toute cette image" 1; sleep 2
 chk "image ignorée : la règle est de nouveau enregistrée et l'image n'est plus traduite" $([ "$(okst waitge ignImg 1 20)" = 1 ] && [ "$(okst waitge skipped 1 40)" = 1 ] && echo 1 || echo 0)
-appcmd peekempty; uidump ig10b; shot ui 25
+# la proposition peut tarder (fil principal occupé) : jusqu'à trois essais, avec l'état relevé à chaque échec pour comprendre
+for k in 1 2 3; do
+  appcmd peekempty; uidump ig10b
+  [ "$(has ig10b 'Image ignor[^ ]* · R[^ ]*tablir')" = 1 ] && break
+  say "image ignorée : proposition « Rétablir » absente (essai $k) ; état : $(appstate; cut -c1-330 $OUT/reports/state.json)"
+  sleep 3
+done
+shot ui 25
 chk "image ignorée : un appui long sur l'image propose de la rétablir" $([ "$(has ig10b 'Image ignor[^ ]* · R[^ ]*tablir')" = 1 ] && [ "$(hasnot ig10b 'Ajouter une traduction')" = 1 ] && echo 1 || echo 0)
 tapt ig10b "tablir" 1; sleep 1.5
 chk "image ignorée : « Rétablir » retire la règle et la page est de nouveau traduite" $([ "$(okst waitst ignImg 0 20)" = 1 ] && [ "$(okst waitst skipped 0 60)" = 1 ] && echo 1 || echo 0)

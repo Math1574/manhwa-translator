@@ -44,8 +44,8 @@ object TestHooks {
                     Thread.sleep(500)
                     if (!cmdFile.exists()) continue
                     val cmd = cmdFile.readText().trim()
+                    if (cmd.isEmpty()) continue      // fichier créé mais pas encore écrit : relu au tour suivant, sans le supprimer
                     cmdFile.delete()
-                    if (cmd.isEmpty()) continue
                     val arg = cmd.substringAfter(' ', "")
                     when (cmd.substringBefore(' ')) {
                         "peek" -> main.post { c.testPeek() }
@@ -69,10 +69,12 @@ object TestHooks {
         val c = graph.controller
         var blocks = 0; var hidden = 0; var edits = 0; var editTr = ""
         val ids = c.testWorkIds()
+        val keys = HashSet<String>()      // deux pages aux octets identiques partagent leurs corrections : on ne les compte qu'une fois
         for (id in ids) {
             val info = c.workInfo(id) ?: continue
             blocks += info.applied.page.blocks.size
             hidden += info.applied.editByBlock.values.count { it.hidden }
+            if (!keys.add(info.imageKey)) continue
             val list = graph.edits.forImage(info.imageKey)
             edits += list.size
             if (editTr.isEmpty()) editTr = list.firstNotNullOfOrNull { it.translation } ?: ""
@@ -80,6 +82,7 @@ object TestHooks {
         val o = JSONObject().put("t", System.currentTimeMillis()).put("undo", c.undoBanner != null).put("peek", c.peekTarget != null)
             .put("works", ids.size).put("blocks", blocks).put("hidden", hidden).put("edits", edits).put("editTr", editTr)
             .put("ign", graph.ignored.rules.texts.size).put("ignImg", graph.ignored.rules.images.size).put("skipped", c.testSkippedCount()).put("banner", c.undoBanner?.message ?: "").put("eraser", c.eraser)
+            .put("peekE", c.peekEmpty != null).put("peekT", c.peekTarget != null)
         val tmp = File(ctx.filesDir, "state.json.tmp"); tmp.writeText(o.toString()); tmp.renameTo(File(ctx.filesDir, "state.json"))
     }
 
