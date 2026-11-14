@@ -73,7 +73,7 @@ private class LibraryUi {
 }
 
 /**
- * Bibliothèque : œuvres lues (recherche, filtre En cours / Terminées / Favoris, tri), reprise de lecture, chapitres de chaque œuvre, pages enregistrées et historique.
+ * Bibliothèque : œuvres lues (recherche, filtre En cours / Terminées / Favoris, tri), chapitres de chaque œuvre, pages enregistrées et historique. La reprise de lecture est sur l'accueil.
  * [onOpen] reçoit l'adresse et l'avancement à reprendre (0 = depuis le début). Les titres sont toujours simples : l'œuvre et le chapitre, pas le titre brut de la page.
  */
 @Composable
@@ -134,34 +134,6 @@ private fun LibraryHome(graph: AppGraph, ui: LibraryUi, onOpenSeries: (String) -
                 }
             }
         } else {
-            val last = series.first()
-            item {
-                Entrance("resume", 0, seen) {
-                    Box(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp))
-                            .background(Brush.linearGradient(listOf(cs.primaryContainer, cs.secondaryContainer)))
-                            .clickable { onOpen(last.lastUrl, resumeAt(last.percent, lib.progressOf(last.lastUrl)?.done == true)) }
-                            .padding(20.dp),
-                    ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text("CONTINUER LA LECTURE", style = MaterialTheme.typography.labelMedium, color = cs.onPrimaryContainer.copy(alpha = 0.75f))
-                            Text(last.title, style = MaterialTheme.typography.headlineSmall, color = cs.onPrimaryContainer, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            Text(
-                                listOfNotNull(last.chapter, if (last.percent > 0) "${last.percent} %" else null, RelativeTime.fr(now, last.lastVisited)).joinToString(" · "),
-                                style = MaterialTheme.typography.bodyMedium, color = cs.onPrimaryContainer.copy(alpha = 0.85f),
-                            )
-                            if (last.percent > 0) {
-                                LinearProgressIndicator(
-                                    progress = { last.percent / 100f }, color = cs.tertiary, trackColor = Color.White.copy(alpha = 0.18f),
-                                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(6.dp).clip(CircleShape),
-                                )
-                            }
-                            Spacer(Modifier.height(6.dp))
-                            GradientButton("Reprendre", { onOpen(last.lastUrl, resumeAt(last.percent, lib.progressOf(last.lastUrl)?.done == true)) })
-                        }
-                    }
-                }
-            }
             item {
                 // recherche, tri (menu) et historique sur une seule ligne : la liste des œuvres reste en vue
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

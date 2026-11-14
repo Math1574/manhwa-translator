@@ -369,8 +369,8 @@ else
   chk "réglages rapides : le retour referme le panneau, la page reste affichée" 0
 fi
 tapt nav "=Bibliothèque" 1; sleep 2; uidump lib; shot ui 2
-chk "bibliothèque : l'œuvre est listée avec « Continuer la lecture »" $([ "$(has lib 'Test Series')" = 1 ] && [ "$(has lib 'Continuer la lecture')" = 1 ] && echo 1 || echo 0)
-tapt lib "=Test Series" 2 top; sleep 2; uidump series; shot ui 3
+chk "bibliothèque : l'œuvre est listée, sans carte « Continuer la lecture » (la reprise est sur l'accueil)" $([ "$(has lib 'Test Series')" = 1 ] && [ "$(hasnot lib 'Continuer la lecture')" = 1 ] && echo 1 || echo 0)
+tapt lib "=Test Series" 1; sleep 2; uidump series; shot ui 3
 chk "fiche d'une œuvre : liste des chapitres" $(has series 'Chapitres')
 chk "fiche d'une œuvre : page de l'œuvre et reprise proposées" $([ "$(has series 'Page de l')" = 1 ] && [ "$(has series 'Continuer')$(has series 'Reprendre')" != "00" ] && echo 1 || echo 0)
 adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump lib2
@@ -504,6 +504,33 @@ uidump cc3; shot ui 35
 chk "centre de corrections : la liste des corrections se vide" $([ "$(has cc3 'Aucune correction')" = 1 ] && echo 1 || echo 0)
 tapt cc3 "=Retirer" 1; sleep 1.5; appstate
 chk "centre de corrections : « Retirer » oublie la traduction retenue sans correction" $([ "$(stv fixes)" = 0 ] && echo 1 || echo 0)
+# étape 12 : accueil — dernière lecture avec « Reprendre », œuvres en cours avec leur avancement, tuiles des sites ; rien de la bibliothèque (ni recherche, ni tri, ni statuts).
+# Dernier bloc d'interface : la commande « home » vide la page ouverte, les blocs qui s'appuient sur les pages en mémoire sont donc faits avant.
+uidump hm0; tapt hm0 "=Lecture" 1; sleep 1.5; appcmd home; sleep 1.5; uidump hm1; shot ui 50
+chk "accueil : l'écran d'accueil remplace la page (aucune page ouverte)" $(okst waitst home True 8)
+chk "accueil : « Dernière lecture » propose de reprendre l'œuvre lue en dernier" $([ "$(has hm1 'Derni[^ ]*re lecture')" = 1 ] && [ "$(hasx hm1 '=Test Series')" = 1 ] && { [ "$(hasx hm1 '=Reprendre')" = 1 ] || [ "$(hasx hm1 '=Chapitre suivant')" = 1 ]; } && echo 1 || echo 0)
+chk "accueil : les langues de la traduction sont rappelées" $(has hm1 'Anglais')
+chk "accueil : les autres œuvres en cours, avec leur avancement, sans l'œuvre terminée" $([ "$(hasx hm1 '=EN COURS')" = 1 ] && [ "$(hasx hm1 '=Zulu Quest')" = 1 ] && [ "$(hasx hm1 '=Mid Tale')" = 1 ] && [ "$(has hm1 'Chapitre 3')" = 1 ] && [ "$(hasnot hm1 'Alpha Saga')" = 1 ] && echo 1 || echo 0)
+chk "accueil : ce n'est pas la bibliothèque (ni recherche, ni tri, ni pastilles de statut)" $([ "$(hasnot hm1 'widget.EditText')" = 1 ] && [ "$(hasnot hm1 'Rechercher une')" = 1 ] && [ "$(hasx hm1 '=Trier')" = 0 ] && [ "$(hasnot hm1 'Termin[^ ]*es (')" = 1 ] && echo 1 || echo 0)
+adb shell input swipe 540 1700 540 600 400; sleep 1; uidump hm2; shot ui 51
+chk "accueil : tuiles des sites lus (nom, nombre d'œuvres) et tuile pour en ajouter" $([ "$(hasx hm2 '=VOS SITES')" = 1 ] && [ "$(hasx hm2 '=Seed')" = 1 ] && [ "$(has hm2 '3 [^ ]*uvres')" = 1 ] && [ "$(has hm2 '10[.]0[.]2[.]2')" = 1 ] && [ "$(hasx hm2 '=Ajouter')" = 1 ] && echo 1 || echo 0)
+# « Ajouter » : la barre d'adresse s'ouvre en saisie ; le site saisi est épinglé à l'accueil (il n'a pas besoin d'exister : seule l'adresse compte)
+tapt hm2 "=Ajouter" 1; sleep 1.5; uidump hm3; shot ui 52
+chk "accueil : « Ajouter » ouvre la saisie d'une adresse" $([ "$(has hm3 'widget.EditText')" = 1 ] && [ "$(has hm3 'Adresse du site')" = 1 ] && echo 1 || echo 0)
+adb shell input text pin.test; sleep 1; adb shell input keyevent KEYCODE_ENTER; sleep 3
+chk "accueil : le site saisi depuis « Ajouter » est épinglé" $(okst waitst homePinned 1 10)
+appcmd home; sleep 1.5; adb shell input swipe 540 1700 540 600 400; sleep 1; uidump hm4; shot ui 53
+chk "accueil : la tuile du site épinglé est affichée (épinglée, sans œuvre lue)" $([ "$(hasx hm4 '=Pin')" = 1 ] && [ "$(has hm4 'pingl')" = 1 ] && echo 1 || echo 0)
+holdt hm4 "=Pin" 1; sleep 1.5; uidump hm5; shot ui 54
+chk "accueil : un appui long sur une tuile propose de la retirer de l'accueil" $(hasx hm5 "=Retirer de l'accueil")
+tapt hm5 "=Retirer de l'accueil" 1; sleep 1.5; uidump hm6
+chk "accueil : « Retirer de l'accueil » enlève la tuile et son épingle" $([ "$(okst waitst homeHidden 1 10)" = 1 ] && [ "$(stv homePinned)" = 0 ] && [ "$(hasx hm6 '=Pin')" = 0 ] && echo 1 || echo 0)
+chk "accueil : « Rétablir les sites retirés » est proposé" $(has hm6 'tablir les sites retir')
+tapt hm6 "tablir les sites retir" 1; sleep 1.5
+chk "accueil : « Rétablir les sites retirés » remet la liste" $(okst waitst homeHidden 0 10)
+adb shell input swipe 540 600 540 1900 400; sleep 1; uidump hm7
+if [ "$(hasx hm7 '=Reprendre')" = 1 ]; then tapt hm7 "=Reprendre" 1; else tapt hm7 "=Chapitre suivant" 1; fi; sleep 5; uidump hm8; shot ui 55
+chk "accueil : « Reprendre » ouvre la page et l'accueil se retire" $([ "$(okst waitst home False 15)" = 1 ] && [ "$(hasnot hm8 'Derni[^ ]*re lecture')" = 1 ] && echo 1 || echo 0)
 # diagnostic : plantages ou blocages système pendant le scénario
 adb logcat -d -v brief 2>/dev/null | grep -iE "ANR in|Application Not Responding|FATAL EXCEPTION|AndroidRuntime|Process .* has died|am_crash|am_anr" | tail -30 > $OUT/reports/ui_logcat.txt
 echo "  [journal système] $(wc -l < $OUT/reports/ui_logcat.txt) ligne(s) d'ANR ou de plantage" | tee -a $OUT/run.log

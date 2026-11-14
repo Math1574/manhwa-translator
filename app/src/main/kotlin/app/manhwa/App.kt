@@ -73,6 +73,8 @@ class AppGraph(ctx: Context) {
     val glossary = GlossaryStore(File(ctx.filesDir, "glossary.tsv"))
     val models = TranslationModels(ctx)
     val library = LibraryStore(File(ctx.filesDir, "library.tsv"))
+    /** Icônes des sites lus, pour les tuiles de l'accueil. */
+    val favicons = FaviconStore(File(ctx.filesDir, "favicons"))
     val journal = TranslationJournal(File(ctx.filesDir, "journal.jsonl"))
     /** Corrections manuelles des textes (zone, texte, position, taille, police), par image. */
     val edits = EditStore(File(ctx.filesDir, "edits.txt"), originsFile = File(ctx.filesDir, "edit_origins.txt"))

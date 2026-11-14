@@ -131,7 +131,7 @@ private fun Root(graph: AppGraph) {
     ) { pad ->
         Box(Modifier.fillMaxSize().padding(pad)) {
             // Le navigateur reste toujours composé pour conserver la page ouverte quand on change d'onglet.
-            BrowserScreen(graph)
+            BrowserScreen(graph, onLibrary = { tab = 1 })
             AnimatedVisibility(
                 visible = tab != 0,
                 enter = fadeIn(tween(190)) + slideInVertically(tween(260)) { it / 28 },
