@@ -1,0 +1,28 @@
+11-14 14:08:25.199 13085 13201 I tflite  : Initialized TensorFlow Lite runtime.
+11-14 14:08:25.229 13085 13201 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+11-14 14:08:25.229 13085 13201 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 14:08:25.238 13085 13201 I native  : I0000 00:00:1794665305.238507   13201 tflite_detector_client_with_shape_cache.cc:105] Caching size: 10
+11-14 14:08:25.286 13085 13201 I native  : I0000 00:00:1794665305.286502   13201 tflite_lstm_client_base.cc:371] Resizing interpreter pool to 4
+11-14 14:08:25.296 13085 13215 I native  : I0000 00:00:1794665305.296568   13215 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/conv_model.fb
+11-14 14:08:25.297 13085 13215 I native  : I0000 00:00:1794665305.297175   13215 tflite_model_pooled_runner.cc:636] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/lstm_model.fb
+11-14 14:08:25.297 13085 13214 I native  : I0000 00:00:1794665305.290295   13214 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Kore_ctc/optical/conv_model.fb
+11-14 14:08:25.302 13085 13214 I native  : I0000 00:00:1794665305.302573   13214 tflite_model_pooled_runner.cc:636] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Kore_ctc/optical/lstm_model.fb
+11-14 14:08:25.304 13085 13201 I native  : I0000 00:00:1794665305.299268   13201 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_splitting_custom_ops/model.tflite
+11-14 14:08:25.307 13085 13201 I native  : I0000 00:00:1794665305.307209   13201 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-14 14:08:25.307 13085 13201 I native  : I0000 00:00:1794665305.307463   13201 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_clustering_custom_ops/model.tflite
+11-14 14:08:25.307 13085 13201 I native  : I0000 00:00:1794665305.307592   13201 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-14 14:08:25.313 13085 13214 I native  : I0000 00:00:1794665305.313314   13214 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 4
+11-14 14:08:25.323 13085 13215 I native  : I0000 00:00:1794665305.323493   13215 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 4
+11-14 14:08:25.376 13085 13201 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 14:08:26.505 13085 13201 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 14:08:26.706 13085 13201 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 14:08:26.864 13085 13201 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 14:08:27.334 13085 13201 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 14:08:27.391 13085 13201 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 14:08:27.454 13085 13201 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 14:08:27.705 13085 13201 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 14:08:28.347 13085 13201 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 14:08:34.855 13085 13267 I tflite  : Initialized TensorFlow Lite runtime.
+11-14 14:08:34.855 13085 13267 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+11-14 14:08:38.815 12457 13272 I ChimeraConfigurator: Detected pending changes for urgent request: [vision.ocr]. Pending module sets: container:2318189190800+mlkit.ocr.common,tflite_dynamite:2640104055100800+tflite_dynamite,vision_ocr:2316024025100000+vision.ocr
+11-14 14:08:48.682 13085 13118 I MTTEST  : REPORT_READY report.json
