@@ -123,7 +123,14 @@ class GemmaTranslator(
     /** Vrai quand le lancement précédent s'est arrêté en pleine copie de conversation : l'essai doit être désactivé. */
     @Volatile var reuseCrashed: Boolean = false
         private set
-    private var reuseFallbacks = 0
+    /** Dernière erreur complète du moteur lors d'une copie ratée (pour le banc d'essai) ; [reuseStatus] n'en garde que la première ligne. */
+    @Volatile var reuseLastError: String = ""
+        private set
+    private var reuseFallbacks = 0           // copies ratées depuis le début de la comparaison / du banc d'essai
+    private var reuseCalls = 0               // demandes passées par la copie avec le réglage actif
+    private var reuseFails = 0
+    private var reuseRun = 0                 // échecs d'affilée
+    private var reuseOffSession = false      // coupée jusqu'au prochain lancement après trop d'échecs
     private var primed: Conversation? = null
     private var primedKey = ""
     private val reuseGuard = File(ctx.filesDir, "reuse_probe.state")
@@ -236,15 +243,32 @@ class GemmaTranslator(
         val sampler = SamplerConfig(topK = 20, topP = 0.9, temperature = 0.15)
         val maxOut = LlmPrompt.maxOutputTokens(texts)
         val prompt = LlmPrompt.user(texts, history.toList(), glossary, series, memory.namesToKeep())
-        // mode accéléré (essai) : en cas d'échec, quelle qu'en soit la raison, on retombe sur le chemin normal ci-dessous
-        val reused: String? = if (reuseOn()) { try { askReusing(eng, system, sampler, maxOut, prompt) } catch (t: Throwable) { reuseFailed(t); null } } else null
+        // mode accéléré (essai) : en cas d'échec, quelle qu'en soit la raison (erreur du moteur, réponse illisible), on retombe sur le chemin normal ci-dessous
+        var reused: String? = null
+        if (reuseOn()) {
+            try {
+                val r = askReusing(eng, system, sampler, maxOut, prompt)
+                if (texts.isNotEmpty() && LlmPrompt.parse(r, texts.size).all { it == null }) throw IllegalStateException("réponse illisible de la copie")
+                reuseNoted(true); reused = r
+            } catch (t: Throwable) { reuseFailed(t) }
+        }
         val reply: String = reused ?: eng.createConversation(ConversationConfig(systemInstruction = Contents.of(system), samplerConfig = sampler, maxOutputToken = maxOut)).use { conv ->
             withWatchdog(conv) { textOf(conv.sendMessage(prompt)) }
         }
         return LlmPrompt.parse(reply, texts.size).toMutableList()
     }
 
-    private fun reuseOn(): Boolean = reuseOverride ?: settings().fastLlm
+    /** Le réglage décide, sauf si la comparaison ou le banc d'essai l'impose ; trop d'échecs coupent le réglage jusqu'au prochain lancement. */
+    private fun reuseOn(): Boolean = reuseOverride ?: (settings().fastLlm && !reuseOffSession)
+
+    /** Comptage des demandes passées par la copie avec le réglage actif (la comparaison et le banc d'essai comptent à part) : trois échecs d'affilée, ou plus d'un tiers d'échecs sur huit demandes ou plus, coupent l'essai. */
+    private fun reuseNoted(ok: Boolean) {
+        if (reuseOverride != null) return
+        reuseCalls++
+        if (ok) { reuseRun = 0; return }
+        reuseFails++; reuseRun++
+        if (reuseRun >= 3 || (reuseCalls >= 8 && reuseFails * 3 > reuseCalls)) reuseOffSession = true
+    }
 
     private fun dropPrimed() {
         try { primed?.close() } catch (_: Throwable) {}
@@ -252,8 +276,15 @@ class GemmaTranslator(
     }
 
     private fun reuseFailed(t: Throwable) {
-        dropPrimed(); reuseFallbacks++
-        reuseStatus = "La réutilisation des consignes a échoué sur ce téléphone (${t.message ?: t.javaClass.simpleName}) : la traduction normale est utilisée."
+        dropPrimed(); reuseFallbacks++; reuseNoted(false)
+        val full = t.message ?: t.javaClass.simpleName
+        reuseLastError = full
+        val why = full.lineSequence().firstOrNull { it.isNotBlank() }?.take(140) ?: t.javaClass.simpleName
+        reuseStatus = when {
+            reuseOverride != null -> "La copie des consignes a échoué : la traduction normale a pris le relais ($why)."
+            reuseOffSession -> "La copie des consignes a échoué trop souvent ($reuseFails fois sur $reuseCalls demandes) : l'essai est coupé jusqu'au prochain lancement de l'application ($why)."
+            else -> "La copie des consignes a échoué $reuseFails fois sur $reuseCalls demandes ; la traduction normale a pris le relais pour ces pages ($why)."
+        }
     }
 
     /**
@@ -276,8 +307,8 @@ class GemmaTranslator(
     class ReuseCompareResult(val outcome: ReuseOutcome?, val note: String)
 
     /**
-     * Comparaison sur le téléphone : les mêmes répliques traduites en mode normal (deux fois : chauffe, puis mesure) puis en mode accéléré (deux fois : préparation, puis vitesse de croisière).
-     * Le dialogue du chapitre en cours n'est pas touché.
+     * Comparaison sur le téléphone, avec les mêmes répliques : une chauffe (non mesurée), deux mesures du mode normal, la préparation de la copie (non mesurée),
+     * puis trois mesures du mode accéléré, échecs compris (un essai raté est refait en mode normal et ce temps est compté). Le dialogue du chapitre en cours n'est pas touché.
      */
     @Synchronized fun compareReuse(): ReuseCompareResult {
         val s = settings()
@@ -286,29 +317,36 @@ class GemmaTranslator(
         main.removeCallbacks(releaseTask)
         val savedHistory = history.toList(); history.clear()
         val savedOverride = reuseOverride
-        reuseFallbacks = 0
+        reuseFallbacks = 0; reuseStatus = ""
         try {
             val eng = ensureEngine(spec, s.useGpu, vision = visionReady && s.autoReread)
             val lines = benchLines
-            fun once(reuse: Boolean): Pair<List<String?>, Long> {
+            class Run(val out: List<String?>, val ms: Long, val fell: Boolean)
+            fun once(reuse: Boolean): Run {
                 reuseOverride = reuse
+                val before = reuseFallbacks
                 val t0 = System.currentTimeMillis()
                 val out = ask(eng, lines, "en", "fr", emptyList(), series = null)
-                return out to (System.currentTimeMillis() - t0)
+                return Run(out, System.currentTimeMillis() - t0, reuseFallbacks > before)
             }
-            val warm = once(false).first                 // chauffe (premiers calculs du moteur) : non mesurée
-            val (normal, tn) = once(false)
-            once(true)                                   // première fois : les consignes sont lues puis gardées
-            val (fast, tf) = once(true)                  // ensuite : la vitesse de croisière
-            if (reuseFallbacks > 0) return ReuseCompareResult(null, reuseStatus.ifEmpty { "La réutilisation des consignes n'a pas fonctionné." })
-            if (normal.any { it == null } || fast.any { it == null } || warm.any { it == null }) return ReuseCompareResult(null, "Le modèle a donné une réponse incomplète : refaites l'essai.")
-            val same = lines.indices.count { normal[it] == fast[it] }
-            val base = lines.indices.count { warm[it] == normal[it] }
-            return ReuseCompareResult(ReuseOutcome(tn, tf, same, base, lines.size), "")
+            once(false)                                   // chauffe (premiers calculs du moteur) : non mesurée
+            val n1 = once(false); val n2 = once(false)    // deux mesures du mode normal
+            val prime = once(true)                        // première fois : les consignes sont lues puis gardées (non mesurée)
+            val fast = List(3) { once(true) }             // vitesse de croisière
+            val all = listOf(n1, n2, prime) + fast
+            if (all.any { r -> r.out.any { it == null } }) return ReuseCompareResult(null, "Le modèle a donné une réponse incomplète : refais l'essai.")
+            val tries = 1 + fast.size
+            val failed = (if (prime.fell) 1 else 0) + fast.count { it.fell }
+            val same = lines.indices.count { i -> fast.all { it.out[i] == n1.out[i] } }
+            val base = lines.indices.count { n1.out[it] == n2.out[it] }
+            val normalMs = (n1.ms + n2.ms) / 2
+            val fastMs = fast.map { it.ms }.average().toLong()
+            return ReuseCompareResult(ReuseOutcome(normalMs, fastMs, same, base, lines.size, failed, tries), "")
         } catch (t: Throwable) {
-            return ReuseCompareResult(null, "Comparaison impossible : ${t.message ?: t.javaClass.simpleName}")
+            return ReuseCompareResult(null, "Comparaison impossible : ${t.message?.lineSequence()?.firstOrNull { it.isNotBlank() }?.take(160) ?: t.javaClass.simpleName}")
         } finally {
             reuseOverride = savedOverride
+            if (!settings().fastLlm) dropPrimed()         // l'essai est désactivé : la copie préparée n'a plus à occuper la mémoire
             history.clear(); history.addAll(savedHistory)
             main.postDelayed(releaseTask, IDLE_RELEASE_MS)
         }

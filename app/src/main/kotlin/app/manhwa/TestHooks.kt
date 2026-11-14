@@ -358,12 +358,18 @@ object TestHooks {
                 graph.llm.refresh()
                 val pages = JSONObject(File(ctx.filesDir, "lab.json").readText()).getJSONArray("pages")
                 for (v in variants) {
-                    if (v == "ab") {
-                        graph.gemma.reuseOverride = null; graph.gemma.specOverride = null
+                    if (v == "ab" || v == "abo") {
+                        // « ab » : la comparaison des réglages, avec le moteur tel que l'application le crée ; « abo » : même comparaison, décodage spéculatif coupé
+                        graph.gemma.reuseOverride = null
+                        val want = if (v == "abo") com.google.ai.edge.litertlm.SpeculativeDecodingMode.OFF else null
+                        if (want != graph.gemma.specOverride) { graph.gemma.specOverride = want; graph.gemma.release() }
+                        val one = JSONObject()
                         val r = graph.gemma.compareReuse()
-                        abJson.put("note", r.note)
-                        r.outcome?.let { o -> abJson.put("normalMs", o.normalMs).put("fastMs", o.fastMs).put("same", o.same).put("sameBaseline", o.sameBaseline).put("lines", o.lines).put("text", app.manhwa.core.SpeedReport.describe(o)) }
-                        notes.put("comparaison ab terminée")
+                        one.put("note", r.note)
+                        r.outcome?.let { o -> one.put("normalMs", o.normalMs).put("fastMs", o.fastMs).put("same", o.same).put("sameBaseline", o.sameBaseline).put("lines", o.lines).put("failed", o.failed).put("tries", o.tries).put("text", app.manhwa.core.SpeedReport.describe(o)) }
+                        one.put("backend", graph.gemma.backendLabel)
+                        abJson.put(v, one)
+                        notes.put("comparaison $v terminée")
                         File(ctx.filesDir, "lab_$name.partial.json").writeText(JSONObject().put("engine", engine.name).put("variants", variantsJson).put("ab", abJson).put("notes", notes).toString())
                         continue
                     }
@@ -392,6 +398,7 @@ object TestHooks {
             }
             graph.gemma.promptVariant = LlmPrompt.CURRENT; graph.gemma.refine = false; graph.gemma.reuseOverride = null; graph.gemma.specOverride = null
             notes.put("réutilisation : " + graph.gemma.reuseStatus)
+            if (graph.gemma.reuseLastError.isNotEmpty()) notes.put("dernière erreur du moteur lors d'une copie ratée : " + graph.gemma.reuseLastError)
             result.put("engine", engine.name).put("variants", variantsJson).put("ab", abJson).put("notes", notes)
             val tmp = File(ctx.filesDir, "lab_$name.json.tmp"); tmp.writeText(result.toString()); tmp.renameTo(File(ctx.filesDir, "lab_$name.json"))
             Log.i(TAG, "REPORT_READY lab_$name.json")

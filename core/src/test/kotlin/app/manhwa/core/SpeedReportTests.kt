@@ -37,6 +37,20 @@ fun speedReportTests() {
         T.ok(t.endsWith("refais l'essai pour en juger."), t)
     }
 
+    T.test("vitesse : des échecs de la copie sont dits ; trop d'échecs → laissée désactivée, un échec isolé avec un vrai gain → possible") {
+        val one = SpeedReport.describe(ReuseOutcome(10_000, 6_000, 6, 6, 6, failed = 1, tries = 4))
+        T.ok(one.contains("La copie des consignes a échoué 1 fois sur 4 (la traduction normale a pris le relais ; ce temps est compté)."), one)
+        T.ok(one.endsWith("Gain net malgré cet échec, texte identique : tu peux l'activer."), one)
+        val two = SpeedReport.describe(ReuseOutcome(10_000, 6_000, 6, 6, 6, failed = 1, tries = 2))
+        T.ok(two.endsWith("La copie échoue trop souvent sur ce téléphone : mieux vaut la laisser désactivée."), two)
+        val none = SpeedReport.describe(ReuseOutcome(10_000, 6_000, 6, 6, 6, failed = 0, tries = 4))
+        T.ok(!none.contains("a échoué") && none.endsWith("Gain net, texte identique : tu peux l'activer."), none)
+        val changed = SpeedReport.describe(ReuseOutcome(10_000, 6_000, 4, 6, 6, failed = 3, tries = 4))
+        T.ok(changed.endsWith("Le texte change avec l'option : mieux vaut la laisser désactivée."), "le texte prime : $changed")
+        val absurd = SpeedReport.describe(ReuseOutcome(10_000, 6_000, 6, 6, 6, failed = 9, tries = 2))
+        T.ok(absurd.contains("a échoué 2 fois sur 2"), "échecs bornés par les essais : $absurd")
+    }
+
     T.test("vitesse : valeurs absurdes ne plantent pas") {
         val t = SpeedReport.describe(ReuseOutcome(0, 0, 99, -4, 6))
         T.ok(t.contains("Texte identique") && t.contains("pas de différence nette"), t)
