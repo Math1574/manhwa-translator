@@ -1,3 +1,13 @@
+
+Welcome to Gradle 8.10.2!
+
+Here are the highlights of this release:
+ - Support for Java 23
+ - Faster configuration cache
+ - Better configuration cache reports
+
+For more details see https://docs.gradle.org/8.10.2/release-notes.html
+
 To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.10.2/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
 Daemon will be stopped at the end of the build 
 
@@ -23,29 +33,24 @@ Solution: Please update the Gradle version to at least Gradle 8.14.4.
 > Task :app:mapDebugSourceSetPaths
 > Task :app:generateDebugResources
 > Task :app:packageDebugResources
+> Task :app:mergeDebugResources
 > Task :app:createDebugCompatibleScreenManifests
 > Task :app:extractDeepLinksDebug
 > Task :app:parseDebugLocalResources
-> Task :app:mergeDebugResources
 > Task :app:processDebugMainManifest
 > Task :app:processDebugManifest
 > Task :app:javaPreCompileDebug
-> Task :app:processDebugManifestForPackage
 > Task :app:mergeDebugShaders
 > Task :app:compileDebugShaders NO-SOURCE
 > Task :app:generateDebugAssets UP-TO-DATE
-> Task :app:processDebugResources
 > Task :app:mergeDebugAssets
+> Task :app:processDebugManifestForPackage
 > Task :app:desugarDebugFileDependencies
+> Task :app:processDebugResources
 > Task :app:mergeDebugJniLibFolders
-> Task :app:validateSigningDebug
-> Task :app:writeDebugAppMetadata
 > Task :app:checkDebugDuplicateClasses
-> Task :app:writeDebugSigningConfigVersions
 > Task :app:compressDebugAssets
-> Task :core:compileKotlin
-> Task :app:mergeExtDexDebug
-
+> Task :app:validateSigningDebug
 > Task :core:compileKotlin
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/PageQueue.kt:31:24 This class is not recommended for use in Kotlin. Use 'kotlin.Any' instead.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/StyleMatcher.kt:167:47 Unnecessary non-null assertion (!!) on a non-null receiver of type 'LineInk'.
@@ -53,15 +58,17 @@ w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/ko
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/StyleMatcher.kt:258:56 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Group'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/TranslationBatcher.kt:39:24 This class is not recommended for use in Kotlin. Use 'kotlin.Any' instead.
 
+> Task :app:mergeExtDexDebug
 > Task :core:compileJava NO-SOURCE
 > Task :core:classes UP-TO-DATE
 > Task :core:jar
+> Task :app:mergeLibDexDebug
+> Task :app:writeDebugAppMetadata
+> Task :app:writeDebugSigningConfigVersions
 > Task :app:mergeDebugNativeLibs
 
 > Task :app:stripDebugDebugSymbols
 Unable to strip the following libraries, packaging them as they are: libandroidx.graphics.path.so, liblitertlm_jni.so, libmlkit_google_ocr_pipeline.so, libonnxruntime.so, libonnxruntime4j_jni.so, libtranslate_jni.so.
-
-> Task :app:mergeLibDexDebug
 
 > Task :app:compileDebugKotlin
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/BlockReading.kt:51:94 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
@@ -82,9 +89,9 @@ w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kot
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Screens.kt:273:37 Condition is always 'true'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Screens.kt:292:26 Condition is always 'true'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/SeamWindow.kt:33:92 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
-w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/SettingsScreens.kt:255:27 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
-w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/SettingsScreens.kt:386:35 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
-w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/SettingsScreens.kt:406:31 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/SettingsScreens.kt:254:27 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/SettingsScreens.kt:385:35 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/SettingsScreens.kt:405:31 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
 
 > Task :app:compileDebugJavaWithJavac
 > Task :app:dexBuilderDebug
@@ -95,9 +102,9 @@ w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kot
 > Task :app:packageDebug
 > Task :app:createDebugApkListingFileRedirect
 > Task :app:assembleDebug
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_4-1794663619082.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_4-1794666318625.json
 
-BUILD SUCCESSFUL in 1m 50s
+BUILD SUCCESSFUL in 2m 28s
 39 actionable tasks: 39 executed
 To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.10.2/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
 Daemon will be stopped at the end of the build 
@@ -143,8 +150,8 @@ Solution: Please update the Gradle version to at least Gradle 8.14.4.
 > Task :app:compileDebugShaders NO-SOURCE
 > Task :app:generateDebugAssets UP-TO-DATE
 > Task :app:mergeDebugAssets
-> Task :app:desugarDebugFileDependencies UP-TO-DATE
 > Task :app:compressDebugAssets
+> Task :app:desugarDebugFileDependencies UP-TO-DATE
 > Task :app:dexBuilderDebug UP-TO-DATE
 > Task :app:mergeDebugGlobalSynthetics UP-TO-DATE
 > Task :app:processDebugJavaRes UP-TO-DATE
@@ -162,7 +169,7 @@ Solution: Please update the Gradle version to at least Gradle 8.14.4.
 > Task :app:packageDebug
 > Task :app:createDebugApkListingFileRedirect UP-TO-DATE
 > Task :app:assembleDebug
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_5-1794663728639.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_5-1794666465587.json
 
-BUILD SUCCESSFUL in 13s
+BUILD SUCCESSFUL in 10s
 39 actionable tasks: 3 executed, 36 up-to-date
