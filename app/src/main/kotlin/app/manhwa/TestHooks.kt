@@ -33,7 +33,7 @@ object TestHooks {
      * erasetap (appui simple au centre de la première traduction visible), discard [off] (active ou coupe les textes écartés), disctap (appui simple au centre du premier cadre visible), testcache [off] (le résultat en cache est repris, pour vérifier la mise à jour ciblée à l'affichage),
      * termadd <terme>|<traduction>[|direct] (ajout d'un terme comme Réglages › Glossaire, avec aperçu ; « direct » : sans aperçu, comme « Garder tel quel »), termsave <terme>|<traduction> (comme « Enregistrer » de l'éditeur), termdel <terme>,
      * savetr <texte> (« Enregistrer » de l'éditeur avec une traduction écrite : correction rangée sous la page ouverte, traduction retenue), fixadd <texte>|<traduction> (traduction retenue sans correction),
-     * termconfirm, termcancel (boutons de l'aperçu), state (écrit seulement l'état).
+     * libseed (trois œuvres de démonstration dans la bibliothèque : Zulu Quest, Mid Tale, Alpha Saga), libsort <recent|title|read> (tri de la bibliothèque), termconfirm, termcancel (boutons de l'aperçu), state (écrit seulement l'état).
      */
     private fun startWatcher(ctx: Context, graph: AppGraph) {
         if (watching) return
@@ -67,6 +67,8 @@ object TestHooks {
                         "termdel" -> main.post { c.testTermDel(arg.trim()) }
                         "savetr" -> main.post { c.testSaveTranslation(arg) }
                         "fixadd" -> { val p = arg.split('|'); if (p.size >= 2) main.post { graph.glossary.addCorrection(p[0].trim(), p[1].trim()) } }
+                        "libseed" -> main.post { graph.library.testSeed() }
+                        "libsort" -> main.post { graph.settingsStore.update { it.copy(librarySort = arg.trim()) } }
                         "termconfirm" -> main.post { c.confirmTermPreview() }
                         "termcancel" -> main.post { c.cancelTermPreview() }
                     }
@@ -99,6 +101,7 @@ object TestHooks {
             .put("works", ids.size).put("blocks", blocks).put("hidden", hidden).put("edits", edits).put("editTr", editTr)
             .put("ign", graph.ignored.rules.texts.size).put("ignImg", graph.ignored.rules.images.size).put("skipped", c.testSkippedCount()).put("banner", c.undoBanner?.message ?: "").put("eraser", c.eraser)
             .put("peekE", c.peekEmpty != null).put("peekT", c.peekTarget != null).put("discMode", c.discardMode).put("disc", discCounts.first).put("discKnown", discCounts.second)
+            .put("libSeries", graph.library.library.series().size).put("libFinished", graph.library.library.series().count { it.finished }).put("libSort", graph.settingsStore.settings.librarySort)
             .put("corr", graph.edits.count()).put("corrOrig", graph.edits.originsSnapshot().size).put("fixes", graph.glossary.corrections.size)
             .put("terms", graph.glossary.terms.size + graph.glossary.seriesTerms.size).put("glossRev", graph.glossary.revision).put("refreshed", c.testRefreshed.get()).put("patched", c.testPatched.get())
             .put("tpv", c.termPreview?.let { if (it.computing) "computing" else "ready" } ?: "none").put("tpvRows", c.termPreview?.rows?.size ?: 0).put("tpvOthers", c.termPreview?.others ?: 0).put("trs", trs.sorted().joinToString("\u001f"))

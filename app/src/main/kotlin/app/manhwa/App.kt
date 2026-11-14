@@ -142,6 +142,26 @@ class LibraryStore(private val file: File) {
     fun markDone(url: String, done: Boolean) = commit { it.markDone(url, done, System.currentTimeMillis()) }
     fun toggleSeriesFavorite(key: String, title: String) = commit { it.toggleSeriesFavorite(key, title, System.currentTimeMillis()) }
     fun removeSeries(key: String) = commit { it.removeSeries(key) }
+    /** Marque une œuvre « terminée », ou la remet en cours. */
+    fun setFinished(key: String, finished: Boolean) = commit { it.setFinished(key, finished, System.currentTimeMillis()) }
+
+    /**
+     * Tests automatiques : trois œuvres de démonstration aux dates, à l'avancement et aux titres de page connus (Zulu Quest lue il y a 3 h, Mid Tale hier, Alpha Saga il y a 3 jours ;
+     * Alpha Saga a tous ses chapitres lus, avec un titre de page brut que la bibliothèque ne doit jamais afficher).
+     */
+    fun testSeed() {
+        val now = System.currentTimeMillis(); val hour = 3_600_000L; val day = 24 * hour
+        val zulu = "https://seed.test/comics/zulu-quest-a1b2c3/chapter/"
+        val alpha = "https://seed.test/comics/alpha-saga-d4e5f6/chapter/"
+        val mid = "https://seed.test/comics/mid-tale-0a1b2c/chapter/"
+        commit { l0 ->
+            var l = l0
+            for (i in 1..3) l = l.visit(zulu + i, "", now - 3 * hour - (3 - i) * 1000L)
+            for (i in 1..5) l = l.visit(alpha + i, "Alpha Saga - Chapter $i | Super Scans", now - 3 * day + i).markDone(alpha + i, true, now - 3 * day)
+            l = l.visit(mid + 1, "", now - day)
+            l.markDone(zulu + 1, true, now).markDone(zulu + 2, true, now)
+        }
+    }
 
     /** Avancement de la page ouverte : l'état est mis à jour tout de suite, le fichier au plus toutes les 4 s ([flush] à la fermeture). */
     fun progress(url: String, percent: Int) {

@@ -15,6 +15,8 @@ data class SeriesEntry(
     /** Avancement (0..100) de la dernière page ouverte. */
     val percent: Int = 0,
     val host: String = "",
+    /** Œuvre marquée « terminée » par l'utilisateur (et aucun nouveau chapitre ouvert depuis). */
+    val finished: Boolean = false,
 )
 
 /** Avancement de lecture d'une page (un chapitre) : part de la page parcourue, et lue jusqu'au bout ou non. */
@@ -22,6 +24,12 @@ data class ReadProgress(val url: String, val percent: Int, val done: Boolean, va
 
 /** Œuvre mise en favori (clé d'œuvre : site + titre). */
 data class SeriesFavorite(val key: String, val title: String, val addedAt: Long)
+
+/**
+ * Œuvre que l'utilisateur a marquée « terminée » : sa clé, le moment du marquage et le nombre de chapitres numérotés ouverts à ce moment-là.
+ * Ouvrir ensuite un chapitre qu'on n'avait pas encore ouvert la remet « en cours » (un nouveau chapitre est sorti) ; relire un ancien chapitre ne change rien.
+ */
+data class SeriesFinished(val key: String, val markedAt: Long, val chaptersAtMark: Int)
 
 /** Un chapitre d'une œuvre, tel que l'historique le connaît. */
 data class ChapterEntry(val url: String, val label: String, val number: Double?, val lastVisited: Long, val visits: Int, val percent: Int, val done: Boolean)
@@ -33,6 +41,7 @@ data class ChapterEntry(val url: String, val label: String, val number: Double?,
 data class BrowsingLibrary(
     val history: List<VisitedPage> = emptyList(), val favorites: List<Favorite> = emptyList(),
     val progress: List<ReadProgress> = emptyList(), val seriesFavorites: List<SeriesFavorite> = emptyList(),
+    val finishedSeries: List<SeriesFinished> = emptyList(),
 ) {
 
     fun visit(url: String, title: String, now: Long, maxHistory: Int = MAX_HISTORY): BrowsingLibrary {
@@ -86,8 +95,25 @@ data class BrowsingLibrary(
     /** Oublie une œuvre : ses pages d'historique, leur avancement et son favori. */
     fun removeSeries(key: String): BrowsingLibrary {
         val urls = history.filter { seriesKey(it.url) == key }.map { it.url }.toSet()
-        return copy(history = history.filter { it.url !in urls }, progress = progress.filter { it.url !in urls }, seriesFavorites = seriesFavorites.filter { it.key != key })
+        return copy(
+            history = history.filter { it.url !in urls }, progress = progress.filter { it.url !in urls },
+            seriesFavorites = seriesFavorites.filter { it.key != key }, finishedSeries = finishedSeries.filter { it.key != key },
+        )
     }
+
+    /** Nombre de chapitres numérotés ouverts d'une œuvre (la page de l'œuvre elle-même ne compte pas). */
+    private fun numberedChapters(key: String): Int = chapters(key).count { it.number != null }
+
+    /** Vrai si l'œuvre est « terminée » : marquée comme telle, sans nouveau chapitre ouvert depuis. */
+    fun isFinished(key: String): Boolean {
+        val mark = finishedSeries.firstOrNull { it.key == key } ?: return false
+        return numberedChapters(key) <= mark.chaptersAtMark
+    }
+
+    /** Marque une œuvre comme terminée, ou la remet en cours. */
+    fun setFinished(key: String, finished: Boolean, now: Long): BrowsingLibrary =
+        if (finished) copy(finishedSeries = (listOf(SeriesFinished(key, now, numberedChapters(key))) + finishedSeries.filter { it.key != key }).take(MAX_FINISHED))
+        else copy(finishedSeries = finishedSeries.filter { it.key != key })
 
     /** Chapitres d'une œuvre vus dans l'historique : le plus récent d'abord par numéro ; une page sans numéro de chapitre vient après. */
     fun chapters(key: String): List<ChapterEntry> {
@@ -110,10 +136,12 @@ data class BrowsingLibrary(
             .map { (key, pages) ->
                 val last = pages.maxByOrNull { it.visitedAt }!!
                 val chs = chapters(key)
+                val mark = finishedSeries.firstOrNull { it.key == key }
                 SeriesEntry(
                     key, SeriesHint.fromUrl(last.url) ?: key, last.url, last.title, last.visitedAt, pages.size, chapterLabel(last.url, last.title),
                     favorite = isSeriesFavorite(key), chapters = chs.size, doneChapters = chs.count { it.done }, percent = progressOf(last.url)?.percent ?: 0,
                     host = last.url.substringAfter("://", last.url).substringBefore('/').lowercase().removePrefix("www."),
+                    finished = mark != null && chs.count { it.number != null } <= mark.chaptersAtMark,
                 )
             }
             .sortedByDescending { it.lastVisited }
@@ -123,11 +151,13 @@ data class BrowsingLibrary(
         for (f in favorites) append("F\t${esc(f.url)}\t${esc(f.title)}\t${f.addedAt}\n")
         for (p in progress) append("P\t${esc(p.url)}\t${p.percent}\t${if (p.done) 1 else 0}\t${p.updatedAt}\n")
         for (f in seriesFavorites) append("S\t${esc(f.key)}\t${esc(f.title)}\t${f.addedAt}\n")
+        for (f in finishedSeries) append("D\t${esc(f.key)}\t${f.markedAt}\t${f.chaptersAtMark}\n")
     }
 
     companion object {
         const val MAX_HISTORY = 3000
         const val MAX_PROGRESS = 3000
+        const val MAX_FINISHED = 1000
         /** Part de la page parcourue à partir de laquelle un chapitre est considéré comme lu. */
         const val DONE_AT = 94
 
@@ -180,7 +210,7 @@ data class BrowsingLibrary(
         /** Tolérant : une ligne illisible est ignorée. */
         fun parse(data: String?): BrowsingLibrary {
             if (data.isNullOrBlank()) return BrowsingLibrary()
-            val hist = ArrayList<VisitedPage>(); val favs = ArrayList<Favorite>(); val prog = ArrayList<ReadProgress>(); val sfavs = ArrayList<SeriesFavorite>()
+            val hist = ArrayList<VisitedPage>(); val favs = ArrayList<Favorite>(); val prog = ArrayList<ReadProgress>(); val sfavs = ArrayList<SeriesFavorite>(); val fin = ArrayList<SeriesFinished>()
             for (line in data.lines()) {
                 val p = line.split('\t')
                 try {
@@ -189,10 +219,11 @@ data class BrowsingLibrary(
                         p.size >= 4 && p[0] == "F" -> favs.add(Favorite(unesc(p[1]), unesc(p[2]), p[3].toLong()))
                         p.size >= 5 && p[0] == "P" -> prog.add(ReadProgress(unesc(p[1]), p[2].toInt().coerceIn(0, 100), p[3] == "1", p[4].toLong()))
                         p.size >= 4 && p[0] == "S" -> sfavs.add(SeriesFavorite(unesc(p[1]), unesc(p[2]), p[3].toLong()))
+                        p.size >= 4 && p[0] == "D" -> fin.add(SeriesFinished(unesc(p[1]), p[2].toLong(), p[3].toInt()))
                     }
                 } catch (_: Exception) {}
             }
-            return BrowsingLibrary(hist, favs, prog, sfavs)
+            return BrowsingLibrary(hist, favs, prog, sfavs, fin)
         }
     }
 }

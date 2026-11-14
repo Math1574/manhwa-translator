@@ -335,7 +335,7 @@ private fun SettingsHome(graph: AppGraph, query: String, onQuery: (String) -> Un
 
 /** Champ de recherche en forme de pastille de verre, avec une croix pour l'effacer. */
 @Composable
-private fun SearchField(query: String, onQuery: (String) -> Unit) {
+internal fun SearchField(query: String, onQuery: (String) -> Unit, hint: String = "Rechercher un réglage") {
     val cs = MaterialTheme.colorScheme
     val focusManager = LocalFocusManager.current
     Row(
@@ -348,7 +348,7 @@ private fun SearchField(query: String, onQuery: (String) -> Unit) {
         Icon(Icons.Filled.Search, null, Modifier.size(22.dp), tint = cs.onSurfaceVariant)
         Spacer(Modifier.width(10.dp))
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-            if (query.isEmpty()) Text("Rechercher un réglage", style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant)
+            if (query.isEmpty()) Text(hint, style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant)
             BasicTextField(
                 value = query, onValueChange = onQuery, singleLine = true,
                 textStyle = MaterialTheme.typography.bodyLarge.copy(color = cs.onSurface),

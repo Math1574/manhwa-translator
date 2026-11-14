@@ -375,6 +375,50 @@ chk "fiche d'une œuvre : liste des chapitres" $(has series 'Chapitres')
 chk "fiche d'une œuvre : page de l'œuvre et reprise proposées" $([ "$(has series 'Page de l')" = 1 ] && [ "$(has series 'Continuer')$(has series 'Reprendre')" != "00" ] && echo 1 || echo 0)
 adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump lib2
 chk "retour de la fiche vers la bibliothèque" $(has lib2 'Historique')
+# étape 10 : bibliothèque — recherche, pastilles de statut, tris, statut « Terminée », titres simples. Trois œuvres de démonstration s'ajoutent à « Test Series ».
+hasx() { if python3 ci/ui_tap.py "$OUT/reports/ui_$1.xml" "$2" >/dev/null 2>&1; then echo 1; else echo 0; fi; }      # un nœud dont le texte est exactement celui donné (« =texte »)
+order() { if python3 ci/ui_order.py "$OUT/reports/ui_$1.xml" "${@:2}" >> $OUT/run.log 2>&1; then echo 1; else echo 0; fi; }   # textes rangés du haut vers le bas dans l'ordre donné
+# choix dans le menu de tri : un appui sur l'entrée si le menu est dans l'export, sinon le réglage est posé par commande (puis un appui hors du menu le ferme) — seule la vérification du menu échoue alors
+pick_sort() { if [ "$(hasx $1 "=$2")" = 1 ]; then tapt $1 "=$2" 1; else appcmd "libsort $3"; tap 540 300; fi; sleep 1.5; }
+appcmd libseed
+chk "bibliothèque : trois œuvres de démonstration s'ajoutent (4 œuvres avec Test Series)" $(okst waitst libSeries 4 25)
+sleep 1.5; uidump lb0; shot ui 42
+chk "bibliothèque : champ de recherche, pastilles de statut, tri et historique" $([ "$(has lb0 'widget.EditText')" = 1 ] && [ "$(hasx lb0 '=Toutes (4)')" = 1 ] && [ "$(hasx lb0 '=En cours (4)')" = 1 ] && [ "$(hasx lb0 '=Terminées (0)')" = 1 ] && [ "$(hasx lb0 '=Trier')" = 1 ] && [ "$(hasx lb0 '=Historique')" = 1 ] && echo 1 || echo 0)
+chk "bibliothèque : par défaut, l'œuvre lue le plus récemment est en tête" $(order lb0 "Zulu Quest" "Mid Tale" "Alpha Saga")
+tapt lb0 "=Trier" 1; sleep 1.5; uidump lb1; shot ui 43
+chk "bibliothèque : le menu de tri propose trois façons de ranger" $([ "$(hasx lb1 '=Titre (A → Z)')" = 1 ] && [ "$(hasx lb1 '=Chapitres lus')" = 1 ] && [ "$(hasx lb1 '=Lues récemment')" = 1 ] && echo 1 || echo 0)
+pick_sort lb1 "Titre (A → Z)" title; uidump lb2
+chk "bibliothèque : tri par titre (A → Z)" $(order lb2 "Alpha Saga" "Mid Tale" "Zulu Quest")
+chk "bibliothèque : le tri choisi est retenu dans les réglages" $(okst waitst libSort title 10)
+tapt lb2 "=Trier" 1; sleep 1.5; uidump lb3
+pick_sort lb3 "Chapitres lus" read; uidump lb4
+chk "bibliothèque : tri par chapitres lus" $(order lb4 "Alpha Saga" "Zulu Quest" "Mid Tale")
+tapt lb4 "=Trier" 1; sleep 1.5; uidump lb5
+pick_sort lb5 "Lues récemment" recent; uidump lb6
+chk "bibliothèque : retour au tri par date de lecture" $(order lb6 "Zulu Quest" "Mid Tale" "Alpha Saga")
+# statut : « Terminée » depuis la fiche d'une œuvre
+tapt lb6 "=Alpha Saga" 1; sleep 2; uidump lb7; shot ui 44
+chk "fiche d'une œuvre : choix du statut En cours / Terminée" $([ "$(hasx lb7 '=En cours')" = 1 ] && [ "$(hasx lb7 '=Terminée')" = 1 ] && echo 1 || echo 0)
+tapt lb7 "=Terminée" 1; sleep 1.5; uidump lb8
+chk "fiche d'une œuvre : « Terminée » est retenu et expliqué" $([ "$(okst waitst libFinished 1 15)" = 1 ] && [ "$(has lb8 'Elle repasse en cours')" = 1 ] && echo 1 || echo 0)
+adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump lb9; shot ui 45
+chk "bibliothèque : l'œuvre terminée porte sa pastille, les pastilles se recomptent" $([ "$(hasx lb9 '=Terminée')" = 1 ] && [ "$(hasx lb9 '=Terminées (1)')" = 1 ] && [ "$(hasx lb9 '=En cours (3)')" = 1 ] && echo 1 || echo 0)
+tapt lb9 "=Terminées (1)" 1; sleep 1.5; uidump lb10
+chk "bibliothèque : le filtre « Terminées » ne montre que les œuvres terminées" $([ "$(has lb10 'Alpha Saga')" = 1 ] && [ "$(hasnot lb10 'Zulu Quest')" = 1 ] && [ "$(hasnot lb10 'Mid Tale')" = 1 ] && echo 1 || echo 0)
+tapt lb10 "=En cours (3)" 1; sleep 1.5; uidump lb11
+chk "bibliothèque : le filtre « En cours » écarte les œuvres terminées" $([ "$(has lb11 'Zulu Quest')" = 1 ] && [ "$(hasnot lb11 'Alpha Saga')" = 1 ] && echo 1 || echo 0)
+tapt lb11 "=Toutes (4)" 1; sleep 1.5; uidump lb12
+# titres simples dans l'historique : l'œuvre et le chapitre, ni l'adresse ni le titre brut de la page
+tapt lb12 "=Historique" 1; sleep 2; uidump lb13; shot ui 46
+chk "historique : titres simples (œuvre et chapitre), ni adresse ni titre brut" $([ "$(has lb13 'Mid Tale')" = 1 ] && [ "$(has lb13 'Alpha Saga')" = 1 ] && [ "$(hasnot lb13 'Super Scans')" = 1 ] && [ "$(hasnot lb13 'comics/')" = 1 ] && echo 1 || echo 0)
+adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump lb14
+# recherche : on tape dans le champ (le clavier reste ouvert : c'est le dernier geste de ce bloc)
+tapt lb14 "@EditText" 1; sleep 1; adb shell input text zulu; sleep 2; uidump lb15; shot ui 47
+chk "bibliothèque : la recherche ne garde que l'œuvre cherchée" $([ "$(has lb15 'Zulu Quest')" = 1 ] && [ "$(hasnot lb15 'Alpha Saga')" = 1 ] && [ "$(hasnot lb15 'Mid Tale')" = 1 ] && echo 1 || echo 0)
+tapt lb15 "Effacer la recherche" 1; sleep 1.5; adb shell input text zzzz; sleep 2; uidump lb16
+chk "bibliothèque : une recherche sans résultat le dit" $(has lb16 'Aucune [^ ]*uvre ne correspond')
+tapt lb16 "Effacer la recherche" 1; sleep 1.5
+adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump lib2
 tapt lib2 "=Réglages" 1; sleep 2; uidump set; shot ui 4
 # l'accueil des réglages est plus long qu'un écran : on le fait défiler pour voir les derniers groupes, puis on remonte et on relit l'écran du haut
 adb shell input swipe 540 1900 540 500 400; sleep 1; uidump setb; shot ui 41
