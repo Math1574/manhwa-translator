@@ -187,6 +187,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     /** Chapitre commencé ouvert sans passer par la bibliothèque : proposition « Reprendre à X % ». */
     var resumeOffer by mutableIntStateOf(0)
     private val candidatesById = ConcurrentHashMap<String, Candidate>()
+    /** Change à chaque nouvelle page : un rafraîchissement différé (file pleine) d'une page quittée est abandonné. */
+    @Volatile private var pageEpoch = 0
     private val keysById = ConcurrentHashMap<String, CacheKey>()
     /** Pages récemment traitées, avec de quoi corriger leurs blocs (éditeur) : les plus anciennes sont oubliées. */
     private val workInfos = object : LinkedHashMap<String, WorkInfo>(16, 0.75f, true) {
@@ -453,6 +455,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
                 currentUrl = if (url.startsWith("http")) url else ""
+                pageEpoch++
                 pageUrl = if (url.startsWith("http")) url else null
                 graph.adFilters.log.newPage()
                 if (translateOn && url.startsWith("http") && (testing || BrowsingLibrary.looksLikeChapter(url))) warmUp()   // les modèles se chargent pendant que la page arrive
@@ -1126,9 +1129,12 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         reprocess(sn.info.imageId)
     }
 
-    private fun reprocess(imageId: String) {
+    private fun reprocess(imageId: String, attempt: Int = 0, epoch: Int = pageEpoch) {
+        if (epoch != pageEpoch) return   // on a changé de page entre-temps : l'ancienne image n'est plus là
         val cand = candidatesById[imageId] ?: return
-        queue.submit(PageJob(cand.id + "#fix" + System.nanoTime(), 0) { cancelled -> process(cand, cancelled) })
+        val accepted = queue.submit(PageJob(cand.id + "#fix" + System.nanoTime(), 0) { cancelled -> process(cand, cancelled) })
+        // la file est pleine (le chapitre se traduit encore) : le rafraîchissement n'est pas perdu, on réessaie dans un instant (une suppression ou son annulation s'affichent alors à coup sûr)
+        if (!accepted && attempt < 40) main.postDelayed({ reprocess(imageId, attempt + 1, epoch) }, 750)
     }
 
     /** Recadrage d'une image encodée (coordonnées de la fenêtre) ramené à [maxSide] pixels au plus : bitmap et échelle (pixels du bitmap par pixel de la fenêtre). */
