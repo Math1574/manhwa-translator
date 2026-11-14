@@ -54,7 +54,7 @@ object TestHooks {
                         "clearedits" -> main.post { c.testClearEdits() }
                         "peekign" -> main.post { c.testPeek(ignored = true) }
                         "peekempty" -> main.post { c.testPeekEmpty() }
-                        "eraser" -> main.post { c.setEraser(arg.trim() != "off") }
+                        "eraser" -> main.post { c.switchEraser(arg.trim() != "off") }
                         "erasetap" -> main.post { c.testEraseTap() }
                     }
                     Thread.sleep(300)   // laisse les gestes lancés sur le fil principal s'appliquer avant de relever l'état

@@ -573,7 +573,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     fun eraseTouched(t: EditTarget) { deleteTarget(t, soon = true) }
 
     /** Active ou coupe la gomme : les traductions supprimables sont entourées, les appuis ne servent plus qu'à les effacer. */
-    fun setEraser(on: Boolean) {
+    fun switchEraser(on: Boolean) {
         eraser = on
         if (on) { peekTarget = null; peekEmpty = null; main.removeCallbacks(clearPeek); main.removeCallbacks(clearPeekEmpty) }
         webView?.evaluateJavascript("window.__mt&&window.__mt.setErase($on)", null)
