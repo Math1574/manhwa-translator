@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -50,7 +49,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -111,6 +109,8 @@ private fun LibraryHome(graph: AppGraph, ui: LibraryUi, onOpenSeries: (String) -
     val seen = remember { HashSet<Any>() }
     val read = series.sumOf { it.doneChapters }
     val finished = series.count { it.finished }
+    // les illustrations qui manquent sont cherchées en arrière-plan, celles de l'écran d'abord ; elles apparaissent une à une
+    LaunchedEffect(shown, series) { graph.coverFetcher.request(shown); graph.coverFetcher.request(series) }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             ScreenHeader(
@@ -208,7 +208,7 @@ private fun SeriesRow(graph: AppGraph, e: SeriesEntry, now: Long, onClick: () ->
     val cs = MaterialTheme.colorScheme
     GlassCard(Modifier.fillMaxWidth(), onClick = onClick, contentPadding = 0.dp) {
         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.width(6.dp).fillMaxHeight().background(Brush.verticalGradient(listOf(seriesColor(e.key), seriesColor(e.key + "·").copy(alpha = 0.55f)))))
+            CoverTile(graph, e.key, e.title, Modifier.padding(start = 10.dp, top = 10.dp, bottom = 10.dp).width(58.dp).height(84.dp))
             Column(Modifier.weight(1f).padding(horizontal = 14.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(e.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -253,12 +253,13 @@ private fun SeriesPage(graph: AppGraph, key: String, onBack: () -> Unit, onGloss
     val shownChapters = remember(chapters, chapterQuery) { LibraryView.chapters(chapters, chapterQuery) }
     val seen = remember { HashSet<Any>() }
     if (entry == null) return
+    LaunchedEffect(key) { graph.coverFetcher.request(listOf(entry)) }
     if (confirm) {
         AlertDialog(
             onDismissRequest = { confirm = false },
             title = { Text("Oublier cette œuvre ?") },
             text = { Text("Ses chapitres, leur avancement et son favori seront retirés de la bibliothèque. Les traductions déjà calculées restent en cache.") },
-            confirmButton = { Button(onClick = { confirm = false; graph.library.removeSeries(key); onBack() }) { Text("Oublier") } },
+            confirmButton = { Button(onClick = { confirm = false; graph.library.removeSeries(key); graph.covers.forget(key); onBack() }) { Text("Oublier") } },
             dismissButton = { TextButton(onClick = { confirm = false }) { Text("Annuler") } },
         )
     }
@@ -286,10 +287,10 @@ private fun SeriesPage(graph: AppGraph, key: String, onBack: () -> Unit, onGloss
             }
         }
         item {
-            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.width(6.dp).fillMaxHeight().clip(CircleShape).background(Brush.verticalGradient(listOf(seriesColor(key), seriesColor(key + "·")))))
-                Spacer(Modifier.width(12.dp))
-                Column {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                CoverTile(graph, key, entry.title, Modifier.width(96.dp).height(138.dp))
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f)) {
                     Text(entry.title, style = MaterialTheme.typography.headlineSmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
                     Text(entry.host, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 }

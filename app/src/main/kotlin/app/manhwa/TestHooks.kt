@@ -37,6 +37,7 @@ object TestHooks {
      * termadd <terme>|<traduction>[|direct] (ajout d'un terme comme Réglages › Glossaire, avec aperçu ; « direct » : sans aperçu, comme « Garder tel quel »), termsave <terme>|<traduction> (comme « Enregistrer » de l'éditeur), termdel <terme>,
      * savetr <texte> (« Enregistrer » de l'éditeur avec une traduction écrite : correction rangée sous la page ouverte, traduction retenue), fixadd <texte>|<traduction> (traduction retenue sans correction),
      * libseed (trois œuvres de démonstration dans la bibliothèque : Zulu Quest, Mid Tale, Alpha Saga), libsort <recent|title|read> (tri de la bibliothèque), home (retour à l'accueil), termconfirm, termcancel (boutons de l'aperçu),
+     evict (vide la mémoire des pages traitées), probe (relève où poser un doigt : tx, ty sur une traduction, ex, ey sur une zone sans traduction),
      edit (ouvre l'éditeur sur la première traduction), pinch <facteur> (deux doigts qui s'écartent ou se rapprochent au centre de l'image de l'éditeur : vrais événements tactiles), twopan <dx> <dy> (deux doigts qui glissent ensemble, en pixels), state (écrit seulement l'état).
      */
     private fun startWatcher(ctx: Context, graph: AppGraph) {
@@ -61,6 +62,8 @@ object TestHooks {
                         "clearedits" -> main.post { c.testClearEdits() }
                         "peekign" -> main.post { c.testPeek(ignored = true) }
                         "peekempty" -> main.post { c.testPeekEmpty() }
+                        "evict" -> c.testEvict()
+                        "probe" -> main.post { c.testProbe() }
                         "eraser" -> main.post { c.switchEraser(arg.trim() != "off") }
                         "erasetap" -> main.post { c.testEraseTap() }
                         "discard" -> main.post { c.switchDiscard(arg.trim() != "off") }
@@ -134,12 +137,13 @@ object TestHooks {
             .put("works", ids.size).put("blocks", blocks).put("hidden", hidden).put("edits", edits).put("editTr", editTr)
             .put("ign", graph.ignored.rules.texts.size).put("ignImg", graph.ignored.rules.images.size).put("skipped", c.testSkippedCount()).put("banner", c.undoBanner?.message ?: "").put("eraser", c.eraser)
             .put("peekE", c.peekEmpty != null).put("peekT", c.peekTarget != null).put("discMode", c.discardMode).put("disc", discCounts.first).put("discKnown", discCounts.second)
-            .put("libSeries", graph.library.library.series().size).put("libFinished", graph.library.library.series().count { it.finished }).put("libSort", graph.settingsStore.settings.librarySort)
+            .put("coverOk", graph.covers.book.records.count { it.ok }).put("coverFail", graph.covers.book.records.count { !it.ok }).put("libSeries", graph.library.library.series().size).put("libFinished", graph.library.library.series().count { it.finished }).put("libSort", graph.settingsStore.settings.librarySort)
             .put("home", c.currentUrl.isEmpty()).put("homeSites", app.manhwa.core.HomeView.sites(graph.library.library, app.manhwa.core.HomeView.pinned(graph.settingsStore.settings), app.manhwa.core.HomeView.hidden(graph.settingsStore.settings)).size)
             .put("homePinned", app.manhwa.core.HomeView.pinned(graph.settingsStore.settings).size).put("homeHidden", app.manhwa.core.HomeView.hidden(graph.settingsStore.settings).size)
             .put("corr", graph.edits.count()).put("corrOrig", graph.edits.originsSnapshot().size).put("fixes", graph.glossary.corrections.size)
             .put("terms", graph.glossary.terms.size + graph.glossary.seriesTerms.size).put("glossRev", graph.glossary.revision).put("refreshed", c.testRefreshed.get()).put("patched", c.testPatched.get())
             .put("tpv", c.termPreview?.let { if (it.computing) "computing" else "ready" } ?: "none").put("tpvRows", c.termPreview?.rows?.size ?: 0).put("tpvOthers", c.termPreview?.others ?: 0).put("trs", trs.sorted().joinToString("\u001f"))
+        c.testProbeJson?.let { pr -> for (k in pr.keys()) o.put(k, pr.get(k)) }
         val ed = EditorProbe.info
         o.put("edOpen", ed != null)
         ed?.invoke()?.forEach { (k, v) -> o.put(k, v) }

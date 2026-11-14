@@ -56,6 +56,20 @@ if os.path.exists(f"{S}/synth/en_mixed.png"):
     for n in (1, 2, 3):
         open(f"{d}/{n}.html", "w").write(HEAD % f"Test Series - Chapter {n}" + f"<h3 style='padding:8px'>Test Series - Chapter {n}</h3>"
             + '<img src="/synth/en_mixed.png" style="display:block;width:100%;margin:0">' * 2 + "</body></html>")
+    # page de l'œuvre : annonce son illustration (og:image, adresse relative) ; une vignette d'une autre œuvre la précède pour vérifier qu'on ne la confond pas avec l'illustration
+    import struct, zlib
+    def png(w, h, px):
+        raw = b"".join(b"\x00" + b"".join(bytes(px(x, y)) for x in range(w)) for y in range(h))
+        def chunk(t, d): c = struct.pack(">I", len(d)) + t + d; return c + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
+        return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")
+    sd = f"{S}/comics/test-series-1a2b3c"
+    open(f"{sd}/cover.png", "wb").write(png(240, 360, lambda x, y: (40 + y * 160 // 360, 90 + x * 100 // 240, 200 - y * 120 // 360) if 24 <= x < 216 and 24 <= y < 336 else (230, 200, 60)))
+    open(f"{sd}/other.png", "wb").write(png(120, 180, lambda x, y: (200, 60, 60)))
+    open(f"{sd}/index.html", "w").write('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test Series - Read Free Online</title>'
+        '<meta property="og:image" content="/comics/test-series-1a2b3c/cover.png"></head><body style="margin:0;background:#1c1c1c;color:#ddd;font-family:sans-serif">'
+        "<h3 style='padding:8px'>Test Series</h3>"
+        '<img src="/comics/test-series-1a2b3c/other.png" alt="Another Story" class="thumb" style="width:80px">'
+        '<img src="/comics/test-series-1a2b3c/cover.png" alt="Test Series" style="width:160px"></body></html>')
 # banc du bloqueur : page piégée + faux sites tiers (noms en « .test », servis par l'application depuis /__sites/<nom>/ en mode test)
 if os.path.exists(f"{S}/synth/en_caps.png"):
     import shutil

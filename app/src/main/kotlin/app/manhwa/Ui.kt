@@ -48,6 +48,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.platform.ViewConfiguration
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
@@ -183,4 +185,19 @@ fun Entrance(key: Any, index: Int, seen: MutableSet<Any>, content: @Composable (
         visibleState = state,
         enter = fadeIn(tween(380, delayMillis = 55 * index)) + slideInVertically(tween(380, delayMillis = 55 * index)) { it / 5 },
     ) { content() }
+}
+
+/** Durée de l'appui long qui ouvre les réglages rapides depuis le bouton Original | Traduit : 3 secondes, pour ne jamais les ouvrir sans le vouloir. */
+const val PANEL_LONG_PRESS_MS = 3000L
+
+/** Les appuis longs du contenu attendent [ms] millisecondes au lieu de la durée du système (le reste de la configuration des gestes est inchangé). */
+@Composable
+fun WithLongPress(ms: Long, content: @Composable () -> Unit) {
+    val base = LocalViewConfiguration.current
+    val config = remember(base, ms) {
+        object : ViewConfiguration by base {
+            override val longPressTimeoutMillis: Long get() = ms
+        }
+    }
+    CompositionLocalProvider(LocalViewConfiguration provides config, content = content)
 }

@@ -155,9 +155,12 @@ object PageScript {
   window.addEventListener('scroll', function(){ if (!vpTick) { vpTick = true; setTimeout(vpReport, 250); } }, {passive:true});
   setTimeout(nbCheck, 800);
 
-  // appui long sur une traduction : tant que le doigt reste posé, la traduction s'efface et l'original réapparaît dessous (aperçu) ; l'application propose alors de la corriger
+  // appui long (2 secondes) sur une traduction : tant que le doigt reste posé, la traduction s'efface et l'original réapparaît dessous (aperçu) ; l'application propose alors de la corriger
+  var LP_MS = 2000, LP_SLOP = 14;
   var LP = {x:0, y:0, timer:null};
-  var PK = {el:null};
+  var PK = {el:null, open:false, sy:0};
+  // les propositions ouvertes par l'appui long disparaissent dès que l'on fait défiler la page
+  function peekGone(){ if (!PK.open) return; PK.open = false; try { AndroidMT.onPeekGone(); } catch(e) {} }
   function peek(x, y){
     var best = null, bestArea = 1e18, bestId = null;
     for (var id in S.entries){
@@ -169,7 +172,7 @@ object PageScript {
       }
     }
     if (best) {
-      best.style.visibility = 'hidden'; PK.el = best;
+      best.style.visibility = 'hidden'; PK.el = best; PK.open = true; PK.sy = window.scrollY;
       try { AndroidMT.onPeek(bestId, best.getAttribute('data-bid'), best.getAttribute('data-src'), best.getAttribute('data-tr')); } catch(e) {}
       return;
     }
@@ -180,6 +183,7 @@ object PageScript {
       var im = imgs[j]; if (im.getAttribute('data-mt-img') || !im.__mtid) continue;
       var ir = im.getBoundingClientRect();
       if (ir.width > 0 && ir.height > 0 && x >= ir.left && x <= ir.right && y >= ir.top && y <= ir.bottom) {
+        PK.open = true; PK.sy = window.scrollY;
         try { AndroidMT.onPeekEmpty(im.__mtid, (x - ir.left) / ir.width * im.naturalWidth, (y - ir.top) / ir.height * im.naturalHeight); } catch(e) {}
         return;
       }
@@ -193,15 +197,19 @@ object PageScript {
     for (var i=0;i<kids.length;i++){ var k = kids[i]; if (k.getAttribute && k.getAttribute('data-bid') === String(bid)) k.style.display = 'none'; }
   }
   document.addEventListener('touchstart', function(e){
-    if (e.touches.length !== 1) { clearTimeout(LP.timer); unpeek(); return; }
+    if (e.touches.length !== 1) { clearTimeout(LP.timer); unpeek(); peekGone(); return; }
     LP.x = e.touches[0].clientX; LP.y = e.touches[0].clientY; clearTimeout(LP.timer);
-    LP.timer = setTimeout(function(){ peek(LP.x, LP.y); }, 450);
+    LP.timer = setTimeout(function(){ peek(LP.x, LP.y); }, LP_MS);
   }, {passive:true, capture:true});
   document.addEventListener('touchmove', function(e){
     if (!e.touches.length) return;
-    if (Math.abs(e.touches[0].clientX - LP.x) > 12 || Math.abs(e.touches[0].clientY - LP.y) > 12) { clearTimeout(LP.timer); unpeek(); }
+    if (Math.abs(e.touches[0].clientX - LP.x) > LP_SLOP || Math.abs(e.touches[0].clientY - LP.y) > LP_SLOP) { clearTimeout(LP.timer); unpeek(); peekGone(); }
   }, {passive:true, capture:true});
   ['touchend','touchcancel'].forEach(function(n){ document.addEventListener(n, function(){ clearTimeout(LP.timer); unpeek(); }, {passive:true, capture:true}); });
+  window.addEventListener('scroll', function(){ if (PK.open && Math.abs(window.scrollY - PK.sy) > 8) { unpeek(); peekGone(); } }, {passive:true});
+  // ce long appui est géré ici : le moteur de la page ne doit pas y mêler le sien (menu contextuel, glisser-déposer de l'image), qui interrompait parfois le geste
+  try { var stl = document.createElement('style'); stl.textContent = 'img{-webkit-user-drag:none!important;-webkit-touch-callout:none!important}'; (document.head || document.documentElement).appendChild(stl); } catch(e) {}
+  document.addEventListener('contextmenu', function(e){ if (e.target && e.target.tagName === 'IMG') e.preventDefault(); }, true);
 
   // sens du défilement (barre d'adresse qui se masque) et avancement de lecture
   var sc = {y: window.scrollY, acc: 0, dir: 0, t: null, sent: -1};
@@ -392,6 +400,39 @@ object PageScript {
     return true;
   }
 
+  // tests automatiques : où poser un vrai doigt (pixels de la vue) — au centre de la première traduction affichée, et sur une zone d'image sans traduction
+  function probe(){
+    var dpr = window.devicePixelRatio || 1, out = {}, patches = [], first = null;
+    for (var id in S.entries){
+      var kids = S.entries[id].div.children;
+      for (var i=0;i<kids.length;i++){
+        var k = kids[i]; if (!k.getAttribute || !k.getAttribute('data-bid')) continue;
+        patches.push(k.getBoundingClientRect());
+        if (!first && !k.getAttribute('data-inert') && k.style.display !== 'none') first = k;
+      }
+    }
+    if (first) {
+      var r = first.getBoundingClientRect();
+      if (r.top < 0 || r.bottom > window.innerHeight) { window.scrollBy(0, r.top + r.height / 2 - window.innerHeight / 2); r = first.getBoundingClientRect(); patches = []; for (var id3 in S.entries){ var kk = S.entries[id3].div.children; for (var i3=0;i3<kk.length;i3++){ if (kk[i3].getAttribute && kk[i3].getAttribute('data-bid')) patches.push(kk[i3].getBoundingClientRect()); } } }
+      out.tx = Math.round((r.left + r.width / 2) * dpr); out.ty = Math.round((r.top + r.height / 2) * dpr);
+    }
+    var imgs = document.images;
+    for (var a=0; a<imgs.length && out.ex === undefined; a++){
+      var im = imgs[a]; if (im.getAttribute('data-mt-img') || !im.__mtid) continue;
+      var ir = im.getBoundingClientRect(); if (ir.width <= 0) continue;
+      for (var gy=0.05; gy<0.96 && out.ex === undefined; gy+=0.05){
+        for (var gx=0.05; gx<0.96; gx+=0.05){
+          var px = ir.left + ir.width * gx, py = ir.top + ir.height * gy;
+          if (px < 10 || px > window.innerWidth - 10 || py < 60 || py > window.innerHeight - 60) continue;
+          var free = true;
+          for (var q=0; q<patches.length; q++){ var pr = patches[q]; if (px > pr.left - 30 && px < pr.right + 30 && py > pr.top - 30 && py < pr.bottom + 30) { free = false; break; } }
+          if (free) { out.ex = Math.round(px * dpr); out.ey = Math.round(py * dpr); break; }
+        }
+      }
+    }
+    return JSON.stringify(out);
+  }
+
   // reprise de lecture : on attend que la hauteur de la page se stabilise (images qui se chargent), puis on se place ; un toucher de l'utilisateur annule
   function resumeTo(pct){
     var tries = 0, lastH = -1, stable = 0, stopped = false;
@@ -405,7 +446,7 @@ object PageScript {
       setTimeout(tick, 400);
     })();
   }
-  window.__mt = {collect:collect, apply:apply, setVisible:setVisible, clear:clear, getB64:getB64, resumeTo:resumeTo, forget:forget, dropPatch:dropPatch, setErase:setErase, testErase:testErase, setDisc:setDisc, setDiscs:setDiscs, testDisc:testDisc};
+  window.__mt = {probe:probe, collect:collect, apply:apply, setVisible:setVisible, clear:clear, getB64:getB64, resumeTo:resumeTo, forget:forget, dropPatch:dropPatch, setErase:setErase, testErase:testErase, setDisc:setDisc, setDiscs:setDiscs, testDisc:testDisc};
 })();
 """
 }

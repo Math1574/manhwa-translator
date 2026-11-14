@@ -144,8 +144,8 @@ chk() { printf '%s\t%s\n' "$1" "$2" >> $UI; }
 dismiss_anr() { for k in 1 2 3 4; do if adb shell dumpsys window | grep -q "Application Not Responding"; then say "fenêtre « ne répond plus » du système fermée"; adb shell input keyevent KEYCODE_BACK; sleep 1.5; else break; fi; done; }
 tap() { dismiss_anr; adb shell input tap "$@"; }
 tapt() { local xy; dismiss_anr; xy=$(python3 ci/ui_tap.py "$OUT/reports/ui_$1.xml" "$2" ${3:-1}) && adb shell input tap $xy; }
-# appui long : un « balayage » immobile d'un peu plus d'une seconde au centre du nœud
-holdt() { local xy; dismiss_anr; xy=$(python3 ci/ui_tap.py "$OUT/reports/ui_$1.xml" "$2" ${3:-1}) && adb shell input swipe $xy $xy 1100; }
+# appui long : un « balayage » immobile au centre du nœud (1,1 s par défaut ; 4e argument : durée en ms — le panneau de réglages rapides demande 3 s)
+holdt() { local xy; dismiss_anr; xy=$(python3 ci/ui_tap.py "$OUT/reports/ui_$1.xml" "$2" ${3:-1}) && adb shell input swipe $xy $xy ${4:-1100}; }
 # l'émulateur affiche parfois « Pixel Launcher ne répond plus » : cette fenêtre absorbe le premier appui, on la ferme avant de commencer
 for k in 1 2 3; do
   uidump anr; if grep -q "isn't responding\|not responding" "$OUT/reports/ui_anr.xml" 2>/dev/null; then tapt anr "Wait" || adb shell input keyevent KEYCODE_BACK; sleep 1; else break; fi
@@ -170,7 +170,7 @@ chk "plein écran : le menu propose Original | Traduit et les chapitres" $([ "$(
 tap 540 1200; sleep 2; uidump fs2; chk "plein écran : un second appui le referme" $(hasnot fs2 'Quitter le plein')
 # réglages rapides depuis le plein écran : appui long sur « Traduit » (ou « Original ») du menu de lecture ; le retour referme le panneau sans quitter le plein écran
 tap 540 1200; sleep 1.5; uidump fsq0
-{ holdt fsq0 "=Traduit" || holdt fsq0 "=Original"; }; sleep 1.5; uidump fsq1; shot ui 13
+{ holdt fsq0 "=Traduit" 1 3600 || holdt fsq0 "=Original" 1 3600; }; sleep 1.5; uidump fsq1; shot ui 13
 chk "réglages rapides : un appui long sur Original | Traduit les ouvre aussi en plein écran" $(has fsq1 'glages rapides')
 if [ "$(has fsq1 'glages rapides')" = 1 ]; then
   adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump fsq2
@@ -352,9 +352,48 @@ chk "image ignorée : « Rétablir » retire la règle et la page est de nouveau
 # une règle de texte (toutes les œuvres) est laissée en place : la page des réglages doit la lister, puis la retirer
 appcmd peek; uidump ig11; tapt ig11 "Ignorer ce texte" 1; sleep 1.5; uidump ig12; tapt ig12 "dans toutes" 1; sleep 1.5
 waitge hidden 1 25 >/dev/null
-# réglages rapides : un appui long sur le bouton rond ouvre le panneau sans basculer la traduction ; un choix de langue y est enregistré ; le retour referme le panneau
+# appuis longs réels sur la page (doigt posé sur l'écran, sans commande) : il en faut 2 s ; un défilement referme aussitôt la proposition
+say "=== appuis longs réels"
+appcmd probe; appstate
+rtx=$(stv tx); rty=$(stv ty); rex=$(stv ex); rey=$(stv ey)
+say "appuis longs : doigt posé en ($rtx,$rty) sur une traduction, en ($rex,$rey) sur une zone sans traduction"
+if [ -n "$rtx" ] && [ -n "$rty" ]; then
+  adb shell input swipe $rtx $rty $rtx $rty 1300; sleep 1; appstate
+  chk "appui long réel : 1,3 s sur une traduction ne propose rien (il en faut 2)" $([ "$(stv peekT)" = False ] && echo 1 || echo 0)
+  adb shell input swipe $rtx $rty $rtx $rty 2700; sleep 1; uidump rp1; shot ui 66
+  chk "appui long réel : 2,7 s sur une traduction propose de la corriger ou de la supprimer" $([ "$(has rp1 'Corriger cette traduction')" = 1 ] && [ "$(has rp1 'Supprimer cette traduction')" = 1 ] && echo 1 || echo 0)
+  adb shell input swipe 540 1500 540 1000 300; sleep 1; uidump rp2; appstate
+  chk "appui long réel : faire défiler l'écran referme aussitôt la proposition" $([ "$(hasnot rp2 'Corriger cette traduction')" = 1 ] && [ "$(stv peekT)" = False ] && echo 1 || echo 0)
+else
+  chk "appui long réel : 1,3 s sur une traduction ne propose rien (il en faut 2)" 0
+  chk "appui long réel : 2,7 s sur une traduction propose de la corriger ou de la supprimer" 0
+  chk "appui long réel : faire défiler l'écran referme aussitôt la proposition" 0
+fi
+if [ -n "$rex" ] && [ -n "$rey" ]; then
+  adb shell input swipe $rex $rey $rex $rey 2700; sleep 1; uidump rp3; shot ui 67
+  chk "appui long réel : 2,7 s sur une image sans traduction propose d'en ajouter une" $(has rp3 'Ajouter une traduction')
+  adb shell input swipe 540 1500 540 1000 300; sleep 1
+  # même geste quand la mémoire des pages traitées a été vidée (long chapitre) : la proposition doit venir quand même, et « Ajouter » ouvre l'éditeur après avoir préparé la page
+  appcmd evict; appcmd probe; appstate; rex=$(stv ex); rey=$(stv ey)
+  adb shell input swipe $rex $rey $rex $rey 2700; sleep 1; uidump rp4; shot ui 68
+  chk "appui long réel : la proposition d'ajout vient aussi pour une page dont la mémoire a été vidée" $(has rp4 'Ajouter une traduction')
+  tapt rp4 "Ajouter une traduction" 1
+  chk "appui long réel : « Ajouter une traduction » ouvre l'éditeur même pour une page oubliée (préparée à la demande)" $(okst waitst edOpen True 45)
+  adb shell input keyevent KEYCODE_BACK; sleep 2
+else
+  chk "appui long réel : 2,7 s sur une image sans traduction propose d'en ajouter une" 0
+  chk "appui long réel : la proposition d'ajout vient aussi pour une page dont la mémoire a été vidée" 0
+  chk "appui long réel : « Ajouter une traduction » ouvre l'éditeur même pour une page oubliée (préparée à la demande)" 0
+fi
+adb shell input swipe 540 1000 540 1700 300; sleep 2; uidump nav
+# réglages rapides : un appui long de 3 s sur le bouton rond ouvre le panneau sans basculer la traduction (un choix de langue y est enregistré ; le retour referme le panneau) ; 1,5 s est un simple appui : il bascule, le panneau reste fermé
 orb_on=$(has nav 'Traduction activ')
-{ holdt nav "Traduction activ" || holdt nav "Traduire"; }; sleep 1.5; uidump qs; shot ui 12
+{ holdt nav "Traduction activ" 1 1500 || holdt nav "Traduire" 1 1500; }; sleep 2; uidump qs0
+chk "réglages rapides : 1,5 s d'appui sur le bouton rond n'ouvre pas le panneau (il en faut 3)" $(hasnot qs0 'glages rapides')
+if [ "$(has qs0 'glages rapides')" = 1 ]; then adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump nav
+else { tapt qs0 "Traduction activ" 1 || tapt qs0 "Traduire" 1; }; sleep 2; uidump nav; fi
+orb_on=$(has nav 'Traduction activ')
+{ holdt nav "Traduction activ" 1 3600 || holdt nav "Traduire" 1 3600; }; sleep 1.5; uidump qs; shot ui 12
 chk "réglages rapides : un appui long sur le bouton rond ouvre le panneau" $(has qs 'glages rapides')
 chk "réglages rapides : langue, taille du texte, onomatopées et retraduction y sont" $([ "$(has qs 'Langue du texte')" = 1 ] && [ "$(has qs 'Traduire vers')" = 1 ] && [ "$(has qs 'Taille du texte')" = 1 ] && [ "$(has qs 'onomatop')" = 1 ] && [ "$(has qs 'Retraduire la page')" = 1 ] && echo 1 || echo 0)
 chk "réglages rapides : la gomme à traductions y est proposée" $(has qs 'Gomme')
@@ -370,7 +409,14 @@ else
 fi
 tapt nav "=Bibliothèque" 1; sleep 2; uidump lib; shot ui 2
 chk "bibliothèque : l'œuvre est listée, sans carte « Continuer la lecture » (la reprise est sur l'accueil)" $([ "$(has lib 'Test Series')" = 1 ] && [ "$(hasnot lib 'Continuer la lecture')" = 1 ] && echo 1 || echo 0)
+# illustrations : la page de l'œuvre du faux site (/comics/test-series-1a2b3c) annonce son image (og:image) ; l'application la lit dans un navigateur caché, la télécharge et l'affiche (quelques secondes, en tâche de fond)
+for k in $(seq 1 20); do uidump libc; [ "$(has libc 'Illustration de Test Series')" = 1 ] && break; sleep 3; done
+shot ui 69; appstate
+say "illustrations : $(stv coverOk) trouvée(s), $(stv coverFail) sans résultat"
+chk "bibliothèque : l'œuvre affiche l'illustration annoncée par la page de l'œuvre du site" $(has libc 'Illustration de Test Series')
+uidump lib
 tapt lib "=Test Series" 1; sleep 2; uidump series; shot ui 3
+chk "fiche d'une œuvre : l'illustration est aussi en tête de la fiche" $(has series 'Illustration de Test Series')
 chk "fiche d'une œuvre : liste des chapitres" $(has series 'Chapitres')
 chk "fiche d'une œuvre : page de l'œuvre et reprise proposées" $([ "$(has series 'Page de l')" = 1 ] && [ "$(has series 'Continuer')$(has series 'Reprendre')" != "00" ] && echo 1 || echo 0)
 adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump lib2
@@ -385,6 +431,7 @@ chk "bibliothèque : trois œuvres de démonstration s'ajoutent (4 œuvres avec 
 sleep 1.5; uidump lb0; shot ui 42
 chk "bibliothèque : champ de recherche, pastilles de statut, tri et historique" $([ "$(has lb0 'widget.EditText')" = 1 ] && [ "$(hasx lb0 '=Toutes (4)')" = 1 ] && [ "$(hasx lb0 '=En cours (4)')" = 1 ] && [ "$(hasx lb0 '=Terminées (0)')" = 1 ] && [ "$(hasx lb0 '=Trier')" = 1 ] && [ "$(hasx lb0 '=Historique')" = 1 ] && echo 1 || echo 0)
 chk "bibliothèque : par défaut, l'œuvre lue le plus récemment est en tête" $(order lb0 "Zulu Quest" "Mid Tale" "Alpha Saga")
+chk "bibliothèque : une œuvre dont le site ne répond pas garde sa pastille (aucune illustration inventée)" $([ "$(hasnot lb0 'Illustration de Zulu Quest')" = 1 ] && [ "$(hasnot lb0 'Illustration de Mid Tale')" = 1 ] && echo 1 || echo 0)
 tapt lb0 "=Trier" 1; sleep 1.5; uidump lb1; shot ui 43
 chk "bibliothèque : le menu de tri propose trois façons de ranger" $([ "$(hasx lb1 '=Titre (A → Z)')" = 1 ] && [ "$(hasx lb1 '=Chapitres lus')" = 1 ] && [ "$(hasx lb1 '=Lues récemment')" = 1 ] && echo 1 || echo 0)
 pick_sort lb1 "Titre (A → Z)" title; uidump lb2
