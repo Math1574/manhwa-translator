@@ -407,6 +407,8 @@ tapt lb8 "Glossaire de cette" 1; sleep 2; uidump gl1; shot ui 48
 chk "glossaire de l'œuvre : la page s'ouvre sur l'œuvre de la bibliothèque, pas sur celle de la page lue" $([ "$(has gl1 'Cette [^ ]*uvre : Alpha Saga')" = 1 ] && [ "$(has gl1 'Ajouter [^ ]* cette [^ ]*uvre')" = 1 ] && echo 1 || echo 0)
 tapt gl1 "@EditText" 1; sleep 1; adb shell input text zzsrc; sleep 1; uidump gl1b
 tapt gl1b "@EditText" 2; sleep 1; adb shell input text zztgt; sleep 1; uidump gl2
+# le clavier ouvert peut masquer le bouton « Ajouter » : on le referme d'abord (un seul retour : tant que le clavier est affiché, il ne quitte pas la page)
+if [ "$(hasx gl2 '=Ajouter à cette œuvre')" = 0 ]; then adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump gl2; fi
 tapt gl2 "=Ajouter à cette œuvre" 1; sleep 2
 chk "glossaire de l'œuvre : un terme ajouté ici est enregistré (une page de cette œuvre n'est pas ouverte : pas d'aperçu)" $(okst waitst terms $((gt0 + 1)) 15)
 uidump gl3
