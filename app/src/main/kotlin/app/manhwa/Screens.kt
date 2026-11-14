@@ -248,12 +248,15 @@ private fun JapanesePackCard(graph: AppGraph) {
 
 private data class GlossaryRow(val series: String?, val source: String, val target: String)
 
+/**
+ * Glossaire. Sans [fixed], « cette œuvre » est celle de la page lue ; avec [fixed] (clé et nom d'une œuvre de la bibliothèque), c'est cette œuvre-là, qu'elle soit ouverte ou non.
+ */
 @Composable
-fun GlossaryScreen(graph: AppGraph) {
+fun GlossaryScreen(graph: AppGraph, fixed: Pair<String, String>? = null) {
     val g = graph.glossary
     val c = graph.controller
-    val series = c.currentSeriesKey
-    val seriesName = if (series != null) (app.manhwa.core.SeriesHint.fromUrl(c.currentUrl) ?: series) else null
+    val series = fixed?.first ?: c.currentSeriesKey
+    val seriesName = fixed?.second ?: if (series != null) (app.manhwa.core.SeriesHint.fromUrl(c.currentUrl) ?: series) else null
     var scopeSeries by remember { mutableStateOf(series != null) }
     var src by remember { mutableStateOf("") }
     var dst by remember { mutableStateOf("") }

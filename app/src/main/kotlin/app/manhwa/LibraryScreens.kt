@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -81,13 +82,16 @@ fun LibraryScreen(graph: AppGraph, onOpen: (url: String, resumeAt: Int) -> Unit)
     val ui = remember { LibraryUi() }
     var seriesKey by remember { mutableStateOf<String?>(null) }
     var history by remember { mutableStateOf(false) }
-    BackHandler(enabled = seriesKey != null || history) { if (history) history = false else seriesKey = null }
+    var glossary by remember { mutableStateOf(false) }
+    BackHandler(enabled = seriesKey != null || history) { if (history) history = false else if (glossary) glossary = false else seriesKey = null }
     val key = seriesKey
-    val exists = key == null || lib.series().any { it.key == key }
-    if (key != null && !exists) LaunchedEffect(key) { seriesKey = null }
+    val entry = if (key == null) null else lib.series().firstOrNull { it.key == key }
+    val exists = key == null || entry != null
+    if (key != null && !exists) LaunchedEffect(key) { seriesKey = null; glossary = false }
     when {
         history -> HistoryPage(graph, onBack = { history = false }, onOpen = { u -> onOpen(u, 0) })
-        key != null && exists -> SeriesPage(graph, key, onBack = { seriesKey = null }, onOpen = onOpen)
+        key != null && entry != null && glossary -> SubPageBody("Glossaire · ${entry.title}", onBack = { glossary = false }) { GlossaryScreen(graph, key to entry.title) }
+        key != null && exists -> SeriesPage(graph, key, onBack = { seriesKey = null }, onGlossary = { glossary = true }, onOpen = onOpen)
         else -> LibraryHome(graph, ui, onOpenSeries = { seriesKey = it }, onHistory = { history = true }, onOpen = onOpen)
     }
 }
@@ -265,7 +269,7 @@ private fun SeriesRow(graph: AppGraph, e: SeriesEntry, now: Long, onClick: () ->
 
 /** Fiche d'une œuvre : continuer, chapitre suivant, page de l'œuvre et liste des chapitres avec leur avancement. */
 @Composable
-private fun SeriesPage(graph: AppGraph, key: String, onBack: () -> Unit, onOpen: (String, Int) -> Unit) {
+private fun SeriesPage(graph: AppGraph, key: String, onBack: () -> Unit, onGlossary: () -> Unit, onOpen: (String, Int) -> Unit) {
     val lib = graph.library.library
     val cs = MaterialTheme.colorScheme
     val now = System.currentTimeMillis()
@@ -340,6 +344,23 @@ private fun SeriesPage(graph: AppGraph, key: String, onBack: () -> Unit, onOpen:
                     )
                 }
                 if (seriesUrl != null) GhostButton("Page de l'œuvre sur le site", { onOpen(seriesUrl, 0) }, Modifier.fillMaxWidth())
+            }
+        }
+        item {
+            val n = graph.glossary.seriesTerms.count { it.series == key }
+            GlassCard(Modifier.fillMaxWidth(), onClick = onGlossary, contentPadding = 14.dp) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(AppIcons.Bookmark, null, Modifier.size(22.dp), tint = cs.primary)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Glossaire de cette œuvre", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            if (n == 0) "Aucun terme : noms et mots à traduire comme vous le voulez" else "$n terme${if (n > 1) "s" else ""} propre${if (n > 1) "s" else ""} à cette œuvre",
+                            style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
+                        )
+                    }
+                    Icon(Icons.Filled.KeyboardArrowRight, null, tint = cs.onSurfaceVariant)
+                }
             }
         }
         item { SectionLabel(if (chapterQuery.isBlank()) "Chapitres (${chapters.size})" else "Chapitres (${shownChapters.size} sur ${chapters.size})") }

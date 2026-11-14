@@ -159,7 +159,7 @@ fun SettingsRoot(graph: AppGraph) {
 }
 
 @Composable
-private fun SubPageBody(title: String, onBack: () -> Unit, content: @Composable () -> Unit) {
+internal fun SubPageBody(title: String, onBack: () -> Unit, content: @Composable () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Retour") }

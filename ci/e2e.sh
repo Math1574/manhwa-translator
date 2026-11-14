@@ -401,6 +401,20 @@ tapt lb6 "=Alpha Saga" 1; sleep 2; uidump lb7; shot ui 44
 chk "fiche d'une œuvre : choix du statut En cours / Terminée" $([ "$(hasx lb7 '=En cours')" = 1 ] && [ "$(hasx lb7 '=Terminée')" = 1 ] && echo 1 || echo 0)
 tapt lb7 "=Terminée" 1; sleep 1.5; uidump lb8
 chk "fiche d'une œuvre : « Terminée » est retenu et expliqué" $([ "$(okst waitst libFinished 1 15)" = 1 ] && [ "$(has lb8 'Elle repasse en cours')" = 1 ] && echo 1 || echo 0)
+# étape 11 : glossaire de l'œuvre depuis la fiche (cette œuvre n'est pas celle de la page ouverte dans le lecteur)
+appstate; gt0=$(stv terms)
+tapt lb8 "Glossaire de cette" 1; sleep 2; uidump gl1; shot ui 48
+chk "glossaire de l'œuvre : la page s'ouvre sur l'œuvre de la bibliothèque, pas sur celle de la page lue" $([ "$(has gl1 'Cette [^ ]*uvre : Alpha Saga')" = 1 ] && [ "$(has gl1 'Ajouter [^ ]* cette [^ ]*uvre')" = 1 ] && echo 1 || echo 0)
+tapt gl1 "@EditText" 1; sleep 1; adb shell input text zzsrc; sleep 1; uidump gl1b
+tapt gl1b "@EditText" 2; sleep 1; adb shell input text zztgt; sleep 1; uidump gl2
+tapt gl2 "=Ajouter à cette œuvre" 1; sleep 2
+chk "glossaire de l'œuvre : un terme ajouté ici est enregistré (une page de cette œuvre n'est pas ouverte : pas d'aperçu)" $(okst waitst terms $((gt0 + 1)) 15)
+uidump gl3; shot ui 49
+chk "glossaire de l'œuvre : le terme est listé comme propre à l'œuvre" $([ "$(has gl3 'zzsrc')" = 1 ] && [ "$(has gl3 'Cette [^ ]*uvre')" = 1 ] && echo 1 || echo 0)
+tapt gl3 "=Retirer" 1; sleep 1.5
+chk "glossaire de l'œuvre : le terme se retire" $(okst waitst terms $gt0 15)
+for k in 1 2 3; do adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump glb; if [ "$(has glb 'Glossaire de cette')" = 1 ]; then break; fi; done
+chk "glossaire de l'œuvre : le retour ramène à la fiche de l'œuvre" $(has glb 'Glossaire de cette')
 adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump lb9; shot ui 45
 chk "bibliothèque : l'œuvre terminée porte sa pastille, les pastilles se recomptent" $([ "$(hasx lb9 '=Terminée')" = 1 ] && [ "$(hasx lb9 '=Terminées (1)')" = 1 ] && [ "$(hasx lb9 '=En cours (3)')" = 1 ] && echo 1 || echo 0)
 tapt lb9 "=Terminées (1)" 1; sleep 1.5; uidump lb10
