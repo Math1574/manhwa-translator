@@ -416,6 +416,33 @@ shot ui 49
 chk "glossaire de l'œuvre : le terme est listé comme propre à l'œuvre" $([ "$(has gl3 'zzsrc')" = 1 ] && [ "$(has gl3 'Cette [^ ]*uvre')" = 1 ] && echo 1 || echo 0)
 tapt gl3 "=Retirer" 1; sleep 1.5
 chk "glossaire de l'œuvre : le terme se retire" $(okst waitst terms $gt0 15)
+# étape 13 : suggestions de noms d'après AniList (faux AniList sur le serveur de test : les contrôles n'appellent jamais le vrai service) ; rien n'est ajouté sans coche
+appcmd "anilist http://10.0.2.2:8000/anilist"
+uidump an0; appstate; an_t0=$(stv terms)
+chk "suggestions AniList : le glossaire d'une œuvre propose de chercher les noms de ses personnages" $(has an0 'Suggestions de noms')
+tapt an0 "Suggestions de noms" 1; sleep 2; uidump an1; shot ui 56
+chk "suggestions AniList : la page dit ce qui est envoyé et propose le titre de l'œuvre" $([ "$(has an1 'Seul le titre')" = 1 ] && [ "$(hasx an1 '=Alpha Saga')" = 1 ] && [ "$(hasx an1 '=Chercher')" = 1 ] && echo 1 || echo 0)
+tapt an1 "=Chercher" 1; sleep 4; uidump an2; shot ui 57
+chk "suggestions AniList : les œuvres trouvées sont proposées avec leur genre et leur année" $([ "$(hasx an2 '=Alpha Saga')" = 1 ] && [ "$(has an2 'Alpha Saga Gaiden')" = 1 ] && [ "$(has an2 'Manhwa')" = 1 ] && [ "$(has an2 '2019')" = 1 ] && [ "$(has an2 'Roman')" = 1 ] && echo 1 || echo 0)
+tapt an2 "=Alpha Saga" 1; sleep 4; uidump an3; shot ui 58
+chk "suggestions AniList : les noms des personnages sont proposés, sans mots anglais courants ni fragments de mots courants" $([ "$(hasx an3 '=Zarvokin')" = 1 ] && [ "$(hasx an3 '=Mirelka')" = 1 ] && [ "$(hasx an3 '=Brannic')" = 1 ] && [ "$(hasx an3 '=Doverell')" = 1 ] && [ "$(has an3 'Personnages principaux')" = 1 ] && [ "$(hasx an3 '=Stone')" = 0 ] && [ "$(hasx an3 '=Eren')" = 0 ] && [ "$(has an3 'Non propos')" = 1 ] && echo 1 || echo 0)
+chk "suggestions AniList : rien n'est coché d'office" $(has an3 'Coche des noms')
+tapt an3 "=Principaux" 1; sleep 1.5; uidump an4
+chk "suggestions AniList : « Principaux » coche les noms des personnages principaux" $(has an4 'Ajouter 4 noms')
+tapt an4 "=Aucun" 1; sleep 1.5; uidump an5
+chk "suggestions AniList : « Aucun » décoche tout" $(has an5 'Coche des noms')
+tapt an5 "=Mirelka" 1; sleep 1.5; uidump an6
+chk "suggestions AniList : un nom se coche d'un appui" $([ "$(has an6 'Ajouter 1 nom')" = 1 ] && [ "$(has an6 'Ajouter 1 noms')" = 0 ] && echo 1 || echo 0)
+tapt an6 "Ajouter 1 nom" 1; sleep 3
+chk "suggestions AniList : seul le nom coché est ajouté, au glossaire de l'œuvre" $([ "$(okst waitst terms $((an_t0 + 1)) 15)" = 1 ] && stv seriesTermSrc | grep -q 'Mirelka' && ! stv seriesTermSrc | grep -q 'Zarvokin' && echo 1 || echo 0)
+uidump an7; shot ui 59
+chk "suggestions AniList : après l'ajout on revient au glossaire, le nom est listé pour l'œuvre" $([ "$(has an7 'Mirelka')" = 1 ] && [ "$(has an7 'Cette [^ ]*uvre')" = 1 ] && [ "$(hasx an7 '=Retirer')" = 1 ] && echo 1 || echo 0)
+tapt an7 "=Retirer" 1; sleep 1.5
+chk "suggestions AniList : le nom ajouté se retire" $(okst waitst terms $an_t0 15)
+appcmd "anilist http://10.0.2.2:9/anilist"
+uidump an8; tapt an8 "Suggestions de noms" 1; sleep 2; uidump an9; tapt an9 "=Chercher" 1; sleep 4; uidump an10; shot ui 60
+chk "suggestions AniList : sans connexion, un message clair et rien ne plante" $(has an10 'Impossible de joindre')
+appcmd "anilist"
 for k in 1 2 3; do adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump glb; if [ "$(has glb 'Glossaire de cette')" = 1 ]; then break; fi; done
 chk "glossaire de l'œuvre : le retour ramène à la fiche de l'œuvre" $(has glb 'Glossaire de cette')
 adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump lb9; shot ui 45

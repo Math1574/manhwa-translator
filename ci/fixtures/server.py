@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Faux site de lecture pour les tests : sert /tmp/site, avec une zone /ref/ exigeant Referer + cookie (comme certains sites)."""
-import http.server, os, sys
+import http.server, json, os, sys
 
 import threading
 LOCK = threading.Lock()
@@ -40,6 +40,43 @@ class H(http.server.SimpleHTTPRequestHandler):
             if not ok:
                 self.send_response(403); self.end_headers(); self.wfile.write(b"forbidden"); return
         super().do_GET()
+
+    def do_POST(self):
+        # /anilist : faux AniList pour les suggestions de noms (les contrôles n'appellent jamais le vrai service) ; même forme de réponse que graphql.anilist.co
+        if self.path.split("?")[0] != "/anilist":
+            self.send_response(404); self.end_headers(); return
+        try:
+            req = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0") or 0)).decode("utf-8"))
+        except Exception:
+            self.send_response(400); self.end_headers(); return
+        q = str(req.get("query", "")); v = req.get("variables") or {}
+        def name(first, last, native="", alt=None):
+            full = (first + " " + last).strip()
+            return {"first": first or None, "middle": None, "last": last or None, "full": full, "native": native or None, "alternative": alt}
+        if "Page(" in q:
+            media = []
+            if "alpha" in str(v.get("s", "")).lower():
+                media = [
+                    {"id": 4242, "title": {"romaji": "Alpha Saga", "english": "Alpha Saga", "native": None}, "format": "MANGA", "countryOfOrigin": "KR", "startDate": {"year": 2019}, "isAdult": False},
+                    {"id": 4243, "title": {"romaji": "Alpha Saga Gaiden", "english": None, "native": None}, "format": "NOVEL", "countryOfOrigin": "KR", "startDate": {"year": 2021}, "isAdult": False},
+                ]
+            body = {"data": {"Page": {"media": media}}}
+        elif "Media(" in q:
+            edges = [
+                {"role": "MAIN", "node": {"name": name("Zarvokin", "Mirelka", "자르보킨", ["Zar"])}},
+                {"role": "MAIN", "node": {"name": name("Brannic", "Doverell")}},
+                {"role": "SUPPORTING", "node": {"name": name("Eren", "Stone")}},
+                {"role": "BACKGROUND", "node": {"name": name("Kai", "")}},
+            ]
+            body = {"data": {"Media": {"characters": {"pageInfo": {"hasNextPage": False}, "edges": edges}}}}
+        else:
+            self.send_response(400); self.end_headers(); return
+        data = json.dumps(body).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
 
     def log_message(self, fmt, *args):
         sys.stderr.write("[site] " + (fmt % args) + "\n")

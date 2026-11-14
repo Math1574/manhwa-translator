@@ -28,6 +28,16 @@ class EnglishLexicon(allWords: Iterable<String>, frequent: List<String>) {
         return false
     }
 
+    /**
+     * Le fragment se trouve-t-il au milieu d'un mot courant (« eren » dans « weren't », « levi » dans « television ») ? Un terme de glossaire pareil, remplacé par un jeton,
+     * abîmerait ces mots : on ne le propose pas.
+     */
+    fun insideCommonWord(fragment: String): Boolean {
+        val f = fragment.lowercase().trim('\'', '’')
+        if (f.isEmpty()) return false
+        return rank.keys.any { it.length > f.length && it.contains(f) } || contractionBase.any { it.length > f.length && it.contains(f) }
+    }
+
     /** Rang de fréquence (0 = très courant) ; 10 000 pour un mot valide mais rare ; Int.MAX_VALUE pour un mot inconnu. */
     fun rank(word: String): Int { val w = word.lowercase(); return rank[w] ?: if (known(w)) 10_000 else Int.MAX_VALUE }
     fun isCommon(word: String) = rank.containsKey(word.lowercase())

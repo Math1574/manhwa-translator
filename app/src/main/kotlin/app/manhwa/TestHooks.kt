@@ -33,7 +33,7 @@ object TestHooks {
      * erasetap (appui simple au centre de la première traduction visible), discard [off] (active ou coupe les textes écartés), disctap (appui simple au centre du premier cadre visible), testcache [off] (le résultat en cache est repris, pour vérifier la mise à jour ciblée à l'affichage),
      * termadd <terme>|<traduction>[|direct] (ajout d'un terme comme Réglages › Glossaire, avec aperçu ; « direct » : sans aperçu, comme « Garder tel quel »), termsave <terme>|<traduction> (comme « Enregistrer » de l'éditeur), termdel <terme>,
      * savetr <texte> (« Enregistrer » de l'éditeur avec une traduction écrite : correction rangée sous la page ouverte, traduction retenue), fixadd <texte>|<traduction> (traduction retenue sans correction),
-     * libseed (trois œuvres de démonstration dans la bibliothèque : Zulu Quest, Mid Tale, Alpha Saga), libsort <recent|title|read> (tri de la bibliothèque), home (retour à l'accueil), termconfirm, termcancel (boutons de l'aperçu), state (écrit seulement l'état).
+     * libseed (trois œuvres de démonstration dans la bibliothèque : Zulu Quest, Mid Tale, Alpha Saga), libsort <recent|title|read> (tri de la bibliothèque), home (retour à l'accueil), anilist <adresse> (faux serveur pour les suggestions de noms, sans argument : le vrai), termconfirm, termcancel (boutons de l'aperçu), state (écrit seulement l'état).
      */
     private fun startWatcher(ctx: Context, graph: AppGraph) {
         if (watching) return
@@ -70,6 +70,7 @@ object TestHooks {
                         "libseed" -> main.post { graph.library.testSeed() }
                         "libsort" -> main.post { graph.settingsStore.update { it.copy(librarySort = arg.trim()) } }
                         "home" -> main.post { c.goHome() }
+                        "anilist" -> AniListClient.endpoint = arg.trim().ifEmpty { app.manhwa.core.AniList.ENDPOINT }
                         "termconfirm" -> main.post { c.confirmTermPreview() }
                         "termcancel" -> main.post { c.cancelTermPreview() }
                     }
@@ -106,7 +107,7 @@ object TestHooks {
             .put("home", c.currentUrl.isEmpty()).put("homeSites", app.manhwa.core.HomeView.sites(graph.library.library, app.manhwa.core.HomeView.pinned(graph.settingsStore.settings), app.manhwa.core.HomeView.hidden(graph.settingsStore.settings)).size)
             .put("homePinned", app.manhwa.core.HomeView.pinned(graph.settingsStore.settings).size).put("homeHidden", app.manhwa.core.HomeView.hidden(graph.settingsStore.settings).size)
             .put("corr", graph.edits.count()).put("corrOrig", graph.edits.originsSnapshot().size).put("fixes", graph.glossary.corrections.size)
-            .put("terms", graph.glossary.terms.size + graph.glossary.seriesTerms.size).put("glossRev", graph.glossary.revision).put("refreshed", c.testRefreshed.get()).put("patched", c.testPatched.get())
+            .put("terms", graph.glossary.terms.size + graph.glossary.seriesTerms.size).put("seriesTermSrc", graph.glossary.seriesTerms.map { it.source }.sorted().joinToString("|")).put("glossRev", graph.glossary.revision).put("refreshed", c.testRefreshed.get()).put("patched", c.testPatched.get())
             .put("tpv", c.termPreview?.let { if (it.computing) "computing" else "ready" } ?: "none").put("tpvRows", c.termPreview?.rows?.size ?: 0).put("tpvOthers", c.termPreview?.others ?: 0).put("trs", trs.sorted().joinToString("\u001f"))
         val tmp = File(ctx.filesDir, "state.json.tmp"); tmp.writeText(o.toString()); tmp.renameTo(File(ctx.filesDir, "state.json"))
     }
