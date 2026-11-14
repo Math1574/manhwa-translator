@@ -18,34 +18,70 @@ class Glossary(entries: List<GlossaryEntry> = emptyList(), corrections: Map<Stri
     /** Termes propres à une œuvre : ils s'ajoutent aux termes communs et les remplacent quand le terme d'origine est le même. */
     private val seriesTerms = LinkedHashMap<String, LinkedHashMap<String, String>>()
 
+    /**
+     * Numéro de version du glossaire : il augmente d'un cran chaque fois qu'un terme est ajouté ou que sa traduction change. Une page traduite garde le numéro du glossaire avec lequel
+     * elle l'a été : les termes plus récents ([termsNewerThan]) ne concernent que les textes qui les contiennent, qui peuvent alors être retraduits seuls.
+     */
+    var revision: Long = 0L
+        private set
+    /** Version à laquelle chaque terme a été ajouté ou modifié (0 : terme d'avant ce suivi, jamais considéré comme récent). Clé : le terme commun, ou « œuvre, séparateur, terme » pour un terme d'œuvre. */
+    private val termRev = HashMap<String, Long>()
+
     init {
         entries.forEach { addTerm(it.source, it.target) }
         corrections.forEach { (k, v) -> addCorrection(k, v) }
     }
 
+    /** Ajoute un terme ou change sa traduction. Un terme déjà connu tel quel ne change rien (ni version, ni retraduction). */
     fun addTerm(source: String, target: String) {
-        if (source.isNotBlank() && target.isNotBlank()) terms[source.trim()] = target.trim()
+        if (source.isBlank() || target.isBlank()) return
+        val s = source.trim(); val t = target.trim()
+        if (terms[s] == t) return
+        terms[s] = t; termRev[s] = ++revision
     }
 
-    fun removeTerm(source: String) { terms.remove(source.trim()) }
+    fun removeTerm(source: String) { terms.remove(source.trim()); termRev.remove(source.trim()) }
 
     fun addSeriesTerm(series: String, source: String, target: String) {
-        if (series.isNotBlank() && source.isNotBlank() && target.isNotBlank()) seriesTerms.getOrPut(series) { LinkedHashMap() }[source.trim()] = target.trim()
+        if (series.isBlank() || source.isBlank() || target.isBlank()) return
+        val s = source.trim(); val t = target.trim()
+        val m = seriesTerms.getOrPut(series) { LinkedHashMap() }
+        if (m[s] == t) return
+        m[s] = t; termRev[series + SEP + s] = ++revision
     }
 
     fun removeSeriesTerm(series: String, source: String) {
-        seriesTerms[series]?.remove(source.trim()); if (seriesTerms[series]?.isEmpty() == true) seriesTerms.remove(series)
+        seriesTerms[series]?.remove(source.trim()); termRev.remove(series + SEP + source.trim())
+        if (seriesTerms[series]?.isEmpty() == true) seriesTerms.remove(series)
     }
 
     fun seriesTerms(): List<SeriesTerm> = seriesTerms.flatMap { (k, m) -> m.map { SeriesTerm(k, it.key, it.value) } }
 
+    /** Le terme est-il connu tel quel (même traduction) : pour une œuvre si [series] est donnée, sinon pour toutes ? */
+    fun hasTerm(series: String?, source: String, target: String): Boolean {
+        val s = source.trim(); val t = target.trim()
+        return if (series != null) seriesTerms[series]?.get(s) == t else terms[s] == t
+    }
+
+    /** Termes (de ce glossaire, déjà fusionné pour une œuvre) ajoutés ou modifiés après la version [rev] : ceux qu'une page traduite avec cette version ne connaît pas encore. */
+    fun termsNewerThan(rev: Long): List<GlossaryEntry> = terms.filter { (termRev[it.key] ?: 0L) > rev }.map { GlossaryEntry(it.key, it.value) }
+
+    /** Copie indépendante (versions comprises) : sert à simuler un ajout de termes sans toucher au glossaire réel. */
+    fun copy(): Glossary = parse(serialize())
+
     /** Glossaire à utiliser pour une œuvre : termes communs, puis ceux de l'œuvre ; les corrections de blocs restent communes. Sans œuvre : une copie du glossaire commun. */
     fun forSeries(series: String?): Glossary {
         val g = Glossary()
-        terms.forEach { (k, v) -> g.addTerm(k, v) }
-        if (series != null) seriesTerms[series]?.forEach { (k, v) -> g.addTerm(k, v) }
+        terms.forEach { (k, v) -> g.loadTerm(k, v, termRev[k] ?: 0L) }
+        if (series != null) seriesTerms[series]?.forEach { (k, v) -> g.loadTerm(k, v, termRev[series + SEP + k] ?: 0L) }
         fixes.forEach { (k, v) -> g.fixes[k] = v }
+        g.revision = revision
         return g
+    }
+
+    private fun loadTerm(source: String, target: String, rev: Long) {
+        terms[source] = target
+        if (rev > 0L) termRev[source] = rev else termRev.remove(source)
     }
     fun addCorrection(sourceBlock: String, translation: String) {
         if (sourceBlock.isNotBlank()) fixes[normalize(sourceBlock)] = translation
@@ -79,25 +115,42 @@ class Glossary(entries: List<GlossaryEntry> = emptyList(), corrections: Map<Stri
         return out
     }
 
+    /** Format : une ligne par terme (T), correction (C) ou terme d'œuvre (S), la version du terme en dernière colonne si elle est connue, et une ligne R pour la version du glossaire. Les anciens fichiers (sans versions) se lisent tels quels. */
     fun serialize(): String = buildString {
-        terms.forEach { (k, v) -> append("T\t").append(esc(k)).append('\t').append(esc(v)).append('\n') }
+        if (revision > 0L) append("R\t").append(revision).append('\n')
+        terms.forEach { (k, v) -> append("T\t").append(esc(k)).append('\t').append(esc(v)); termRev[k]?.let { append('\t').append(it) }; append('\n') }
         fixes.forEach { (k, v) -> append("C\t").append(esc(k)).append('\t').append(esc(v)).append('\n') }
-        seriesTerms.forEach { (s, m) -> m.forEach { (k, v) -> append("S\t").append(esc(s)).append('\t').append(esc(k)).append('\t').append(esc(v)).append('\n') } }
+        seriesTerms.forEach { (s, m) -> m.forEach { (k, v) -> append("S\t").append(esc(s)).append('\t').append(esc(k)).append('\t').append(esc(v)); termRev[s + SEP + k]?.let { append('\t').append(it) }; append('\n') } }
     }
 
     private fun normalize(s: String) = s.filter { !it.isWhitespace() }
 
     companion object {
+        private const val SEP = '\u0000'
+
         fun parse(data: String): Glossary {
             val g = Glossary()
+            var fileRev = 0L
             for (line in data.lines()) {
                 val p = line.split('\t')
                 when {
-                    p.size == 3 && p[0] == "T" -> g.addTerm(unesc(p[1]), unesc(p[2]))
+                    p.size == 2 && p[0] == "R" -> fileRev = p[1].toLongOrNull() ?: 0L
+                    (p.size == 3 || p.size == 4) && p[0] == "T" -> {
+                        val s = unesc(p[1]).trim(); val t = unesc(p[2]).trim()
+                        if (s.isNotBlank() && t.isNotBlank()) g.loadTerm(s, t, p.getOrNull(3)?.toLongOrNull() ?: 0L)
+                    }
                     p.size == 3 && p[0] == "C" -> g.fixes[unesc(p[1])] = unesc(p[2])
-                    p.size == 4 && p[0] == "S" -> g.addSeriesTerm(unesc(p[1]), unesc(p[2]), unesc(p[3]))
+                    (p.size == 4 || p.size == 5) && p[0] == "S" -> {
+                        val series = unesc(p[1]); val s = unesc(p[2]).trim(); val t = unesc(p[3]).trim()
+                        if (series.isNotBlank() && s.isNotBlank() && t.isNotBlank()) {
+                            g.seriesTerms.getOrPut(series) { LinkedHashMap() }[s] = t
+                            val r = p.getOrNull(4)?.toLongOrNull() ?: 0L
+                            if (r > 0L) g.termRev[series + SEP + s] = r
+                        }
+                    }
                 }
             }
+            g.revision = maxOf(fileRev, g.termRev.values.maxOrNull() ?: 0L)
             return g
         }
     }

@@ -14,7 +14,8 @@ fun interface TranslationEngine {
 }
 
 sealed class PageOutcome {
-    data class Done(val result: PageResult, val fromCache: Boolean) : PageOutcome()
+    /** [refreshed] : nombre de textes retraduits parce que des termes du glossaire ajoutés depuis les concernaient (page reprise du cache). */
+    data class Done(val result: PageResult, val fromCache: Boolean, val refreshed: Int = 0) : PageOutcome()
     /** Aucune zone de texte détectée : ce n'est pas une erreur, rien à afficher. */
     data class NoText(val imageWidth: Int, val imageHeight: Int) : PageOutcome()
     data class Failed(val stage: String, val message: String) : PageOutcome()
@@ -87,9 +88,28 @@ class PagePipeline(
         return letters.length in 1..3 && letters.all { it.isLowerCase() } && ScriptDetector.dominant(text) == "en"
     }
 
+    private val refresher = TermRefresh(translator)
+
+    /**
+     * Page reprise du cache : si des termes ont été ajoutés au glossaire depuis sa traduction, seuls les textes qui les contiennent sont retraduits (les autres blocs ne changent pas),
+     * puis la page est remise à jour dans le cache avec la version actuelle du glossaire. Une retraduction qui échoue laisse la page telle quelle : elle sera retentée à l'affichage suivant.
+     */
+    private fun refreshFromCache(key: CacheKey, cached: PageResult, source: String, target: String): PageOutcome.Done {
+        val g = glossary()
+        val since = cache.revisionOf(key)
+        val idx = TermRefresh.concerned(cached, g, since)
+        if (idx.isEmpty()) return PageOutcome.Done(cached, fromCache = true)
+        val changes = try { refresher.retranslate(cached, idx, g, source, target) } catch (e: Exception) { emptyMap() }
+        if (changes.isEmpty()) { log("glossaire : ${idx.size} texte(s) à retraduire, aucun n'a pu l'être (page gardée telle quelle)"); return PageOutcome.Done(cached, fromCache = true) }
+        val updated = TermRefresh.withTranslations(cached, changes)
+        cache.put(key, updated, if (changes.size == idx.size) g.revision else since)
+        log("glossaire : ${changes.size} texte(s) retraduit(s) sur ${cached.blocks.size}")
+        return PageOutcome.Done(updated, fromCache = true, refreshed = changes.size)
+    }
+
     fun process(imageBytes: ByteArray, source: String, target: String): PageOutcome {
         val key = CacheKey(sha256Hex(imageBytes), source, target, engineId)
-        if (useCache) cache.get(key)?.let { return PageOutcome.Done(it, fromCache = true) }
+        if (useCache) cache.get(key)?.let { return refreshFromCache(key, it, source, target) }
 
         val ocrResult = try { ocr.recognize(imageBytes) } catch (e: Exception) {
             return PageOutcome.Failed("ocr", e.message ?: e.javaClass.simpleName)
@@ -154,7 +174,7 @@ class PagePipeline(
             translated[i]?.let { TranslatedBlock(b.id, bt.box, b.text, it, b.vertical, medianLineHeight(b), bt.lines.map { l -> l.box }, bt.lines.map { l -> l.text }, if (clean[i] != b.text) clean[i] else "", b.kind.name.takeIf { b.kind != BlockKind.UNKNOWN } ?: "", b.container, b.zone) }
         }
         val result = PageResult(ocrResult.imageWidth, ocrResult.imageHeight, out)
-        if (errors == 0) cache.put(key, result) // une page partielle n'est pas mise en cache
+        if (errors == 0) cache.put(key, result, g.revision) // une page partielle n'est pas mise en cache ; elle garde la version du glossaire avec laquelle elle a été traduite
         return PageOutcome.Done(result, fromCache = false)
     }
 
