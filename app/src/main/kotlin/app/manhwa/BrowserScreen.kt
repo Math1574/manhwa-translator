@@ -150,7 +150,7 @@ fun BrowserScreen(graph: AppGraph) {
                 ReaderOverlay(graph, onQuickSettings = { quick = true })
             }
             // propositions discrètes : reprendre le chapitre où l'on s'était arrêté ; corriger la traduction dont on regarde l'original
-            if (!(c.fullscreen && c.readerBar) && (c.resumeOffer > 0 || c.peekTarget != null || c.peekEmpty != null || c.navBlocked != null)) {
+            if (!(c.fullscreen && c.readerBar) && (c.resumeOffer > 0 || c.peekTarget != null || c.peekEmpty != null || c.navBlocked != null || c.undoDelete != null)) {
                 Column(Modifier.align(Alignment.BottomCenter).padding(bottom = if (c.fullscreen) 28.dp else 20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (c.resumeOffer > 0) {
                         LaunchedEffect(c.resumeOffer) { delay(9000); c.dismissResumeOffer() }
@@ -161,6 +161,8 @@ fun BrowserScreen(graph: AppGraph) {
                         // supprimer d'un geste (petits artefacts pris pour du texte) : l'original est rétabli à cet endroit
                         RoundPill(Icons.Filled.Delete, "Supprimer cette traduction") { c.deletePeek() }
                     }
+                    // suppression d'un geste : trois secondes pour la défaire (le bandeau se referme ensuite et la suppression est définitive)
+                    if (c.undoDelete != null) Pill("Traduction supprimée · Annuler", onClick = { c.undoDeletion() })
                     c.peekEmpty?.let { Pill("Ajouter une traduction ici", onClick = { c.openNewEdit() }, onClose = { c.peekEmpty = null }) }
                     c.navBlocked?.let { nb ->
                         if (nb.popup) Pill(nb.reason, onClick = { c.dismissNavBlocked() })

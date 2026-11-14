@@ -24,8 +24,63 @@ object TestHooks {
     private const val TAG = "MTTEST"
     @Volatile private var running = false
 
+    @Volatile private var watching = false
+
+    /**
+     * Commandes pour les scénarios d'interface (builds debug, extra « mt_watch ») : l'application lit files/cmd.txt toutes les demi-secondes, exécute la commande puis écrit l'état dans
+     * files/state.json. Commandes : peek (comme un appui long sur la première traduction), window <ms> (durée du bandeau « Annuler »), setedit <texte> (traduction écrite à la main),
+     * clearedits (retire les corrections), state (écrit seulement l'état).
+     */
+    private fun startWatcher(ctx: Context, graph: AppGraph) {
+        if (watching) return
+        watching = true
+        val c = graph.controller
+        val main = Handler(Looper.getMainLooper())
+        val cmdFile = File(ctx.filesDir, "cmd.txt")
+        thread(name = "mt-watch", isDaemon = true) {
+            while (true) {
+                try {
+                    Thread.sleep(500)
+                    if (!cmdFile.exists()) continue
+                    val cmd = cmdFile.readText().trim()
+                    cmdFile.delete()
+                    if (cmd.isEmpty()) continue
+                    val arg = cmd.substringAfter(' ', "")
+                    when (cmd.substringBefore(' ')) {
+                        "peek" -> main.post { c.testPeek() }
+                        "window" -> c.undoWindowMs = arg.toLongOrNull() ?: Controller.UNDO_MS
+                        "setedit" -> main.post { c.testSetTranslation(arg) }
+                        "clearedits" -> main.post { c.testClearEdits() }
+                    }
+                    Thread.sleep(300)   // laisse les gestes lancés sur le fil principal s'appliquer avant de relever l'état
+                    writeState(ctx, graph)
+                } catch (_: Throwable) {}
+            }
+        }
+    }
+
+    /** État relevé pour les scénarios d'interface : bandeau « Annuler » proposé, nombre de blocs, de blocs supprimés et de corrections, traduction de la première correction. */
+    private fun writeState(ctx: Context, graph: AppGraph) {
+        val c = graph.controller
+        var blocks = 0; var hidden = 0; var edits = 0; var editTr = ""
+        val ids = c.testWorkIds()
+        for (id in ids) {
+            val info = c.workInfo(id) ?: continue
+            blocks += info.applied.page.blocks.size
+            hidden += info.applied.editByBlock.values.count { it.hidden }
+            val list = graph.edits.forImage(info.imageKey)
+            edits += list.size
+            if (editTr.isEmpty()) editTr = list.firstNotNullOfOrNull { it.translation } ?: ""
+        }
+        val o = JSONObject().put("t", System.currentTimeMillis()).put("undo", c.undoDelete != null).put("peek", c.peekTarget != null)
+            .put("works", ids.size).put("blocks", blocks).put("hidden", hidden).put("edits", edits).put("editTr", editTr)
+        val tmp = File(ctx.filesDir, "state.json.tmp"); tmp.writeText(o.toString()); tmp.renameTo(File(ctx.filesDir, "state.json"))
+    }
+
     fun maybeRun(ctx: Context, graph: AppGraph, intent: Intent) {
         val debuggable = (ctx.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        if (debuggable && intent.getStringExtra("mt_watch") == "true") startWatcher(ctx, graph)
+        if (debuggable) intent.getStringExtra("mt_undo_ms")?.toLongOrNull()?.let { graph.controller.undoWindowMs = it }   // bandeau « Annuler » plus long pour laisser le temps de lire l'écran
         if (debuggable && intent.getStringExtra("mt_lab") != null && !running) { runLab(ctx, graph, intent); return }
         if (debuggable && intent.getStringExtra("mt_adtest") != null && !running) { runAdTest(ctx, graph, intent); return }
         val url = intent.getStringExtra("mt_url")

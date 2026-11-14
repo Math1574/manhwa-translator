@@ -103,6 +103,12 @@ const val NEW_BLOCK_ID = -2
 /** Zone non traduite touchée longuement : coordonnées dans l'image d'origine. */
 class EmptySpot(val imageId: String, val x: Float, val y: Float)
 
+/**
+ * Suppression d'une traduction qui peut encore être annulée : la page, l'image, la correction écrite pour la supprimer et celle qui existait avant
+ * (null : le bloc n'avait aucune correction). [src] sert au journal.
+ */
+class DeletedBlock(val imageId: String, val imageKey: String, val editId: String, val previous: BlockEdit?, val src: String)
+
 /** Ce que le contrôleur garde d'une page traitée pour pouvoir corriger ses blocs : fenêtre traitée, résultat avant et après corrections, empreinte de l'image. */
 class WorkInfo(
     val imageId: String, val imageSrc: String, val imageKey: String, val bytes: ByteArray, val ctxH: Int,
@@ -170,6 +176,11 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     /** Zone non traduite dont on touche longuement l'image : l'interface propose d'y ajouter un texte. */
     var peekEmpty by mutableStateOf<EmptySpot?>(null)
     private val clearPeekEmpty = Runnable { peekEmpty = null }
+    /** Dernière traduction supprimée d'un geste (corbeille de l'appui long) : l'interface propose de l'annuler pendant [undoWindowMs]. */
+    var undoDelete by mutableStateOf<DeletedBlock?>(null)
+    private val clearUndo = Runnable { undoDelete = null }
+    /** Durée de la proposition d'annulation (3 s) ; allongée seulement par les tests automatiques pour laisser le temps de lire l'écran. */
+    @Volatile var undoWindowMs = UNDO_MS
     /** Avancement à reprendre à l'ouverture de la page demandée (0 = aucun). */
     private var resumeTarget = 0
     private var resumeUrl = ""
@@ -450,7 +461,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                 graph.gemma.seriesTitle = if (url.startsWith("http")) app.manhwa.core.SeriesHint.fromUrl(url) else null
                 loading = true
                 nearBottom = false
-                barsHidden = false; pageProgress = 0; showReaderBar(false); resumeOffer = 0; peekTarget = null
+                barsHidden = false; pageProgress = 0; showReaderBar(false); resumeOffer = 0; peekTarget = null; undoDelete = null
                 pageError = null
                 resetSession()
                 view.evaluateJavascript(PageScript.INJECT, null)
@@ -555,6 +566,58 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         // le patch disparaît tout de suite ; la page est ensuite redessinée sans lui (résultat en cache)
         webView?.evaluateJavascript("window.__mt&&window.__mt.dropPatch(${JSONObject.quote(t.imageId)},${t.bid})", null)
         reprocess(id)
+        // la suppression reste annulable quelques secondes : un bandeau « Annuler » est proposé, puis il disparaît et la suppression est définitive
+        undoDelete = DeletedBlock(id, info.imageKey, edit.id, prev, shown.source)
+        main.removeCallbacks(clearUndo); main.postDelayed(clearUndo, undoWindowMs)
+    }
+
+    /** Annule la dernière suppression : le bloc retrouve la correction qu'il avait avant (ou aucune), puis la page est redessinée. */
+    fun undoDeletion() {
+        val u = undoDelete ?: return
+        undoDelete = null; main.removeCallbacks(clearUndo)
+        if (u.previous != null) graph.edits.upsert(u.imageKey, u.previous) else graph.edits.remove(u.imageKey, u.editId)
+        graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "correction").put("url", currentUrl).put("src", u.src).put("edit", "suppression annulée"))
+        reprocess(u.imageId)
+    }
+
+    // ---------- tests automatiques (builds debug) : gestes de l'appui long rejoués sans toucher la page ----------
+
+    /** Pages dont les blocs sont gardés en mémoire (les plus récentes). */
+    fun testWorkIds(): List<String> = synchronized(workInfos) { workInfos.keys.toList() }
+
+    /** Comme un appui long sur la première traduction non supprimée : la proposition « Corriger / supprimer » s'affiche 30 s. Faux s'il n'y a aucune traduction. */
+    fun testPeek(): Boolean {
+        for (id in testWorkIds()) {
+            val info = workInfo(id) ?: continue
+            val b = info.applied.page.blocks.firstOrNull { info.applied.editByBlock[it.id]?.hidden != true } ?: continue
+            peekEmpty = null; peekTarget = EditTarget(id, b.id, b.source, b.translated)
+            main.removeCallbacks(clearPeek); main.postDelayed(clearPeek, 30_000)
+            return true
+        }
+        return false
+    }
+
+    /** Pose une traduction écrite à la main sur la première traduction non supprimée (comme l'éditeur), puis redessine la page. */
+    fun testSetTranslation(text: String): Boolean {
+        for (id in testWorkIds()) {
+            val info = workInfo(id) ?: continue
+            val shown = info.applied.page.blocks.firstOrNull { info.applied.editByBlock[it.id]?.hidden != true } ?: continue
+            val orig = info.result.blocks.firstOrNull { it.id == shown.id } ?: shown
+            val prev = info.applied.editByBlock[shown.id]
+            val edit = prev?.copy(translation = text) ?: BlockEdit("e" + java.util.UUID.randomUUID().toString().take(8), EditKind.ADJUST, imageRect(orig.box, info.ctxH), orig.source, translation = text)
+            graph.edits.upsert(info.imageKey, edit); reprocess(id)
+            return true
+        }
+        return false
+    }
+
+    /** Retire toutes les corrections des pages en mémoire et les redessine. */
+    fun testClearEdits() {
+        for (id in testWorkIds()) {
+            val info = workInfo(id) ?: continue
+            for (e in graph.edits.forImage(info.imageKey)) graph.edits.remove(info.imageKey, e.id)
+            reprocess(id)
+        }
     }
 
     /** Ajoute un texte à la main à l'endroit touché (zone non traduite) : l'éditeur s'ouvre sur un rectangle à ajuster. */
@@ -1382,6 +1445,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     }
 
     companion object {
+        /** Une traduction supprimée d'un geste peut être rétablie pendant 3 secondes. */
+        const val UNDO_MS = 3000L
         const val MAX_IMAGE_BYTES = 30 * 1024 * 1024
         /** Une page bloquée depuis 1 min est signalée au journal ; depuis 4 min, son fil est abandonné et remplacé. */
         const val STALL_REPORT_MS = 60_000L
