@@ -4,8 +4,6 @@
 PKG=app.manhwa.translator
 OUT=/tmp/e2e; mkdir -p $OUT/shots $OUT/reports
 SUITE=${SUITE:-quick}
-LAB_VARIANTS=${LAB_VARIANTS:-v2,v3}           # banc d'essai : variantes de traduction (v1, v2, v3 ; suffixes r, c, a, o ; ab = comparaison normale / accélérée)
-LAB_ENGINES=${LAB_ENGINES:-e2b e4b}          # banc d'essai : modèles essayés
 EXTRA=()
 say() { echo "[e2e $(date +%H:%M:%S)] $*" | tee -a $OUT/run.log; }
 
@@ -494,9 +492,6 @@ tapt set4 "@EditText" 1; sleep 1; adb shell input text gpu; sleep 2; uidump srch
 chk "réglages : la recherche « gpu » propose l'accélération GPU, rangée dans Avancé" $([ "$(has srch 'GPU')" = 1 ] && [ "$(has srch 'Avanc')" = 1 ] && echo 1 || echo 0)
 tapt srch "=Accélération GPU (expérimental)" 1; sleep 3; uidump adv; shot ui 10
 chk "réglages : un résultat de recherche ouvre la page Avancé" $([ "$(has adv 'Tester CPU')" = 1 ] && echo 1 || echo 0)
-# essai de traduction accélérée : proposé dans Avancé › Performance avec sa comparaison, désactivé tant qu'on ne l'a pas choisi (le vrai modèle n'est essayé que par le banc d'essai)
-appstate
-chk "réglages : l'essai « Traduction accélérée » est proposé avec son bouton de comparaison, désactivé par défaut" $([ "$(has adv 'Traduction acc')" = 1 ] && [ "$(has adv 'Comparer normal')" = 1 ] && [ "$(stv fastLlm)" = "False" ] && echo 1 || echo 0)
 adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump set5
 tapt set5 "Effacer la recherche" 1; sleep 1; uidump set6
 tapt set6 "@EditText" 1; sleep 1; adb shell input text filtres; sleep 2; uidump srch2
@@ -652,9 +647,9 @@ chk "raccourci : « Reprendre la lecture » publié pour l'œuvre lue" $([ "$(gr
 fi # fin des scénarios web (absents de la suite lab)
 
 # --- suite complète / lab : Gemma 4 E2B ---
-if [ "$SUITE" != quick ] && [[ " $LAB_ENGINES " == *" e2b "* ]] && [ -f /tmp/gemma/gemma-4-E2B-it.litertlm ]; then
+if [ "$SUITE" != quick ] && [ -f /tmp/gemma/gemma-4-E2B-it.litertlm ]; then
   push_model /tmp/gemma/gemma-4-E2B-it.litertlm gemma-4-E2B-it.litertlm 181938105e0eefd105961417e8da75903eacda102c4fce9ce90f50b97139a63c
-  lab e2b GEMMA_E2B $LAB_VARIANTS
+  lab e2b GEMMA_E2B v2,v3
   if [ "$SUITE" = full ]; then
   run pc_en_gemma          pc_en.html          GEMMA_E2B EN FR "" 1500
   run synth_en_caps_gemma  synth_en_caps.html  GEMMA_E2B EN FR "" 900
@@ -662,9 +657,9 @@ if [ "$SUITE" != quick ] && [[ " $LAB_ENGINES " == *" e2b "* ]] && [ -f /tmp/gem
   run pc_ja_gemma          pc_ja.html          GEMMA_E2B JA FR "" 1500
   fi
 fi
-if [ "$SUITE" != quick ] && [[ " $LAB_ENGINES " == *" e4b "* ]] && [ -f /tmp/gemma/gemma-4-E4B-it.litertlm ]; then
+if [ "$SUITE" != quick ] && [ -f /tmp/gemma/gemma-4-E4B-it.litertlm ]; then
   push_model /tmp/gemma/gemma-4-E4B-it.litertlm gemma-4-E4B-it.litertlm 0b2a8980ce155fd97673d8e820b4d29d9c7d99b8fa6806f425d969b145bd52e0
-  lab e4b GEMMA_E4B $LAB_VARIANTS
+  lab e4b GEMMA_E4B v2,v3
   if [ "$SUITE" = full ]; then
   run pc_en_gemma4b          pc_en.html          GEMMA_E4B EN FR "" 1800
   run synth_en_caps_gemma4b  synth_en_caps.html  GEMMA_E4B EN FR "" 1200

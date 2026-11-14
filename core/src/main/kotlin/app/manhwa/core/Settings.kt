@@ -59,10 +59,6 @@ data class AppSettings(
     /** Accueil : sites épinglés (adresses d'accueil séparées par des espaces) et sites retirés de l'accueil (clés séparées par des virgules). */
     val homeSites: String = "",
     val homeHidden: String = "",
-    /** Essai : Gemma garde en mémoire les consignes de traduction (moins de calcul par page ; le texte peut changer un peu). Désactivé par défaut. */
-    val fastLlm: Boolean = false,
-    /** Avec l'essai : coupe le décodage spéculatif, qui ne fait pas toujours bon ménage avec la copie des consignes. Sans effet si l'essai est désactivé. */
-    val fastLlmNoSpec: Boolean = false,
 ) {
     val adAllowSiteSet: Set<String> get() = adAllowSites.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
     val adAllowTargetSet: Set<String> get() = adAllowTargets.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
@@ -80,7 +76,7 @@ data class AppSettings(
         it["maxPrefetchPages"] = maxPrefetchPages.toString(); it["cacheMaxMb"] = cacheMaxMb.toString()
         it["schema"] = "2"; it["engine"] = engine.name; it["useGpu"] = useGpu.toString(); it["diagnostic"] = diagnostic.toString(); it["enhancedOcr"] = enhancedOcr.toString(); it["refinePass"] = refinePass.toString(); it["blockAds"] = blockAds.toString(); it["autoReread"] = autoReread.toString(); it["translateSfx"] = translateSfx.toString()
         it["themeAccent"] = themeAccent; it["themeBackground"] = themeBackground; it["reducedMotion"] = reducedMotion.toString(); it["showMascot"] = showMascot.toString(); it["themeMascot"] = themeMascot; it["adAllowSites"] = adAllowSites; it["adAllowTargets"] = adAllowTargets
-        it["readTranslate"] = readTranslate.toString(); it["orbRight"] = orbRight.toString(); it["orbY"] = orbY.toString(); it["hideBarsWhileReading"] = hideBarsWhileReading.toString(); it["librarySort"] = librarySort; it["homeSites"] = homeSites; it["homeHidden"] = homeHidden; it["fastLlm"] = fastLlm.toString(); it["fastLlmNoSpec"] = fastLlmNoSpec.toString()
+        it["readTranslate"] = readTranslate.toString(); it["orbRight"] = orbRight.toString(); it["orbY"] = orbY.toString(); it["hideBarsWhileReading"] = hideBarsWhileReading.toString(); it["librarySort"] = librarySort; it["homeSites"] = homeSites; it["homeHidden"] = homeHidden
     }.let { p -> java.io.StringWriter().also { w -> p.store(w, null) }.toString() }
 
     companion object {
@@ -119,8 +115,6 @@ data class AppSettings(
                 p.getProperty("librarySort")?.takeIf { v -> SeriesSort.values().any { it.id == v } } ?: d.librarySort,
                 p.getProperty("homeSites") ?: d.homeSites,
                 p.getProperty("homeHidden") ?: d.homeHidden,
-                p.getProperty("fastLlm")?.toBooleanStrictOrNull() ?: d.fastLlm,
-                p.getProperty("fastLlmNoSpec")?.toBooleanStrictOrNull() ?: d.fastLlmNoSpec,
             ).sanitized()
         }
     }

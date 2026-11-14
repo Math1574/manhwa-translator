@@ -138,7 +138,7 @@ object TestHooks {
             .put("libSeries", graph.library.library.series().size).put("libFinished", graph.library.library.series().count { it.finished }).put("libSort", graph.settingsStore.settings.librarySort)
             .put("home", c.currentUrl.isEmpty()).put("homeSites", app.manhwa.core.HomeView.sites(graph.library.library, app.manhwa.core.HomeView.pinned(graph.settingsStore.settings), app.manhwa.core.HomeView.hidden(graph.settingsStore.settings)).size)
             .put("homePinned", app.manhwa.core.HomeView.pinned(graph.settingsStore.settings).size).put("homeHidden", app.manhwa.core.HomeView.hidden(graph.settingsStore.settings).size)
-            .put("fastLlm", graph.settingsStore.settings.fastLlm).put("fastLlmNoSpec", graph.settingsStore.settings.fastLlmNoSpec).put("corr", graph.edits.count()).put("corrOrig", graph.edits.originsSnapshot().size).put("fixes", graph.glossary.corrections.size)
+            .put("corr", graph.edits.count()).put("corrOrig", graph.edits.originsSnapshot().size).put("fixes", graph.glossary.corrections.size)
             .put("terms", graph.glossary.terms.size + graph.glossary.seriesTerms.size).put("seriesTermSrc", graph.glossary.seriesTerms.map { it.source }.sorted().joinToString("|")).put("glossRev", graph.glossary.revision).put("refreshed", c.testRefreshed.get()).put("patched", c.testPatched.get())
             .put("tpv", c.termPreview?.let { if (it.computing) "computing" else "ready" } ?: "none").put("tpvRows", c.termPreview?.rows?.size ?: 0).put("tpvOthers", c.termPreview?.others ?: 0).put("trs", trs.sorted().joinToString("\u001f"))
         val ed = EditorProbe.info
@@ -342,9 +342,7 @@ object TestHooks {
 
     /**
      * Banc d'essai de traduction : lit files/lab.json (pages de répliques), traduit chaque page avec chaque variante
-     * (v1, v2, v3 ; suffixes : r = relecture, c = consignes réutilisées (essai accéléré), a / o = décodage spéculatif ADAPTIVE / coupé)
-     * et écrit files/lab_<nom>.json. Le contexte de chapitre est conservé d'une page à l'autre. La variante « ab » lance la comparaison
-     * « normale / accélérée » des réglages (six répliques) et range son résultat sous « ab ».
+     * (v1, v2, v2r = v2 + relecture) et écrit files/lab_<nom>.json. Le contexte de chapitre est conservé d'une page à l'autre.
      */
     private fun runLab(ctx: Context, graph: AppGraph, intent: Intent) {
         running = true
@@ -353,36 +351,13 @@ object TestHooks {
         val engine = TranslationEngineChoice.values().firstOrNull { it.name == intent.getStringExtra("mt_engine") } ?: TranslationEngineChoice.GEMMA_E2B
         graph.settingsStore.update { it.copy(engine = engine, useGpu = false, source = SourceLang.EN, target = TargetLang.FR) }
         thread(name = "mt-lab") {
-            val result = JSONObject(); val variantsJson = JSONObject(); val notes = JSONArray(); val abJson = JSONObject()
+            val result = JSONObject(); val variantsJson = JSONObject(); val notes = JSONArray()
             try {
                 graph.llm.refresh()
                 val pages = JSONObject(File(ctx.filesDir, "lab.json").readText()).getJSONArray("pages")
                 for (v in variants) {
-                    if (v == "ab" || v == "abo") {
-                        // « ab » : la comparaison des réglages, avec le moteur tel que l'application le crée ; « abo » : même comparaison, décodage spéculatif coupé
-                        graph.gemma.reuseOverride = null
-                        val want = if (v == "abo") com.google.ai.edge.litertlm.SpeculativeDecodingMode.OFF else null
-                        if (want != graph.gemma.specOverride) { graph.gemma.specOverride = want; graph.gemma.release() }
-                        val one = JSONObject()
-                        val r = graph.gemma.compareReuse()
-                        one.put("note", r.note)
-                        r.outcome?.let { o ->
-                            one.put("normalMs", o.normalMs).put("sameBaseline", o.sameBaseline).put("lines", o.lines).put("skipped", JSONArray(o.skipped)).put("text", app.manhwa.core.SpeedReport.describe(o))
-                            fun tryJson(x: app.manhwa.core.SpeedTry?) = x?.let { JSONObject().put("ms", it.ms).put("same", it.same).put("failed", it.failed).put("tries", it.tries) }
-                            tryJson(o.copy)?.let { one.put("copy", it) }; tryJson(o.noSpec)?.let { one.put("noSpec", it) }
-                        }
-                        one.put("backend", graph.gemma.backendLabel)
-                        abJson.put(v, one)
-                        notes.put("comparaison $v terminée")
-                        File(ctx.filesDir, "lab_$name.partial.json").writeText(JSONObject().put("engine", engine.name).put("variants", variantsJson).put("ab", abJson).put("notes", notes).toString())
-                        continue
-                    }
-                    val flags = v.drop(2)
                     graph.gemma.promptVariant = when { v.startsWith("v1") -> 1; v.startsWith("v3") -> 3; else -> 2 }
-                    graph.gemma.refine = 'r' in flags
-                    graph.gemma.reuseOverride = 'c' in flags
-                    val mode = when { 'a' in flags -> com.google.ai.edge.litertlm.SpeculativeDecodingMode.ADAPTIVE; 'o' in flags -> com.google.ai.edge.litertlm.SpeculativeDecodingMode.OFF; else -> null }
-                    if (mode != graph.gemma.specOverride) { graph.gemma.specOverride = mode; graph.gemma.release() }   // le mode se choisit à la création du moteur
+                    graph.gemma.refine = v.endsWith("r")
                     graph.gemma.resetContext()
                     graph.gemma.seriesTitle = intent.getStringExtra("mt_series")
                     val out = JSONArray()
@@ -395,15 +370,13 @@ object TestHooks {
                     }
                     variantsJson.put(v, out)
                     notes.put("variante $v terminée")
-                    File(ctx.filesDir, "lab_$name.partial.json").writeText(JSONObject().put("engine", engine.name).put("variants", variantsJson).put("ab", abJson).put("notes", notes).toString())
+                    File(ctx.filesDir, "lab_$name.partial.json").writeText(JSONObject().put("engine", engine.name).put("variants", variantsJson).put("notes", notes).toString())
                 }
             } catch (e: Throwable) {
                 notes.put("exception : $e")
             }
-            graph.gemma.promptVariant = LlmPrompt.CURRENT; graph.gemma.refine = false; graph.gemma.reuseOverride = null; graph.gemma.specOverride = null
-            notes.put("réutilisation : " + graph.gemma.reuseStatus)
-            if (graph.gemma.reuseLastError.isNotEmpty()) notes.put("dernière erreur du moteur lors d'une copie ratée : " + graph.gemma.reuseLastError)
-            result.put("engine", engine.name).put("variants", variantsJson).put("ab", abJson).put("notes", notes)
+            graph.gemma.promptVariant = LlmPrompt.CURRENT; graph.gemma.refine = false
+            result.put("engine", engine.name).put("variants", variantsJson).put("notes", notes)
             val tmp = File(ctx.filesDir, "lab_$name.json.tmp"); tmp.writeText(result.toString()); tmp.renameTo(File(ctx.filesDir, "lab_$name.json"))
             Log.i(TAG, "REPORT_READY lab_$name.json")
             running = false

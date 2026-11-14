@@ -70,5 +70,5 @@ dependencies {
     // Second moteur de lecture : PaddleOCR (modèles ONNX) pour le texte stylisé ou hors bulles
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.20.0")
     // Traduction locale avec contexte : modèle de langage Gemma 4 via LiteRT-LM
-    implementation("com.google.ai.edge.litertlm:litertlm-android:0.19.1")
+    implementation("com.google.ai.edge.litertlm:litertlm-android:0.18.1")
 }
