@@ -1,0 +1,80 @@
+11-14 13:28:16.489  5955  6001 E nhwa.translator: No implementation found for void com.google.ai.edge.litertlm.NativeLibraryLoader.nativeCheckLoaded() (tried Java_com_google_ai_edge_litertlm_NativeLibraryLoader_nativeCheckLoaded and Java_com_google_ai_edge_litertlm_NativeLibraryLoader_nativeCheckLoaded__) - is the library loaded, e.g. System.loadLibrary?
+11-14 13:28:16.499  5955  6002 W native  : W0000 00:00:1794662896.499715    6002 litert_lm_loader.cc:407] Section not found: SP_Tokenizer
+11-14 13:28:16.506  5955  6001 I litert  : [environment.cc:36] Creating LiteRT environment with options
+11-14 13:28:16.506  5955  6001 W litert  : [npu_registry.cc:34] NPU accelerator could not be loaded and registered: kLiteRtStatusErrorNotFound.
+11-14 13:28:16.506  5955  6001 I litert  : [accelerator_registry.cc:54] RegisterAccelerator: ptr=0x751245e0f7b0, name=LiteRT GPU
+11-14 13:28:16.506  5955  6001 I litert  : [gpu_registry.cc:121] Statically linked GPU accelerator registered.
+11-14 13:28:16.506  5955  6001 I litert  : [accelerator_registry.cc:54] RegisterAccelerator: ptr=0x751245e10380, name=CpuAccelerator
+11-14 13:28:16.506  5955  6001 I litert  : [cpu_registry.cc:73] XNNPACK CPU accelerator registered.
+11-14 13:28:16.880  5955  6001 I litert  : [environment.cc:36] Creating LiteRT environment with options
+11-14 13:28:16.880  5955  6001 W litert  : [npu_registry.cc:34] NPU accelerator could not be loaded and registered: kLiteRtStatusErrorNotFound.
+11-14 13:28:16.880  5955  6001 I litert  : [accelerator_registry.cc:54] RegisterAccelerator: ptr=0x751245e0dad0, name=LiteRT GPU
+11-14 13:28:16.880  5955  6001 I litert  : [gpu_registry.cc:121] Statically linked GPU accelerator registered.
+11-14 13:28:16.880  5955  6001 I litert  : [accelerator_registry.cc:54] RegisterAccelerator: ptr=0x751245e0e240, name=CpuAccelerator
+11-14 13:28:16.880  5955  6001 I litert  : [cpu_registry.cc:73] XNNPACK CPU accelerator registered.
+11-14 13:28:16.880  5955  6001 W native  : W0000 00:00:1794662896.880839    6001 litert_lm_loader.cc:407] Section not found: ExecutorMetadataProto
+11-14 13:28:16.881  5955  6001 I litert  : [magic_number_utils.cc:101] Loaded: num_subgraphs=1340, num_signatures=4
+11-14 13:28:16.881  5955  6001 I litert  : [magic_number_utils.cc:109]   signature=decode, subgraph_index=0, num_tensors=3514, num_inputs=53, num_outputs=50, num_ops=2712
+11-14 13:28:16.881  5955  6001 I litert  : [magic_number_utils.cc:109]   signature=prefill_1024, subgraph_index=1, num_tensors=2309, num_inputs=53, num_outputs=48, num_ops=1773
+11-14 13:28:16.881  5955  6001 I litert  : [magic_number_utils.cc:109]   signature=prefill_128, subgraph_index=2, num_tensors=2309, num_inputs=53, num_outputs=48, num_ops=1773
+11-14 13:28:16.881  5955  6001 I litert  : [magic_number_utils.cc:109]   signature=verify, subgraph_index=3, num_tensors=3606, num_inputs=53, num_outputs=50, num_ops=2801
+11-14 13:28:16.881  5955  6001 I litert  : [magic_number_utils.cc:113] Magic number configs: num_configs=1
+11-14 13:28:16.881  5955  6001 I litert  : [magic_number_utils.cc:120]   config[0]: magic_number=32003, target_number=4096, signature_prefix=null
+11-14 13:28:16.888  5955  6001 I litert  : [magic_number_utils.cc:536] 577 tensors of signature decode have been updated for magic number  32003 to target number 4096
+11-14 13:28:16.896  5955  6001 I litert  : [magic_number_utils.cc:536] 426 tensors of signature prefill_1024 have been updated for magic number  32003 to target number 4096
+11-14 13:28:16.911  5955  6001 I litert  : [magic_number_utils.cc:536] 426 tensors of signature prefill_128 have been updated for magic number  32003 to target number 4096
+11-14 13:28:16.926  5955  6001 I litert  : [magic_number_utils.cc:536] 581 tensors of signature verify have been updated for magic number  32003 to target number 4096
+11-14 13:28:16.926  5955  6001 I litert  : [compiled_model.cc:963] Flatbuffer model initialized directly from incoming litert model.
+11-14 13:28:17.009  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.009  5955  6001 I tflite  : XNNPack weight cache build for '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache' started.
+11-14 13:28:17.068  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.074  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.077  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.198  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.201  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.207  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.211  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.289  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.292  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.302  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.314  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.430  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.437  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.447  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.452  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.481  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.482  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.486  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.488  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.533  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.535  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.542  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.550  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.676  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.679  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.686  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.688  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.743  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.745  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.749  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.754  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.823  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.829  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.848  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.867  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.974  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.976  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.987  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:17.994  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:18.071  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:18.074  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:18.078  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:18.082  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:18.138  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:18.143  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:18.153  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:18.160  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:18.223  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:18.224  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:18.229  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
+11-14 13:28:18.232  5955  6001 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E4B-it.litertlm_1794662895_3659530240.xnnpack_cache'.
