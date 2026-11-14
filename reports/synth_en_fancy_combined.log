@@ -1,0 +1,51 @@
+11-14 07:07:37.564  9677  9852 I tflite  : Initialized TensorFlow Lite runtime.
+11-14 07:07:37.570  9677  9853 I native  : I0000 00:00:1794640057.570593    9853 tflite_lstm_client_base.cc:371] Resizing interpreter pool to 4
+11-14 07:07:37.589  9677  9852 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+11-14 07:07:37.589  9677  9852 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 07:07:37.593  9677  9852 I native  : I0000 00:00:1794640057.593597    9852 tflite_detector_client_with_shape_cache.cc:105] Caching size: 10
+11-14 07:07:37.601  9677  9852 I native  : I0000 00:00:1794640057.601957    9852 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_splitting_custom_ops/model.tflite
+11-14 07:07:37.602  9677  9852 I native  : I0000 00:00:1794640057.602422    9852 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-14 07:07:37.602  9677  9852 I native  : I0000 00:00:1794640057.602755    9852 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_clustering_custom_ops/model.tflite
+11-14 07:07:37.603  9677  9852 I native  : I0000 00:00:1794640057.603147    9852 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-14 07:07:37.603  9677  9863 I native  : I0000 00:00:1794640057.603671    9863 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/conv_model.fb
+11-14 07:07:37.604  9677  9863 I native  : I0000 00:00:1794640057.604338    9863 tflite_model_pooled_runner.cc:636] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/lstm_model.fb
+11-14 07:07:37.607  9677  9863 I native  : I0000 00:00:1794640057.607348    9863 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 4
+11-14 07:07:37.665  9677  9853 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 07:07:37.933  9677  9853 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 07:07:37.980  9677  9853 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 07:07:38.101  9677  9853 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 07:07:40.830  9677  9853 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 07:07:41.121  9677  9853 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 07:07:41.381  9677  9853 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 07:07:41.968  9677  9853 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 07:07:42.357  9677  9853 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 07:07:53.749  9677  9759 I MT      : écarté « CRACI » (onomatopée laissée telle quelle, hors zone)
+11-14 07:07:53.857  9677  9991 I tflite  : Initialized TensorFlow Lite runtime.
+11-14 07:07:53.857  9677  9991 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+11-14 07:07:55.750  9620  9687 D cevx    : Starting download: https://www.gstatic.com/messages/smarts/smart_actions_emotive_models/emotion_reply_model_replicate_extended.tflite
+11-14 07:07:55.750  9620  9687 V cevx    : Is http uri, downloading (uri: https://www.gstatic.com/messages/smarts/smart_actions_emotive_models/emotion_reply_model_replicate_extended.tflite)
+11-14 07:07:55.965  9620  9959 D cevx    : Starting download: https://www.gstatic.com/messages/smarts/smart_actions_emotive_models/emotion_complete_model_replicate.tflite_1589263783992
+11-14 07:07:55.965  9620  9959 V cevx    : Is http uri, downloading (uri: https://www.gstatic.com/messages/smarts/smart_actions_emotive_models/emotion_complete_model_replicate.tflite_1589263783992)
+11-14 07:07:56.052  9620  9683 D cevx    : Starting download: https://www.gstatic.com/messages/smarts/smart_actions_emotive_models/emotion_complete_model_replicate_extended.tflite
+11-14 07:07:56.052  9620  9683 V cevx    : Is http uri, downloading (uri: https://www.gstatic.com/messages/smarts/smart_actions_emotive_models/emotion_complete_model_replicate_extended.tflite)
+11-14 07:07:56.119  9620  9687 D cevx    : Starting download: https://www.gstatic.com/messages/smarts/smart_actions_emotive_models/emotion_complete_model_replicate_winter.tflite
+11-14 07:07:56.119  9620  9687 V cevx    : Is http uri, downloading (uri: https://www.gstatic.com/messages/smarts/smart_actions_emotive_models/emotion_complete_model_replicate_winter.tflite)
+11-14 07:07:56.242  9620  9959 D cevx    : Starting download: https://www.gstatic.com/messages/smarts/smart_actions_ml_models//emotions_tflite_model_1579310142.tflite
+11-14 07:07:56.242  9620  9959 V cevx    : Is http uri, downloading (uri: https://www.gstatic.com/messages/smarts/smart_actions_ml_models//emotions_tflite_model_1579310142.tflite)
+11-14 07:08:00.482  9620  9683 D cevx    : Starting download: https://www.gstatic.com/messages/smarts/multitask_experiment/multi_lite_9head_20200301_model.tflite_1584573658696
+11-14 07:08:00.482  9620  9683 V cevx    : Is http uri, downloading (uri: https://www.gstatic.com/messages/smarts/multitask_experiment/multi_lite_9head_20200301_model.tflite_1584573658696)
+11-14 07:08:01.211  9620  9683 D cevx    : Starting download: https://www.gstatic.com/messages/smarts/multitask_experiment/multi_lite_9heads_plus_photo_suggest_20201118.tflite_1605907326457
+11-14 07:08:01.211  9620  9683 V cevx    : Is http uri, downloading (uri: https://www.gstatic.com/messages/smarts/multitask_experiment/multi_lite_9heads_plus_photo_suggest_20201118.tflite_1605907326457)
+11-14 07:08:02.007  9620  9959 D cevx    : Starting download: https://www.gstatic.com/messages/smarts/nudge/nudge_question_classifier_v2.tflite_1639164115205
+11-14 07:08:02.007  9620  9959 V cevx    : Is http uri, downloading (uri: https://www.gstatic.com/messages/smarts/nudge/nudge_question_classifier_v2.tflite_1639164115205)
+11-14 07:08:02.727  9620  9959 D cevx    : Starting download: https://www.gstatic.com//messages/smarts/smart_actions_sensitive_classifier_models/sgnn_w31c31_20200517_1596523090.tflite
+11-14 07:08:02.728  9620  9959 V cevx    : Is http uri, downloading (uri: https://www.gstatic.com//messages/smarts/smart_actions_sensitive_classifier_models/sgnn_w31c31_20200517_1596523090.tflite)
+11-14 07:08:02.734  9620  9958 D cevx    : Starting download: https://www.gstatic.com/messages/smarts/smart_actions_sensitive_classifier_models/binary3.sgnn.w31c31.20201129.tflite
+11-14 07:08:02.734  9620  9958 V cevx    : Is http uri, downloading (uri: https://www.gstatic.com/messages/smarts/smart_actions_sensitive_classifier_models/binary3.sgnn.w31c31.20201129.tflite)
+11-14 07:08:02.822  9620  9683 D cevx    : Starting download: https://www.gstatic.com/messages/smarts/smart_actions_sensitive_classifier_models/multi3.sgnn.w31c31.20201129.tflite
+11-14 07:08:02.823  9620  9683 V cevx    : Is http uri, downloading (uri: https://www.gstatic.com/messages/smarts/smart_actions_sensitive_classifier_models/multi3.sgnn.w31c31.20201129.tflite)
+11-14 07:08:02.833  9620  9959 D cevx    : Starting download: https://www.gstatic.com/messages/smarts/smart_actions_sensitive_classifier_models/sgnn.w31c31.tflite_20211012
+11-14 07:08:02.833  9620  9959 V cevx    : Is http uri, downloading (uri: https://www.gstatic.com/messages/smarts/smart_actions_sensitive_classifier_models/sgnn.w31c31.tflite_20211012)
+11-14 07:08:06.988  9620  9959 D cevx    : Starting download: https://www.gstatic.com/messages/smarts/smart_suggestion_reranker_models/smart_suggestion_reranker_models/tff_suggestion_triggering_2022_03_30d_train_s1.0c1.0.10_examples_optimized_checkpoint_03570.tflite_1651164981810
+11-14 07:08:06.988  9620  9959 V cevx    : Is http uri, downloading (uri: https://www.gstatic.com/messages/smarts/smart_suggestion_reranker_models/smart_suggestion_reranker_models/tff_suggestion_triggering_2022_03_30d_train_s1.0c1.0.10_examples_optimized_checkpoint_03570.tflite_1651164981810)
+11-14 07:08:18.658  9677  9769 I MTTEST  : REPORT_READY report.json

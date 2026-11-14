@@ -1,0 +1,65 @@
+Performing Streamed Install
+Success
+Physical size: 1080x2400
+[e2e 06:56:32] === prep (index.html, MLKIT, EN→FR)
+[e2e 06:58:29] terminé : prep (116 s)
+[e2e 06:58:29] aucune image traitée : nouvel essai de prep
+[e2e 06:58:29] === prep (index.html, MLKIT, EN→FR)
+[e2e 06:59:23] terminé : prep (54 s)
+[e2e 06:59:23] === pc_en_mlkit (pc_en.html, MLKIT, EN→FR)
+[e2e 07:00:40] terminé : pc_en_mlkit (76 s)
+[e2e 07:00:40] === synth_en_caps_mlkit (synth_en_caps.html, MLKIT, EN→FR)
+[e2e 07:01:30] terminé : synth_en_caps_mlkit (49 s)
+[e2e 07:01:30] === synth_en_mixed_mlkit (synth_en_mixed.html, MLKIT, EN→FR)
+[e2e 07:02:19] terminé : synth_en_mixed_mlkit (49 s)
+[e2e 07:02:19] === synth_en_variety_combined (synth_en_variety.html, MLKIT, EN→FR)
+[e2e 07:03:14] terminé : synth_en_variety_combined (55 s)
+[e2e 07:03:14] === adblock_mlkit (adtest.html, MLKIT, EN→FR)
+[e2e 07:04:03] terminé : adblock_mlkit (49 s)
+[e2e 07:04:03] === synth_layouts_combined (synth_layouts.html, MLKIT, EN→FR)
+[e2e 07:05:35] terminé : synth_layouts_combined (91 s)
+[e2e 07:05:35] === synth_atypical_combined (synth_atypical.html, MLKIT, EN→FR)
+[e2e 07:06:49] terminé : synth_atypical_combined (74 s)
+[e2e 07:06:49] === synth_en_fancy_mlkitonly (synth_en_fancy.html, MLKIT, EN→FR)
+[e2e 07:07:32] terminé : synth_en_fancy_mlkitonly (43 s)
+[e2e 07:07:32] === synth_en_fancy_combined (synth_en_fancy.html, MLKIT, EN→FR)
+[e2e 07:08:33] terminé : synth_en_fancy_combined (61 s)
+[e2e 07:08:33] === pc_en_ref_mlkit (pc_en_ref.html, MLKIT, EN→FR)
+[e2e 07:09:44] terminé : pc_en_ref_mlkit (70 s)
+[e2e 07:09:44] === seam_mlkit (seam_cut.html, MLKIT, EN→FR)
+[e2e 07:10:58] terminé : seam_mlkit (73 s)
+[e2e 07:10:58] === seam_off_mlkit (seam_cut.html, MLKIT, EN→FR)
+[e2e 07:12:11] terminé : seam_off_mlkit (73 s)
+[e2e 07:12:11] === pc_en_batch_mlkit (pc_en.html, MLKIT, EN→FR)
+[e2e 07:13:22] terminé : pc_en_batch_mlkit (70 s)
+[e2e 07:13:22] === pc_en_long_mlkit (pc_en_long.html, MLKIT, EN→FR)
+[e2e 07:17:41] terminé : pc_en_long_mlkit (259 s)
+[e2e 07:17:41] === pc_en_toggle_mlkit (pc_en_toggle.html, MLKIT, EN→FR)
+[e2e 07:19:58] terminé : pc_en_toggle_mlkit (137 s)
+[e2e 07:19:58] === pc_en_once_mlkit (pc_en_once.html, MLKIT, EN→FR)
+[e2e 07:21:09] terminé : pc_en_once_mlkit (70 s)
+[e2e 07:21:09] === pc_en_strict_mlkit (pc_en_strict.html, MLKIT, EN→FR)
+[e2e 07:22:20] terminé : pc_en_strict_mlkit (70 s)
+[e2e 07:22:20] === pc_en_lazy_mlkit (pc_en_lazy.html, MLKIT, EN→FR)
+[e2e 07:23:44] terminé : pc_en_lazy_mlkit (83 s)
+[e2e 07:23:44] === synth_ko_mlkit (synth_ko.html, MLKIT, KO→FR)
+[e2e 07:24:33] terminé : synth_ko_mlkit (49 s)
+[e2e 07:24:33] === synth_ja_vert_mlkit (synth_ja_vertical.html, MLKIT, JA→FR)
+[e2e 07:25:28] terminé : synth_ja_vert_mlkit (55 s)
+[e2e 07:25:28] === synth_zh_mlkit (synth_zh.html, MLKIT, ZH_HANS→FR)
+[e2e 07:26:17] terminé : synth_zh_mlkit (49 s)
+[e2e 07:26:17] === pc_ja_mlkit (pc_ja.html, MLKIT, JA→FR)
+[e2e 07:27:40] terminé : pc_ja_mlkit (83 s)
+[e2e 07:27:40] === bloqueur de publicités
+[e2e 07:28:18] bloqueur terminé (6132 octets de rapport)
+[e2e 07:28:18] === interface
+  [avant appui]   mCurrentFocus=Window{a87636e u0 app.manhwa.translator/app.manhwa.MainActivity}
+  [avant appui]     topResumedActivity=ActivityRecord{8b96af8 u0 app.manhwa.translator/app.manhwa.MainActivity t33}
+  [avant appui]   ResumedActivity: ActivityRecord{8b96af8 u0 app.manhwa.translator/app.manhwa.MainActivity t33}
+  [après appui]   mCurrentFocus=Window{a87636e u0 app.manhwa.translator/app.manhwa.MainActivity}
+  mCurrentFocus=Window{a87636e u0 app.manhwa.translator/app.manhwa.MainActivity}
+        InsetsSource id=137e0000 type=statusBars frame=[0,0][1080,128] visible=true flags= insetsRoundedCornerFrame=false
+        mSource=InsetsSource id=137e0000 type=statusBars frame=[0,0][1080,128] visible=true flags= insetsRoundedCornerFrame=false
+[e2e 07:31:59] textes écartés : 2 cadre(s) proposé(s), listes connues pour 2 page(s) sur 2
+  [journal système] 30 ligne(s) d'ANR ou de plantage
+[e2e 07:35:45] toutes les scènes sont terminées
