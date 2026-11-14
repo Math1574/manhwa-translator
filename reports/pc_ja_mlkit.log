@@ -1,0 +1,41 @@
+11-14 07:18:25.468 14229 14345 I tflite  : Initialized TensorFlow Lite runtime.
+11-14 07:18:25.492 14229 14346 I native  : I0000 00:00:1794640705.492718   14346 tflite_lstm_client_base.cc:371] Resizing interpreter pool to 4
+11-14 07:18:25.591 14229 14345 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+11-14 07:18:25.591 14229 14345 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 07:18:25.591 14229 14356 I native  : I0000 00:00:1794640705.591874   14356 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Hani_ctc/optical/conv_model.fb
+11-14 07:18:25.596 14229 14356 I native  : I0000 00:00:1794640705.596087   14356 tflite_model_pooled_runner.cc:636] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Hani_ctc/optical/lstm_model.fb
+11-14 07:18:25.608 14229 14357 I native  : I0000 00:00:1794640705.606726   14357 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Jpan_ctc/optical/conv_model.fb
+11-14 07:18:25.609 14229 14357 I native  : I0000 00:00:1794640705.609216   14357 tflite_model_pooled_runner.cc:636] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Jpan_ctc/optical/lstm_model.fb
+11-14 07:18:25.615 14229 14358 I native  : I0000 00:00:1794640705.615064   14358 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/conv_model.fb
+11-14 07:18:25.615 14229 14358 I native  : I0000 00:00:1794640705.615579   14358 tflite_model_pooled_runner.cc:636] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/lstm_model.fb
+11-14 07:18:25.616 14229 14345 I native  : I0000 00:00:1794640705.615616   14345 tflite_detector_client_with_shape_cache.cc:105] Caching size: 10
+11-14 07:18:25.620 14229 14345 I native  : I0000 00:00:1794640705.620651   14345 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_splitting_custom_ops/model.tflite
+11-14 07:18:25.629 14229 14345 I native  : I0000 00:00:1794640705.629361   14345 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-14 07:18:25.629 14229 14345 I native  : I0000 00:00:1794640705.629756   14345 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_clustering_custom_ops/model.tflite
+11-14 07:18:25.630 14229 14345 I native  : I0000 00:00:1794640705.630830   14345 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-14 07:18:25.635 14229 14356 I native  : I0000 00:00:1794640705.635124   14356 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 4
+11-14 07:18:25.638 14229 14358 I native  : I0000 00:00:1794640705.638127   14358 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 4
+11-14 07:18:25.639 14229 14357 I native  : I0000 00:00:1794640705.639410   14357 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 4
+11-14 07:18:25.690 14229 14346 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 07:18:27.851 14229 14346 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 07:18:28.478 14229 14346 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 07:18:28.590 14229 14346 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 07:18:28.980 14229 14345 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 07:18:29.016 14229 14345 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 07:18:29.415 14229 14345 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 07:18:29.646 14229 14345 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 07:18:29.758 14229 14345 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 07:18:39.576 14229 14254 I MT      : écarté « G » (bruit, hors zone)
+11-14 07:18:39.767 14229 14345 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 07:18:40.026 14229 14345 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 07:18:40.080 14229 14414 I tflite  : Initialized TensorFlow Lite runtime.
+11-14 07:18:40.081 14229 14414 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+11-14 07:18:40.294 14229 14345 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 07:18:40.567 14229 14345 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 07:18:41.462 14229 14345 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 07:18:42.518 14229 14345 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-14 07:18:55.895 14229 14255 I MT      : écarté « 18 » (bruit, hors zone)
+11-14 07:18:55.895 14229 14255 I MT      : écarté « 05/2014 » (bruit, hors zone)
+11-14 07:19:09.939 14229 14256 I MT      : écarté « どはどは » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-14 07:19:09.939 14229 14256 I MT      : écarté « ん » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-14 07:19:20.791 14229 14263 I MTTEST  : REPORT_READY report.json
