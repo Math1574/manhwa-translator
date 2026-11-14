@@ -56,6 +56,9 @@ data class AppSettings(
     val adAllowTargets: String = "",
     /** Tri de la bibliothèque (identifiant d'un [SeriesSort]) : mémorisé entre les lancements. */
     val librarySort: String = "recent",
+    /** Accueil : sites épinglés (adresses d'accueil séparées par des espaces) et sites retirés de l'accueil (clés séparées par des virgules). */
+    val homeSites: String = "",
+    val homeHidden: String = "",
 ) {
     val adAllowSiteSet: Set<String> get() = adAllowSites.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
     val adAllowTargetSet: Set<String> get() = adAllowTargets.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
@@ -73,7 +76,7 @@ data class AppSettings(
         it["maxPrefetchPages"] = maxPrefetchPages.toString(); it["cacheMaxMb"] = cacheMaxMb.toString()
         it["schema"] = "2"; it["engine"] = engine.name; it["useGpu"] = useGpu.toString(); it["diagnostic"] = diagnostic.toString(); it["enhancedOcr"] = enhancedOcr.toString(); it["refinePass"] = refinePass.toString(); it["blockAds"] = blockAds.toString(); it["autoReread"] = autoReread.toString(); it["translateSfx"] = translateSfx.toString()
         it["themeAccent"] = themeAccent; it["themeBackground"] = themeBackground; it["reducedMotion"] = reducedMotion.toString(); it["showMascot"] = showMascot.toString(); it["themeMascot"] = themeMascot; it["adAllowSites"] = adAllowSites; it["adAllowTargets"] = adAllowTargets
-        it["readTranslate"] = readTranslate.toString(); it["orbRight"] = orbRight.toString(); it["orbY"] = orbY.toString(); it["hideBarsWhileReading"] = hideBarsWhileReading.toString(); it["librarySort"] = librarySort
+        it["readTranslate"] = readTranslate.toString(); it["orbRight"] = orbRight.toString(); it["orbY"] = orbY.toString(); it["hideBarsWhileReading"] = hideBarsWhileReading.toString(); it["librarySort"] = librarySort; it["homeSites"] = homeSites; it["homeHidden"] = homeHidden
     }.let { p -> java.io.StringWriter().also { w -> p.store(w, null) }.toString() }
 
     companion object {
@@ -110,6 +113,8 @@ data class AppSettings(
                 p.getProperty("adAllowSites") ?: d.adAllowSites,
                 p.getProperty("adAllowTargets") ?: d.adAllowTargets,
                 p.getProperty("librarySort")?.takeIf { v -> SeriesSort.values().any { it.id == v } } ?: d.librarySort,
+                p.getProperty("homeSites") ?: d.homeSites,
+                p.getProperty("homeHidden") ?: d.homeHidden,
             ).sanitized()
         }
     }

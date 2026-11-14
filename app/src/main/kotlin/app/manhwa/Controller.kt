@@ -45,6 +45,7 @@ import app.manhwa.core.RequestTypes
 import app.manhwa.core.ResType
 import app.manhwa.core.Sites
 import app.manhwa.core.BrowsingLibrary
+import app.manhwa.core.HomeView
 import app.manhwa.core.CacheKey
 import app.manhwa.core.DebugInfo
 import app.manhwa.core.JunkFilter
@@ -543,6 +544,11 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         wv.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(view: WebView, newProgress: Int) { progress = newProgress }
 
+            /** Icône du site reçue avec la page : gardée pour la tuile de l'accueil. */
+            override fun onReceivedIcon(view: WebView, icon: Bitmap?) {
+                try { HomeView.siteKey(view.url ?: return)?.let { graph.favicons.save(it, icon) } } catch (_: Throwable) {}
+            }
+
             /** Une page n'ouvre jamais de fenêtre : on refuse (les liens en nouvel onglet du site lui-même sont suivis dans la page par le script de garde). */
             override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message): Boolean {
                 graph.adFilters.log.add("pop-up", "(fenêtre demandée${if (isUserGesture) " après un geste" else ""})", null, siteOf(pageUrl))
@@ -577,7 +583,10 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     }
 
     fun load(url: String, resumeAt: Int = 0) {
-        if (url.isNotEmpty()) { pageError = null; resumeTarget = resumeAt; resumeUrl = BrowsingLibrary.normalize(url) ?: url; webView?.loadUrl(url) }
+        if (url.isNotEmpty()) {
+            pageError = null; resumeTarget = resumeAt; resumeUrl = BrowsingLibrary.normalize(url) ?: url; webView?.loadUrl(url)
+            if (url.startsWith("http")) currentUrl = url      // l'accueil se retire tout de suite ; la page annonce ensuite son adresse définitive
+        }
     }
 
     /** Se replace dans le chapitre là où la lecture s'était arrêtée. */
@@ -992,24 +1001,19 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         if (workInfo(sp.imageId) == null) return
         editTarget = EditTarget(sp.imageId, NEW_BLOCK_ID, "", "", sp.x, sp.y)
     }
+    /** Revient à l'accueil : la page affichée est vidée (l'accueil lui-même est dessiné par l'application, voir [HomeScreen]) et plus aucune page n'est lue. */
     fun goHome() {
-        val lib = graph.library.library
-        fun esc(t: String) = android.text.Html.escapeHtml(t)
-        val sb = StringBuilder("<html><body style='background:#0E0F1A;color:#C9CCE8;font-family:sans-serif;padding:24px'><h2 style='color:#B388FF'>Manhwa Translator</h2>")
-        val series = lib.series().take(5)
-        if (series.isNotEmpty()) {
-            sb.append("<h3 style='color:#B388FF'>Reprendre la lecture</h3>")
-            for (e in series) sb.append("<p><a style='color:#8AB4FF' href='${esc(e.lastUrl)}'>${esc(e.title)}</a>${e.chapter?.let { " — $it" } ?: ""}</p>")
-        }
-        if (lib.favorites.isNotEmpty()) {
-            sb.append("<h3 style='color:#B388FF'>Favoris</h3>")
-            for (f in lib.favorites.take(8)) sb.append("<p><a style='color:#8AB4FF' href='${esc(f.url)}'>${esc(f.title)}</a></p>")
-        }
-        sb.append("<p>Saisissez l'adresse d'un site de lecture dans la barre ci-dessus, ouvrez un chapitre, puis appuyez sur « Traduire ».</p>")
-        sb.append("<p>Avant la première traduction, téléchargez les modèles de langue dans l'onglet « Modèles ». L'historique et les favoris sont dans l'onglet « Bibliothèque ».</p></body></html>")
-        webView?.loadDataWithBaseURL(null, sb.toString(), "text/html", "utf-8", null)
+        webView?.loadDataWithBaseURL(null, "<html><body style='background:#0E0F1A'></body></html>", "text/html", "utf-8", null)
         currentUrl = ""; pageError = null; resetSession()
     }
+    /** Incrémenté pour demander à la barre d'adresse de s'ouvrir en saisie (tuile « Ajouter » de l'accueil) ; [pinOnGo] : le site saisi est aussi épinglé à l'accueil. */
+    var addressTick by mutableIntStateOf(0)
+    var pinOnGo by mutableStateOf(false)
+    fun requestAddress(pin: Boolean) { pinOnGo = pin; addressTick++ }
+    /** Épingle à l'accueil le site d'une adresse (par défaut celui de la page ouverte) ; retire de l'accueil le site de la clé [key]. */
+    fun pinSite(url: String = currentUrl) { if (url.startsWith("http")) graph.settingsStore.update { HomeView.withPinned(it, url) } }
+    fun hideSite(key: String) { graph.settingsStore.update { HomeView.withHidden(it, key) } }
+    fun restoreSites() { graph.settingsStore.update { HomeView.withoutHidden(it) } }
     /** Tests automatiques : évalue du JavaScript dans la page et rend le résultat. */
     fun evalForTest(js: String, cb: (String?) -> Unit) { webView?.evaluateJavascript(js, cb) }
     /** Tests automatiques : un appui du doigt aux coordonnées de la page (pixels CSS), comme un vrai toucher. */

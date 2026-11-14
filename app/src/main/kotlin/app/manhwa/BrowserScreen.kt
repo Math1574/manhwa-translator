@@ -78,6 +78,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import app.manhwa.core.BrowsingLibrary
 import app.manhwa.core.ChapterNav
+import app.manhwa.core.HomeView
 import app.manhwa.core.UrlInput
 import kotlinx.coroutines.delay
 
@@ -87,7 +88,7 @@ private fun prettyAddress(url: String) = url.removePrefix("https://").removePref
 // ---------------- Navigateur ----------------
 
 @Composable
-fun BrowserScreen(graph: AppGraph) {
+fun BrowserScreen(graph: AppGraph, onLibrary: () -> Unit = {}) {
     val c = graph.controller
     val st = graph.settingsStore.settings
     val running = c.active && c.done + c.failed < c.total
@@ -127,13 +128,17 @@ fun BrowserScreen(graph: AppGraph) {
                 update = { it.keepScreenOn = c.fullscreen || c.active },
                 modifier = Modifier.fillMaxSize(),
             )
+            // accueil : tant qu'aucune page n'est ouverte, il recouvre la page vide
+            if (c.currentUrl.isEmpty() && !c.fullscreen) HomeScreen(graph, onLibrary)
             if (running && !c.fullscreen && c.total > 0) {
                 LinearProgressIndicator(
                     progress = { (c.done + c.failed).toFloat() / c.total }, trackColor = Color.Transparent,
                     modifier = Modifier.fillMaxWidth().height(3.dp).align(Alignment.TopCenter),
                 )
             }
-            if (!c.fullscreen) {
+            if (!c.fullscreen && c.currentUrl.isEmpty()) {
+                // accueil : pas de bouton de traduction, aucune page à traduire
+            } else if (!c.fullscreen) {
                 // Bouton Original | Traduit : rond, déplaçable au doigt, rangé au bord de l'écran pour ne pas gêner les boutons des sites.
                 TranslateOrb(
                     translateOn = c.translateOn, active = c.active, running = running, progress = if (c.total > 0) (c.done + c.failed).toFloat() / c.total else 0f,
@@ -272,6 +277,8 @@ private fun AddressBar(graph: AppGraph) {
     val heart = graph.library.isHeart(c.currentUrl)
     val canHeart = c.currentUrl.startsWith("http")
     val seriesUrl = BrowsingLibrary.seriesUrlOf(c.currentUrl)
+    // la tuile « Ajouter » de l'accueil ouvre la saisie d'une adresse
+    LaunchedEffect(c.addressTick) { if (c.addressTick > 0) { field = TextFieldValue(""); editing = true } }
 
     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = { c.back() }, enabled = c.canGoBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Retour") }
@@ -289,16 +296,26 @@ private fun AddressBar(graph: AppGraph) {
             } else {
                 var hadFocus by remember { mutableStateOf(false) }
                 LaunchedEffect(Unit) { requester.requestFocus() }
-                BasicTextField(
-                    value = field, onValueChange = { field = it }, singleLine = true,
-                    textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Go),
-                    keyboardActions = KeyboardActions(onGo = { c.load(UrlInput.normalize(field.text)); editing = false; focus.clearFocus() }),
-                    modifier = Modifier.fillMaxWidth().focusRequester(requester).onFocusChanged { st ->
-                        if (st.isFocused) hadFocus = true else if (hadFocus) editing = false
-                    },
-                )
+                Box(Modifier.fillMaxWidth()) {
+                    if (field.text.isEmpty()) Text(if (c.pinOnGo) "Adresse du site à ajouter" else "Adresse ou recherche", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    BasicTextField(
+                        value = field, onValueChange = { field = it }, singleLine = true,
+                        textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Go),
+                        keyboardActions = KeyboardActions(onGo = {
+                            val typed = field.text.trim()
+                            val target = UrlInput.normalize(field.text)
+                            c.load(target)
+                            // saisi depuis « Ajouter » de l'accueil : le site est épinglé (une adresse, pas une recherche)
+                            if (c.pinOnGo && typed.isNotEmpty() && typed.none { it.isWhitespace() } && (typed.contains('.') || typed.startsWith("http"))) c.pinSite(target)
+                            c.pinOnGo = false; editing = false; focus.clearFocus()
+                        }),
+                        modifier = Modifier.fillMaxWidth().focusRequester(requester).onFocusChanged { st ->
+                            if (st.isFocused) hadFocus = true else if (hadFocus) { editing = false; c.pinOnGo = false }
+                        },
+                    )
+                }
             }
         }
         IconButton(onClick = { graph.library.toggleHeart(c.currentUrl, c.pageTitle) }, enabled = canHeart) {
@@ -311,13 +328,20 @@ private fun AddressBar(graph: AppGraph) {
         Box {
             IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, "Plus d'actions") }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                DropdownMenuItem(text = { Text(if (c.translateOn && c.active) "Revenir à l'original" else "Traduire cette page") }, onClick = { menu = false; c.onTranslateButton() })
+                if (c.currentUrl.isNotEmpty()) DropdownMenuItem(text = { Text(if (c.translateOn && c.active) "Revenir à l'original" else "Traduire cette page") }, onClick = { menu = false; c.onTranslateButton() })
                 if (c.translateOn && c.active) DropdownMenuItem(text = { Text("Retraduire la page") }, onClick = { menu = false; c.start(force = true) })
                 if (c.translateOn && c.active) DropdownMenuItem(text = { Text(if (c.eraser) "Terminer la gomme" else "Gomme : supprimer des traductions") }, onClick = { menu = false; c.switchEraser(!c.eraser) })
                 if (c.translateOn && c.active) DropdownMenuItem(text = { Text(if (c.discardMode) "Terminer les textes écartés" else "Textes écartés : les voir et les traduire") }, onClick = { menu = false; c.switchDiscard(!c.discardMode) })
-                DropdownMenuItem(text = { Text(if (c.loading) "Arrêter le chargement" else "Actualiser") }, onClick = { menu = false; if (c.loading) c.stopLoading() else c.reload() })
+                if (c.currentUrl.isNotEmpty()) DropdownMenuItem(text = { Text(if (c.loading) "Arrêter le chargement" else "Actualiser") }, onClick = { menu = false; if (c.loading) c.stopLoading() else c.reload() })
                 DropdownMenuItem(text = { Text("Page suivante") }, enabled = c.canGoForward, onClick = { menu = false; c.forward() })
                 DropdownMenuItem(text = { Text("Accueil") }, onClick = { menu = false; c.goHome() })
+                if (c.currentUrl.startsWith("http")) {
+                    val st = graph.settingsStore.settings
+                    val key = HomeView.siteKey(c.currentUrl)
+                    if (HomeView.sites(graph.library.library, HomeView.pinned(st), HomeView.hidden(st)).none { it.key == key }) {
+                        DropdownMenuItem(text = { Text("Ajouter ce site à l'accueil") }, onClick = { menu = false; c.pinSite() })
+                    }
+                }
                 if (seriesUrl != null) DropdownMenuItem(text = { Text("Page de l'œuvre") }, onClick = { menu = false; c.load(seriesUrl) })
                 if (c.currentUrl.startsWith("http")) {
                     val on = c.adsActiveHere()
