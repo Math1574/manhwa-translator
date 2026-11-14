@@ -103,11 +103,8 @@ const val NEW_BLOCK_ID = -2
 /** Zone non traduite touchée longuement : coordonnées dans l'image d'origine. */
 class EmptySpot(val imageId: String, val x: Float, val y: Float)
 
-/**
- * Suppression d'une traduction qui peut encore être annulée : la page, l'image, la correction écrite pour la supprimer et celle qui existait avant
- * (null : le bloc n'avait aucune correction). [src] sert au journal.
- */
-class DeletedBlock(val imageId: String, val imageKey: String, val editId: String, val previous: BlockEdit?, val src: String)
+/** Geste qui peut encore être défait : texte du bandeau (« Traduction supprimée ») et ce qu'il faut faire pour l'annuler. */
+class UndoBanner(val message: String, val undo: () -> Unit)
 
 /** Ce que le contrôleur garde d'une page traitée pour pouvoir corriger ses blocs : fenêtre traitée, résultat avant et après corrections, empreinte de l'image. */
 class WorkInfo(
@@ -176,9 +173,9 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     /** Zone non traduite dont on touche longuement l'image : l'interface propose d'y ajouter un texte. */
     var peekEmpty by mutableStateOf<EmptySpot?>(null)
     private val clearPeekEmpty = Runnable { peekEmpty = null }
-    /** Dernière traduction supprimée d'un geste (corbeille de l'appui long) : l'interface propose de l'annuler pendant [undoWindowMs]. */
-    var undoDelete by mutableStateOf<DeletedBlock?>(null)
-    private val clearUndo = Runnable { undoDelete = null }
+    /** Dernier geste qui peut être défait (suppression d'une traduction, texte ou image ignorés) : l'interface propose « Annuler » pendant [undoWindowMs]. */
+    var undoBanner by mutableStateOf<UndoBanner?>(null)
+    private val clearUndo = Runnable { undoBanner = null }
     /** Durée de la proposition d'annulation (3 s) ; allongée seulement par les tests automatiques pour laisser le temps de lire l'écran. */
     @Volatile var undoWindowMs = UNDO_MS
     /** Avancement à reprendre à l'ouverture de la page demandée (0 = aucun). */
@@ -464,7 +461,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                 graph.gemma.seriesTitle = if (url.startsWith("http")) app.manhwa.core.SeriesHint.fromUrl(url) else null
                 loading = true
                 nearBottom = false
-                barsHidden = false; pageProgress = 0; showReaderBar(false); resumeOffer = 0; peekTarget = null; undoDelete = null
+                barsHidden = false; pageProgress = 0; showReaderBar(false); resumeOffer = 0; peekTarget = null; undoBanner = null
                 pageError = null
                 resetSession()
                 view.evaluateJavascript(PageScript.INJECT, null)
@@ -570,17 +567,24 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         webView?.evaluateJavascript("window.__mt&&window.__mt.dropPatch(${JSONObject.quote(t.imageId)},${t.bid})", null)
         reprocess(id)
         // la suppression reste annulable quelques secondes : un bandeau « Annuler » est proposé, puis il disparaît et la suppression est définitive
-        undoDelete = DeletedBlock(id, info.imageKey, edit.id, prev, shown.source)
+        showUndo("Traduction supprimée") {
+            if (prev != null) graph.edits.upsert(info.imageKey, prev) else graph.edits.remove(info.imageKey, edit.id)
+            graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "correction").put("url", currentUrl).put("src", shown.source).put("edit", "suppression annulée"))
+            reprocess(id)
+        }
+    }
+
+    /** Propose « Annuler » pendant [undoWindowMs] ; la proposition précédente est remplacée (son geste devient définitif). */
+    fun showUndo(message: String, undo: () -> Unit) {
+        undoBanner = UndoBanner(message, undo)
         main.removeCallbacks(clearUndo); main.postDelayed(clearUndo, undoWindowMs)
     }
 
-    /** Annule la dernière suppression : le bloc retrouve la correction qu'il avait avant (ou aucune), puis la page est redessinée. */
-    fun undoDeletion() {
-        val u = undoDelete ?: return
-        undoDelete = null; main.removeCallbacks(clearUndo)
-        if (u.previous != null) graph.edits.upsert(u.imageKey, u.previous) else graph.edits.remove(u.imageKey, u.editId)
-        graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "correction").put("url", currentUrl).put("src", u.src).put("edit", "suppression annulée"))
-        reprocess(u.imageId)
+    /** Défait le dernier geste proposé par le bandeau. */
+    fun runUndo() {
+        val u = undoBanner ?: return
+        undoBanner = null; main.removeCallbacks(clearUndo)
+        u.undo()
     }
 
     // ---------- tests automatiques (builds debug) : gestes de l'appui long rejoués sans toucher la page ----------

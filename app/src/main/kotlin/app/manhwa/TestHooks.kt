@@ -72,7 +72,7 @@ object TestHooks {
             edits += list.size
             if (editTr.isEmpty()) editTr = list.firstNotNullOfOrNull { it.translation } ?: ""
         }
-        val o = JSONObject().put("t", System.currentTimeMillis()).put("undo", c.undoDelete != null).put("peek", c.peekTarget != null)
+        val o = JSONObject().put("t", System.currentTimeMillis()).put("undo", c.undoBanner != null).put("peek", c.peekTarget != null)
             .put("works", ids.size).put("blocks", blocks).put("hidden", hidden).put("edits", edits).put("editTr", editTr)
         val tmp = File(ctx.filesDir, "state.json.tmp"); tmp.writeText(o.toString()); tmp.renameTo(File(ctx.filesDir, "state.json"))
     }
