@@ -543,7 +543,7 @@ adb shell input swipe 540 1700 540 600 400; sleep 1; uidump hm2; shot ui 51
 chk "accueil : tuiles des sites lus (nom, nombre d'œuvres) et tuile pour en ajouter" $([ "$(hasx hm2 '=VOS SITES')" = 1 ] && [ "$(hasx hm2 '=Seed')" = 1 ] && [ "$(has hm2 '3 [^ ]*uvres')" = 1 ] && [ "$(has hm2 '10[.]0[.]2[.]2')" = 1 ] && [ "$(hasx hm2 '=Ajouter')" = 1 ] && echo 1 || echo 0)
 # « Ajouter » : la barre d'adresse s'ouvre en saisie ; le site saisi est épinglé à l'accueil (il n'a pas besoin d'exister : seule l'adresse compte)
 tapt hm2 "=Ajouter" 1; sleep 1.5; uidump hm3; shot ui 52
-chk "accueil : « Ajouter » ouvre la saisie d'une adresse" $([ "$(has hm3 'widget.EditText')" = 1 ] && [ "$(has hm3 'Adresse du site')" = 1 ] && echo 1 || echo 0)
+chk "accueil : « Ajouter » ouvre la saisie d'une adresse" $([ "$(has hm3 'widget.EditText')" = 1 ] && [ "$(hasx hm3 '=Adresse ou recherche')" = 0 ] && echo 1 || echo 0)
 adb shell input text pin.test; sleep 1; adb shell input keyevent KEYCODE_ENTER; sleep 3
 chk "accueil : le site saisi depuis « Ajouter » est épinglé" $(okst waitst homePinned 1 10)
 appcmd home; sleep 1.5; adb shell input swipe 540 1700 540 600 400; sleep 1; uidump hm4; shot ui 53
