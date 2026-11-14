@@ -416,6 +416,33 @@ chk "ignorés : la recherche « ignor » ouvre la page « Textes et images ignor
 chk "ignorés : la règle posée en lisant (toutes les œuvres) y est listée avec « Retirer »" $([ "$(has ign1 'Toutes les [^ ]*uvres')" = 1 ] && [ "$(has ign1 'Retirer')" = 1 ] && echo 1 || echo 0)
 tapt ign1 "Retirer" 1; sleep 1.5; uidump ign2; shot ui 23
 chk "ignorés : « Retirer » supprime la règle de la liste et de l'application" $([ "$(has ign2 'Aucun texte ignor')" = 1 ] && [ "$(okst waitst ign 0 8)" = 1 ] && echo 1 || echo 0)
+# centre de corrections : une correction faite comme dans l'éditeur (traduction écrite, rangée sous la page ouverte), un terme du glossaire et une traduction retenue sans correction sont listés ;
+# chacun se défait depuis la page. La recherche des réglages y mène. Les textes sont choisis sans accent : la lecture de l'écran (uiautomator) les code parfois en entités.
+appcmd "savetr Texte du centre"; appcmd "termadd zzterme|yyterme|direct"; appcmd "fixadd TEXTE ORPHELIN|Traduction orpheline"
+waittr "texte du centre" 25 >/dev/null; appstate
+cc_corr=$(stv corr); cc_fix=$(stv fixes); cc_terms=$(stv terms)
+chk "centre de corrections : départ (une correction rangée sous la page ouverte, un terme, deux traductions retenues)" $([ "$cc_corr" -ge 1 ] && [ "$(stv corrOrig)" -ge 1 ] && [ "$cc_fix" -ge 2 ] && [ "$cc_terms" -ge 1 ] && echo 1 || echo 0)
+adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump cc0
+tapt cc0 "Effacer la recherche" 1; sleep 1; uidump cc0b
+tapt cc0b "@EditText" 1; sleep 1; adb shell input text corrections; sleep 2; uidump cc0c
+tapt cc0c "=Centre de corrections" 1; sleep 2.5; uidump cc1; shot ui 33
+hc() { if [ "$(has cc1 "$1")" = 1 ] || [ "$(has cc2 "$1")" = 1 ]; then echo 1; else echo 0; fi; }
+chk "centre de corrections : la recherche « corrections » ouvre la page" $([ "$(has cc1 'Aucune image ignor')" = 1 ] && [ "$(has cc1 'Termes du glossaire')" = 1 ] && echo 1 || echo 0)
+chk "centre de corrections : le terme du glossaire y est listé avec « Retirer »" $([ "$(has cc1 'zzterme')" = 1 ] && [ "$(has cc1 'yyterme')" = 1 ] && [ "$(has cc1 'text="Retirer"')" = 1 ] && echo 1 || echo 0)
+tapt cc1 "=Retirer" 1; sleep 1.5; appstate
+chk "centre de corrections : « Retirer » supprime le terme du glossaire" $([ "$(stv terms)" = "$((cc_terms - 1))" ] && echo 1 || echo 0)
+adb shell input swipe 540 1900 540 500 400; sleep 1; uidump cc2; shot ui 34
+chk "centre de corrections : les trois groupes sont là (ignorés, glossaire, corrections par chapitre)" $([ "$(hc 'Textes et images ignor')" = 1 ] && [ "$(hc 'Termes du glossaire')" = 1 ] && [ "$(hc 'Corrections par chapitre')" = 1 ] && echo 1 || echo 0)
+chk "centre de corrections : la correction est rangée sous son chapitre (œuvre et numéro), avec ce qui a été fait" $([ "$(hc 'Test Series')" = 1 ] && [ "$(hc 'Chapitre 1')" = 1 ] && [ "$(hc 'Traduction [^ ]*crite')" = 1 ] && [ "$(hc 'Texte du centre')" = 1 ] && echo 1 || echo 0)
+chk "centre de corrections : la traduction retenue sans correction est listée à part" $([ "$(hc 'Traductions retenues')" = 1 ] && [ "$(hc 'TEXTE ORPHELIN')" = 1 ] && echo 1 || echo 0)
+tapt cc2 "=Défaire" 1; sleep 1.5; appstate
+chk "centre de corrections : « Défaire » retire la correction et la traduction retenue qui lui est liée (pas l'autre)" $([ "$(stv corr)" = "$((cc_corr - 1))" ] && [ "$(stv fixes)" = "$((cc_fix - 1))" ] && echo 1 || echo 0)
+cc_gone=0; for i in $(seq 1 25); do appstate; [ "$(trhas 'texte du centre')" = 0 ] && cc_gone=1 && break; done
+chk "centre de corrections : la page retrouve sa traduction automatique après « Défaire »" $cc_gone
+uidump cc3; shot ui 35
+chk "centre de corrections : la liste des corrections se vide" $([ "$(has cc3 'Aucune correction')" = 1 ] && echo 1 || echo 0)
+tapt cc3 "=Retirer" 1; sleep 1.5; appstate
+chk "centre de corrections : « Retirer » oublie la traduction retenue sans correction" $([ "$(stv fixes)" = 0 ] && echo 1 || echo 0)
 # diagnostic : plantages ou blocages système pendant le scénario
 adb logcat -d -v brief 2>/dev/null | grep -iE "ANR in|Application Not Responding|FATAL EXCEPTION|AndroidRuntime|Process .* has died|am_crash|am_anr" | tail -30 > $OUT/reports/ui_logcat.txt
 echo "  [journal système] $(wc -l < $OUT/reports/ui_logcat.txt) ligne(s) d'ANR ou de plantage" | tee -a $OUT/run.log

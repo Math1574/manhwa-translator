@@ -57,6 +57,9 @@ import app.manhwa.core.LlmModels
 import app.manhwa.core.PageJob
 import app.manhwa.core.PageOutcome
 import app.manhwa.core.BlockEdit
+import app.manhwa.core.CorrectionItem
+import app.manhwa.core.Corrections
+import app.manhwa.core.EditOrigin
 import app.manhwa.core.BlockGrouper
 import app.manhwa.core.EditApplier
 import app.manhwa.core.EditKind
@@ -146,6 +149,11 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     var nearBottom by mutableStateOf(false)
     /** Titre de la page affichée (pour les favoris). */
     val pageTitle: String get() = webView?.title ?: ""
+    /** Dernier titre de page relevé quand elle a fini de charger : lisible depuis n'importe quel fil (celui de la WebView ne l'est que du fil principal). */
+    @Volatile private var lastTitle = ""
+
+    /** La page ouverte (adresse, titre) : retenue avec chaque correction pour les ranger par chapitre dans le centre de corrections. Null hors d'une page web. */
+    fun editOrigin(): EditOrigin? = currentUrl.takeIf { it.startsWith("http") }?.let { EditOrigin(it, lastTitle, System.currentTimeMillis()) }
     var loading by mutableStateOf(false)
     var progress by mutableIntStateOf(0)
     var pageError by mutableStateOf<String?>(null)
@@ -486,6 +494,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
                 currentUrl = if (url.startsWith("http")) url else ""
+                lastTitle = ""
                 pageEpoch++
                 pageUrl = if (url.startsWith("http")) url else null
                 graph.adFilters.log.newPage()
@@ -503,6 +512,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
             override fun onPageFinished(view: WebView, url: String) {
                 loading = false
+                lastTitle = view.title ?: ""
                 if (url.startsWith("http")) graph.library.visit(url, view.title ?: "")
                 view.evaluateJavascript(PageScript.INJECT, null)
                 if (url.startsWith("http")) {
@@ -804,6 +814,26 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         for (id in all) reprocess(id)
     }
 
+    /**
+     * Centre de corrections : défait des corrections. Chacune disparaît de son image ; si une traduction écrite à la main avait été retenue pour ce texte (reprise partout où il est lu),
+     * elle s'en va aussi, sauf si une autre correction restante la porte. Les pages ouvertes qui portent ces images sont redessinées (résultat en cache : quelques instants) ;
+     * les autres retrouvent leur traduction automatique à leur prochain affichage.
+     */
+    fun undoCorrections(items: List<CorrectionItem>) {
+        if (items.isEmpty()) return
+        val removing = items.map { it.imageKey to it.edit.id }.toSet()
+        val remaining = graph.edits.snapshot().flatMap { img -> img.edits.filter { (img.key to it.id) !in removing } }
+        val g = graph.glossary.current(null)
+        val keys = HashSet<String>()
+        for (item in items) {
+            Corrections.retainedTextToDrop(item.edit, remaining, g)?.let { text -> graph.glossary.removeCorrection(text) }
+            graph.edits.remove(item.imageKey, item.edit.id)
+            keys.add(item.imageKey)
+            graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "correction").put("src", item.edit.matchSource.ifEmpty { item.edit.source ?: "" }).put("edit", "défaite depuis le centre de corrections (${item.label})"))
+        }
+        for (id in workIds()) if (workInfo(id)?.imageKey in keys) reprocess(id)
+    }
+
     /** Le texte touché longuement est-il ignoré par une règle ? L'interface propose alors de le rétablir plutôt que de le corriger. */
     fun peekIgnored(): Boolean {
         val t = peekTarget ?: return false
@@ -924,6 +954,23 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             val prev = info.applied.editByBlock[shown.id]?.takeUnless { it.id.startsWith(IGNORE_EDIT_PREFIX) }
             val edit = prev?.copy(translation = text) ?: BlockEdit("e" + java.util.UUID.randomUUID().toString().take(8), EditKind.ADJUST, imageRect(orig.box, info.ctxH), orig.source, translation = text)
             graph.edits.upsert(info.imageKey, edit); reprocess(id)
+            return true
+        }
+        return false
+    }
+
+    /**
+     * Tests automatiques : « Enregistrer » de l'éditeur ouvert sur la première traduction visible, avec la traduction [text] écrite à la main (et sans terme) : même chemin que l'éditeur,
+     * donc la correction est enregistrée avec la page ouverte pour origine et la traduction est aussi retenue pour ce texte. Faux s'il n'y a aucune traduction.
+     */
+    fun testSaveTranslation(text: String): Boolean {
+        for (id in testWorkIds()) {
+            val info = workInfo(id) ?: continue
+            val shown = info.applied.page.blocks.firstOrNull { info.applied.editByBlock[it.id]?.hidden != true } ?: continue
+            val orig = info.result.blocks.firstOrNull { it.id == shown.id } ?: shown
+            val sn = EditSession(info, shown, null, null)
+            val edit = BlockEdit("e" + java.util.UUID.randomUUID().toString().take(8), EditKind.ADJUST, imageRect(orig.box, info.ctxH), orig.source, translation = text)
+            saveEdit(sn, edit, emptyList(), false)
             return true
         }
         return false

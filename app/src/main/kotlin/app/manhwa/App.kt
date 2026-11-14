@@ -10,12 +10,16 @@ import androidx.compose.runtime.setValue
 import app.manhwa.core.AppSettings
 import app.manhwa.core.BlockEdit
 import app.manhwa.core.EditApplier
+import app.manhwa.core.EditOrigin
+import app.manhwa.core.EditedImage
 import app.manhwa.core.EditsCodec
+import app.manhwa.core.OriginsCodec
 import app.manhwa.core.BrowsingLibrary
 import app.manhwa.core.Glossary
 import app.manhwa.core.GlossaryEntry
 import app.manhwa.core.NameSuggestions
 import app.manhwa.core.SeriesTerm
+import app.manhwa.core.TextCorrection
 import app.manhwa.core.ResultCache
 import app.manhwa.core.TranslationBatcher
 import com.google.android.gms.tasks.Tasks
@@ -71,7 +75,7 @@ class AppGraph(ctx: Context) {
     val library = LibraryStore(File(ctx.filesDir, "library.tsv"))
     val journal = TranslationJournal(File(ctx.filesDir, "journal.jsonl"))
     /** Corrections manuelles des textes (zone, texte, position, taille, police), par image. */
-    val edits = EditStore(File(ctx.filesDir, "edits.txt"))
+    val edits = EditStore(File(ctx.filesDir, "edits.txt"), originsFile = File(ctx.filesDir, "edit_origins.txt"))
     /** Textes (dans une œuvre ou partout) et images (bandeaux de début ou de fin de chapitre) que l'utilisateur ne veut plus voir traduits. */
     val ignored = IgnoreStore(File(ctx.filesDir, "ignored.txt"), File(ctx.filesDir, "ignored"))
     init {
@@ -108,6 +112,10 @@ class AppGraph(ctx: Context) {
     /** Listes de filtres du bloqueur de publicités (chargées en arrière-plan). */
     val adFilters = AdFilters(ctx).also { it.start() }
     val controller = TranslationController(ctx, this)
+    init {
+        // le chapitre ouvert est retenu avec chaque correction (centre de corrections : corrections par chapitre)
+        edits.originProvider = { controller.editOrigin() }
+    }
 }
 
 /** Historique de lecture, avancement par chapitre et favoris, conservés sur le téléphone (fichier texte). */
@@ -171,19 +179,45 @@ class SettingsStore(ctx: Context) {
 /**
  * Corrections manuelles par image (clé : empreinte de l'image) : zone du texte, texte, position, taille, police. Conservées sur disque, indépendamment du cache des résultats ; les images
  * les plus anciennes sont oubliées au-delà de [maxImages].
+ *
+ * L'image ne dit pas d'où elle vient : la page ouverte au moment d'une correction ([originProvider]) est retenue à part, dans [originsFile], pour que le centre de corrections range
+ * les corrections par chapitre (celles d'avant ce suivi n'ont pas d'origine).
  */
-class EditStore(private val file: File, private val maxImages: Int = 400) {
+class EditStore(private val file: File, private val maxImages: Int = 400, private val originsFile: File? = null) {
     private val images = LinkedHashMap<String, Pair<Long, MutableList<BlockEdit>>>()
+    private val origins = LinkedHashMap<String, EditOrigin>()
 
-    init { try { if (file.exists()) images.putAll(EditsCodec.parse(file.readText())) } catch (_: Throwable) {} }
+    /** Donne la page ouverte (adresse, titre) : posé par l'application une fois le contrôleur créé. */
+    @Volatile var originProvider: (() -> EditOrigin?)? = null
+    /** Change à chaque modification : l'interface qui liste les corrections s'en sert pour se redessiner. */
+    var version by mutableStateOf(0)
+        private set
+
+    init {
+        try { if (file.exists()) images.putAll(EditsCodec.parse(file.readText())) } catch (_: Throwable) {}
+        try { if (originsFile != null && originsFile.exists()) origins.putAll(OriginsCodec.parse(originsFile.readText())) } catch (_: Throwable) {}
+        origins.keys.retainAll(images.keys)
+    }
 
     @Synchronized fun forImage(key: String): List<BlockEdit> = images[key]?.second?.toList() ?: emptyList()
+
+    /** Toutes les images corrigées, la dernière corrigée en dernier, avec leurs corrections. */
+    @Synchronized fun snapshot(): List<EditedImage> = images.map { (k, v) -> EditedImage(k, v.first, v.second.toList()) }
+
+    @Synchronized fun originsSnapshot(): Map<String, EditOrigin> = LinkedHashMap(origins)
+
+    /** Nombre de corrections enregistrées (toutes images). */
+    @Synchronized fun count(): Int = images.values.sumOf { it.second.size }
 
     @Synchronized fun upsert(key: String, edit: BlockEdit) {
         val next = EditApplier.upsert(images[key]?.second ?: emptyList(), edit)
         images.remove(key)
-        if (next.isNotEmpty()) images[key] = System.currentTimeMillis() to next.toMutableList()
+        if (next.isNotEmpty()) {
+            images[key] = System.currentTimeMillis() to next.toMutableList()
+            try { originProvider?.invoke()?.let { origins[key] = it } } catch (_: Throwable) {}
+        } else origins.remove(key)
         while (images.size > maxImages) images.remove(images.keys.first())
+        origins.keys.retainAll(images.keys)
         save()
     }
 
@@ -191,7 +225,7 @@ class EditStore(private val file: File, private val maxImages: Int = 400) {
         val cur = images[key] ?: return
         val next = cur.second.filter { it.id != editId }
         images.remove(key)
-        if (next.isNotEmpty()) images[key] = System.currentTimeMillis() to next.toMutableList()
+        if (next.isNotEmpty()) images[key] = System.currentTimeMillis() to next.toMutableList() else origins.remove(key)
         save()
     }
 
@@ -201,6 +235,14 @@ class EditStore(private val file: File, private val maxImages: Int = 400) {
             tmp.writeText(EditsCodec.serialize(images))
             if (!tmp.renameTo(file)) { file.writeText(tmp.readText()); tmp.delete() }
         } catch (_: Throwable) {}
+        try {
+            if (originsFile != null) {
+                val tmp = File(originsFile.path + ".tmp")
+                tmp.writeText(OriginsCodec.serialize(origins))
+                if (!tmp.renameTo(originsFile)) { originsFile.writeText(tmp.readText()); tmp.delete() }
+            }
+        } catch (_: Throwable) {}
+        version++
     }
 }
 
@@ -211,6 +253,8 @@ class GlossaryStore(private val file: File) {
     val terms = mutableStateListOf<GlossaryEntry>().apply { addAll(glossary.terms()) }
     /** Termes propres à une œuvre (clé d'œuvre : site + titre). */
     val seriesTerms = mutableStateListOf<SeriesTerm>().apply { addAll(glossary.seriesTerms()) }
+    /** Traductions retenues pour un texte exact (corrections manuelles de bulles) : le centre de corrections les liste. */
+    val corrections = mutableStateListOf<TextCorrection>().apply { addAll(glossary.corrections()) }
 
     /** Glossaire à utiliser pour une œuvre : termes communs puis termes de l'œuvre ([series] null : termes communs seuls). */
     fun current(series: String? = null): Glossary = snapshot.forSeries(series)
@@ -232,12 +276,16 @@ class GlossaryStore(private val file: File) {
     /** Correction manuelle d'une bulle : cette traduction sera reprise telle quelle chaque fois que ce texte apparaît. */
     fun addCorrection(sourceBlock: String, translation: String) { glossary.addCorrection(sourceBlock, translation); commit() }
 
+    /** Oublie la traduction retenue pour ce texte : il est de nouveau traduit comme les autres. */
+    fun removeCorrection(sourceBlock: String) { if (glossary.removeCorrection(sourceBlock)) commit() }
+
     private fun commit() {
         val data = glossary.serialize()
         file.writeText(data)
         snapshot = Glossary.parse(data)
         terms.clear(); terms.addAll(glossary.terms())
         seriesTerms.clear(); seriesTerms.addAll(glossary.seriesTerms())
+        corrections.clear(); corrections.addAll(glossary.corrections())
     }
 }
 
