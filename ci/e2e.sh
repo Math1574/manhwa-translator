@@ -180,7 +180,12 @@ chk "fiche d'une œuvre : page de l'œuvre et reprise proposées" $([ "$(has ser
 adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump lib2
 chk "retour de la fiche vers la bibliothèque" $(has lib2 'Historique')
 tapt lib2 "=Réglages" 1; sleep 2; uidump set; shot ui 4
-chk "réglages : une carte par thème" $([ "$(has set 'Reconnaissance du texte')" = 1 ] && [ "$(has set 'Navigation')" = 1 ] && [ "$(has set 'Donn')" = 1 ] && [ "$(has set 'Glossaire')" = 1 ] && echo 1 || echo 0)
+# l'accueil des réglages est plus long qu'un écran : on le fait défiler pour voir les derniers groupes, puis on remonte et on relit l'écran du haut
+adb shell input swipe 540 1900 540 500 400; sleep 1; uidump setb; shot ui 41
+adb shell input swipe 540 500 540 1900 400; sleep 1; adb shell input swipe 540 500 540 1900 400; sleep 1; uidump set
+hs() { if [ "$(has set "$1")" = 1 ] || [ "$(has setb "$1")" = 1 ]; then echo 1; else echo 0; fi; }
+chk "réglages : une carte par thème" $([ "$(hs 'Reconnaissance du texte')" = 1 ] && [ "$(hs 'Navigation')" = 1 ] && [ "$(hs 'Donn')" = 1 ] && [ "$(hs 'Glossaire')" = 1 ] && [ "$(hs 'Mod.*les de traduction')" = 1 ] && [ "$(hs 'Avanc')" = 1 ] && echo 1 || echo 0)
+chk "réglages : champ de recherche, carte de mise à jour et numéro de version sur l'accueil" $([ "$(has set 'Rechercher un r.*glage')" = 1 ] && [ "$(has set 'Mise .*jour de')" = 1 ] && [ "$(has set 'build [0-9]')" = 1 ] && echo 1 || echo 0)
 tapt set "=Traduction" 1 top; sleep 2; uidump settr
 chk "réglages : la carte Traduction ouvre ses options (langues)" $(has settr 'Langue du texte')
 adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump set2
@@ -191,6 +196,17 @@ tapt set3 "=Apparence" 1 top; sleep 2; uidump setap; shot ui 7
 chk "réglages : la carte Apparence propose mascotte, accent et fond" $([ "$(has setap 'Mascotte')" = 1 ] && [ "$(has setap 'Couleur d')" = 1 ] && echo 1 || echo 0)
 tapt setap "=Hibou savant" 1; sleep 1.5; uidump setap2; shot ui 8
 chk "réglages : choisir une autre mascotte met à jour sa présentation" $(has setap2 'Hibou savant : il relit')
+# recherche dans les réglages : un résultat ouvre la page Avancé ; un second mène à un groupe du bas de la page, vers lequel elle doit défiler
+adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump set4
+tapt set4 "Rechercher un r" 1; sleep 1; adb shell input text gpu; sleep 2; uidump srch; shot ui 9
+chk "réglages : la recherche « gpu » propose l'accélération GPU, rangée dans Avancé" $([ "$(has srch 'GPU')" = 1 ] && [ "$(has srch 'Avanc')" = 1 ] && echo 1 || echo 0)
+tapt srch "=Accélération GPU (expérimental)" 1; sleep 3; uidump adv; shot ui 10
+chk "réglages : un résultat de recherche ouvre la page Avancé" $([ "$(has adv 'Tester CPU')" = 1 ] && echo 1 || echo 0)
+adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump set5
+tapt set5 "Effacer la recherche" 1; sleep 1; uidump set6
+tapt set6 "Rechercher un r" 1; sleep 1; adb shell input text filtres; sleep 2; uidump srch2
+tapt srch2 "=Listes de filtres" 1; sleep 3; uidump adv2; shot ui 11
+chk "réglages : la recherche fait défiler la page jusqu'au groupe trouvé (bas de la page Avancé)" $([ "$(has adv2 'Voir le journal')" = 1 ] && echo 1 || echo 0)
 # diagnostic : plantages ou blocages système pendant le scénario
 adb logcat -d -v brief 2>/dev/null | grep -iE "ANR in|Application Not Responding|FATAL EXCEPTION|AndroidRuntime|Process .* has died|am_crash|am_anr" | tail -30 > $OUT/reports/ui_logcat.txt
 echo "  [journal système] $(wc -l < $OUT/reports/ui_logcat.txt) ligne(s) d'ANR ou de plantage" | tee -a $OUT/run.log

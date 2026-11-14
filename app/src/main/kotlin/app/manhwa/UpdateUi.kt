@@ -31,10 +31,35 @@ import java.util.Locale
 
 private fun mo(bytes: Long) = String.format(Locale.FRANCE, "%.0f", bytes / 1_048_576.0)
 
+/** Au repos (rien de nouveau, ou pas encore vérifié) : une seule ligne avec le bouton de vérification ; la carte complète n'apparaît que lorsqu'il y a quelque chose à faire. */
+@Composable
+private fun CompactUpdate(u: UpdateManager) {
+    val cs = MaterialTheme.colorScheme
+    val line = buildString {
+        append(if (u.current > 0) "Version installée : build ${u.current}" else "Version de développement (sans numéro de build)")
+        if (u.state == UpdateState.UP_TO_DATE) {
+            append(" · à jour")
+            if (u.lastCheckMs > 0) append(" (vérifiée ").append(app.manhwa.core.RelativeTime.fr(System.currentTimeMillis(), u.lastCheckMs)).append(")")
+        }
+    }
+    GlassCard(Modifier.fillMaxWidth(), contentPadding = 14.dp) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f).padding(end = 10.dp)) {
+                Text("Mise à jour de l'application", style = MaterialTheme.typography.titleMedium)
+                Text(line, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            }
+            GhostButton(if (u.state == UpdateState.UP_TO_DATE) "Revérifier" else "Vérifier", { u.check() })
+        }
+        val info = u.message
+        if (info != null) { Spacer(Modifier.height(6.dp)); Text(info, style = MaterialTheme.typography.bodySmall, color = cs.secondary) }
+    }
+}
+
 /** Carte « Mise à jour » : version installée, nouveautés de la version disponible, téléchargement et installation. */
 @Composable
 fun UpdateCard(graph: AppGraph) {
     val u = graph.updater
+    if (u.state == UpdateState.IDLE || u.state == UpdateState.UP_TO_DATE) { CompactUpdate(u); return }
     val cs = MaterialTheme.colorScheme
     var notesOpen by remember { mutableStateOf(false) }
     val latest = u.latest
@@ -47,21 +72,11 @@ fun UpdateCard(graph: AppGraph) {
         )
         Spacer(Modifier.height(10.dp))
         when (u.state) {
-            UpdateState.IDLE -> {
-                Text("Les mises à jour se vérifient toutes seules au lancement, au plus toutes les six heures. Rien ne se télécharge sans votre accord.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                Spacer(Modifier.height(10.dp))
-                GhostButton("Vérifier maintenant", { u.check() })
-            }
+            UpdateState.IDLE, UpdateState.UP_TO_DATE -> {}     // affichés par CompactUpdate
             UpdateState.CHECKING -> Row(verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                 Spacer(Modifier.width(10.dp))
                 Text("Vérification…", style = MaterialTheme.typography.bodyMedium)
-            }
-            UpdateState.UP_TO_DATE -> {
-                Text("Vous avez la dernière version.", style = MaterialTheme.typography.bodyMedium)
-                if (u.lastCheckMs > 0) Text("Dernière vérification : " + app.manhwa.core.RelativeTime.fr(System.currentTimeMillis(), u.lastCheckMs), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                Spacer(Modifier.height(10.dp))
-                GhostButton("Vérifier de nouveau", { u.check() })
             }
             UpdateState.AVAILABLE, UpdateState.READY -> {
                 val ready = u.state == UpdateState.READY

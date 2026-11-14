@@ -108,11 +108,10 @@ fun ModelsScreen(graph: AppGraph) {
         )
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Traduction de qualité (Gemma 4)", style = MaterialTheme.typography.headlineSmall)
+        SectionLabel("Gemma 4 · traduction de qualité")
         Text(
-            "Modèle de langage exécuté sur le téléphone : il traduit toute la page d'un coup, en tenant compte du dialogue précédent et du glossaire. " +
-                "Gratuit, sans compte, licence Apache 2.0. Choisissez-le ensuite dans les réglages.",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            "Modèle exécuté sur le téléphone : il traduit la page entière avec le contexte et le glossaire. Gratuit, sans compte (licence Apache 2.0).",
+            color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
         )
         val totalRamGb = remember {
             val mi = android.app.ActivityManager.MemoryInfo()
@@ -125,24 +124,20 @@ fun ModelsScreen(graph: AppGraph) {
             color = MaterialTheme.colorScheme.secondary,
         )
         llm.specs.forEach { spec -> GemmaCard(spec, llm) { confirm = spec } }
-        HorizontalDivider()
-        Text("Traduction légère (ML Kit)", style = MaterialTheme.typography.headlineSmall)
+        SectionLabel("ML Kit · traduction légère")
         Text(
-            "Chaque langue se télécharge une seule fois (environ 30 Mo, via les serveurs de Google). Ensuite la traduction fonctionne sans connexion. " +
-                "L'anglais est intégré. Le japonais → français passe par l'anglais.",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            "Chaque langue se télécharge une fois (≈ 30 Mo, via les serveurs de Google) ; ensuite tout fonctionne sans connexion. L'anglais est intégré ; le japonais → français passe par l'anglais.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
         )
-        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-            Column(Modifier.padding(12.dp)) {
-                Text("Reconnaissance du texte (OCR)", style = MaterialTheme.typography.titleMedium)
-                Text("Prête : modèles coréen, chinois, latin et japonais horizontal intégrés à l'application. Le japonais vertical (manga) est un module à part, plus bas.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+        GlassCard(Modifier.fillMaxWidth(), contentPadding = 14.dp) {
+            Text("Reconnaissance du texte (OCR)", style = MaterialTheme.typography.titleMedium)
+            Text("Prête : coréen, chinois, latin et japonais horizontal intégrés. Le japonais vertical est un module à part, ci-dessous.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         }
         JapanesePackCard(graph)
         m.languages.forEach { (code, name) ->
             val st = m.status[code] ?: "absent"
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            GlassCard(Modifier.fillMaxWidth(), contentPadding = 14.dp) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(name, style = MaterialTheme.typography.titleMedium)
                         Text(
@@ -157,9 +152,9 @@ fun ModelsScreen(graph: AppGraph) {
                         if (st == "downloading") LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 6.dp))
                     }
                     when (st) {
-                        "ready" -> OutlinedButton(onClick = { m.delete(code) }) { Text("Supprimer") }
+                        "ready" -> GhostButton("Supprimer", { m.delete(code) })
                         "downloading" -> {}
-                        else -> Button(onClick = { m.download(code) }) { Text("Télécharger") }
+                        else -> GradientButton("Télécharger", { m.download(code) })
                     }
                 }
             }
@@ -176,9 +171,9 @@ private fun GemmaCard(spec: ModelSpec, llm: LlmModelsManager, onAskDownload: () 
     val busy = llm.busy[spec.id] == true
     val pct = llm.progress[spec.id] ?: 0f
     val err = llm.error[spec.id]
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
+    GlassCard(Modifier.fillMaxWidth(), contentPadding = 14.dp) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f).padding(end = 8.dp)) {
                 Text(gemmaName(spec), style = MaterialTheme.typography.titleMedium)
                 Text(
                     if (spec == LlmModels.E2B) "Rapide, bonne qualité · ${gb(spec.sizeBytes)} Go" else "Meilleure qualité, plus lent · ${gb(spec.sizeBytes)} Go",
@@ -196,9 +191,9 @@ private fun GemmaCard(spec: ModelSpec, llm: LlmModelsManager, onAskDownload: () 
                 if (busy) LinearProgressIndicator(progress = { pct }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
             }
             when {
-                busy -> OutlinedButton(onClick = { llm.cancel(spec) }) { Text("Annuler") }
-                ready -> OutlinedButton(onClick = { llm.delete(spec) }) { Text("Supprimer") }
-                else -> Button(onClick = onAskDownload) { Text(if (err != null) "Reprendre" else "Télécharger") }
+                busy -> GhostButton("Annuler", { llm.cancel(spec) })
+                ready -> GhostButton("Supprimer", { llm.delete(spec) })
+                else -> GradientButton(if (err != null) "Reprendre" else "Télécharger", onAskDownload)
             }
         }
     }
@@ -218,12 +213,12 @@ private fun JapanesePackCard(graph: AppGraph) {
             dismissButton = { TextButton(onClick = { confirm = false }) { Text("Annuler") } },
         )
     }
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
+    GlassCard(Modifier.fillMaxWidth(), contentPadding = 14.dp) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f).padding(end = 8.dp)) {
                 Text("Japonais vertical (manga-ocr)", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Lit les colonnes de texte vertical des mangas japonais. Facultatif : sans lui, le japonais est lu par PaddleOCR et ML Kit. Module de $size Mo, téléchargé à la demande.",
+                    "Lit le texte vertical des mangas japonais. Facultatif (module de $size Mo) : sans lui, PaddleOCR et ML Kit lisent le japonais.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
                 )
                 Text(
@@ -241,9 +236,9 @@ private fun JapanesePackCard(graph: AppGraph) {
             }
             when {
                 pack.bundled || !pack.offered -> {}
-                pack.busy -> OutlinedButton(onClick = { pack.cancel() }) { Text("Annuler") }
-                pack.ready -> OutlinedButton(onClick = { try { graph.paddleModels.manga.close() } catch (_: Throwable) {}; pack.delete() }) { Text("Supprimer") }
-                else -> Button(onClick = { confirm = true }) { Text(if (pack.error != null) "Reprendre" else "Télécharger") }
+                pack.busy -> GhostButton("Annuler", { pack.cancel() })
+                pack.ready -> GhostButton("Supprimer", { try { graph.paddleModels.manga.close() } catch (_: Throwable) {}; pack.delete() })
+                else -> GradientButton(if (pack.error != null) "Reprendre" else "Télécharger", { confirm = true })
             }
         }
     }
@@ -272,8 +267,8 @@ fun GlossaryScreen(graph: AppGraph) {
         g.terms.map { GlossaryRow(null, it.source, it.target) }
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
-            "Noms de personnages et termes récurrents : le terme d'origine est remplacé par votre traduction. Un terme d'œuvre ne s'applique qu'à cette œuvre. " +
-                "Effacez le cache puis retraduisez pour l'appliquer aux pages déjà traduites.",
+            "Le terme d'origine est remplacé par votre traduction ; un terme d'œuvre ne vaut que pour cette œuvre. " +
+                "Pour l'appliquer aux pages déjà traduites : vider le cache (Réglages › Données), puis retraduire.",
             color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

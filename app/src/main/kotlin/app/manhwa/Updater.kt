@@ -170,10 +170,14 @@ class UpdateManager(private val ctx: Context) {
         return f.exists() && f.length() == r.apkSize && packageProblem(f) == null
     }
 
-    /** Efface les anciens téléchargements ; [keep] et son fichier partiel sont conservés, ainsi que la version la plus récente déjà reçue si [keepLatest]. */
+    /**
+     * Efface les anciens téléchargements ; [keep] et son fichier partiel sont conservés, ainsi que la version la plus récente déjà reçue si [keepLatest]
+     * (à condition qu'elle soit plus récente que la version installée : un APK déjà installé n'a plus rien à faire dans le cache).
+     */
     private fun cleanDir(keep: File?, keepLatest: Boolean) {
         val files = dir.listFiles() ?: return
-        val newest = if (keepLatest) files.filter { it.name.endsWith(".apk") }.maxByOrNull { it.name.removePrefix("ManhwaTranslator-build-").removeSuffix(".apk").toIntOrNull() ?: 0 } else null
+        fun buildOf(f: File) = f.name.removePrefix("ManhwaTranslator-build-").removeSuffix(".apk").toIntOrNull() ?: 0
+        val newest = if (keepLatest) files.filter { it.name.endsWith(".apk") && buildOf(it) > current }.maxByOrNull { buildOf(it) } else null
         for (f in files) {
             val base = f.name.removeSuffix(".part")
             if (keep != null && base == keep.name) continue
