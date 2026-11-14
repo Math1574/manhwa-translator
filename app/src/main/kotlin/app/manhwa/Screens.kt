@@ -14,6 +14,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -261,6 +262,7 @@ fun GlossaryScreen(graph: AppGraph, fixed: Pair<String, String>? = null) {
     var src by remember { mutableStateOf("") }
     var dst by remember { mutableStateOf("") }
     var tick by remember { mutableStateOf(0) }
+    var suggestOpen by remember { mutableStateOf(false) }
     val forSeries = scopeSeries && series != null
     val known = remember(tick, g.terms.size, g.seriesTerms.size) {
         (g.terms.map { it.source.lowercase() } + g.seriesTerms.filter { it.series == series }.map { it.source.lowercase() }).toSet()
@@ -268,17 +270,27 @@ fun GlossaryScreen(graph: AppGraph, fixed: Pair<String, String>? = null) {
     val suggestions = remember(tick, series, known) { if (forSeries) graph.names.suggestions(series, known) else emptyList() }
     val rows = (if (forSeries) g.seriesTerms.filter { it.series == series }.map { GlossaryRow(it.series, it.source, it.target) } else emptyList()) +
         g.terms.map { GlossaryRow(null, it.source, it.target) }
-    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            "Le terme d'origine est remplacé par votre traduction ; un terme d'œuvre ne vaut que pour cette œuvre. " +
-                "Seuls les textes qui contiennent le terme sont retraduits : un aperçu est proposé pour les pages ouvertes, les autres pages déjà traduites se mettent à jour quand vous les affichez.",
-            color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = !forSeries, onClick = { scopeSeries = false }, label = { Text("Toutes les œuvres") })
-            FilterChip(selected = forSeries, onClick = { scopeSeries = true }, enabled = series != null, label = { Text(if (seriesName != null) "Cette œuvre : $seriesName" else "Cette œuvre (ouvrez-en une)") })
+    if (suggestOpen && forSeries && series != null) {
+        AniListSuggestPage(graph, series, seriesName ?: "", onClose = { suggestOpen = false; tick++ })
+        return
+    }
+    // toute la page défile (et pas seulement la liste des termes) : le clavier ouvert ou une longue liste de noms ne cachent plus le bouton « Ajouter »
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        item(key = "intro") {
+            Text(
+                "Le terme d'origine est remplacé par votre traduction ; un terme d'œuvre ne vaut que pour cette œuvre. " +
+                    "Seuls les textes qui contiennent le terme sont retraduits : un aperçu est proposé pour les pages ouvertes, les autres pages déjà traduites se mettent à jour quand vous les affichez.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
+            )
         }
-        if (suggestions.isNotEmpty()) {
+        item(key = "scope") {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = !forSeries, onClick = { scopeSeries = false }, label = { Text("Toutes les œuvres") })
+                FilterChip(selected = forSeries, onClick = { scopeSeries = true }, enabled = series != null, label = { Text(if (seriesName != null) "Cette œuvre : $seriesName" else "Cette œuvre (ouvrez-en une)") })
+            }
+        }
+        if (forSeries && series != null) item(key = "anilist") { OutlinedButton(onClick = { suggestOpen = true }, Modifier.fillMaxWidth()) { Text("Suggestions de noms (AniList)") } }
+        if (suggestions.isNotEmpty()) item(key = "names") {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                 Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text("Noms qui reviennent souvent", style = MaterialTheme.typography.titleSmall)
@@ -293,21 +305,21 @@ fun GlossaryScreen(graph: AppGraph, fixed: Pair<String, String>? = null) {
                 }
             }
         }
-        OutlinedTextField(src, { src = it }, Modifier.fillMaxWidth(), label = { Text("Terme d'origine (ex. 성진우)") }, singleLine = true)
-        OutlinedTextField(dst, { dst = it }, Modifier.fillMaxWidth(), label = { Text("Traduction (ex. Sung Jin-Woo)") }, singleLine = true)
-        Button(onClick = { c.addTermsWithPreview(listOf(app.manhwa.core.GlossaryEntry(src.trim(), dst.trim())), if (forSeries) series else null) { src = ""; dst = ""; tick++ } }, enabled = src.isNotBlank() && dst.isNotBlank()) {
-            Text(if (forSeries) "Ajouter à cette œuvre" else "Ajouter pour toutes les œuvres")
+        item(key = "src") { OutlinedTextField(src, { src = it }, Modifier.fillMaxWidth(), label = { Text("Terme d'origine (ex. 성진우)") }, singleLine = true) }
+        item(key = "dst") { OutlinedTextField(dst, { dst = it }, Modifier.fillMaxWidth(), label = { Text("Traduction (ex. Sung Jin-Woo)") }, singleLine = true) }
+        item(key = "add") {
+            Button(onClick = { c.addTermsWithPreview(listOf(app.manhwa.core.GlossaryEntry(src.trim(), dst.trim())), if (forSeries) series else null) { src = ""; dst = ""; tick++ } }, enabled = src.isNotBlank() && dst.isNotBlank()) {
+                Text(if (forSeries) "Ajouter à cette œuvre" else "Ajouter pour toutes les œuvres")
+            }
         }
-        HorizontalDivider()
-        LazyColumn(Modifier.weight(1f)) {
-            items(rows, key = { (it.series ?: "*") + "|" + it.source }) { e ->
-                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("${e.source}  →  ${e.target}")
-                        if (e.series != null) Text("Cette œuvre", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                    }
-                    TextButton(onClick = { if (e.series != null) g.removeForSeries(e.series, e.source) else g.remove(e.source) }) { Text("Retirer") }
+        item(key = "sep") { HorizontalDivider() }
+        items(rows, key = { (it.series ?: "*") + "|" + it.source }) { e ->
+            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("${e.source}  →  ${e.target}")
+                    if (e.series != null) Text("Cette œuvre", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                 }
+                TextButton(onClick = { if (e.series != null) g.removeForSeries(e.series, e.source) else g.remove(e.source) }) { Text("Retirer") }
             }
         }
     }
