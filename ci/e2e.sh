@@ -293,6 +293,25 @@ chk "mise à jour à l'affichage : un terme modifié sans aperçu ne retraduit q
 uidump gl5; shot ui 30
 appcmd "termdel disciple"; appcmd "termdel master"; appcmd clearedits; appcmd "testcache off"
 chk "retraduction ciblée : les termes et corrections de test sont retirés" $([ "$(okst waitst terms 0 25)" = 1 ] && [ "$(okst waitst edits 0 25)" = 1 ] && echo 1 || echo 0)
+# textes écartés : le mode entoure ce que la lecture a laissé de côté (ici l'onomatopée « Boom! ») ; un appui simple en traduit un, « Annuler » le retire.
+# L'appui est rejoué dans la page par une commande (événements tactiles), le reste (bouton « Terminer », bandeau, « Annuler ») est touché pour de vrai.
+appcmd window 20000
+appcmd discard on; uidump dc1; shot ui 31
+chk "textes écartés : activés, un bouton « Textes écartés · Terminer » est affiché" $([ "$(has dc1 'Textes [^ ]*cart')" = 1 ] && [ "$(okst waitst discMode True 8)" = 1 ] && echo 1 || echo 0)
+chk "textes écartés : au moins un texte laissé de côté est entouré (page reprise ou relue)" $(okst waitge disc 1 40)
+d0=$(stv disc); say "textes écartés : $d0 cadre(s) proposé(s), listes connues pour $(stv discKnown) page(s)"
+appcmd disctap
+chk "textes écartés : un appui traduit le texte (correction enregistrée, cadre retiré)" $([ "$(okst waitst edits 1 25)" = 1 ] && [ "$(stv disc)" -lt "${d0:-0}" ] && echo 1 || echo 0)
+uidump dc2; shot ui 32
+chk "textes écartés : le bandeau « Texte traduit · Annuler » apparaît" $(has dc2 'Texte traduit')
+chk "textes écartés : le mode reste actif après un appui" $([ "$(stv discMode)" = True ] && [ "$(has dc2 'Textes [^ ]*cart')" = 1 ] && echo 1 || echo 0)
+tapt dc2 "Annuler" 1; sleep 1
+chk "textes écartés : « Annuler » retire la traduction et le cadre revient" $([ "$(okst waitst edits 0 25)" = 1 ] && [ "$(okst waitge disc "${d0:-1}" 25)" = 1 ] && echo 1 || echo 0)
+uidump dc3; tapt dc3 "Terminer" 1; sleep 1
+chk "textes écartés : « Terminer » coupe le mode" $([ "$(okst waitst discMode False 10)" = 1 ] && echo 1 || echo 0)
+uidump dc4; chk "textes écartés : le bouton disparaît" $(hasnot dc4 'Textes [^ ]*cart')
+appcmd clearedits
+chk "textes écartés : les corrections de test sont retirées" $(okst waitst edits 0 25)
 appcmd window 20000
 appcmd peek; uidump ig1; shot ui 17
 chk "ignorer : un appui long propose aussi « Ignorer ce texte… » (avec Corriger)" $([ "$(has ig1 'Ignorer ce texte')" = 1 ] && [ "$(has ig1 'Corriger cette traduction')" = 1 ] && echo 1 || echo 0)
