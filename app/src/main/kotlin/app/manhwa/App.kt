@@ -111,7 +111,7 @@ class AppGraph(ctx: Context) {
     val reuseTest = ReuseTester(this)
     init {
         // l'essai de traduction accélérée a fait planter l'application au lancement précédent : on le désactive
-        if (gemma.reuseCrashed) settingsStore.update { it.copy(fastLlm = false) }
+        if (gemma.reuseCrashed) settingsStore.update { it.copy(fastLlm = false, fastLlmNoSpec = false) }
     }
     val blockReader = GemmaBlockReader(gemma) { settingsStore.settings }
     val visionTest = VisionTester(ctx, gemma)

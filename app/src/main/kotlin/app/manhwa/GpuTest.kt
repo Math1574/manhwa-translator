@@ -78,7 +78,7 @@ class ReuseTester(private val graph: AppGraph) {
 
     fun run() {
         if (running) return
-        running = true; summary = "Comparaison en cours (une à trois minutes), ne traduisez pas pendant ce temps…"
+        running = true; summary = "Comparaison en cours (deux à cinq minutes : le moteur est rechargé une fois), ne traduisez pas pendant ce temps…"
         Thread {
             val text = try {
                 val r = graph.gemma.compareReuse()

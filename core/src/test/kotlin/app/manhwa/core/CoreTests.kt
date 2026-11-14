@@ -339,6 +339,9 @@ fun settingsTests() {
         T.ok(!AppSettings.parse("textScale=1.0").fastLlm, "anciens réglages : désactivée")
         T.ok(AppSettings.parse(AppSettings(fastLlm = true).serialize()).fastLlm, "choix conservé")
         T.ok(!AppSettings.parse("fastLlm=peut-être").fastLlm, "valeur illisible : désactivée")
+        T.ok(!AppSettings().fastLlmNoSpec && !AppSettings.parse("textScale=1.0").fastLlmNoSpec, "sans décodage spéculatif : désactivé par défaut")
+        T.ok(AppSettings.parse(AppSettings(fastLlm = true, fastLlmNoSpec = true).serialize()).fastLlmNoSpec, "choix conservé")
+        T.ok(!AppSettings.parse("fastLlmNoSpec=oui").fastLlmNoSpec, "valeur illisible : désactivé")
     }
 }
 

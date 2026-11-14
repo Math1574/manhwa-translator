@@ -17,6 +17,8 @@ import app.manhwa.core.ModelSpec
 import app.manhwa.core.ModelStatus
 import app.manhwa.core.ModelStore
 import app.manhwa.core.ReuseOutcome
+import app.manhwa.core.SpeedReport
+import app.manhwa.core.SpeedTry
 import app.manhwa.core.TranslationEngine
 import app.manhwa.core.VisionPrompt
 import com.google.ai.edge.litertlm.Backend
@@ -118,6 +120,8 @@ class GemmaTranslator(
     @Volatile var reuseOverride: Boolean? = null
     /** Banc d'essai seulement : impose le mode du décodage spéculatif (ON, OFF ou ADAPTIVE) à la création du moteur. */
     @Volatile var specOverride: SpeculativeDecodingMode? = null
+    /** La comparaison et le banc d'essai imposent « sans décodage spéculatif » (vrai) ou le moteur tel que l'application le crée (faux) ; null : suit les réglages. */
+    @Volatile var noSpecOverride: Boolean? = null
     /** Message pour les réglages quand l'essai a posé problème (plantage au lancement précédent, copie impossible sur ce téléphone). */
     @Volatile var reuseStatus: String = ""
         private set
@@ -135,14 +139,34 @@ class GemmaTranslator(
     private var primed: Conversation? = null
     private var primedKey = ""
     private val reuseGuard = File(ctx.filesDir, "reuse_probe.state")
+    private val crashFile = File(ctx.filesDir, "reuse_crash.txt")
+    /** Modes de copie (« copy » : moteur tel que l'application le crée ; « nospec » : sans décodage spéculatif) qui ont fait planter l'application avec CETTE version : une nouvelle version les essaie de nouveau. */
+    private var crashedModes: Set<String> = emptySet()
+
+    @Suppress("DEPRECATION")
+    private fun appVersion(): Long = try {
+        val pi = ctx.packageManager.getPackageInfo(ctx.packageName, 0)
+        if (android.os.Build.VERSION.SDK_INT >= 28) pi.longVersionCode else pi.versionCode.toLong()
+    } catch (_: Throwable) { 0L }
 
     init {
-        // un plantage natif ne s'intercepte pas : « running » est écrit avant chaque demande en mode accéléré et effacé après ; s'il reste, l'essai est désactivé
+        // un plantage natif ne s'intercepte pas : « running:mode » est écrit avant chaque demande en mode accéléré et effacé après ; s'il reste, ce mode est désactivé et noté
         try {
+            val ver = appVersion().toString()
+            val known = HashSet<String>()
+            if (crashFile.exists()) crashFile.readLines().forEach { l -> val p = l.trim().split(":"); if (p.size == 2 && p[0] == ver) known.add(p[1]) }
             if (reuseGuard.exists()) {
-                if (reuseGuard.readText().trim() == "running") { reuseCrashed = true; reuseStatus = "L'essai de traduction accélérée a fait planter l'application : il a été désactivé." }
+                val g = reuseGuard.readText().trim()
+                if (g.startsWith("running")) {
+                    val mode = g.substringAfter(':', "copy").ifEmpty { "copy" }
+                    known.add(mode)
+                    try { crashFile.appendText("$ver:$mode\n") } catch (_: Throwable) {}
+                    reuseCrashed = true
+                    reuseStatus = "L'essai de traduction accélérée (" + (if (mode == "nospec") "sans décodage spéculatif" else "avec le décodage spéculatif") + ") a fait planter l'application : il a été désactivé."
+                }
                 reuseGuard.delete()
             }
+            crashedModes = known
         } catch (_: Throwable) {}
     }
 
@@ -260,7 +284,11 @@ class GemmaTranslator(
     }
 
     /** Le réglage décide, sauf si la comparaison ou le banc d'essai l'impose ; trop d'échecs coupent le réglage jusqu'au prochain lancement. */
-    private fun reuseOn(): Boolean = reuseOverride ?: (settings().fastLlm && !reuseOffSession)
+    private fun reuseOn(): Boolean = reuseOverride ?: (settings().fastLlm && !reuseOffSession && reuseMode() !in crashedModes)
+
+    /** Vrai quand le moteur doit être créé sans décodage spéculatif (copie sans décodage spéculatif). */
+    private fun noSpec(): Boolean = noSpecOverride ?: settings().let { it.fastLlm && it.fastLlmNoSpec }
+    private fun reuseMode(): String = if (noSpec()) "nospec" else "copy"
 
     /** Comptage des demandes passées par la copie avec le réglage actif (la comparaison et le banc d'essai comptent à part) : trois échecs d'affilée, ou plus d'un tiers d'échecs sur huit demandes ou plus, coupent l'essai. */
     private fun reuseNoted(ok: Boolean) {
@@ -294,7 +322,7 @@ class GemmaTranslator(
      */
     @OptIn(ExperimentalApi::class)
     private fun askReusing(eng: Engine, system: String, sampler: SamplerConfig, maxOut: Int, prompt: String): String {
-        try { reuseGuard.writeText("running") } catch (_: Throwable) {}
+        try { reuseGuard.writeText("running:" + reuseMode()) } catch (_: Throwable) {}
         try {
             val key = "$engineKey|${sampler.temperature}|${system.length}|${system.hashCode()}"
             val base: Conversation = primed?.takeIf { primedKey == key && it.isAlive } ?: run {
@@ -308,8 +336,10 @@ class GemmaTranslator(
     class ReuseCompareResult(val outcome: ReuseOutcome?, val note: String)
 
     /**
-     * Comparaison sur le téléphone, avec les mêmes répliques : une chauffe (non mesurée), deux mesures du mode normal, la préparation de la copie (non mesurée),
-     * puis trois mesures du mode accéléré, échecs compris (un essai raté est refait en mode normal et ce temps est compté). Le dialogue du chapitre en cours n'est pas touché.
+     * Comparaison sur le téléphone, avec les mêmes répliques : (1) le mode normal, moteur tel que l'application le crée (une chauffe non mesurée, puis deux mesures) ;
+     * (2) la copie des consignes avec ce même moteur ; (3) la copie sans décodage spéculatif (le moteur est recréé). Pour chaque copie : une préparation non mesurée,
+     * puis trois mesures, échecs compris (un essai raté est refait en mode normal et ce temps est compté). Un mode qui a déjà fait planter l'application n'est pas réessayé.
+     * Le dialogue du chapitre en cours n'est pas touché.
      */
     @Synchronized fun compareReuse(): ReuseCompareResult {
         val s = settings()
@@ -317,11 +347,13 @@ class GemmaTranslator(
             ?: return ReuseCompareResult(null, "Choisissez d'abord Gemma comme moteur de traduction (onglet Modèles).")
         main.removeCallbacks(releaseTask)
         val savedHistory = history.toList(); history.clear()
-        val savedOverride = reuseOverride
+        val savedReuse = reuseOverride; val savedNoSpec = noSpecOverride
         reuseFallbacks = 0; reuseStatus = ""
         try {
-            val eng = ensureEngine(spec, s.useGpu, vision = visionReady && s.autoReread)
             val lines = benchLines
+            val vision = visionReady && s.autoReread
+            noSpecOverride = false
+            var eng: Engine = ensureEngine(spec, s.useGpu, vision = vision)
             class Run(val out: List<String?>, val ms: Long, val fell: Boolean)
             fun once(reuse: Boolean): Run {
                 reuseOverride = reuse
@@ -332,25 +364,38 @@ class GemmaTranslator(
             }
             once(false)                                   // chauffe (premiers calculs du moteur) : non mesurée
             val n1 = once(false); val n2 = once(false)    // deux mesures du mode normal
-            val prime = once(true)                        // première fois : les consignes sont lues puis gardées (non mesurée)
-            val fast = List(3) { once(true) }             // vitesse de croisière
-            val all = listOf(n1, n2, prime) + fast
-            if (all.any { r -> r.out.any { it == null } }) return ReuseCompareResult(null, "Le modèle a donné une réponse incomplète : refais l'essai.")
-            val tries = 1 + fast.size
-            val failed = (if (prime.fell) 1 else 0) + fast.count { it.fell }
-            val same = lines.indices.count { i -> fast.all { it.out[i] == n1.out[i] } }
+            if (listOf(n1, n2).any { r -> r.out.any { it == null } }) return ReuseCompareResult(null, "Le modèle a donné une réponse incomplète : refais l'essai.")
             val base = lines.indices.count { n1.out[it] == n2.out[it] }
             val normalMs = (n1.ms + n2.ms) / 2
-            val fastMs = fast.map { it.ms }.average().toLong()
-            val diffs = lines.indices.mapNotNull { i ->
-                val other = fast.map { it.out[i] }.firstOrNull { it != n1.out[i] } ?: return@mapNotNull null
-                LineDiff(lines[i], n1.out[i].orEmpty(), other.orEmpty())
+            val skipped = ArrayList<String>()
+
+            fun phase(mode: String, noSpecNow: Boolean, label: String): SpeedTry? {
+                if (mode in crashedModes) { skipped.add("$label : non essayée, elle a fait planter l'application sur ce téléphone."); return null }
+                return try {
+                    noSpecOverride = noSpecNow
+                    eng = ensureEngine(spec, s.useGpu, vision = vision)      // recréé si le mode du moteur change
+                    val prime = once(true)                                    // première fois : les consignes sont lues puis gardées (non mesurée)
+                    val fast = List(3) { once(true) }                         // vitesse de croisière
+                    val runs = listOf(prime) + fast
+                    if (runs.any { r -> r.out.any { it == null } }) { skipped.add("$label : le modèle a donné une réponse incomplète, refais l'essai."); return null }
+                    val same = lines.indices.count { i -> fast.all { it.out[i] == n1.out[i] } }
+                    val diffs = lines.indices.mapNotNull { i ->
+                        val other = fast.map { it.out[i] }.firstOrNull { it != n1.out[i] } ?: return@mapNotNull null
+                        LineDiff(lines[i], n1.out[i].orEmpty(), other.orEmpty())
+                    }
+                    SpeedTry(fast.map { it.ms }.average().toLong(), same, runs.count { it.fell }, runs.size, diffs)
+                } catch (t: Throwable) {
+                    skipped.add("$label : impossible à essayer (${t.message?.lineSequence()?.firstOrNull { it.isNotBlank() }?.take(140) ?: t.javaClass.simpleName}).")
+                    null
+                }
             }
-            return ReuseCompareResult(ReuseOutcome(normalMs, fastMs, same, base, lines.size, failed, tries, diffs), "")
+            val copy = phase("copy", false, SpeedReport.COPY)
+            val noSpecTry = phase("nospec", true, SpeedReport.NO_SPEC)
+            return ReuseCompareResult(ReuseOutcome(normalMs, base, lines.size, copy, noSpecTry, skipped), "")
         } catch (t: Throwable) {
             return ReuseCompareResult(null, "Comparaison impossible : ${t.message?.lineSequence()?.firstOrNull { it.isNotBlank() }?.take(160) ?: t.javaClass.simpleName}")
         } finally {
-            reuseOverride = savedOverride
+            reuseOverride = savedReuse; noSpecOverride = savedNoSpec
             if (!settings().fastLlm) dropPrimed()         // l'essai est désactivé : la copie préparée n'a plus à occuper la mémoire
             history.clear(); history.addAll(savedHistory)
             main.postDelayed(releaseTask, IDLE_RELEASE_MS)
@@ -389,18 +434,20 @@ class GemmaTranslator(
         private set
 
     private fun ensureEngine(spec: ModelSpec, gpu: Boolean, vision: Boolean = false): Engine {
-        val key = spec.id + (if (gpu) ":gpu" else ":cpu") + (if (vision) ":v" else "")
+        val ns = noSpec()
+        val nsKey = if (ns) ":nospec" else ""
+        val key = spec.id + (if (gpu) ":gpu" else ":cpu") + (if (vision) ":v" else "") + nsKey
         engine?.let { if (engineKey == key) return it }
         release()
         val path = models.fileOf(spec).absolutePath
-        // ordre d'essai : GPU + spéculatif, GPU, CPU + spéculatif, CPU (repli automatique si une option n'est pas disponible)
-        val attempts = (if (gpu) listOf(true to true, true to false) else emptyList()) + listOf(false to true, false to false)
+        // ordre d'essai : GPU + spéculatif, GPU, CPU + spéculatif, CPU (repli automatique si une option n'est pas disponible) ; sans décodage spéculatif : aucune tentative avec lui
+        val attempts = ((if (gpu) listOf(true to true, true to false) else emptyList()) + listOf(false to true, false to false)).filter { !ns || !it.second }
         var last: Throwable? = null
         for (withVision in if (vision) listOf(true, false) else listOf(false)) {
             for ((useGpu, spec2) in attempts) {
                 try {
                     val e = createEngine(path, if (useGpu) Backend.GPU() else Backend.CPU(), spec2, withVision)
-                    engine = e; engineKey = spec.id + (if (gpu) ":gpu" else ":cpu") + (if (withVision) ":v" else "")
+                    engine = e; engineKey = spec.id + (if (gpu) ":gpu" else ":cpu") + (if (withVision) ":v" else "") + nsKey
                     engineHasVision = withVision
                     backendLabel = (if (useGpu) "GPU" else "CPU") + (if (spec2) " + décodage spéculatif" else "") + (if (withVision) " + lecture d'image" else "")
                     if (vision && !withVision) markVision(false, "le moteur n'a pas pu être créé avec la lecture d'image : ${last?.message ?: last?.javaClass?.simpleName}")

@@ -721,7 +721,8 @@ private fun AdvancedSettings(graph: AppGraph, focus: String?) {
             }
             if (graph.gpuTest.summary.isNotEmpty()) Hint(graph.gpuTest.summary)
             HorizontalDivider()
-            SwitchRow("Traduction accélérée (essai)", "Gemma garde en mémoire les consignes de traduction au lieu de les relire à chaque page : moins de calcul, donc plus rapide et moins chaud en théorie. À essayer : comparez d'abord avec le bouton ci-dessous. Si la copie échoue trop souvent, l'application coupe l'essai toute seule.", s.fastLlm) { v -> store.update { it.copy(fastLlm = v) } }
+            SwitchRow("Traduction accélérée (essai)", "Gemma garde en mémoire les consignes de traduction au lieu de les relire à chaque page : moins de calcul, donc en théorie plus rapide et moins chaud. Le texte peut changer un peu. Lancez d'abord la comparaison ci-dessous ; si la copie échoue trop souvent, l'application coupe l'essai toute seule.", s.fastLlm) { v -> store.update { it.copy(fastLlm = v) } }
+            SwitchRow("Sans décodage spéculatif", "Avec l'essai, coupe le décodage spéculatif (une accélération interne qui ne s'entend pas toujours avec la copie). La copie est plus régulière, mais l'écriture de la traduction est plus lente. À n'activer que si la comparaison le recommande.", s.fastLlmNoSpec, enabled = s.fastLlm) { v -> store.update { it.copy(fastLlmNoSpec = v) } }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 GhostButton("Comparer normal / accéléré", { graph.reuseTest.run() }, enabled = !graph.reuseTest.running)
                 if (graph.reuseTest.running) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)

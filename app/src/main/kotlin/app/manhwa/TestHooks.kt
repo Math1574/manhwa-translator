@@ -138,7 +138,7 @@ object TestHooks {
             .put("libSeries", graph.library.library.series().size).put("libFinished", graph.library.library.series().count { it.finished }).put("libSort", graph.settingsStore.settings.librarySort)
             .put("home", c.currentUrl.isEmpty()).put("homeSites", app.manhwa.core.HomeView.sites(graph.library.library, app.manhwa.core.HomeView.pinned(graph.settingsStore.settings), app.manhwa.core.HomeView.hidden(graph.settingsStore.settings)).size)
             .put("homePinned", app.manhwa.core.HomeView.pinned(graph.settingsStore.settings).size).put("homeHidden", app.manhwa.core.HomeView.hidden(graph.settingsStore.settings).size)
-            .put("fastLlm", graph.settingsStore.settings.fastLlm).put("corr", graph.edits.count()).put("corrOrig", graph.edits.originsSnapshot().size).put("fixes", graph.glossary.corrections.size)
+            .put("fastLlm", graph.settingsStore.settings.fastLlm).put("fastLlmNoSpec", graph.settingsStore.settings.fastLlmNoSpec).put("corr", graph.edits.count()).put("corrOrig", graph.edits.originsSnapshot().size).put("fixes", graph.glossary.corrections.size)
             .put("terms", graph.glossary.terms.size + graph.glossary.seriesTerms.size).put("seriesTermSrc", graph.glossary.seriesTerms.map { it.source }.sorted().joinToString("|")).put("glossRev", graph.glossary.revision).put("refreshed", c.testRefreshed.get()).put("patched", c.testPatched.get())
             .put("tpv", c.termPreview?.let { if (it.computing) "computing" else "ready" } ?: "none").put("tpvRows", c.termPreview?.rows?.size ?: 0).put("tpvOthers", c.termPreview?.others ?: 0).put("trs", trs.sorted().joinToString("\u001f"))
         val ed = EditorProbe.info
@@ -366,7 +366,11 @@ object TestHooks {
                         val one = JSONObject()
                         val r = graph.gemma.compareReuse()
                         one.put("note", r.note)
-                        r.outcome?.let { o -> one.put("normalMs", o.normalMs).put("fastMs", o.fastMs).put("same", o.same).put("sameBaseline", o.sameBaseline).put("lines", o.lines).put("failed", o.failed).put("tries", o.tries).put("text", app.manhwa.core.SpeedReport.describe(o)) }
+                        r.outcome?.let { o ->
+                            one.put("normalMs", o.normalMs).put("sameBaseline", o.sameBaseline).put("lines", o.lines).put("skipped", JSONArray(o.skipped)).put("text", app.manhwa.core.SpeedReport.describe(o))
+                            fun tryJson(x: app.manhwa.core.SpeedTry?) = x?.let { JSONObject().put("ms", it.ms).put("same", it.same).put("failed", it.failed).put("tries", it.tries) }
+                            tryJson(o.copy)?.let { one.put("copy", it) }; tryJson(o.noSpec)?.let { one.put("noSpec", it) }
+                        }
                         one.put("backend", graph.gemma.backendLabel)
                         abJson.put(v, one)
                         notes.put("comparaison $v terminée")
