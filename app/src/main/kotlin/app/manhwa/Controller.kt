@@ -433,7 +433,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         if (show) main.postDelayed(hideReaderBar, 5000)
     }
 
-    /** Un doigt est posé sur le menu de lecture (appui long de 3 s sur Original | Traduit) : il reste ouvert tant que l'appui dure, puis reprend ses 5 secondes de repos. */
+    /** Un doigt est posé sur le menu de lecture (appui long sur Original | Traduit) : il reste ouvert tant que l'appui dure, puis reprend ses 5 secondes de repos. */
     fun holdReaderBar(held: Boolean) {
         if (!readerBar) return
         main.removeCallbacks(hideReaderBar)
@@ -902,7 +902,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         if (peekEmpty != null) { peekEmpty = null; main.removeCallbacks(clearPeekEmpty) }
     }
 
-    /** Petite vibration quand l'appui long de 2 secondes a été pris en compte (rien ne change à l'écran tant que la proposition n'apparaît pas en bas). */
+    /** Petite vibration quand l'appui long de 0,75 s a été pris en compte (rien ne change à l'écran tant que la proposition n'apparaît pas en bas). */
     private fun longPressTick() { try { webView?.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS) } catch (_: Throwable) {} }
 
     /** Texte lu du bloc touché avant toute correction : c'est celui que les règles « ignorer » comparent au texte lu sur la page (une correction manuelle du texte n'y change rien). */

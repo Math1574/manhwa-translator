@@ -187,16 +187,16 @@ fun Entrance(key: Any, index: Int, seen: MutableSet<Any>, content: @Composable (
     ) { content() }
 }
 
-/** Durée de l'appui long qui ouvre les réglages rapides depuis le bouton Original | Traduit : 3 secondes, pour ne jamais les ouvrir sans le vouloir. */
-const val PANEL_LONG_PRESS_MS = 3000L
+/** Délai ajouté à la durée d'appui long du système (celle d'avant) pour ouvrir les réglages rapides depuis le bouton Original | Traduit ou le bouton rond : 0,3 s de plus, pour ne pas les ouvrir sans le vouloir sans casser le rythme. */
+const val PANEL_LONG_PRESS_EXTRA_MS = 300L
 
-/** Les appuis longs du contenu attendent [ms] millisecondes au lieu de la durée du système (le reste de la configuration des gestes est inchangé). */
+/** Les appuis longs du contenu attendent [extraMs] millisecondes de plus que la durée du système, qui reste la base (le reste de la configuration des gestes est inchangé). */
 @Composable
-fun WithLongPress(ms: Long, content: @Composable () -> Unit) {
+fun WithLongPress(extraMs: Long, content: @Composable () -> Unit) {
     val base = LocalViewConfiguration.current
-    val config = remember(base, ms) {
+    val config = remember(base, extraMs) {
         object : ViewConfiguration by base {
-            override val longPressTimeoutMillis: Long get() = ms
+            override val longPressTimeoutMillis: Long get() = base.longPressTimeoutMillis + extraMs
         }
     }
     CompositionLocalProvider(LocalViewConfiguration provides config, content = content)

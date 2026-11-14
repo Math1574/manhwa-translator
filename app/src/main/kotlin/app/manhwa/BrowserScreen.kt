@@ -246,7 +246,7 @@ private fun Pill(text: String, onClick: () -> Unit, onClose: (() -> Unit)? = nul
 }
 
 /**
- * Interrupteur à deux positions : on voit ce qui est affiché et ce que le toucher va afficher. Un appui long de 3 secondes ouvre les réglages rapides.
+ * Interrupteur à deux positions : on voit ce qui est affiché et ce que le toucher va afficher. Un appui long (0,3 s de plus que l'appui long du système) ouvre les réglages rapides.
  * [onPress] : vrai tant qu'un doigt est posé dessus (le menu de lecture ne se range pas pendant l'appui, qui dure plus que ses 5 secondes de repos).
  */
 @OptIn(ExperimentalFoundationApi::class)
@@ -267,7 +267,7 @@ private fun TranslationToggle(translated: Boolean, modifier: Modifier = Modifier
             style = MaterialTheme.typography.labelLarge,
         )
     }
-    WithLongPress(PANEL_LONG_PRESS_MS) {
+    WithLongPress(PANEL_LONG_PRESS_EXTRA_MS) {
         Row(modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)).border(1.dp, Color.White.copy(alpha = 0.12f), CircleShape).padding(3.dp)) {
             Seg("Original", !translated)
             Seg("Traduit", translated)
