@@ -21,13 +21,13 @@ w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kot
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Screens.kt:273:37 Condition is always 'true'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Screens.kt:292:26 Condition is always 'true'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/SeamWindow.kt:33:92 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
-w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/SettingsScreens.kt:254:27 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
-w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/SettingsScreens.kt:385:35 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
-w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/SettingsScreens.kt:405:31 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
-BUILD SUCCESSFUL in 1m 17s
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/SettingsScreens.kt:255:27 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/SettingsScreens.kt:386:35 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/SettingsScreens.kt:406:31 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
+BUILD SUCCESSFUL in 1m 20s
 BUILD SUCCESSFUL in 10s
-total 160416
-drwxr-xr-x 2 runner runner      4096 Nov 14 13:31 .
-drwxr-xr-x 3 runner runner      4096 Nov 14 13:30 ..
--rw-r--r-- 1 runner runner 164252207 Nov 14 13:31 app-debug.apk
--rw-r--r-- 1 runner runner       405 Nov 14 13:31 output-metadata.json
+total 160960
+drwxr-xr-x 2 runner runner      4096 Nov 14 13:41 .
+drwxr-xr-x 3 runner runner      4096 Nov 14 13:41 ..
+-rw-r--r-- 1 runner runner 164809263 Nov 14 13:41 app-debug.apk
+-rw-r--r-- 1 runner runner       405 Nov 14 13:41 output-metadata.json
