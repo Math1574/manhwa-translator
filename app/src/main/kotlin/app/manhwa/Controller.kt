@@ -189,8 +189,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     private val candidatesById = ConcurrentHashMap<String, Candidate>()
     /** Change à chaque nouvelle page : un rafraîchissement différé (file pleine) d'une page quittée est abandonné. */
     @Volatile private var pageEpoch = 0
-    /** Images laissées telles quelles parce que l'utilisateur ne veut jamais les voir traduites : retraitées si la règle est retirée. */
-    private val skippedIds = ConcurrentHashMap.newKeySet<String>()
+    /** Images laissées telles quelles parce que l'utilisateur ne veut jamais les voir traduites (identifiant de l'image de la page → règle qui la vise) : retraitées si la règle est retirée. */
+    private val skipped = ConcurrentHashMap<String, IgnoredImage>()
     private val keysById = ConcurrentHashMap<String, CacheKey>()
     /** Pages récemment traitées, avec de quoi corriger leurs blocs (éditeur) : les plus anciennes sont oubliées. */
     private val workInfos = object : LinkedHashMap<String, WorkInfo>(16, 0.75f, true) {
@@ -331,10 +331,12 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             if (outcome is PageOutcome.Failed && failEntries.incrementAndGet() <= 60) {
                 graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "fail").put("img", id).put("stage", outcome.stage).put("message", outcome.message.take(300)).put("sys", diag()))
             }
+            // un retraitement demandé après coup (correction, suppression, règle « ignorer ») n'est pas une image de plus à traduire : il ne compte pas dans l'avancement
+            val extra = id.contains('#')
             main.post {
                 when (outcome) {
-                    is PageOutcome.Done -> done++
-                    is PageOutcome.NoText -> { done++; noText++ }
+                    is PageOutcome.Done -> if (!extra) done++
+                    is PageOutcome.NoText -> if (!extra) { done++; noText++ }
                     is PageOutcome.Failed -> {
                         failed++; lastError = "${outcome.stage} : ${outcome.message}"
                         if (outcome.message.contains("Modèle de traduction")) {
@@ -611,7 +613,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val keys = ids.mapNotNull { workInfo(it)?.imageKey }.toSet()
         val all = LinkedHashSet<String>(ids)
         for (id in workIds()) if (workInfo(id)?.imageKey in keys) all.add(id)
-        all.addAll(skippedIds)
+        all.addAll(skipped.keys)
         for (id in all) reprocess(id)
     }
 
@@ -679,15 +681,37 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         showUndo("Image ignorée") { graph.ignored.removeImage(rule.id); reprocessForImages() }
     }
 
+    /** L'image touchée longuement est-elle ignorée ? Elle est alors laissée telle quelle : on propose de la rétablir plutôt que d'y ajouter une traduction. */
+    fun peekImageIgnored(): Boolean = peekImageId()?.let { skipped.containsKey(it) } == true
+
+    /** Rétablit l'image ignorée touchée longuement : sa règle est retirée, la page est traduite à nouveau et « Annuler » est proposé. */
+    fun unignorePeekImage() {
+        val id = peekImageId() ?: return
+        peekTarget = null; peekEmpty = null; main.removeCallbacks(clearPeek); main.removeCallbacks(clearPeekEmpty)
+        val rule = skipped[id] ?: return
+        val thumb = try { graph.ignored.thumbFile(rule.id).takeIf { it.exists() }?.readBytes() } catch (_: Throwable) { null }
+        graph.ignored.removeImage(rule.id)
+        graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "correction").put("url", currentUrl).put("src", rule.sha.takeLast(12)).put("edit", "image rétablie"))
+        reprocessForImages(listOf(id))
+        showUndo("Image rétablie") { graph.ignored.addImage(rule, thumb); reprocessForImages(listOf(id)) }
+    }
+
     // ---------- tests automatiques (builds debug) : gestes de l'appui long rejoués sans toucher la page ----------
 
     fun testWorkIds(): List<String> = workIds()
 
+    /** Nombre d'images de la page actuellement laissées telles quelles par une règle d'image. */
+    fun testSkippedCount(): Int = skipped.size
+
+    /** Redessine toutes les pages en mémoire et les images laissées telles quelles (après avoir retiré des règles « ignorer »). */
+    fun testReprocessAll() { val all = LinkedHashSet<String>(workIds()); all.addAll(skipped.keys); for (id in all) reprocess(id) }
+
     /** Comme un appui long sur la première traduction non supprimée : la proposition « Corriger / supprimer » s'affiche 30 s. Faux s'il n'y a aucune traduction. */
-    fun testPeek(): Boolean {
+    fun testPeek(ignored: Boolean = false): Boolean {
         for (id in testWorkIds()) {
             val info = workInfo(id) ?: continue
-            val b = info.applied.page.blocks.firstOrNull { info.applied.editByBlock[it.id]?.hidden != true } ?: continue
+            // première traduction non supprimée ; avec [ignored], premier texte masqué par une règle « ignorer »
+            val b = info.applied.page.blocks.firstOrNull { val e = info.applied.editByBlock[it.id]; if (ignored) e?.id?.startsWith(IGNORE_EDIT_PREFIX) == true else e?.hidden != true } ?: continue
             peekEmpty = null; peekTarget = EditTarget(id, b.id, b.source, b.translated)
             main.removeCallbacks(clearPeek); main.postDelayed(clearPeek, 30_000)
             return true
@@ -801,7 +825,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     }
 
     private fun resetSession() {
-        stopWork(); resetCounters(); active = false; overlaysVisible = true
+        stopWork(); resetCounters(); skipped.clear(); active = false; overlaysVisible = true
         graph.gemma.resetContext()
     }
 
@@ -874,12 +898,12 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         if (ignoreRules.images.isNotEmpty()) {
             val hit = ignoreRules.imageMatch(sha256Hex(bytes), app.manhwa.ImagePrint.of(bytes))
             if (hit != null) {
-                candidatesById[c.id] = c; skippedIds.add(c.id)
+                candidatesById[c.id] = c; skipped[c.id] = hit
                 if (!cancelled()) sendOverlay(c.id, JSONObject().put("w", hit.width).put("h", hit.height).put("patches", JSONArray()))
                 return PageOutcome.NoText(hit.width, hit.height)
             }
         }
-        skippedIds.remove(c.id)
+        skipped.remove(c.id)
         val s = graph.settingsStore.settings
         val t0 = System.currentTimeMillis()
         // jonction avec l'image du dessus : l'image est traitée avec le bas de celle du dessus collé au-dessus d'elle, pour lire en entier un texte que le découpage a coupé en deux ;

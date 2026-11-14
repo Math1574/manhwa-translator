@@ -219,6 +219,33 @@ appcmd window 3000; appcmd peek; uidump pk6; tapt pk6 "Supprimer cette traductio
 chk "suppression : le bandeau se referme seul au bout de 3 s" $(hasnot pk7 'Traduction supprim')
 chk "suppression : sans annulation, la suppression est définitive" $([ "$(okst waitst hidden 1 25)" = 1 ] && [ "$(stv undo)" = False ] && echo 1 || echo 0)
 appcmd clearedits; waitst hidden 0 25 >/dev/null
+# ignorer un texte ou une image : l'appui long est rejoué par une commande, puis vrais appuis sur « Ignorer ce texte… », sur le choix de la fenêtre, sur « Annuler » et « Rétablir »
+waitge() { local i; for i in $(seq 1 ${3:-15}); do appstate; [ "$(stv $1)" -ge "$2" ] 2>/dev/null && return 0; done; return 1; }
+appcmd window 20000
+appcmd peek; uidump ig1; shot ui 17
+chk "ignorer : un appui long propose aussi « Ignorer ce texte… » (avec Corriger)" $([ "$(has ig1 'Ignorer ce texte')" = 1 ] && [ "$(has ig1 'Corriger cette traduction')" = 1 ] && echo 1 || echo 0)
+tapt ig1 "Ignorer ce texte" 1; sleep 1.5; uidump ig2; shot ui 18
+chk "ignorer : la fenêtre propose cette œuvre, toutes les œuvres ou toute l'image" $([ "$(has ig2 'dans cette')" = 1 ] && [ "$(has ig2 'dans toutes')" = 1 ] && [ "$(has ig2 'Toute cette image')" = 1 ] && echo 1 || echo 0)
+tapt ig2 "dans cette" 1; sleep 1.5; uidump ig3; shot ui 19
+chk "ignorer : le bandeau « Texte ignoré · Annuler » apparaît" $(has ig3 'Texte ignor')
+chk "ignorer : le texte reste tel quel (règle enregistrée, bloc masqué, aucune correction)" $([ "$(okst waitge hidden 1 25)" = 1 ] && [ "$(stv ign)" = 1 ] && [ "$(stv edits)" = 0 ] && echo 1 || echo 0)
+tapt ig3 "Annuler" 1; sleep 1
+chk "ignorer : « Annuler » retire la règle et rétablit la traduction" $([ "$(okst waitst hidden 0 25)" = 1 ] && [ "$(stv ign)" = 0 ] && echo 1 || echo 0)
+appcmd peek; uidump ig4; tapt ig4 "Ignorer ce texte" 1; sleep 1.5; uidump ig5; tapt ig5 "dans toutes" 1; sleep 1.5
+chk "ignorer partout : la règle est enregistrée et le texte reste tel quel" $([ "$(okst waitge hidden 1 25)" = 1 ] && [ "$(stv ign)" = 1 ] && echo 1 || echo 0)
+appcmd peekign; uidump ig6; shot ui 20
+chk "ignorer : un appui long sur un texte ignoré propose de le rétablir (pas de « Corriger »)" $([ "$(has ig6 'tablir')" = 1 ] && [ "$(hasnot ig6 'Corriger cette traduction')" = 1 ] && echo 1 || echo 0)
+tapt ig6 "tablir" 1; sleep 1.5; uidump ig7; shot ui 24
+chk "ignorer : « Rétablir » retire la règle et rend la traduction" $([ "$(okst waitst hidden 0 25)" = 1 ] && [ "$(stv ign)" = 0 ] && [ "$(has ig7 'Texte r[^ ]*tabli')" = 1 ] && echo 1 || echo 0)
+# image entière (bandeau) : la règle (empreinte) est enregistrée, la page n'est plus traduite ; « Annuler » la rétablit
+appcmd peek; uidump ig8; tapt ig8 "Ignorer ce texte" 1; sleep 1.5; uidump ig9; tapt ig9 "Toute cette image" 1; sleep 2; uidump ig10; shot ui 21
+chk "image ignorée : le bandeau « Image ignorée · Annuler » apparaît" $(has ig10 'Image ignor')
+chk "image ignorée : la règle est enregistrée et l'image n'est plus traduite" $([ "$(okst waitge ignImg 1 20)" = 1 ] && [ "$(okst waitge skipped 1 40)" = 1 ] && echo 1 || echo 0)
+tapt ig10 "Annuler" 1; sleep 1
+chk "image ignorée : « Annuler » rétablit l'image (règle retirée, page de nouveau traduite)" $([ "$(okst waitst ignImg 0 20)" = 1 ] && [ "$(okst waitst skipped 0 60)" = 1 ] && echo 1 || echo 0)
+# une règle de texte (toutes les œuvres) est laissée en place : la page des réglages doit la lister, puis la retirer
+appcmd peek; uidump ig11; tapt ig11 "Ignorer ce texte" 1; sleep 1.5; uidump ig12; tapt ig12 "dans toutes" 1; sleep 1.5
+waitge hidden 1 25 >/dev/null
 # réglages rapides : un appui long sur le bouton rond ouvre le panneau sans basculer la traduction ; un choix de langue y est enregistré ; le retour referme le panneau
 orb_on=$(has nav 'Traduction activ')
 { holdt nav "Traduction activ" || holdt nav "Traduire"; }; sleep 1.5; uidump qs; shot ui 12
@@ -244,6 +271,7 @@ tapt lib2 "=Réglages" 1; sleep 2; uidump set; shot ui 4
 adb shell input swipe 540 1900 540 500 400; sleep 1; uidump setb; shot ui 41
 adb shell input swipe 540 500 540 1900 400; sleep 1; adb shell input swipe 540 500 540 1900 400; sleep 1; uidump set
 hs() { if [ "$(has set "$1")" = 1 ] || [ "$(has setb "$1")" = 1 ]; then echo 1; else echo 0; fi; }
+chk "réglages : la page « Textes et images ignorés » est proposée à l'accueil" $(hs 'Textes et images ignor')
 chk "réglages : une carte par thème" $([ "$(hs 'Reconnaissance du texte')" = 1 ] && [ "$(hs 'Navigation')" = 1 ] && [ "$(hs 'Donn')" = 1 ] && [ "$(hs 'Glossaire')" = 1 ] && [ "$(hs 'Mod.*les de traduction')" = 1 ] && [ "$(hs 'Avanc')" = 1 ] && echo 1 || echo 0)
 chk "réglages rapides : la langue choisie dans le panneau est enregistrée (résumé de Réglages)" $(has set 'Cor[^"]*Fran[^"]*ML Kit')
 chk "réglages : champ de recherche, carte de mise à jour et numéro de version sur l'accueil" $([ "$(has set 'Rechercher un r.*glage')" = 1 ] && [ "$(has set 'Mise .*jour de')" = 1 ] && [ "$(has set 'build [0-9]')" = 1 ] && echo 1 || echo 0)
@@ -270,6 +298,15 @@ tapt set5 "Effacer la recherche" 1; sleep 1; uidump set6
 tapt set6 "Rechercher un r" 1; sleep 1; adb shell input text filtres; sleep 2; uidump srch2
 tapt srch2 "=Listes de filtres" 1; sleep 3; uidump adv2; shot ui 11
 chk "réglages : la recherche fait défiler la page jusqu'au groupe trouvé (bas de la page Avancé)" $([ "$(has adv2 'Voir le journal')" = 1 ] && echo 1 || echo 0)
+# page « Textes et images ignorés » : atteinte par la recherche, elle liste la règle posée en lisant (texte, toutes les œuvres) et permet de la retirer
+adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump set7
+tapt set7 "Effacer la recherche" 1; sleep 1; uidump set8
+tapt set8 "Rechercher un r" 1; sleep 1; adb shell input text ignor; sleep 2; uidump srch3
+tapt srch3 "=Textes et images ignorés" 1; sleep 2.5; uidump ign1; shot ui 22
+chk "ignorés : la recherche « ignor » ouvre la page « Textes et images ignorés »" $([ "$(has ign1 'Aucune image ignor')" = 1 ] && echo 1 || echo 0)
+chk "ignorés : la règle posée en lisant (toutes les œuvres) y est listée avec « Retirer »" $([ "$(has ign1 'Toutes les [^ ]*uvres')" = 1 ] && [ "$(has ign1 'Retirer')" = 1 ] && echo 1 || echo 0)
+tapt ign1 "Retirer" 1; sleep 1.5; uidump ign2; shot ui 23
+chk "ignorés : « Retirer » supprime la règle de la liste et de l'application" $([ "$(has ign2 'Aucun texte ignor')" = 1 ] && [ "$(okst waitst ign 0 8)" = 1 ] && echo 1 || echo 0)
 # diagnostic : plantages ou blocages système pendant le scénario
 adb logcat -d -v brief 2>/dev/null | grep -iE "ANR in|Application Not Responding|FATAL EXCEPTION|AndroidRuntime|Process .* has died|am_crash|am_anr" | tail -30 > $OUT/reports/ui_logcat.txt
 echo "  [journal système] $(wc -l < $OUT/reports/ui_logcat.txt) ligne(s) d'ANR ou de plantage" | tee -a $OUT/run.log

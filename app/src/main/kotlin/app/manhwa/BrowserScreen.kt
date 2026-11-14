@@ -172,9 +172,13 @@ fun BrowserScreen(graph: AppGraph) {
                     // geste qui se défait : trois secondes pour l'annuler (le bandeau se referme ensuite et le geste est définitif)
                     c.undoBanner?.let { Pill("${it.message} · Annuler", onClick = { c.runUndo() }) }
                     c.peekEmpty?.let {
-                        Pill("Ajouter une traduction ici", onClick = { c.openNewEdit() }, onClose = { c.peekEmpty = null })
-                        // bandeau de début ou de fin de chapitre : l'image n'est plus jamais lue ni traduite
-                        Pill("Ne jamais traduire cette image", onClick = { c.ignorePeekImage() })
+                        if (c.peekImageIgnored()) {
+                            Pill("Image ignorée · Rétablir", onClick = { c.unignorePeekImage() }, onClose = { c.peekEmpty = null })
+                        } else {
+                            Pill("Ajouter une traduction ici", onClick = { c.openNewEdit() }, onClose = { c.peekEmpty = null })
+                            // bandeau de début ou de fin de chapitre : l'image n'est plus jamais lue ni traduite
+                            Pill("Ne jamais traduire cette image", onClick = { c.ignorePeekImage() })
+                        }
                     }
                     c.navBlocked?.let { nb ->
                         if (nb.popup) Pill(nb.reason, onClick = { c.dismissNavBlocked() })
