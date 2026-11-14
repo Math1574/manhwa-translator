@@ -27,7 +27,7 @@ problems = []
 P("# Rapport de test automatique\n")
 for path in sorted(glob.glob(f"{OUT}/reports/*.json")):
     name = os.path.basename(path)[:-5]
-    if name in ('adtest', 'fs'): continue      # rapports d'autres scénarios (bloqueur, plein écran), lus plus bas
+    if name in ('adtest', 'fs', 'state'): continue      # rapports d'autres scénarios (bloqueur, plein écran) ou état relevé par les contrôles d'interface, lus plus bas
     if name == 'prep':
         try: P('## préparation\n- ' + '\n- '.join(json.load(open(path)).get('notes', [])) + '\n')
         except Exception as e: P(f'## préparation illisible : {e}')

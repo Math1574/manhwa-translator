@@ -153,7 +153,7 @@ done
 adb shell am force-stop $PKG
 adb shell "run-as $PKG rm -f files/ui.json"
 adb shell am start -n $PKG/app.manhwa.MainActivity --es mt_url "http://10.0.2.2:8000/comics/test-series-1a2b3c/chapter/1.html" --es mt_engine MLKIT --es mt_source EN \
-   --es mt_target FR --es mt_models "fr" --es mt_timeout 200 --es mt_report ui.json --es mt_fullscreen true >/dev/null
+   --es mt_target FR --es mt_models "fr" --es mt_timeout 200 --es mt_report ui.json --es mt_fullscreen true --es mt_watch true --es mt_undo_ms 20000 >/dev/null
 for i in $(seq 1 40); do sleep 6; adb shell "run-as $PKG ls files/ui.json" 2>/dev/null | grep -q ui.json && break; done
 adb exec-out "run-as $PKG cat files/ui.json" > $OUT/reports/fs.json
 sleep 5
@@ -185,17 +185,53 @@ chk "onglets : Lecture, Bibliothèque, Réglages" $([ "$(has nav 'Lecture')" = 1
 chk "bouton rond Original | Traduit présent hors plein écran" $([ "$(has nav 'Traduction activ')" = 1 ] || [ "$(has nav 'Traduire')" = 1 ] && echo 1 || echo 0)
 shot ui 5
 adb shell dumpsys window | grep -E "mCurrentFocus|isStatusBarVisible|statusBar.*visible" | head -3 | tee -a $OUT/run.log
+# suppression annulable : l'appui long sur une traduction est rejoué par une commande (même proposition « Corriger / supprimer »), puis vrais appuis sur la corbeille et sur « Annuler » ;
+# l'état de l'appli (bloc supprimé ou non, corrections) est relevé dans files/state.json. Fait avant les réglages rapides : la langue est encore anglais → français (résultat en cache repris)
+appcmd() { adb shell "echo '$*' | run-as $PKG sh -c 'cat > files/cmd.txt'"; sleep 1.5; }
+appstate() { adb shell "run-as $PKG rm -f files/state.json"; adb shell "echo state | run-as $PKG sh -c 'cat > files/cmd.txt'"; local i; for i in 1 2 3 4 5 6 7 8; do sleep 1; adb exec-out "run-as $PKG cat files/state.json" > $OUT/reports/state.json 2>/dev/null; grep -q '"works"' $OUT/reports/state.json 2>/dev/null && break; done; }
+stv() { python3 -c "import json;print(json.load(open('$OUT/reports/state.json')).get('$1',''))" 2>/dev/null; }
+waitst() { local i; for i in $(seq 1 ${3:-15}); do appstate; [ "$(stv $1)" = "$2" ] && return 0; done; return 1; }
+okst() { if "$@"; then echo 1; else echo 0; fi; }
+appcmd window 20000
+appcmd peek; uidump pk; shot ui 14
+chk "suppression : un appui long sur une traduction propose de la corriger ou de la supprimer" $([ "$(has pk 'Corriger cette traduction')" = 1 ] && [ "$(has pk 'Supprimer cette traduction')" = 1 ] && echo 1 || echo 0)
+chk "suppression : l'état de départ est sain (aucune traduction supprimée, au moins un bloc)" $(okst waitst hidden 0 5)
+blocks0=$(stv blocks)
+tapt pk "Supprimer cette traduction" 1; sleep 1.5; uidump pk2; shot ui 15
+chk "suppression : le bandeau « Annuler » apparaît après la suppression" $(has pk2 'Traduction supprim')
+chk "suppression : la proposition « Corriger » disparaît avec la corbeille" $(hasnot pk2 'Corriger cette traduction')
+chk "suppression : la traduction est supprimée (original rétabli, correction enregistrée)" $(okst waitst hidden 1 25)
+chk "suppression : le bloc reste repérable (même nombre de blocs que avant)" $([ "$(stv blocks)" = "$blocks0" ] && echo 1 || echo 0)
+tapt pk2 "Annuler" 1; sleep 1
+chk "annulation : « Annuler » rétablit la traduction (plus de bloc supprimé, aucune correction)" $([ "$(okst waitst hidden 0 25)" = 1 ] && [ "$(stv edits)" = 0 ] && echo 1 || echo 0)
+uidump pk3; chk "annulation : le bandeau se referme" $(hasnot pk3 'Traduction supprim')
+# une correction faite à la main avant la suppression doit revenir telle quelle après « Annuler »
+appcmd setedit ANNULERTEST
+chk "annulation : une traduction corrigée à la main est enregistrée (départ)" $(okst waitst editTr ANNULERTEST 25)
+appcmd peek; uidump pk4; tapt pk4 "Supprimer cette traduction" 1
+chk "annulation : la traduction corrigée peut elle aussi être supprimée" $(okst waitst hidden 1 25)
+uidump pk5; tapt pk5 "Annuler" 1; sleep 1
+chk "annulation : la correction faite à la main avant la suppression est rétablie telle quelle" $([ "$(okst waitst hidden 0 25)" = 1 ] && [ "$(stv editTr)" = ANNULERTEST ] && echo 1 || echo 0)
+appcmd clearedits
+chk "annulation : les corrections de test sont retirées" $(okst waitst edits 0 25)
+# sans annulation : le bandeau se referme seul au bout de 3 s (durée réelle) et la suppression reste
+appcmd window 3000; appcmd peek; uidump pk6; tapt pk6 "Supprimer cette traduction" 1; sleep 6; uidump pk7; shot ui 16
+chk "suppression : le bandeau se referme seul au bout de 3 s" $(hasnot pk7 'Traduction supprim')
+chk "suppression : sans annulation, la suppression est définitive" $([ "$(okst waitst hidden 1 25)" = 1 ] && [ "$(stv undo)" = False ] && echo 1 || echo 0)
+appcmd clearedits; waitst hidden 0 25 >/dev/null
 # réglages rapides : un appui long sur le bouton rond ouvre le panneau sans basculer la traduction ; un choix de langue y est enregistré ; le retour referme le panneau
 orb_on=$(has nav 'Traduction activ')
 { holdt nav "Traduction activ" || holdt nav "Traduire"; }; sleep 1.5; uidump qs; shot ui 12
 chk "réglages rapides : un appui long sur le bouton rond ouvre le panneau" $(has qs 'glages rapides')
 chk "réglages rapides : langue, taille du texte, onomatopées et retraduction y sont" $([ "$(has qs 'Langue du texte')" = 1 ] && [ "$(has qs 'Traduire vers')" = 1 ] && [ "$(has qs 'Taille du texte')" = 1 ] && [ "$(has qs 'onomatop')" = 1 ] && [ "$(has qs 'Retraduire la page')" = 1 ] && echo 1 || echo 0)
-chk "réglages rapides : l'appui long ne bascule pas la traduction" $([ "$(has qs 'Traduction activ')" = "$orb_on" ] && echo 1 || echo 0)
 if [ "$(has qs 'glages rapides')" = 1 ]; then
   tapt qs "=Coréen" 1; sleep 1
   adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump qs2
+  # le bouton rond est caché sous le panneau tant qu'il est ouvert : son état se compare une fois le panneau refermé
+  chk "réglages rapides : l'appui long ne bascule pas la traduction (même état du bouton avant et après)" $([ "$(has qs2 'Traduction activ')" = "$orb_on" ] && echo 1 || echo 0)
   chk "réglages rapides : le retour referme le panneau, la page reste affichée" $([ "$(hasnot qs2 'glages rapides')" = 1 ] && [ "$(has qs2 'Biblioth')" = 1 ] && echo 1 || echo 0)
 else
+  chk "réglages rapides : l'appui long ne bascule pas la traduction (même état du bouton avant et après)" 0
   chk "réglages rapides : le retour referme le panneau, la page reste affichée" 0
 fi
 tapt nav "=Bibliothèque" 1; sleep 2; uidump lib; shot ui 2
@@ -212,7 +248,7 @@ adb shell input swipe 540 500 540 1900 400; sleep 1; adb shell input swipe 540 5
 hs() { if [ "$(has set "$1")" = 1 ] || [ "$(has setb "$1")" = 1 ]; then echo 1; else echo 0; fi; }
 chk "réglages : une carte par thème" $([ "$(hs 'Reconnaissance du texte')" = 1 ] && [ "$(hs 'Navigation')" = 1 ] && [ "$(hs 'Donn')" = 1 ] && [ "$(hs 'Glossaire')" = 1 ] && [ "$(hs 'Mod.*les de traduction')" = 1 ] && [ "$(hs 'Avanc')" = 1 ] && echo 1 || echo 0)
 chk "réglages rapides : la langue choisie dans le panneau est enregistrée (résumé de Réglages)" $(has set 'Cor[^"]*Fran[^"]*ML Kit')
-chk "réglages : champ de recherche, carte de mise à jour et numéro de version sur l'accueil" $([ "$(has set 'Rechercher un r.*glage')" = 1 ] && [ "$(has set 'Mise .*jour de')" = 1 ] && [ "$(has set 'build [0-9]')" = 1 ] && echo 1 || echo 0)
+chk "réglages : champ de recherche, carte de mise à jour et numéro de version sur l'accueil" $([ "$(has set 'widget.EditText')" = 1 ] && [ "$(has set 'Mise .*jour de')" = 1 ] && [ "$(has set 'build [0-9]')" = 1 ] && echo 1 || echo 0)
 tapt set "=Traduction" 1 top; sleep 2; uidump settr
 chk "réglages : la carte Traduction ouvre ses options (langues)" $(has settr 'Langue du texte')
 tapt settr "=Anglais" 1 top; sleep 1
@@ -227,13 +263,13 @@ tapt setap "=Hibou savant" 1; sleep 1.5; uidump setap2; shot ui 8
 chk "réglages : choisir une autre mascotte met à jour sa présentation" $(has setap2 'Hibou savant : il relit')
 # recherche dans les réglages : un résultat ouvre la page Avancé ; un second mène à un groupe du bas de la page, vers lequel elle doit défiler
 adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump set4
-tapt set4 "Rechercher un r" 1; sleep 1; adb shell input text gpu; sleep 2; uidump srch; shot ui 9
+tapt set4 "@EditText" 1; sleep 1; adb shell input text gpu; sleep 2; uidump srch; shot ui 9
 chk "réglages : la recherche « gpu » propose l'accélération GPU, rangée dans Avancé" $([ "$(has srch 'GPU')" = 1 ] && [ "$(has srch 'Avanc')" = 1 ] && echo 1 || echo 0)
 tapt srch "=Accélération GPU (expérimental)" 1; sleep 3; uidump adv; shot ui 10
 chk "réglages : un résultat de recherche ouvre la page Avancé" $([ "$(has adv 'Tester CPU')" = 1 ] && echo 1 || echo 0)
 adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump set5
 tapt set5 "Effacer la recherche" 1; sleep 1; uidump set6
-tapt set6 "Rechercher un r" 1; sleep 1; adb shell input text filtres; sleep 2; uidump srch2
+tapt set6 "@EditText" 1; sleep 1; adb shell input text filtres; sleep 2; uidump srch2
 tapt srch2 "=Listes de filtres" 1; sleep 3; uidump adv2; shot ui 11
 chk "réglages : la recherche fait défiler la page jusqu'au groupe trouvé (bas de la page Avancé)" $([ "$(has adv2 'Voir le journal')" = 1 ] && echo 1 || echo 0)
 # diagnostic : plantages ou blocages système pendant le scénario
