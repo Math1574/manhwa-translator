@@ -627,6 +627,10 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     /** Garde la proposition « Corriger / supprimer » affichée pendant le choix « Ignorer ce texte… » (sinon elle s'effacerait au bout de 7 s). */
     fun holdPeek() { main.removeCallbacks(clearPeek) }
 
+    /** Texte lu du bloc touché avant toute correction : c'est celui que les règles « ignorer » comparent au texte lu sur la page (une correction manuelle du texte n'y change rien). */
+    private fun readSource(info: WorkInfo, bid: Int, fallback: String): String =
+        (info.result.blocks.firstOrNull { it.id == bid }?.source ?: info.applied.page.blocks.firstOrNull { it.id == bid }?.source ?: fallback).trim()
+
     /** La règle peut-elle se limiter à cette œuvre ? (la page ouverte doit être reconnue comme une œuvre) */
     fun peekHasSeries(): Boolean {
         val t = peekTarget ?: return false
@@ -638,7 +642,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val t = peekTarget ?: return
         peekTarget = null; main.removeCallbacks(clearPeek)
         val info = workInfo(t.imageId.removeSuffix("~up")) ?: return
-        val src = (info.applied.page.blocks.firstOrNull { it.id == t.bid }?.source ?: t.src).trim()
+        val src = readSource(info, t.bid, t.src)
         val scope = if (everywhere) IgnoredText.EVERYWHERE else (info.series ?: IgnoredText.EVERYWHERE)
         if (src.isEmpty() || !graph.ignored.addText(scope, src)) return
         graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "correction").put("url", currentUrl).put("src", src).put("edit", if (scope == IgnoredText.EVERYWHERE) "texte ignoré partout" else "texte ignoré dans l'œuvre"))
@@ -652,7 +656,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val t = peekTarget ?: return
         peekTarget = null; main.removeCallbacks(clearPeek)
         val info = workInfo(t.imageId.removeSuffix("~up")) ?: return
-        val src = info.applied.page.blocks.firstOrNull { it.id == t.bid }?.source ?: t.src
+        val src = readSource(info, t.bid, t.src)
         val n = IgnoredMatch.normalize(src)
         val hits = graph.ignored.rules.texts.filter { r -> (r.scope == IgnoredText.EVERYWHERE || r.scope == info.series) && IgnoredMatch.same(n, IgnoredMatch.normalize(r.text)) }
         if (hits.isEmpty()) return
