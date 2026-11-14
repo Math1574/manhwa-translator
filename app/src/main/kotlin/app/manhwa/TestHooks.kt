@@ -29,7 +29,8 @@ object TestHooks {
     /**
      * Commandes pour les scénarios d'interface (builds debug, extra « mt_watch ») : l'application lit files/cmd.txt toutes les demi-secondes, exécute la commande puis écrit l'état dans
      * files/state.json. Commandes : peek (comme un appui long sur la première traduction), window <ms> (durée du bandeau « Annuler »), setedit <texte> (traduction écrite à la main),
-     * clearedits (retire les corrections), peekign (appui long sur le premier texte ignoré), peekempty (appui long sur une image ignorée), state (écrit seulement l'état).
+     * clearedits (retire les corrections), peekign (appui long sur le premier texte ignoré), peekempty (appui long sur une image ignorée), eraser [off] (active ou coupe la gomme),
+     * erasetap (appui simple au centre de la première traduction visible), state (écrit seulement l'état).
      */
     private fun startWatcher(ctx: Context, graph: AppGraph) {
         if (watching) return
@@ -43,8 +44,8 @@ object TestHooks {
                     Thread.sleep(500)
                     if (!cmdFile.exists()) continue
                     val cmd = cmdFile.readText().trim()
+                    if (cmd.isEmpty()) continue      // fichier créé mais pas encore écrit : relu au tour suivant, sans le supprimer
                     cmdFile.delete()
-                    if (cmd.isEmpty()) continue
                     val arg = cmd.substringAfter(' ', "")
                     when (cmd.substringBefore(' ')) {
                         "peek" -> main.post { c.testPeek() }
@@ -53,6 +54,8 @@ object TestHooks {
                         "clearedits" -> main.post { c.testClearEdits() }
                         "peekign" -> main.post { c.testPeek(ignored = true) }
                         "peekempty" -> main.post { c.testPeekEmpty() }
+                        "eraser" -> main.post { c.switchEraser(arg.trim() != "off") }
+                        "erasetap" -> main.post { c.testEraseTap() }
                     }
                     Thread.sleep(300)   // laisse les gestes lancés sur le fil principal s'appliquer avant de relever l'état
                     writeState(ctx, graph)
@@ -66,17 +69,20 @@ object TestHooks {
         val c = graph.controller
         var blocks = 0; var hidden = 0; var edits = 0; var editTr = ""
         val ids = c.testWorkIds()
+        val keys = HashSet<String>()      // deux pages aux octets identiques partagent leurs corrections : on ne les compte qu'une fois
         for (id in ids) {
             val info = c.workInfo(id) ?: continue
             blocks += info.applied.page.blocks.size
             hidden += info.applied.editByBlock.values.count { it.hidden }
+            if (!keys.add(info.imageKey)) continue
             val list = graph.edits.forImage(info.imageKey)
             edits += list.size
             if (editTr.isEmpty()) editTr = list.firstNotNullOfOrNull { it.translation } ?: ""
         }
         val o = JSONObject().put("t", System.currentTimeMillis()).put("undo", c.undoBanner != null).put("peek", c.peekTarget != null)
             .put("works", ids.size).put("blocks", blocks).put("hidden", hidden).put("edits", edits).put("editTr", editTr)
-            .put("ign", graph.ignored.rules.texts.size).put("ignImg", graph.ignored.rules.images.size).put("skipped", c.testSkippedCount()).put("banner", c.undoBanner?.message ?: "")
+            .put("ign", graph.ignored.rules.texts.size).put("ignImg", graph.ignored.rules.images.size).put("skipped", c.testSkippedCount()).put("banner", c.undoBanner?.message ?: "").put("eraser", c.eraser)
+            .put("peekE", c.peekEmpty != null).put("peekT", c.peekTarget != null)
         val tmp = File(ctx.filesDir, "state.json.tmp"); tmp.writeText(o.toString()); tmp.renameTo(File(ctx.filesDir, "state.json"))
     }
 

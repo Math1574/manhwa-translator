@@ -29,6 +29,8 @@ object PageScript {
 (function(){
   if (window.__mt) return;
   var S = {entries:{}, seen:{}, first:{}, seq:0, visible:true, timer:null};
+  var ER = {on:false, t:0, x:0, y:0};      // gomme : active, instant et position du dernier toucher qui a supprimé une traduction
+  function mark(el, on){ el.style.outline = on ? '2px dashed rgba(255,70,70,0.95)' : ''; el.style.outlineOffset = '-2px'; }
   var MIN = 150;
   function idOf(im){ if(!im.__mtid){ im.__mtid = 'i' + (++S.seq); } return im.__mtid; }
   function findImg(id){ var l = document.images; for (var i=0;i<l.length;i++){ if (l[i].__mtid === id) return l[i]; } return null; }
@@ -101,7 +103,9 @@ object PageScript {
       var q0 = ps[i], im2 = document.createElement('img');
       im2.src = q0.png; im2.setAttribute('data-mt-img', '1'); im2.draggable = false;
       if (q0.bid !== undefined) { im2.setAttribute('data-bid', q0.bid); im2.setAttribute('data-src', q0.src || ''); im2.setAttribute('data-tr', q0.tr || ''); }
+      if (q0.inert) im2.setAttribute('data-inert', '1');       // emplacement d'une traduction supprimée ou ignorée : on peut la retrouver d'un appui long, mais il n'y a rien à effacer
       im2.style.cssText = 'position:absolute;margin:0;padding:0;border:0;max-width:none;pointer-events:none;';
+      if (ER.on && q0.bid !== undefined && !q0.inert) mark(im2, true);
       im2.style.left = (q0.x / data.w * 100) + '%'; im2.style.top = (q0.y / data.h * 100) + '%';
       im2.style.width = (q0.w / data.w * 100) + '%'; im2.style.height = (q0.h / data.h * 100) + '%';
       d.appendChild(im2);
@@ -243,6 +247,74 @@ object PageScript {
     tp.timer = setTimeout(function(){ tp.last = 0; try { AndroidMT.onTap(); } catch(e) {} }, 330);
   }, {passive:true, capture:true});
 
+  // gomme : tant qu'elle est active, un appui simple sur une traduction la supprime (l'original réapparaît dessous) ; ni les barres ni un lien éventuel ne réagissent à cet appui
+  function patchAt(x, y){
+    var best = null, bestArea = 1e18, bestId = null;
+    for (var id in S.entries){
+      var e = S.entries[id]; if (!e.div || e.div.style.display === 'none') continue;
+      var kids = e.div.children;
+      for (var i=0;i<kids.length;i++){
+        var k = kids[i]; if (!k.getAttribute || !k.getAttribute('data-bid') || k.getAttribute('data-inert') || k.style.display === 'none') continue;
+        var r = k.getBoundingClientRect();
+        if (r.width > 0 && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom && r.width * r.height < bestArea) { best = k; bestArea = r.width * r.height; bestId = id; }
+      }
+    }
+    return best ? {el:best, id:bestId} : null;
+  }
+  function setErase(on){
+    ER.on = !!on;
+    for (var id in S.entries){
+      var e = S.entries[id]; if (!e.div) continue;
+      var kids = e.div.children;
+      for (var i=0;i<kids.length;i++){ var k = kids[i]; if (k.getAttribute && k.getAttribute('data-bid') && !k.getAttribute('data-inert')) mark(k, ER.on); }
+    }
+  }
+  var EP = {x:0, y:0, t:0, moved:false};
+  document.addEventListener('touchstart', function(e){
+    if (e.touches.length !== 1) { EP.moved = true; return; }
+    EP.x = e.touches[0].clientX; EP.y = e.touches[0].clientY; EP.t = Date.now(); EP.moved = false;
+  }, {passive:true, capture:true});
+  document.addEventListener('touchmove', function(e){
+    if (!e.touches.length) return;
+    if (Math.abs(e.touches[0].clientX - EP.x) > 10 || Math.abs(e.touches[0].clientY - EP.y) > 10) EP.moved = true;
+  }, {passive:true, capture:true});
+  document.addEventListener('touchend', function(e){
+    if (!ER.on || EP.moved || Date.now() - EP.t > 300 || e.changedTouches.length !== 1) return;
+    var h = patchAt(EP.x, EP.y); if (!h) return;
+    ER.t = Date.now(); ER.x = EP.x; ER.y = EP.y;
+    clearTimeout(tp.timer); tp.last = 0;                         // ce toucher ne sert qu'à effacer : il n'ouvre ni ne ferme les barres
+    var el = h.el;
+    el.style.display = 'none';                                   // la traduction disparaît tout de suite ; l'application enregistre la suppression et redessine la page
+    try { AndroidMT.onErase(h.id, el.getAttribute('data-bid'), el.getAttribute('data-src'), el.getAttribute('data-tr')); } catch(err) {}
+  }, {passive:true, capture:true});
+  document.addEventListener('click', function(e){
+    if (!ER.on) return;
+    if ((Date.now() - ER.t < 700 && Math.abs(e.clientX - ER.x) < 30 && Math.abs(e.clientY - ER.y) < 30) || patchAt(e.clientX, e.clientY)) { e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
+  // tests automatiques : rejoue un appui simple au centre de la première traduction visible (faux s'il n'y en a pas)
+  function testErase(){
+    var pick = null;
+    for (var id in S.entries){
+      var e = S.entries[id]; if (!e.div) continue;
+      var kids = e.div.children;
+      for (var i=0;i<kids.length && !pick;i++){
+        var k = kids[i]; if (!k.getAttribute || !k.getAttribute('data-bid') || k.getAttribute('data-inert') || k.style.display === 'none') continue;
+        var r = k.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+        if (r.width > 0 && cx >= 0 && cx <= window.innerWidth && cy >= 0 && cy <= window.innerHeight) pick = {x:cx, y:cy};
+      }
+      if (pick) break;
+    }
+    if (!pick) return false;
+    var tgt = document.elementFromPoint(pick.x, pick.y) || document.body;
+    function fire(type){
+      var t = new Touch({identifier: 7, target: tgt, clientX: pick.x, clientY: pick.y});
+      var list = (type === 'touchend') ? [] : [t];
+      tgt.dispatchEvent(new TouchEvent(type, {bubbles:true, cancelable:true, touches:list, targetTouches:list, changedTouches:[t]}));
+    }
+    fire('touchstart'); setTimeout(function(){ fire('touchend'); }, 80);
+    return true;
+  }
+
   // reprise de lecture : on attend que la hauteur de la page se stabilise (images qui se chargent), puis on se place ; un toucher de l'utilisateur annule
   function resumeTo(pct){
     var tries = 0, lastH = -1, stable = 0, stopped = false;
@@ -256,7 +328,7 @@ object PageScript {
       setTimeout(tick, 400);
     })();
   }
-  window.__mt = {collect:collect, apply:apply, setVisible:setVisible, clear:clear, getB64:getB64, resumeTo:resumeTo, forget:forget, dropPatch:dropPatch};
+  window.__mt = {collect:collect, apply:apply, setVisible:setVisible, clear:clear, getB64:getB64, resumeTo:resumeTo, forget:forget, dropPatch:dropPatch, setErase:setErase, testErase:testErase};
 })();
 """
 }

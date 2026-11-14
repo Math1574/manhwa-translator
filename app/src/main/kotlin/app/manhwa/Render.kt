@@ -297,7 +297,7 @@ object PageRenderer {
     private fun inertPatch(b: TranslatedBlock): JSONObject {
         val u = (b.zone ?: b.lineBoxes.ifEmpty { listOf(b.box) }.reduce { x, y -> x.union(y) })
         return JSONObject().put("x", u.left.toDouble()).put("y", u.top.toDouble()).put("w", u.width.toDouble()).put("h", u.height.toDouble())
-            .put("bid", b.id).put("src", b.source).put("tr", b.translated).put("png", transparentPng)
+            .put("bid", b.id).put("src", b.source).put("tr", b.translated).put("png", transparentPng).put("inert", true)      // « inert » : rien n'est dessiné ici, la gomme n'a rien à supprimer
     }
 
     private fun lineHeightOf(b: TranslatedBlock): Float =
