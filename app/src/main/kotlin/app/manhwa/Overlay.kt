@@ -223,7 +223,9 @@ object PageScript {
     if (!sc.t) sc.t = setTimeout(function(){
       sc.t = null;
       var h = document.documentElement.scrollHeight - window.innerHeight;
-      var p = h <= 0 ? 100 : Math.max(0, Math.min(100, Math.round(100 * window.scrollY / h)));
+      // page pas encore (ou plus) défilable : images pas encore chargées, page en cours de remplacement… rien n'a été lu, on ne signale rien (« 100 % » marquait le chapitre comme lu dès l'ouverture)
+      if (h <= 0) return;
+      var p = Math.max(0, Math.min(100, Math.round(100 * window.scrollY / h)));
       if (p !== sc.sent) { sc.sent = p; try { AndroidMT.onProgress(p); } catch(e) {} }
     }, 1000);
   }

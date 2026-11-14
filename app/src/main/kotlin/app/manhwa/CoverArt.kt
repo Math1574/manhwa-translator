@@ -9,6 +9,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.LruCache
 import android.webkit.CookieManager
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -191,6 +192,8 @@ class CoverFetcher(private val ctx: Context, private val store: CoverStore, priv
                     override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) { gen++; status = 0 }
                     override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, errorResponse: WebResourceResponse) { if (request.isForMainFrame) status = errorResponse.statusCode }
                     override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) { if (request.isForMainFrame) finish(null) }
+                    /** Le processus d'affichage (partagé avec la page lue) a disparu : sans réponse de notre part, Android arrête toute l'application. Ce navigateur est perdu, le suivant sera neuf. */
+                    override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean { finish(null); closeWeb(); return true }
                     override fun onPageFinished(view: WebView, url: String) {
                         val g = gen
                         // page renvoyée ailleurs (publicité, autre site) : ce qu'elle annonce n'est pas l'illustration de l'œuvre

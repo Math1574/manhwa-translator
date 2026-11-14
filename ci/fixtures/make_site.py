@@ -56,6 +56,9 @@ if os.path.exists(f"{S}/synth/en_mixed.png"):
     for n in (1, 2, 3):
         open(f"{d}/{n}.html", "w").write(HEAD % f"Test Series - Chapter {n}" + f"<h3 style='padding:8px'>Test Series - Chapter {n}</h3>"
             + '<img src="/synth/en_mixed.png" style="display:block;width:100%;margin:0">' * 2 + "</body></html>")
+    # chapitre trop court pour défiler (page d'attente, chapitre à venir) : rien n'y est lu, il ne doit jamais être marqué comme lu
+    os.makedirs(f"{S}/comics/short-series-9z9z9z/chapter", exist_ok=True)
+    open(f"{S}/comics/short-series-9z9z9z/chapter/1.html", "w").write(HEAD % "Short Series - Chapter 1" + "<h3 style='padding:8px'>Chapitre à venir</h3></body></html>")
     # page de l'œuvre : annonce son illustration (og:image, adresse relative) ; une vignette d'une autre œuvre la précède pour vérifier qu'on ne la confond pas avec l'illustration
     import struct, zlib
     def png(w, h, px):

@@ -56,6 +56,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -126,11 +127,14 @@ fun BrowserScreen(graph: AppGraph, onLibrary: () -> Unit = {}) {
             }
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            AndroidView(
-                factory = { c.obtainWebView(it) },
-                update = { it.keepScreenOn = c.fullscreen || c.active },
-                modifier = Modifier.fillMaxSize(),
-            )
+            // (la clé change quand le navigateur de la page a dû être remplacé : la vue est alors reconstruite)
+            key(c.webViewGeneration) {
+                AndroidView(
+                    factory = { c.obtainWebView(it) },
+                    update = { it.keepScreenOn = c.fullscreen || c.active },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
             // accueil : tant qu'aucune page n'est ouverte, il recouvre la page vide
             if (c.currentUrl.isEmpty() && !c.fullscreen) HomeScreen(graph, onLibrary)
             if (running && !c.fullscreen && c.total > 0) {

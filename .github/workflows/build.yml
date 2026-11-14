@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       suite:
-        description: 'quick (ML Kit), full (ajoute Gemma) ou lab (banc d essai de traduction)'
+        description: 'quick (ML Kit), full (ajoute Gemma), lab (banc d essai de traduction) ou nav (changement de chapitre pendant une traduction de Gemma)'
         default: 'quick'
       publier:
         description: 'oui pour publier l APK dans les Releases depuis main (par défaut, seul un envoi sur main publie)'

@@ -79,6 +79,12 @@ lab() { # nom moteur variantes
   say "banc d'essai terminé : $1 ($(( $(date +%s) - start )) s)"
 }
 
+# suite « nav » : changer de chapitre pendant que le vrai modèle Gemma traduit (voir ci/e2e_nav.sh)
+if [ "$SUITE" = nav ]; then
+  source ci/e2e_nav.sh
+  exit 0
+fi
+
 if [ "$SUITE" != lab ]; then
 # --- préparation : téléchargement des modèles de traduction ML Kit (première utilisation lente) ---
 run prep index.html MLKIT EN FR "fr,ja,ko,zh" 30
@@ -659,6 +665,43 @@ else
     "défaire deux fois efface tout le dessin" "en mode rectangle un glissé change la zone et s'ajoute à l'historique" "défaire rend la zone d'avant" \
     "onglet Position : un glissé déplace le texte" "défaire remet le texte à sa place" "« Annuler » referme l'éditeur sans rien enregistrer"; do chk "éditeur : $n" 0; done
 fi
+# chapitre trop court pour défiler (page d'attente, chapitre à venir) : rien n'y est lu, il ne doit pas être marqué « lu » (le script de la page signalait 100 % dès l'ouverture)
+say "=== chapitre trop court pour défiler"
+SHORT="http://10.0.2.2:8000/comics/short-series-9z9z9z/chapter/1.html"
+appcmd "goto $SHORT"
+sleep 7
+appstate
+chk "chapitre trop court pour défiler : n'est pas marqué comme lu" $([ "$(stv url)" = "$SHORT" ] && [ "$(stv curDone)" = False ] && echo 1 || echo 0)
+# changement de chapitre pendant qu'une traduction occupe le moteur de langage : le verrou du modèle reste pris 14 s (comme une génération de Gemma) pendant que l'on ouvre le chapitre suivant.
+# Le fil principal ne doit pas attendre la fin de la traduction : l'application se figeait, puis Android la fermait, quand on changeait de chapitre pendant une traduction.
+say "=== changement de chapitre pendant une traduction"
+CH2="http://10.0.2.2:8000/comics/test-series-1a2b3c/chapter/2.html"
+appstate; ep0=$(stv epoch)
+appcmd "holdgemma 14000"
+appcmd "goto $CH2"
+sleep 3
+appstate
+say "chapitre suivant pendant une traduction : retard du fil principal « $(stv mainLag) » ms, adresse « $(stv url) », page $(stv epoch) (avant : $ep0)"
+chk "chapitre suivant pendant une traduction : l'application répond sans attendre la fin de la traduction (retard du fil principal < 2,5 s)" $([ -n "$(stv mainLag)" ] && [ "$(stv mainLag)" -lt 2500 ] 2>/dev/null && echo 1 || echo 0)
+chk "chapitre suivant pendant une traduction : le nouveau chapitre s'ouvre" $(okst waitst url "$CH2" 20)
+chk "chapitre suivant pendant une traduction : le nouveau chapitre est traduit" $(okst waitst prog 2/2 90)
+dismiss_anr; uidump nv1; shot ui 70
+chk "chapitre suivant pendant une traduction : aucune fenêtre « ne répond pas » du système" $(hasnot nv1 "isn't responding")
+# le processus qui dessine la page disparaît (manque de mémoire, plantage) : sans réponse prévue, Android arrêtait toute l'application
+say "=== processus d'affichage de la page perdu"
+sleep 14      # (l'occupation simulée du moteur est finie)
+appstate; ep1=$(stv epoch)
+pid0=$(adb shell pidof $PKG | tr -d '\r' | awk '{print $1}')
+appcmd crashrenderer
+sleep 10
+pid1=$(adb shell pidof $PKG | tr -d '\r' | awk '{print $1}')
+appstate
+say "page perdue : processus $pid0 → $pid1, incidents comptés « $(stv rendererLost) », page $(stv epoch) (avant : $ep1), adresse « $(stv url) », avancement « $(stv prog) »"
+chk "page perdue : l'application reste ouverte (même processus)" $([ -n "$pid1" ] && [ "$pid1" = "$pid0" ] && echo 1 || echo 0)
+chk "page perdue : l'incident est reconnu et la page est rouverte" $([ "$(stv rendererLost)" = 1 ] && [ "$(stv epoch)" -gt "$ep1" ] 2>/dev/null && echo 1 || echo 0)
+chk "page perdue : la même adresse est rouverte et traduite de nouveau" $([ "$(stv url)" = "$CH2" ] && [ "$(okst waitst prog 2/2 90)" = 1 ] && echo 1 || echo 0)
+uidump rg; shot ui 71
+chk "page perdue : aucune fenêtre d'erreur du système (ni « ne répond pas », ni « s'arrête »)" $([ "$(hasnot rg "isn't responding")" = 1 ] && [ "$(hasnot rg 'keeps stopping')" = 1 ] && [ "$(hasnot rg 'has stopped')" = 1 ] && echo 1 || echo 0)
 # diagnostic : plantages ou blocages système pendant le scénario
 adb logcat -d -v brief 2>/dev/null | grep -iE "ANR in|Application Not Responding|FATAL EXCEPTION|AndroidRuntime|Process .* has died|am_crash|am_anr" | tail -30 > $OUT/reports/ui_logcat.txt
 echo "  [journal système] $(wc -l < $OUT/reports/ui_logcat.txt) ligne(s) d'ANR ou de plantage" | tee -a $OUT/run.log

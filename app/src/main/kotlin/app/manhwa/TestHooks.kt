@@ -38,7 +38,8 @@ object TestHooks {
      * savetr <texte> (« Enregistrer » de l'éditeur avec une traduction écrite : correction rangée sous la page ouverte, traduction retenue), fixadd <texte>|<traduction> (traduction retenue sans correction),
      * libseed (trois œuvres de démonstration dans la bibliothèque : Zulu Quest, Mid Tale, Alpha Saga), libsort <recent|title|read> (tri de la bibliothèque), home (retour à l'accueil), termconfirm, termcancel (boutons de l'aperçu),
      evict (vide la mémoire des pages traitées), probe (relève où poser un doigt : tx, ty sur une traduction, ex, ey sur une zone sans traduction),
-     edit (ouvre l'éditeur sur la première traduction), pinch <facteur> (deux doigts qui s'écartent ou se rapprochent au centre de l'image de l'éditeur : vrais événements tactiles), twopan <dx> <dy> (deux doigts qui glissent ensemble, en pixels), state (écrit seulement l'état).
+     edit (ouvre l'éditeur sur la première traduction), pinch <facteur> (deux doigts qui s'écartent ou se rapprochent au centre de l'image de l'éditeur : vrais événements tactiles), twopan <dx> <dy> (deux doigts qui glissent ensemble, en pixels), holdgemma <ms> (le moteur de langage reste occupé ce temps, comme une traduction en cours), goto <adresse> (ouvre la page, comme « Chapitre suivant »),
+     * crashrenderer (le processus qui dessine la page disparaît, comme un manque de mémoire), state (écrit seulement l'état).
      */
     private fun startWatcher(ctx: Context, graph: AppGraph) {
         if (watching) return
@@ -81,6 +82,9 @@ object TestHooks {
                         "termcancel" -> main.post { c.cancelTermPreview() }
                         "edit" -> main.post { c.testEdit() }
                         "pinch" -> { val f = arg.trim().toFloatOrNull() ?: 2f; main.post { twoFingers(main, 240f, 240f * f, 0f, 0f) } }
+                        "holdgemma" -> graph.gemma.testBusy(arg.trim().toLongOrNull() ?: 10_000L)
+                        "goto" -> main.post { c.load(arg.trim()) }
+                        "crashrenderer" -> main.post { c.testCrashRenderer() }
                         "twopan" -> { val p = arg.trim().split(' ').mapNotNull { it.toFloatOrNull() }; if (p.size >= 2) main.post { twoFingers(main, 240f, 240f, p[0], p[1]) } }
                     }
                     Thread.sleep(300)   // laisse les gestes lancés sur le fil principal s'appliquer avant de relever l'état
@@ -133,7 +137,14 @@ object TestHooks {
             edits += list.size
             if (editTr.isEmpty()) editTr = list.firstNotNullOfOrNull { it.translation } ?: ""
         }
-        val o = JSONObject().put("t", System.currentTimeMillis()).put("undo", c.undoBanner != null).put("peek", c.peekTarget != null)
+        // retard du fil principal : temps qu'une tâche posée sur lui met à s'exécuter (un fil principal figé par une attente fait attendre ici aussi, jusqu'à 30 s)
+        val lagT = SystemClock.uptimeMillis()
+        val lagDone = java.util.concurrent.CountDownLatch(1)
+        Handler(Looper.getMainLooper()).post { lagDone.countDown() }
+        lagDone.await(30, java.util.concurrent.TimeUnit.SECONDS)
+        val mainLag = SystemClock.uptimeMillis() - lagT
+        val o = JSONObject().put("t", System.currentTimeMillis()).put("mainLag", mainLag).put("url", c.currentUrl).put("prog", "${c.done}/${c.total}").put("epoch", c.testPageEpoch()).put("gen", c.testGenerating()).put("rendererLost", c.rendererLost).put("curDone", graph.library.library.progressOf(c.currentUrl)?.done ?: false)
+            .put("undo", c.undoBanner != null).put("peek", c.peekTarget != null)
             .put("works", ids.size).put("blocks", blocks).put("hidden", hidden).put("edits", edits).put("editTr", editTr)
             .put("ign", graph.ignored.rules.texts.size).put("ignImg", graph.ignored.rules.images.size).put("skipped", c.testSkippedCount()).put("banner", c.undoBanner?.message ?: "").put("eraser", c.eraser)
             .put("peekE", c.peekEmpty != null).put("peekT", c.peekTarget != null).put("discMode", c.discardMode).put("disc", discCounts.first).put("discKnown", discCounts.second)

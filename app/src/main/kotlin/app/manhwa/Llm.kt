@@ -3,6 +3,7 @@ package app.manhwa
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import androidx.compose.runtime.mutableStateMapOf
 import app.manhwa.core.AppSettings
 import app.manhwa.core.ConfirmationRequired
@@ -107,11 +108,28 @@ class GemmaTranslator(
     private val memory = ChapterMemory()
     @Volatile var lastReport: List<LineReport> = emptyList()
 
-    /** Noms propres repérés dans le chapitre (minuscules) : le réparateur de texte lu ne doit pas les « corriger ». */
-    fun chapterNames(): Set<String> = memory.namesToKeep().map { it.lowercase() }.toSet()
+    /**
+     * Mémoire du chapitre (dialogue récent, noms propres) : son propre verrou, tenu un instant seulement. Elle ne partage jamais celui de la traduction, qui reste pris pendant toute une génération
+     * (des dizaines de secondes) : l'appel qui l'oublie au changement de page vient du fil principal, qu'il ne doit pas figer (l'application « ne répondait plus » quand on changeait de chapitre pendant une traduction).
+     */
+    private val ctxLock = Any()
+    /** Compte les oublis : une traduction qui était en cours pendant que la page changeait n'ajoute rien à la mémoire du nouveau chapitre. */
+    private var ctxEpoch = 0
     private val history = ArrayDeque<Pair<String, String>>()
+    private fun recentDialogue(): List<Pair<String, String>> = synchronized(ctxLock) { history.toList() }
+    private fun keptNames(): List<String> = synchronized(ctxLock) { memory.namesToKeep() }
+
+    /** Noms propres repérés dans le chapitre (minuscules) : le réparateur de texte lu ne doit pas les « corriger ». */
+    fun chapterNames(): Set<String> = keptNames().map { it.lowercase() }.toSet()
     private val main = Handler(Looper.getMainLooper())
-    private val releaseTask = Runnable { release() }
+    /** Dernier usage du moteur : le déchargement après inactivité ne part que si rien n'a servi depuis. */
+    @Volatile private var lastUse = SystemClock.uptimeMillis()
+    /** Le déchargement ferme le moteur (plusieurs Go) et attend la fin d'une traduction éventuelle : il se fait hors du fil principal. */
+    private val releaseTask = Runnable { thread(name = "mt-gemma-release", isDaemon = true) { releaseIfIdle() } }
+
+    @Synchronized private fun releaseIfIdle() { if (SystemClock.uptimeMillis() - lastUse >= IDLE_RELEASE_MS - 5_000L) release() }
+    /** Fin d'un usage du moteur : le déchargement est reprogrammé après le délai d'inactivité. */
+    private fun scheduleRelease() { lastUse = SystemClock.uptimeMillis(); main.postDelayed(releaseTask, IDLE_RELEASE_MS) }
 
     override fun usesGlossaryPrompt(): Boolean = true
 
@@ -124,6 +142,7 @@ class GemmaTranslator(
         val spec = LlmModels.specFor(s.engine) ?: throw IllegalStateException("Aucun modèle Gemma sélectionné")
         if (!models.isReady(spec)) throw IllegalStateException("Modèle Gemma absent : téléchargez-le dans l'onglet Modèles")
         main.removeCallbacks(releaseTask)
+        val epoch = synchronized(ctxLock) { ctxEpoch }
         try {
             val eng = ensureEngine(spec, s.useGpu, vision = visionReady && s.autoReread)
             var out = ask(eng, texts, source, target, glossary)
@@ -132,10 +151,11 @@ class GemmaTranslator(
             var final = out.mapIndexed { i, t -> t ?: throw IllegalStateException("Réponse du modèle incomplète (ligne ${i + 1})") }
             if (refine || s.refinePass) final = refineDraft(eng, texts, final, glossary)
             final = checkAndFix(eng, texts, final, target, source, glossary)
-            texts.indices.forEach { remember(texts[it], final[it]); memory.observe(texts[it], final[it]) }
+            // la page a changé pendant la traduction (le contexte a été oublié) : ce dialogue n'appartient plus au chapitre en cours
+            synchronized(ctxLock) { if (epoch == ctxEpoch) texts.indices.forEach { remember(texts[it], final[it]); memory.observe(texts[it], final[it]) } }
             return final
         } finally {
-            main.postDelayed(releaseTask, IDLE_RELEASE_MS) // libère la mémoire (plusieurs Go) quand on ne traduit plus
+            scheduleRelease() // libère la mémoire (plusieurs Go) quand on ne traduit plus
         }
     }
 
@@ -146,7 +166,7 @@ class GemmaTranslator(
         if (!models.isReady(spec)) return
         main.removeCallbacks(releaseTask)
         try { ensureEngine(spec, s.useGpu, vision = visionReady && s.autoReread) } catch (_: Throwable) {}
-        finally { main.postDelayed(releaseTask, IDLE_RELEASE_MS) }
+        finally { scheduleRelease() }
     }
 
     /** Seconde passe : un « éditeur » corrige les contresens et le style littéral du brouillon. En cas de réponse invalide, le brouillon est conservé. */
@@ -157,7 +177,7 @@ class GemmaTranslator(
                 samplerConfig = SamplerConfig(topK = 20, topP = 0.9, temperature = 0.15),
                 maxOutputToken = LlmPrompt.maxOutputTokens(texts),
             )
-            val reply = eng.createConversation(config).use { conv -> withWatchdog(conv) { textOf(conv.sendMessage(LlmPrompt.refineUser(texts, draft, history.toList(), glossary, seriesTitle))) } }
+            val reply = eng.createConversation(config).use { conv -> withWatchdog(conv) { textOf(conv.sendMessage(LlmPrompt.refineUser(texts, draft, recentDialogue(), glossary, seriesTitle))) } }
             LlmPrompt.parse(reply, texts.size).mapIndexed { i, t -> t ?: draft[i] }
         } catch (e: Throwable) {
             draft
@@ -169,7 +189,7 @@ class GemmaTranslator(
      * une fois, avec le détail des problèmes. La nouvelle version n'est retenue que si elle a moins de problèmes.
      */
     private fun checkAndFix(eng: Engine, texts: List<String>, draft: List<String>, target: String, source: String, glossary: List<GlossaryEntry>): List<String> {
-        val names = memory.namesToKeep()
+        val names = keptNames()
         val out = draft.toMutableList(); val reports = ArrayList<LineReport>()
         for (i in out.indices) {
             var probs = TranslationChecks.problems(texts[i], out[i], target, names)
@@ -195,7 +215,7 @@ class GemmaTranslator(
             maxOutputToken = LlmPrompt.maxOutputTokens(listOf(text)),
         )
         val reply = eng.createConversation(config).use { conv ->
-            withWatchdog(conv) { textOf(conv.sendMessage(LlmPrompt.fixUser(text, previous, problems, history.toList(), glossary, names))) }
+            withWatchdog(conv) { textOf(conv.sendMessage(LlmPrompt.fixUser(text, previous, problems, recentDialogue(), glossary, names))) }
         }
         return LlmPrompt.parse(reply, 1).firstOrNull()
     }
@@ -207,7 +227,7 @@ class GemmaTranslator(
             maxOutputToken = LlmPrompt.maxOutputTokens(texts),
         )
         val reply = eng.createConversation(config).use { conv ->
-            withWatchdog(conv) { textOf(conv.sendMessage(LlmPrompt.user(texts, history.toList(), glossary, series, memory.namesToKeep()))) }
+            withWatchdog(conv) { textOf(conv.sendMessage(LlmPrompt.user(texts, recentDialogue(), glossary, series, keptNames()))) }
         }
         return LlmPrompt.parse(reply, texts.size).toMutableList()
     }
@@ -319,7 +339,7 @@ class GemmaTranslator(
             markVision(false, t.message ?: t.javaClass.simpleName)
             return null
         } finally {
-            main.postDelayed(releaseTask, IDLE_RELEASE_MS)
+            scheduleRelease()
         }
     }
 
@@ -355,7 +375,7 @@ class GemmaTranslator(
             markVision(false, t.message ?: t.javaClass.simpleName)
             return VisionTestResult(false, "", 0, 0, visionStatus)
         } finally {
-            main.postDelayed(releaseTask, IDLE_RELEASE_MS)
+            scheduleRelease()
         }
     }
 
@@ -397,8 +417,11 @@ class GemmaTranslator(
         while (history.size > HISTORY_SIZE) history.removeFirst()
     }
 
-    /** Nouveau chapitre ou nouvelle page web : on oublie le dialogue précédent. */
-    @Synchronized fun resetContext() { history.clear(); memory.reset() }
+    /** Tests automatiques : occupe le moteur comme une traduction en cours (le verrou de la traduction reste pris pendant [ms]). */
+    fun testBusy(ms: Long) { thread(name = "mt-test-busy", isDaemon = true) { synchronized(this) { try { Thread.sleep(ms) } catch (_: InterruptedException) {} } } }
+
+    /** Nouveau chapitre ou nouvelle page web : on oublie le dialogue précédent. N'attend jamais la fin d'une traduction (appelé depuis le fil principal). */
+    fun resetContext() { synchronized(ctxLock) { ctxEpoch++; history.clear(); memory.reset() } }
 
     @Synchronized fun release() {
         try { engine?.close() } catch (_: Throwable) {}
