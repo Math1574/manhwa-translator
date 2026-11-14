@@ -161,6 +161,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     var canGoBack by mutableStateOf(false)
     var canGoForward by mutableStateOf(false)
     var active by mutableStateOf(false)
+    /** Une traduction est en cours (pages traitées < pages à traiter) : les tâches de fond, comme la recherche des illustrations, se font plus discrètes. */
+    val translating: Boolean get() = active && done + failed < total
     var fullscreen by mutableStateOf(false)
     /** Barre d'adresse masquée parce qu'on lit en descendant ; elle revient en remontant ou en touchant la page. */
     var barsHidden by mutableStateOf(false)

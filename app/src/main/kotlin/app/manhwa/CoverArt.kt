@@ -45,6 +45,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -109,10 +110,10 @@ class CoverStore(private val dir: File) {
 }
 
 /**
- * Va chercher les illustrations qui manquent, une œuvre à la fois, en tâche de fond : la page de l'œuvre est ouverte dans un navigateur caché (sans images : on n'y lit que
+ * Va chercher les illustrations qui manquent, une œuvre à la fois, en tâche de fond (plus lentement pendant une traduction) : la page de l'œuvre est ouverte dans un navigateur caché (sans images : on n'y lit que
  * l'adresse annoncée pour le partage, « og:image »), puis l'image est téléchargée une seule fois et réduite. Comme pour le reste de l'application, tout reste sur le téléphone.
  */
-class CoverFetcher(private val ctx: Context, private val store: CoverStore, private val library: () -> BrowsingLibrary) {
+class CoverFetcher(private val ctx: Context, private val store: CoverStore, private val library: () -> BrowsingLibrary, private val busy: () -> Boolean) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private class Wish(val key: String, val title: String)
     private val queue = ArrayDeque<Wish>()
@@ -131,6 +132,9 @@ class CoverFetcher(private val ctx: Context, private val store: CoverStore, priv
         try {
             while (true) {
                 val w = queue.removeFirstOrNull() ?: break
+                // pendant une traduction on ne se presse pas : au plus une illustration toutes les 20 secondes environ
+                var waited = 0L
+                while (busy() && waited < 20_000L) { delay(2_000L); waited += 2_000L }
                 try { fetch(w) } catch (e: CancellationException) { throw e } catch (_: Throwable) { store.failed(w.key) } finally { queued.remove(w.key) }
             }
         } finally { closeWeb() }
