@@ -703,9 +703,6 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     /** Nombre d'images de la page actuellement laissées telles quelles par une règle d'image. */
     fun testSkippedCount(): Int = skipped.size
 
-    /** Redessine toutes les pages en mémoire et les images laissées telles quelles (après avoir retiré des règles « ignorer »). */
-    fun testReprocessAll() { val all = LinkedHashSet<String>(workIds()); all.addAll(skipped.keys); for (id in all) reprocess(id) }
-
     /** Comme un appui long sur la première traduction non supprimée : la proposition « Corriger / supprimer » s'affiche 30 s. Faux s'il n'y a aucune traduction. */
     fun testPeek(ignored: Boolean = false): Boolean {
         for (id in testWorkIds()) {

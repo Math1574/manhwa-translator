@@ -29,7 +29,7 @@ object TestHooks {
     /**
      * Commandes pour les scénarios d'interface (builds debug, extra « mt_watch ») : l'application lit files/cmd.txt toutes les demi-secondes, exécute la commande puis écrit l'état dans
      * files/state.json. Commandes : peek (comme un appui long sur la première traduction), window <ms> (durée du bandeau « Annuler »), setedit <texte> (traduction écrite à la main),
-     * clearedits (retire les corrections), peekign (appui long sur le premier texte ignoré), clearignored (retire toutes les règles « ignorer »), state (écrit seulement l'état).
+     * clearedits (retire les corrections), peekign (appui long sur le premier texte ignoré), state (écrit seulement l'état).
      */
     private fun startWatcher(ctx: Context, graph: AppGraph) {
         if (watching) return
@@ -52,11 +52,6 @@ object TestHooks {
                         "setedit" -> main.post { c.testSetTranslation(arg) }
                         "clearedits" -> main.post { c.testClearEdits() }
                         "peekign" -> main.post { c.testPeek(ignored = true) }
-                        "clearignored" -> main.post {
-                            graph.ignored.rules.texts.toList().forEach { graph.ignored.removeText(it.scope, it.text) }
-                            graph.ignored.rules.images.toList().forEach { graph.ignored.removeImage(it.id) }
-                            c.testReprocessAll()
-                        }
                     }
                     Thread.sleep(300)   // laisse les gestes lancés sur le fil principal s'appliquer avant de relever l'état
                     writeState(ctx, graph)
