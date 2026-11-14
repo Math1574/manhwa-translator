@@ -283,13 +283,15 @@ else
   chk "retraduction ciblée : « Enregistrer » de l'éditeur avec un terme passe aussi par l'aperçu" 0
   chk "retraduction ciblée : depuis l'éditeur, le terme est ajouté et le texte concerné retraduit" 0
 fi
-# 3) terme ajouté sans aperçu (comme « Garder tel quel ») : les pages ouvertes reprennent leur résultat en cache et seul le texte concerné est retraduit à l'affichage
+# 3) terme modifié sans aperçu (comme « Garder tel quel ») : les pages ouvertes reprennent leur résultat en cache et seul le texte concerné est retraduit à l'affichage.
+# On change la traduction de « disciple » (déjà vue à l'étape 1 : ML Kit garde le jeton qui protège ce mot). Un terme comme « choice » dans « no choice but to kill him » ne convient pas :
+# ML Kit y perd le jeton, la traduction sans protection ne change alors pas (limite connue de ML Kit ; Gemma reçoit le glossaire dans sa consigne).
 tr2=$(stv trs); rf0=$(stv refreshed)
-appcmd "termadd choice|alternative|direct"
-d3=$(waittr alternative 40 && trdiff "$tr2" "$(stv trs)" || echo -1)
-chk "mise à jour à l'affichage : un terme ajouté sans aperçu ne retraduit que le texte concerné (page reprise du cache)" $([ "$d3" -ge 1 ] && [ "$d3" -le 2 ] && [ "$(stv refreshed)" -ge $((rf0 + 1)) ] && echo 1 || echo 0)
+appcmd "termadd disciple|eleve|direct"
+d3=$(waittr eleve 40 && trdiff "$tr2" "$(stv trs)" || echo -1)
+chk "mise à jour à l'affichage : un terme modifié sans aperçu ne retraduit que le texte concerné (page reprise du cache)" $([ "$d3" -ge 1 ] && [ "$d3" -le 2 ] && [ "$(stv refreshed)" -ge $((rf0 + 1)) ] && echo 1 || echo 0)
 uidump gl5; shot ui 30
-appcmd "termdel disciple"; appcmd "termdel master"; appcmd "termdel choice"; appcmd clearedits; appcmd "testcache off"
+appcmd "termdel disciple"; appcmd "termdel master"; appcmd clearedits; appcmd "testcache off"
 chk "retraduction ciblée : les termes et corrections de test sont retirés" $([ "$(okst waitst terms 0 25)" = 1 ] && [ "$(okst waitst edits 0 25)" = 1 ] && echo 1 || echo 0)
 appcmd window 20000
 appcmd peek; uidump ig1; shot ui 17
