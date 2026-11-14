@@ -315,6 +315,83 @@ object PageScript {
     return true;
   }
 
+  // textes écartés : chaque texte lu mais laissé de côté est entouré (cadres posés dans le calque de l'image, sans effet sur les appuis) ; tant que le mode est actif, un appui simple sur un cadre
+  // demande sa traduction (le cadre s'assombrit en attendant) ; ni les barres ni un lien éventuel ne réagissent à cet appui
+  var DS = {on:false, t:0, x:0, y:0};
+  function setDiscs(id, list, w, h){
+    var e = S.entries[id];
+    if (!e) { if (!list.length) return true; if (!apply(id, {w:w, h:h, patches:[]})) return false; e = S.entries[id]; }      // page sans traduction : un calque vide porte les cadres (aucun s'il n'y a rien à entourer)
+    if (!e || !e.div) return false;
+    var kids = e.div.children;
+    for (var i=kids.length-1;i>=0;i--){ var k0 = kids[i]; if (k0.getAttribute && k0.getAttribute('data-did') !== null) k0.remove(); }
+    for (var j=0;j<list.length;j++){
+      var q = list[j], b = document.createElement('div');
+      b.setAttribute('data-did', q.id);
+      b.style.cssText = 'position:absolute;box-sizing:border-box;pointer-events:none;border:2px dashed rgba(255,150,0,0.95);background:rgba(255,150,0,0.10);';
+      b.style.left = (q.x / e.w * 100) + '%'; b.style.top = (q.y / e.h * 100) + '%';
+      b.style.width = (q.w / e.w * 100) + '%'; b.style.height = (q.h / e.h * 100) + '%';
+      b.style.display = DS.on ? 'block' : 'none';
+      e.div.appendChild(b);
+    }
+    return true;
+  }
+  function setDisc(on){
+    DS.on = !!on;
+    for (var id in S.entries){
+      var e = S.entries[id]; if (!e.div) continue;
+      var kids = e.div.children;
+      for (var i=0;i<kids.length;i++){ var k = kids[i]; if (k.getAttribute && k.getAttribute('data-did') !== null) k.style.display = DS.on ? 'block' : 'none'; }
+    }
+  }
+  function discAt(x, y){
+    var best = null, bestArea = 1e18, bestId = null;
+    for (var id in S.entries){
+      var e = S.entries[id]; if (!e.div || e.div.style.display === 'none') continue;
+      var kids = e.div.children;
+      for (var i=0;i<kids.length;i++){
+        var k = kids[i]; if (!k.getAttribute || k.getAttribute('data-did') === null || k.style.display === 'none' || k.getAttribute('data-busy')) continue;
+        var r = k.getBoundingClientRect();
+        if (r.width > 0 && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom && r.width * r.height < bestArea) { best = k; bestArea = r.width * r.height; bestId = id; }
+      }
+    }
+    return best ? {el:best, id:bestId} : null;
+  }
+  document.addEventListener('touchend', function(e){
+    if (!DS.on || EP.moved || Date.now() - EP.t > 300 || e.changedTouches.length !== 1) return;
+    var h = discAt(EP.x, EP.y); if (!h) return;
+    DS.t = Date.now(); DS.x = EP.x; DS.y = EP.y;
+    clearTimeout(tp.timer); tp.last = 0;                         // ce toucher ne sert qu'à traduire : il n'ouvre ni ne ferme les barres
+    h.el.setAttribute('data-busy', '1'); h.el.style.background = 'rgba(255,150,0,0.45)';
+    try { AndroidMT.onDiscard(h.id, h.el.getAttribute('data-did')); } catch(err) {}
+  }, {passive:true, capture:true});
+  document.addEventListener('click', function(e){
+    if (!DS.on) return;
+    if ((Date.now() - DS.t < 700 && Math.abs(e.clientX - DS.x) < 30 && Math.abs(e.clientY - DS.y) < 30) || discAt(e.clientX, e.clientY)) { e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
+  // tests automatiques : rejoue un appui simple au centre du premier cadre visible (faux s'il n'y en a pas)
+  function testDisc(){
+    var pick = null;
+    for (var id in S.entries){
+      var e = S.entries[id]; if (!e.div || e.div.style.display === 'none') continue;
+      var kids = e.div.children;
+      for (var i=0;i<kids.length && !pick;i++){
+        var k = kids[i]; if (!k.getAttribute || k.getAttribute('data-did') === null || k.style.display === 'none' || k.getAttribute('data-busy')) continue;
+        var r = k.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+        if (r.width > 0 && cx >= 0 && cx <= window.innerWidth && cy >= 0 && cy <= window.innerHeight) pick = {x:cx, y:cy};
+      }
+      if (pick) break;
+    }
+    if (!pick) return false;
+    var tgt = document.elementFromPoint(pick.x, pick.y) || document.body;
+    function fire(type){
+      var t = new Touch({identifier: 8, target: tgt, clientX: pick.x, clientY: pick.y});
+      var list = (type === 'touchend') ? [] : [t];
+      tgt.dispatchEvent(new TouchEvent(type, {bubbles:true, cancelable:true, touches:list, targetTouches:list, changedTouches:[t]}));
+    }
+    fire('touchstart'); setTimeout(function(){ fire('touchend'); }, 80);
+    return true;
+  }
+
   // reprise de lecture : on attend que la hauteur de la page se stabilise (images qui se chargent), puis on se place ; un toucher de l'utilisateur annule
   function resumeTo(pct){
     var tries = 0, lastH = -1, stable = 0, stopped = false;
@@ -328,7 +405,7 @@ object PageScript {
       setTimeout(tick, 400);
     })();
   }
-  window.__mt = {collect:collect, apply:apply, setVisible:setVisible, clear:clear, getB64:getB64, resumeTo:resumeTo, forget:forget, dropPatch:dropPatch, setErase:setErase, testErase:testErase};
+  window.__mt = {collect:collect, apply:apply, setVisible:setVisible, clear:clear, getB64:getB64, resumeTo:resumeTo, forget:forget, dropPatch:dropPatch, setErase:setErase, testErase:testErase, setDisc:setDisc, setDiscs:setDiscs, testDisc:testDisc};
 })();
 """
 }

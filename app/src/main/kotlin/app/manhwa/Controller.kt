@@ -30,6 +30,9 @@ import app.manhwa.core.AdVerdict
 import app.manhwa.core.CdpClient
 import app.manhwa.core.OcrEngine
 import app.manhwa.core.TranslationEngine
+import app.manhwa.core.AppSettings
+import app.manhwa.core.DiscardedBlock
+import app.manhwa.core.EnglishLexicon
 import app.manhwa.core.Glossary
 import app.manhwa.core.GlossaryEntry
 import app.manhwa.core.SourceLang
@@ -190,6 +193,13 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     private val refreshSoon = HashMap<String, Runnable>()
     /** Numéro du dernier retraitement lancé pour chaque page : un retraitement plus ancien encore en cours ne redessine pas la page (il écraserait le résultat à jour). */
     private val fixRuns = ConcurrentHashMap<String, Long>()
+    /** Mode « textes écartés » : chaque texte lu mais laissé de côté (onomatopée, débris, lecture peu sûre) est entouré, un appui simple le traduit. Se coupe en changeant de page. */
+    var discardMode by mutableStateOf(false)
+    /** Textes écartés de chaque page (identifiant d'image → liste, coordonnées de la fenêtre traitée) : établis à la lecture complète de la page, sinon relus à la demande. */
+    private val discardedById = ConcurrentHashMap<String, List<DiscardedBlock>>()
+    /** Pages dont les textes écartés sont en cours de relecture, textes écartés dont la traduction est en cours (« page:rang »). */
+    private val scanning: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    private val busyDisc: MutableSet<String> = ConcurrentHashMap.newKeySet()
     /** Fenêtre « Retraduire les textes concernés ? » ouverte avant l'enregistrement de termes du glossaire ; null quand il n'y en a pas. */
     var termPreview by mutableStateOf<TermPreview?>(null)
         private set
@@ -586,8 +596,142 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     /** Active ou coupe la gomme : les traductions supprimables sont entourées, les appuis ne servent plus qu'à les effacer. */
     fun switchEraser(on: Boolean) {
         eraser = on
+        if (on && discardMode) switchDiscard(false)
         if (on) { peekTarget = null; peekEmpty = null; main.removeCallbacks(clearPeek); main.removeCallbacks(clearPeekEmpty) }
         webView?.evaluateJavascript("window.__mt&&window.__mt.setErase($on)", null)
+    }
+
+    /** Texte à écarter d'une page (filigrane, débris de lecture, texte qui revient de page en page) : mêmes règles pour la lecture complète et pour la relecture des textes écartés. */
+    private fun junkRule(c: Candidate, s: AppSettings, lexicon: EnglishLexicon): (String, Float, Boolean) -> Boolean = { t, rel, anchored ->
+        s.source.code != "ja" && s.source.code != "ko" && s.source.code != "zh" && (JunkFilter.isWatermark(t) || ((rel < 1.6f || !anchored) && JunkFilter.isDebris(t, lexicon)) || repeatedAcrossPages(t, keysById[c.id]?.imageHash ?: c.id))
+    }
+
+    // ---------- textes écartés : les voir et les traduire d'un appui ----------
+
+    /**
+     * Active ou coupe le mode « textes écartés » : les textes lus mais laissés de côté sont entourés et un appui simple en traduit un. Il coupe la gomme (les deux se disputent l'appui).
+     * Les pages reprises du cache n'ont pas passé par la lecture complète : leur liste est établie par une relecture à part, sans traduction.
+     */
+    fun switchDiscard(on: Boolean) {
+        discardMode = on
+        if (on) {
+            if (eraser) { eraser = false; webView?.evaluateJavascript("window.__mt&&window.__mt.setErase(false)", null) }
+            peekTarget = null; peekEmpty = null; main.removeCallbacks(clearPeek); main.removeCallbacks(clearPeekEmpty)
+        }
+        webView?.evaluateJavascript("window.__mt&&window.__mt.setDisc($on)", null)
+        if (on) for (id in workIds()) refreshDiscards(id)
+    }
+
+    /** Textes écartés de la page encore à proposer : ceux qu'une traduction affichée (ajoutée à la main, par exemple) ne recouvre pas déjà. */
+    private fun visibleDiscards(info: WorkInfo): List<DiscardedBlock> {
+        val list = discardedById[info.imageId] ?: return emptyList()
+        val shown = info.applied.page.blocks.filter { info.applied.editByBlock[it.id]?.hidden != true }
+        return list.filter { d -> shown.none { it.box.overlapRatio(d.box) > 0.5f } }
+    }
+
+    /** Pose les cadres des textes écartés sur la page (fil principal). Liste inconnue (page reprise du cache) : relue à part, seulement si le mode est actif. */
+    fun refreshDiscards(id: String) {
+        val info = workInfo(id) ?: return
+        if (!discardedById.containsKey(id)) { if (discardMode) scanDiscarded(id); return }
+        val arr = JSONArray()
+        for (d in visibleDiscards(info)) {
+            val r = imageRect(d.box, info.ctxH)
+            arr.put(JSONObject().put("id", d.id).put("x", r.left.toDouble()).put("y", r.top.toDouble()).put("w", r.width.toDouble()).put("h", r.height.toDouble()))
+        }
+        val w = info.result.imageWidth; val h = info.result.imageHeight - info.ctxH
+        webView?.evaluateJavascript("window.__mt&&window.__mt.setDiscs(${JSONObject.quote(id)}, $arr, $w, $h)", null)
+    }
+
+    /** Relit la page sans la traduire pour établir ses textes écartés ; passe par la file comme la lecture des pages (une seule lecture du texte à la fois). */
+    private fun scanDiscarded(id: String) {
+        val cand = candidatesById[id] ?: return
+        if (!scanning.add(id)) return
+        val epoch = pageEpoch
+        val accepted = queue.submit(PageJob(cand.id + "#disc" + System.nanoTime(), 0) { cancelled ->
+            var w = 0; var h = 0
+            try {
+                val info = workInfo(id)
+                if (info != null && !cancelled() && epoch == pageEpoch) {
+                    w = info.result.imageWidth; h = info.result.imageHeight
+                    val list = scanPipeline(cand, info).scanDiscarded(info.bytes)
+                    if (epoch == pageEpoch) { discardedById[id] = list; main.post { refreshDiscards(id) } }
+                }
+            } catch (e: Throwable) {
+                android.util.Log.w("MT", "textes écartés : relecture impossible", e)
+                main.post { lastError = "Textes écartés : relecture impossible (${e.message ?: e.javaClass.simpleName})" }
+            } finally { scanning.remove(id) }
+            PageOutcome.NoText(w, h)       // l'identifiant porte un « # » : cette lecture ne compte pas dans l'avancement
+        })
+        if (!accepted) { scanning.remove(id); main.postDelayed({ if (discardMode && epoch == pageEpoch) refreshDiscards(id) }, 1500) }
+    }
+
+    /** Lecteur de page sans traduction : mêmes règles d'écart que la lecture complète (voir [process]), pour les pages reprises du cache. */
+    private fun scanPipeline(c: Candidate, info: WorkInfo): PagePipeline {
+        val s = graph.settingsStore.settings
+        val lexicon = Lexicon.get(ctx)
+        val enhanced = s.enhancedOcr && graph.paddleModels.available
+        val ocrEngine = CombinedOcr(s.source, MlKitOcr(s.source), if (enhanced) graph.paddle else null, lexicon, parallel = !thermalHot)
+        val skipSfx = !s.translateSfx && s.source.code != "ja" && s.source.code != "ko" && s.source.code != "zh"
+        val ctxH = info.ctxH
+        val imageH = info.result.imageHeight - ctxH
+        val nextTakes = !testNoSeam && Seams.nextTakesOver(c.nextH)
+        val timedOcr = OcrEngine { b -> synchronized(ocrLock) { ocrEngine.recognize(b) } }
+        return PagePipeline(
+            graph.cache, timedOcr, TranslationEngine { t, _, _ -> t }, "scan",
+            junk = junkRule(c, s, lexicon),
+            isSfx = { t, kind, rel -> skipSfx && Onomatopoeia.isSfx(t, kind, rel, lexicon) },
+            owns = { b -> !(ctxH > 0 || nextTakes) || Seams.owns(b.box, b.container, b.zone, ctxH, imageH, nextTakes) },
+        )
+    }
+
+    /** Appui sur un texte écarté (mode actif) : il est traduit comme le ferait « Traduire » de l'éditeur, puis ajouté à la page comme un texte ajouté à la main ; « Annuler » le retire. */
+    fun translateDiscarded(rawId: String, did: Int) {
+        if (!discardMode) return
+        val id = rawId.removeSuffix("~up")
+        val info = workInfo(id) ?: return
+        val d = discardedById[id]?.firstOrNull { it.id == did } ?: return
+        if (!busyDisc.add("$id:$did")) return
+        thread(name = "discard-translate", isDaemon = true) {
+            val tr = try { translateText(cleanForTranslation(d.source)).trim() } catch (e: Throwable) { android.util.Log.w("MT", "texte écarté : traduction impossible", e); null }
+            main.post {
+                busyDisc.remove("$id:$did")
+                if (tr.isNullOrEmpty()) { lastError = "Ce texte n'a pas pu être traduit."; refreshDiscards(id); return@post }
+                val edit = discardEdit(info, d, tr)
+                graph.edits.upsert(info.imageKey, edit)
+                graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "correction").put("url", currentUrl).put("src", d.source).put("after", tr).put("edit", "texte écarté traduit (${d.reason})"))
+                reprocess(id)
+                showUndo("Texte traduit") {
+                    graph.edits.remove(info.imageKey, edit.id)
+                    graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "correction").put("url", currentUrl).put("src", d.source).put("edit", "texte écarté : traduction annulée"))
+                    reprocess(id)
+                }
+            }
+        }
+    }
+
+    /** Le texte tel que la lecture complète l'aurait envoyé à la traduction (mots collés, chiffres parasites réparés). */
+    private fun cleanForTranslation(text: String): String = try {
+        val lexicon = Lexicon.get(ctx)
+        OcrRepair.dropJunkTail(OcrRepair.repair(text, lexicon, graph.gemma.chapterNames()), lexicon).ifBlank { text }
+    } catch (e: Throwable) { text }
+
+    /** Texte ajouté à la main sur la zone du texte écarté : même lecture (lignes, bulle, zone), traduction obtenue. */
+    private fun discardEdit(info: WorkInfo, d: DiscardedBlock, translation: String): BlockEdit {
+        val shift = info.ctxH
+        return BlockEdit(
+            "e" + java.util.UUID.randomUUID().toString().take(8), EditKind.MANUAL, null, "", UserRegion(imageRect(d.zone ?: d.box, shift)), d.source, translation, false, 0f, 0f, 1f, null,
+            d.vertical, d.lineHeight, d.lineBoxes.map { imageRect(it, shift) }, d.lineTexts, d.kind, d.bubble?.let { imageRect(it, shift) }, false,
+        )
+    }
+
+    /** Tests automatiques : un appui simple au centre du premier cadre de texte écarté visible, comme au doigt (le mode doit être actif). */
+    fun testDiscardTap() { webView?.evaluateJavascript("window.__mt&&window.__mt.testDisc()", null) }
+
+    /** Tests automatiques : nombre de textes écartés proposés (cadres) sur les pages en mémoire, et nombre de pages dont la liste est connue. */
+    fun testDiscardCounts(): Pair<Int, Int> {
+        var n = 0
+        for (id in workIds()) { val info = workInfo(id) ?: continue; n += visibleDiscards(info).size }
+        return n to discardedById.size
     }
 
     /** Tests automatiques : un appui simple au centre de la première traduction visible, comme au doigt (la gomme doit être active). */
@@ -878,6 +1022,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
     private fun resetSession() {
         stopWork(); resetCounters(); skipped.clear(); active = false; overlaysVisible = true
+        discardMode = false; discardedById.clear(); scanning.clear(); busyDisc.clear()
         eraser = false; fixRuns.clear(); refreshSoon.values.forEach { main.removeCallbacks(it) }; refreshSoon.clear()      // nouvelle page : la gomme se coupe, les redessins en attente de l'ancienne n'ont plus d'objet
         graph.gemma.resetContext()
     }
@@ -1012,7 +1157,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             debugSink = { debug = it },
             // l'anglais est lu par OCR avec beaucoup de bruit : on écarte filigranes et débris, puis on répare mots collés et chiffres parasites
             // un texte libre sans zone du détecteur est écarté s'il ne contient aucun mot reconnu, même en gros lettrage (décor lu comme du texte : « IC », « RIC », « PY »)
-            junk = { t, rel, anchored -> s.source.code != "ja" && s.source.code != "ko" && s.source.code != "zh" && (JunkFilter.isWatermark(t) || ((rel < 1.6f || !anchored) && JunkFilter.isDebris(t, lexicon)) || repeatedAcrossPages(t, keysById[c.id]?.imageHash ?: c.id)) },
+            junk = junkRule(c, s, lexicon),
             isSfx = { t, kind, rel -> skipSfx && Onomatopoeia.isSfx(t, kind, rel, lexicon) },
             repair = { t -> try { OcrRepair.dropJunkTail(OcrRepair.repair(t, lexicon, graph.gemma.chapterNames()), lexicon) } catch (e: Throwable) { t } },
             junkTail = { t -> try { OcrRepair.junkTail(t, lexicon) } catch (e: Throwable) { "" } },
@@ -1021,6 +1166,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             plausibility = { t -> try { val names = graph.gemma.chapterNames(); OcrMerge.plausibility(t, lexicon, names) } catch (e: Throwable) { 1f } },
             log = { msg -> pageNotes.getOrPut(c.id) { StringBuilder() }.let { if (it.length < 3000) it.append(" [").append(msg).append("]") }; android.util.Log.i("MT", msg) },
             owns = { b -> !(ctxH > 0 || nextTakes) || Seams.owns(b.box, b.container, b.zone, ctxH, imageH, nextTakes) },
+            discardSink = { list -> discardedById[c.id] = list },
         )
         val out = pipeline.process(workBytes, s.source.code, s.target.code)
         if (out is PageOutcome.Done && out.refreshed > 0) testRefreshed.addAndGet(out.refreshed)
@@ -1074,6 +1220,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             }
             if (own != null) sendOverlay(c.id, own)
             if (up != null) sendOverlay(c.id + "~up", up, c.prevId)
+            if (basePage != null) main.post { refreshDiscards(c.id) }
             overlayForLog = own; overlayUpForLog = up
             if (own != null && out is PageOutcome.Done) journalLayout(c, pageUrl, out, own)
         }
@@ -1712,6 +1859,10 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         // appui simple sur une traduction pendant que la gomme est active : suppression, « Annuler » proposé
         @JavascriptInterface fun onErase(id: String, bid: String, src: String, tr: String) {
             main.post { if (eraser) eraseTouched(EditTarget(id, bid.toIntOrNull() ?: -1, src, tr)) }
+        }
+        // appui simple sur un texte écarté pendant que le mode est actif : traduction du texte
+        @JavascriptInterface fun onDiscard(id: String, did: String) {
+            main.post { if (discardMode) translateDiscarded(id, did.toIntOrNull() ?: return@post) }
         }
         @JavascriptInterface fun onImagesChanged() { main.post { if (active) start(false) } }
         @JavascriptInterface fun onViewport(y: Double, h: Double) { viewportY = y; if (h > 0) viewportH = h }

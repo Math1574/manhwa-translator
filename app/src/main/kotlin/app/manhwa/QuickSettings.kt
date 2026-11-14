@@ -75,6 +75,7 @@ fun BoxScope.QuickSettings(graph: AppGraph, onClose: () -> Unit) {
                 SwitchRow("Traduire les onomatopées", "Désactivé : CRACK, BOOM… restent tels quels.", s.translateSfx) { v -> store.update { it.copy(translateSfx = v) } }
                 val canRetranslate = c.translateOn && c.active
                 SwitchRow("Gomme à traductions", "Un appui sur une traduction la supprime (« Annuler » reste proposé 3 secondes). Se coupe en changeant de page.", c.eraser, enabled = canRetranslate || c.eraser) { v -> c.switchEraser(v); if (v) onClose() }
+                SwitchRow("Textes écartés", "Entoure ce que l'application a laissé de côté (onomatopées, débris, textes mal lus) : un appui sur un cadre le traduit (« Annuler » reste proposé 3 secondes). Se coupe en changeant de page.", c.discardMode, enabled = canRetranslate || c.discardMode) { v -> c.switchDiscard(v); if (v) onClose() }
                 GradientButton("Retraduire la page", { c.start(force = true); onClose() }, Modifier.fillMaxWidth(), enabled = canRetranslate)
                 Hint(if (canRetranslate) "« Retraduire la page » applique ces choix à la page ouverte." else "Touchez d'abord le bouton rond pour traduire la page.")
             }

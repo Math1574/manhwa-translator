@@ -25,6 +25,9 @@ sealed class PageOutcome {
 data class DebugLine(val box: RectF, val text: String, val confidence: Float, val status: String)
 data class DebugInfo(val imageWidth: Int, val imageHeight: Int, val lines: List<DebugLine>)
 
+/** Nombre maximal de textes écartés retenus pour une page. */
+private const val MAX_DISCARDED = 40
+
 class PagePipeline(
     private val cache: ResultCache,
     private val ocr: OcrEngine,
@@ -52,6 +55,8 @@ class PagePipeline(
     private val maxReread: Int = 4,
     /** Ce bloc revient-il à cette image ? (jonctions d'images empilées : un texte coupé est traduit par une seule des deux images voisines). */
     private val owns: (TextBlock) -> Boolean = { true },
+    /** Reçoit les textes lus et laissés de côté, à chaque lecture complète d'une image (pas pour une page reprise du cache). */
+    private val discardSink: ((List<DiscardedBlock>) -> Unit)? = null,
 ) {
     /**
      * Retire d'un bloc les lignes (ou la fin de la dernière ligne) qui ne sont que le [tail] de débris collé en fin de texte : « …SI ÉLEVÉ ?! Taay sr4: In ) » est la dernière ligne d'une bulle
@@ -110,6 +115,65 @@ class PagePipeline(
         return PageOutcome.Done(updated, fromCache = true, refreshed = changes.size)
     }
 
+    /** Ce que donne la lecture d'une image : groupes de lignes avant et après retrait des onomatopées collées, groupes gardés pour la traduction, page en majuscules, hauteur de ligne médiane. */
+    private class Reading(val grouped0: List<TextBlock>, val grouped: List<TextBlock>, val blocks: List<TextBlock>, val capsPage: Boolean, val medianH: Float)
+
+    private fun relHeight(b: TextBlock, medianH: Float) = if (medianH > 0f) medianLineHeight(b) / medianH else 1f
+
+    private fun readGroups(ocrResult: OcrResult): Reading {
+        val grouped0 = grouper.group(ocrResult.lines, ocrResult.detections)
+        // hauteur de ligne relative à la médiane de la page : un gros lettrage (onomatopée, titre) n'est jamais un débris
+        val heights = grouped0.map { medianLineHeight(it) }.filter { it > 0f }.sorted()
+        val medianH = if (heights.isEmpty()) 0f else heights[heights.size / 2]
+        fun relH(b: TextBlock) = relHeight(b, medianH)
+        // une onomatopée collée à une phrase voisine (même bloc) : sa ligne est retirée du bloc, qui garde le reste ; l'image n'y touche pas
+        val grouped = grouped0.mapNotNull { b -> withoutSfxLines(b, medianH) }
+        // page en majuscules : un petit fragment en minuscules (« in » lu dans une marque du dessin) n'est pas du texte de la page ; traduit avec ses voisins, il en absorbait le début de phrase
+        val capsPage = isAllCapsPage(grouped)
+        val blocks = grouped.filter { owns(it) && !TextNormalizer.isNoise(it.text) && !(capsPage && isLowercaseFragment(it.text)) && !junk(it.text, relH(it), it.kind != BlockKind.FREE || it.zone != null) && !isSfx(it.text, it.kind, relH(it)) }
+        return Reading(grouped0, grouped, blocks, capsPage, medianH)
+    }
+
+    /**
+     * Les textes que la lecture a trouvés et que la traduction laisse de côté : groupes écartés (onomatopée, débris, bruit…), lignes d'onomatopée retirées d'un bloc, et lignes à la lecture
+     * trop peu sûre pour former un bloc. Seuls comptent ceux qui reviennent à cette image (jonctions) et qui contiennent au moins deux lettres ou chiffres.
+     */
+    private fun discardedFrom(ocrResult: OcrResult, rd: Reading): List<DiscardedBlock> {
+        val out = ArrayList<DiscardedBlock>()
+        fun add(box: RectF, text: String, why: String, vertical: Boolean, lineHeight: Float, lines: List<OcrLine>, kind: BlockKind, bubble: RectF?, zone: RectF?) {
+            if (out.size >= MAX_DISCARDED || text.count { it.isLetterOrDigit() || it.isCjk() } < 2) return
+            out.add(DiscardedBlock(out.size, box, text, why, vertical, lineHeight, lines.map { it.box }, lines.map { it.text }, if (kind == BlockKind.UNKNOWN) "" else kind.name, bubble, zone))
+        }
+        val sfxWhy = "onomatopée laissée telle quelle"
+        for (g in rd.grouped) {
+            if (g in rd.blocks || !owns(g)) continue
+            val why = if (TextNormalizer.isNoise(g.text)) "bruit" else if (rd.capsPage && isLowercaseFragment(g.text)) "fragment en minuscules" else if (isSfx(g.text, g.kind, relHeight(g, rd.medianH))) sfxWhy else "débris, filigrane ou répété"
+            add(g.box, g.text, why, g.vertical, medianLineHeight(g), g.lines, g.kind, g.container, g.zone)
+        }
+        // lignes d'onomatopée retirées d'un bloc qui garde le reste, ou bloc entier d'onomatopées
+        for (b0 in rd.grouped0) {
+            if (!owns(b0)) continue
+            val kept = rd.grouped.firstOrNull { it.id == b0.id }
+            if (kept == null) add(b0.box, b0.text, sfxWhy, b0.vertical, medianLineHeight(b0), b0.lines, b0.kind, b0.container, b0.zone)
+            else for (l in b0.lines) if (l !in kept.lines) add(l.box, l.text, sfxWhy, l.vertical, l.lineHeight, listOf(l), b0.kind, null, null)
+        }
+        // lignes rejetées pour leur lecture peu sûre : du vrai texte mal lu ressemble à cela ; l'utilisateur pourra corriger la lecture après l'avoir ajouté
+        val used = rd.grouped0.flatMap { it.lines }.toSet()
+        for (l in ocrResult.lines) {
+            if (l in used || grouper.dropReason(l) != "confiance") continue
+            if (rd.grouped0.any { it.box.overlapRatio(l.box) > 0.3f } || out.any { it.box.overlapRatio(l.box) > 0.3f }) continue
+            if (!owns(TextBlock(-1, listOf(l), l.box, l.text, l.vertical))) continue
+            add(l.box, l.text, "lecture peu sûre", l.vertical, l.lineHeight, listOf(l), BlockKind.UNKNOWN, null, null)
+        }
+        return out
+    }
+
+    /** Relit l'image sans la traduire (ni cache, ni rien d'autre) pour établir la liste des textes laissés de côté : sert aux pages reprises du cache, qui n'ont pas passé par la lecture complète. */
+    fun scanDiscarded(imageBytes: ByteArray): List<DiscardedBlock> {
+        val ocrResult = ocr.recognize(imageBytes)
+        return discardedFrom(ocrResult, readGroups(ocrResult))
+    }
+
     fun process(imageBytes: ByteArray, source: String, target: String): PageOutcome {
         val key = CacheKey(sha256Hex(imageBytes), source, target, engineId)
         if (useCache) cache.get(key)?.let { return refreshFromCache(key, it, source, target) }
@@ -117,18 +181,12 @@ class PagePipeline(
         val ocrResult = try { ocr.recognize(imageBytes) } catch (e: Exception) {
             return PageOutcome.Failed("ocr", e.message ?: e.javaClass.simpleName)
         }
-        val grouped0 = grouper.group(ocrResult.lines, ocrResult.detections)
-        // hauteur de ligne relative à la médiane de la page : un gros lettrage (onomatopée, titre) n'est jamais un débris
-        val heights = grouped0.map { medianLineHeight(it) }.filter { it > 0f }.sorted()
-        val medianH = if (heights.isEmpty()) 0f else heights[heights.size / 2]
-        fun relH(b: TextBlock) = if (medianH > 0f) medianLineHeight(b) / medianH else 1f
-        // une onomatopée collée à une phrase voisine (même bloc) : sa ligne est retirée du bloc, qui garde le reste ; l'image n'y touche pas
-        val grouped = grouped0.mapNotNull { b -> withoutSfxLines(b, medianH) }
-        // page en majuscules : un petit fragment en minuscules (« in » lu dans une marque du dessin) n'est pas du texte de la page ; traduit avec ses voisins, il en absorbait le début de phrase
-        val capsPage = isAllCapsPage(grouped)
-        val blocks = grouped.filter { owns(it) && !TextNormalizer.isNoise(it.text) && !(capsPage && isLowercaseFragment(it.text)) && !junk(it.text, relH(it), it.kind != BlockKind.FREE || it.zone != null) && !isSfx(it.text, it.kind, relH(it)) }
+        val rd = readGroups(ocrResult)
+        val grouped = rd.grouped; val blocks = rd.blocks; val capsPage = rd.capsPage
+        fun relH(b: TextBlock) = relHeight(b, rd.medianH)
         for (g in grouped) if (g !in blocks && !owns(g)) log("écarté « ${g.text.take(40)} » (traduit par l'image voisine, de l'autre côté de la jonction)")
         for (g in grouped) if (g !in blocks && owns(g)) log("écarté « ${g.text.take(40)} » (${if (TextNormalizer.isNoise(g.text)) "bruit" else if (capsPage && isLowercaseFragment(g.text)) "fragment en minuscules sur une page en majuscules" else if (isSfx(g.text, g.kind, relH(g))) "onomatopée laissée telle quelle" else "débris, filigrane ou répété"}${if (g.kind != BlockKind.IN_BUBBLE && g.zone == null) ", hors zone" else ""})")
+        discardSink?.let { sink -> try { sink(discardedFrom(ocrResult, rd)) } catch (e: Exception) { log("textes écartés : liste non établie (${e.message})") } }
         val clean = blocks.map { repair(it.text) }.toMutableList()
         reportDebug(ocrResult, grouped, blocks, emptySet())
         if (blocks.isEmpty()) return PageOutcome.NoText(ocrResult.imageWidth, ocrResult.imageHeight)
