@@ -409,7 +409,10 @@ tapt gl1 "@EditText" 1; sleep 1; adb shell input text zzsrc; sleep 1; uidump gl1
 tapt gl1b "@EditText" 2; sleep 1; adb shell input text zztgt; sleep 1; uidump gl2
 tapt gl2 "=Ajouter à cette œuvre" 1; sleep 2
 chk "glossaire de l'œuvre : un terme ajouté ici est enregistré (une page de cette œuvre n'est pas ouverte : pas d'aperçu)" $(okst waitst terms $((gt0 + 1)) 15)
-uidump gl3; shot ui 49
+uidump gl3
+# le clavier reste ouvert après l'ajout et masque la liste des termes (sous le formulaire) : un retour le referme (sans quitter la page tant qu'il est affiché)
+if [ "$(has gl3 'text="Retirer"')" = 0 ]; then adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump gl3; fi
+shot ui 49
 chk "glossaire de l'œuvre : le terme est listé comme propre à l'œuvre" $([ "$(has gl3 'zzsrc')" = 1 ] && [ "$(has gl3 'Cette [^ ]*uvre')" = 1 ] && echo 1 || echo 0)
 tapt gl3 "=Retirer" 1; sleep 1.5
 chk "glossaire de l'œuvre : le terme se retire" $(okst waitst terms $gt0 15)
