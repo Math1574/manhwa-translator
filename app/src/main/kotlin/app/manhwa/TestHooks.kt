@@ -29,7 +29,8 @@ object TestHooks {
     /**
      * Commandes pour les scénarios d'interface (builds debug, extra « mt_watch ») : l'application lit files/cmd.txt toutes les demi-secondes, exécute la commande puis écrit l'état dans
      * files/state.json. Commandes : peek (comme un appui long sur la première traduction), window <ms> (durée du bandeau « Annuler »), setedit <texte> (traduction écrite à la main),
-     * clearedits (retire les corrections), peekign (appui long sur le premier texte ignoré), peekempty (appui long sur une image ignorée), state (écrit seulement l'état).
+     * clearedits (retire les corrections), peekign (appui long sur le premier texte ignoré), peekempty (appui long sur une image ignorée), eraser [off] (active ou coupe la gomme),
+     * erasetap (appui simple au centre de la première traduction visible), state (écrit seulement l'état).
      */
     private fun startWatcher(ctx: Context, graph: AppGraph) {
         if (watching) return
@@ -53,6 +54,8 @@ object TestHooks {
                         "clearedits" -> main.post { c.testClearEdits() }
                         "peekign" -> main.post { c.testPeek(ignored = true) }
                         "peekempty" -> main.post { c.testPeekEmpty() }
+                        "eraser" -> main.post { c.setEraser(arg.trim() != "off") }
+                        "erasetap" -> main.post { c.testEraseTap() }
                     }
                     Thread.sleep(300)   // laisse les gestes lancés sur le fil principal s'appliquer avant de relever l'état
                     writeState(ctx, graph)
@@ -76,7 +79,7 @@ object TestHooks {
         }
         val o = JSONObject().put("t", System.currentTimeMillis()).put("undo", c.undoBanner != null).put("peek", c.peekTarget != null)
             .put("works", ids.size).put("blocks", blocks).put("hidden", hidden).put("edits", edits).put("editTr", editTr)
-            .put("ign", graph.ignored.rules.texts.size).put("ignImg", graph.ignored.rules.images.size).put("skipped", c.testSkippedCount()).put("banner", c.undoBanner?.message ?: "")
+            .put("ign", graph.ignored.rules.texts.size).put("ignImg", graph.ignored.rules.images.size).put("skipped", c.testSkippedCount()).put("banner", c.undoBanner?.message ?: "").put("eraser", c.eraser)
         val tmp = File(ctx.filesDir, "state.json.tmp"); tmp.writeText(o.toString()); tmp.renameTo(File(ctx.filesDir, "state.json"))
     }
 

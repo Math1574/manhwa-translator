@@ -181,6 +181,12 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     private val clearUndo = Runnable { undoBanner = null }
     /** Durée de la proposition d'annulation (3 s) ; allongée seulement par les tests automatiques pour laisser le temps de lire l'écran. */
     @Volatile var undoWindowMs = UNDO_MS
+    /** Gomme active : un appui simple sur une traduction la supprime (même effet que la corbeille). Se coupe en changeant de page. */
+    var eraser by mutableStateOf(false)
+    /** Retraitements en attente après une série de suppressions rapprochées (une seule page redessinée pour plusieurs appuis) ; fil principal seulement. */
+    private val refreshSoon = HashMap<String, Runnable>()
+    /** Numéro du dernier retraitement lancé pour chaque page : un retraitement plus ancien encore en cours ne redessine pas la page (il écraserait le résultat à jour). */
+    private val fixRuns = ConcurrentHashMap<String, Long>()
     /** Avancement à reprendre à l'ouverture de la page demandée (0 = aucun). */
     private var resumeTarget = 0
     private var resumeUrl = ""
@@ -560,6 +566,23 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     fun deletePeek() {
         val t = peekTarget ?: return
         peekTarget = null; main.removeCallbacks(clearPeek)
+        deleteTarget(t, soon = false)
+    }
+
+    /** Gomme (un appui simple sur une traduction) : même suppression que la corbeille ; la page n'est redessinée qu'une fois, quelques instants après le dernier appui d'une série. */
+    fun eraseTouched(t: EditTarget) { deleteTarget(t, soon = true) }
+
+    /** Active ou coupe la gomme : les traductions supprimables sont entourées, les appuis ne servent plus qu'à les effacer. */
+    fun setEraser(on: Boolean) {
+        eraser = on
+        if (on) { peekTarget = null; peekEmpty = null; main.removeCallbacks(clearPeek); main.removeCallbacks(clearPeekEmpty) }
+        webView?.evaluateJavascript("window.__mt&&window.__mt.setErase($on)", null)
+    }
+
+    /** Tests automatiques : un appui simple au centre de la première traduction visible, comme au doigt (la gomme doit être active). */
+    fun testEraseTap() { webView?.evaluateJavascript("window.__mt&&window.__mt.testErase()", null) }
+
+    private fun deleteTarget(t: EditTarget, soon: Boolean) {
         val id = t.imageId.removeSuffix("~up")
         val info = workInfo(id) ?: return
         val shown = info.applied.page.blocks.firstOrNull { it.id == t.bid } ?: return
@@ -572,13 +595,22 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "correction").put("url", currentUrl).put("src", shown.source).put("before", shown.translated).put("edit", "supprimé"))
         // le patch disparaît tout de suite ; la page est ensuite redessinée sans lui (résultat en cache)
         webView?.evaluateJavascript("window.__mt&&window.__mt.dropPatch(${JSONObject.quote(t.imageId)},${t.bid})", null)
-        reprocess(id)
+        if (soon) reprocessSoon(id) else reprocess(id)
         // la suppression reste annulable quelques secondes : un bandeau « Annuler » est proposé, puis il disparaît et la suppression est définitive
         showUndo("Traduction supprimée") {
             if (prev != null) graph.edits.upsert(info.imageKey, prev) else graph.edits.remove(info.imageKey, edit.id)
             graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "correction").put("url", currentUrl).put("src", shown.source).put("edit", "suppression annulée"))
             reprocess(id)
         }
+    }
+
+    /** Redessine la page un instant après le dernier appel (une série d'appuis de la gomme ne redessine la page qu'une fois) ; fil principal. */
+    private fun reprocessSoon(id: String, delayMs: Long = 350) {
+        refreshSoon.remove(id)?.let { main.removeCallbacks(it) }
+        val epoch = pageEpoch
+        val r = Runnable { refreshSoon.remove(id); reprocess(id, 0, epoch) }
+        refreshSoon[id] = r
+        main.postDelayed(r, delayMs)
     }
 
     /** Propose « Annuler » pendant [undoWindowMs] ; la proposition précédente est remplacée (son geste devient définitif). */
@@ -835,6 +867,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
     private fun resetSession() {
         stopWork(); resetCounters(); skipped.clear(); active = false; overlaysVisible = true
+        eraser = false; fixRuns.clear(); refreshSoon.values.forEach { main.removeCallbacks(it) }; refreshSoon.clear()      // nouvelle page : la gomme se coupe, les redessins en attente de l'ancienne n'ont plus d'objet
         graph.gemma.resetContext()
     }
 
@@ -891,7 +924,10 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         }
     }
 
-    private fun process(c: Candidate, cancelled: () -> Boolean): PageOutcome {
+    private fun process(c: Candidate, cancelled: () -> Boolean, fix: Boolean = false): PageOutcome {
+        // retraitement demandé après coup (suppression, correction…) : si un plus récent démarre pendant que celui-ci travaille encore, c'est lui qui redessine la page (celui-ci ne verrait pas les derniers gestes)
+        val fixRun = if (fix) (fixRuns.merge(c.id, 1L) { a, b -> a + b } ?: 0L) else 0L
+        fun staleFix() = fix && fixRuns[c.id] != fixRun
         val pageUrl = currentUrl
         val pageSeries = BrowsingLibrary.seriesKey(pageUrl)
         BatchContext.cancelled.set(cancelled); BatchContext.order.set(c.top); BatchContext.lastBatch.remove()
@@ -993,7 +1029,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             basePage.blocks.filter { ignoreRules.textIgnored(pageSeries, it.source) }.map { b -> BlockEdit(IGNORE_EDIT_PREFIX + b.id, EditKind.ADJUST, imageRect(b.box, ctxH), b.source, hidden = true) }
         } else emptyList()
         val applied: EditApplier.Applied? = if (basePage != null) try { EditApplier.apply(basePage, graph.edits.forImage(imageKey) + ignoreEdits, ctxH.toFloat()) } catch (e: Throwable) { null } else null
-        if (basePage != null) synchronized(workInfos) {
+        if (basePage != null && !staleFix()) synchronized(workInfos) {
             workInfos[c.id] = WorkInfo(c.id, c.src, imageKey, workBytes, ctxH, basePage, applied ?: EditApplier.Applied(basePage, emptyMap(), emptyList(), emptyMap()), pageSeries)
         }
         var overlayForLog: JSONObject? = null
@@ -1001,7 +1037,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         BatchContext.lastBatch.get()?.let { batchInfo[c.id] = it }
         runStage[c.id] = "affichage"
         if (out is PageOutcome.Done && !out.fromCache) journalPage(c, pageUrl, engineId, s.target.code, out, System.currentTimeMillis() - t0)
-        if (!cancelled()) {
+        if (!cancelled() && !staleFix()) {
             val tRender = SystemClock.uptimeMillis()
             val json = synchronized(renderLock) {
                 when {
@@ -1276,7 +1312,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     private fun reprocess(imageId: String, attempt: Int = 0, epoch: Int = pageEpoch) {
         if (epoch != pageEpoch) return   // on a changé de page entre-temps : l'ancienne image n'est plus là
         val cand = candidatesById[imageId] ?: return
-        val accepted = queue.submit(PageJob(cand.id + "#fix" + System.nanoTime(), 0) { cancelled -> process(cand, cancelled) })
+        val accepted = queue.submit(PageJob(cand.id + "#fix" + System.nanoTime(), 0) { cancelled -> process(cand, cancelled, fix = true) })
         // la file est pleine (le chapitre se traduit encore) : le rafraîchissement n'est pas perdu, on réessaie dans un instant (une suppression ou son annulation s'affichent alors à coup sûr)
         if (!accepted && attempt < 40) main.postDelayed({ reprocess(imageId, attempt + 1, epoch) }, 750)
     }
@@ -1484,6 +1520,10 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                 val bare = id.removeSuffix("~up")
                 if (workInfo(bare) != null || skipped.containsKey(bare)) { peekTarget = null; peekEmpty = EmptySpot(bare, x.toFloat(), y.toFloat()); main.removeCallbacks(clearPeekEmpty); main.postDelayed(clearPeekEmpty, 7000) }
             }
+        }
+        // appui simple sur une traduction pendant que la gomme est active : suppression, « Annuler » proposé
+        @JavascriptInterface fun onErase(id: String, bid: String, src: String, tr: String) {
+            main.post { if (eraser) eraseTouched(EditTarget(id, bid.toIntOrNull() ?: -1, src, tr)) }
         }
         @JavascriptInterface fun onImagesChanged() { main.post { if (active) start(false) } }
         @JavascriptInterface fun onViewport(y: Double, h: Double) { viewportY = y; if (h > 0) viewportH = h }

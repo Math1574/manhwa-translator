@@ -221,6 +221,25 @@ chk "suppression : sans annulation, la suppression est définitive" $([ "$(okst 
 appcmd clearedits; waitst hidden 0 25 >/dev/null
 # ignorer un texte ou une image : l'appui long est rejoué par une commande, puis vrais appuis sur « Ignorer ce texte… », sur le choix de la fenêtre, sur « Annuler » et « Rétablir »
 waitge() { local i; for i in $(seq 1 ${3:-15}); do appstate; [ "$(stv $1)" -ge "$2" ] 2>/dev/null && return 0; done; return 1; }
+# gomme : un appui simple sur une traduction la supprime. L'appui est rejoué dans la page par une commande (événements tactiles), le reste (bouton « Terminer », bandeau, « Annuler ») est touché pour de vrai
+appcmd window 20000
+appcmd eraser on; uidump er1; shot ui 26
+chk "gomme : activée, un bouton « Gomme active · Terminer » est affiché" $([ "$(has er1 'Gomme active')" = 1 ] && [ "$(okst waitst eraser True 8)" = 1 ] && echo 1 || echo 0)
+appcmd erasetap
+chk "gomme : un appui sur une traduction la supprime (bloc masqué, correction enregistrée)" $([ "$(okst waitge hidden 1 25)" = 1 ] && [ "$(stv edits)" = 1 ] && echo 1 || echo 0)
+uidump er2; shot ui 27
+chk "gomme : le bandeau « Traduction supprimée · Annuler » apparaît" $(has er2 'Traduction supprim')
+chk "gomme : l'appui n'a pas masqué la barre d'adresse (il ne sert qu'à effacer)" $(has er2 'Plus d')
+chk "gomme : elle reste active après un appui" $([ "$(stv eraser)" = True ] && [ "$(has er2 'Gomme active')" = 1 ] && echo 1 || echo 0)
+appcmd erasetap
+chk "gomme : un deuxième appui supprime une deuxième traduction (autre bloc)" $([ "$(okst waitge hidden 2 25)" = 1 ] && [ "$(stv edits)" = 2 ] && echo 1 || echo 0)
+uidump er3; tapt er3 "Annuler" 1; sleep 1
+chk "gomme : « Annuler » ne rétablit que la dernière suppression" $([ "$(okst waitst hidden 1 25)" = 1 ] && [ "$(stv edits)" = 1 ] && echo 1 || echo 0)
+uidump er4; tapt er4 "Terminer" 1; sleep 1
+chk "gomme : « Terminer » coupe la gomme" $([ "$(okst waitst eraser False 10)" = 1 ] && echo 1 || echo 0)
+uidump er5; chk "gomme : le bouton « Gomme active » disparaît" $(hasnot er5 'Gomme active')
+appcmd clearedits
+chk "gomme : les corrections de test sont retirées" $(okst waitst edits 0 25)
 appcmd window 20000
 appcmd peek; uidump ig1; shot ui 17
 chk "ignorer : un appui long propose aussi « Ignorer ce texte… » (avec Corriger)" $([ "$(has ig1 'Ignorer ce texte')" = 1 ] && [ "$(has ig1 'Corriger cette traduction')" = 1 ] && echo 1 || echo 0)
@@ -258,6 +277,7 @@ orb_on=$(has nav 'Traduction activ')
 { holdt nav "Traduction activ" || holdt nav "Traduire"; }; sleep 1.5; uidump qs; shot ui 12
 chk "réglages rapides : un appui long sur le bouton rond ouvre le panneau" $(has qs 'glages rapides')
 chk "réglages rapides : langue, taille du texte, onomatopées et retraduction y sont" $([ "$(has qs 'Langue du texte')" = 1 ] && [ "$(has qs 'Traduire vers')" = 1 ] && [ "$(has qs 'Taille du texte')" = 1 ] && [ "$(has qs 'onomatop')" = 1 ] && [ "$(has qs 'Retraduire la page')" = 1 ] && echo 1 || echo 0)
+chk "réglages rapides : la gomme à traductions y est proposée" $(has qs 'Gomme')
 if [ "$(has qs 'glages rapides')" = 1 ]; then
   tapt qs "=Coréen" 1; sleep 1
   adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump qs2
