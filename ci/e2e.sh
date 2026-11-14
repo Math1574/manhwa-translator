@@ -299,7 +299,8 @@ appcmd window 20000
 appcmd discard on; uidump dc1; shot ui 31
 chk "textes écartés : activés, un bouton « Textes écartés · Terminer » est affiché" $([ "$(has dc1 'Textes [^ ]*cart')" = 1 ] && [ "$(okst waitst discMode True 8)" = 1 ] && echo 1 || echo 0)
 chk "textes écartés : au moins un texte laissé de côté est entouré (page reprise ou relue)" $(okst waitge disc 1 40)
-d0=$(stv disc); say "textes écartés : $d0 cadre(s) proposé(s), listes connues pour $(stv discKnown) page(s)"
+waitge discKnown "$(stv works)" 40 >/dev/null      # toutes les pages en mémoire ont leur liste (une relecture à la fois) : le nombre de cadres ne bouge plus ensuite
+d0=$(stv disc); say "textes écartés : $d0 cadre(s) proposé(s), listes connues pour $(stv discKnown) page(s) sur $(stv works)"
 appcmd disctap
 chk "textes écartés : un appui traduit le texte (correction enregistrée, cadre retiré)" $([ "$(okst waitst edits 1 25)" = 1 ] && [ "$(stv disc)" -lt "${d0:-0}" ] && echo 1 || echo 0)
 uidump dc2; shot ui 32
