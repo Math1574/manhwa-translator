@@ -5,6 +5,9 @@ data class GlossaryEntry(val source: String, val target: String)
 /** Terme propre à une œuvre (clé d'œuvre : site + titre). */
 data class SeriesTerm(val series: String, val source: String, val target: String)
 
+/** Traduction retenue pour un texte lu exactement ainsi (correction manuelle d'une bulle) : [source] est le texte tel qu'on l'a lu, sans les sauts de ligne, quand il est connu. */
+data class TextCorrection(val source: String, val translation: String)
+
 data class Protected(val text: String, val tokens: Map<String, String>)
 
 /**
@@ -15,6 +18,8 @@ data class Protected(val text: String, val tokens: Map<String, String>)
 class Glossary(entries: List<GlossaryEntry> = emptyList(), corrections: Map<String, String> = emptyMap()) {
     private val terms = LinkedHashMap<String, String>()
     private val fixes = LinkedHashMap<String, String>()
+    /** Texte lu, tel qu'on l'a vu, de chaque correction (la clé des corrections n'a plus d'espaces) : pour les montrer lisiblement. Absent des corrections d'avant ce suivi. */
+    private val fixText = HashMap<String, String>()
     /** Termes propres à une œuvre : ils s'ajoutent aux termes communs et les remplacent quand le terme d'origine est le même. */
     private val seriesTerms = LinkedHashMap<String, LinkedHashMap<String, String>>()
 
@@ -74,7 +79,7 @@ class Glossary(entries: List<GlossaryEntry> = emptyList(), corrections: Map<Stri
         val g = Glossary()
         terms.forEach { (k, v) -> g.loadTerm(k, v, termRev[k] ?: 0L) }
         if (series != null) seriesTerms[series]?.forEach { (k, v) -> g.loadTerm(k, v, termRev[series + SEP + k] ?: 0L) }
-        fixes.forEach { (k, v) -> g.fixes[k] = v }
+        fixes.forEach { (k, v) -> g.fixes[k] = v; fixText[k]?.let { t -> g.fixText[k] = t } }
         g.revision = revision
         return g
     }
@@ -84,7 +89,20 @@ class Glossary(entries: List<GlossaryEntry> = emptyList(), corrections: Map<Stri
         if (rev > 0L) termRev[source] = rev else termRev.remove(source)
     }
     fun addCorrection(sourceBlock: String, translation: String) {
-        if (sourceBlock.isNotBlank()) fixes[normalize(sourceBlock)] = translation
+        if (sourceBlock.isBlank()) return
+        val k = normalize(sourceBlock)
+        fixes[k] = translation
+        fixText[k] = sourceBlock.trim().replace(Regex("\\s+"), " ")
+    }
+
+    /** Les traductions retenues pour un texte exact, dans l'ordre où elles ont été faites. */
+    fun corrections(): List<TextCorrection> = fixes.map { (k, v) -> TextCorrection(fixText[k] ?: k, v) }
+
+    /** Oublie la traduction retenue pour ce texte (le texte est de nouveau traduit comme les autres). Vrai si elle existait. */
+    fun removeCorrection(sourceBlock: String): Boolean {
+        val k = normalize(sourceBlock)
+        fixText.remove(k)
+        return fixes.remove(k) != null
     }
 
     fun terms(): List<GlossaryEntry> = terms.map { GlossaryEntry(it.key, it.value) }
@@ -115,11 +133,11 @@ class Glossary(entries: List<GlossaryEntry> = emptyList(), corrections: Map<Stri
         return out
     }
 
-    /** Format : une ligne par terme (T), correction (C) ou terme d'œuvre (S), la version du terme en dernière colonne si elle est connue, et une ligne R pour la version du glossaire. Les anciens fichiers (sans versions) se lisent tels quels. */
+    /** Format : une ligne par terme (T), correction (C) ou terme d'œuvre (S), la version du terme en dernière colonne si elle est connue (pour une correction : le texte lu, tel qu'on l'a vu), et une ligne R pour la version du glossaire. Les anciens fichiers (sans versions) se lisent tels quels. */
     fun serialize(): String = buildString {
         if (revision > 0L) append("R\t").append(revision).append('\n')
         terms.forEach { (k, v) -> append("T\t").append(esc(k)).append('\t').append(esc(v)); termRev[k]?.let { append('\t').append(it) }; append('\n') }
-        fixes.forEach { (k, v) -> append("C\t").append(esc(k)).append('\t').append(esc(v)).append('\n') }
+        fixes.forEach { (k, v) -> append("C\t").append(esc(k)).append('\t').append(esc(v)); fixText[k]?.let { append('\t').append(esc(it)) }; append('\n') }
         seriesTerms.forEach { (s, m) -> m.forEach { (k, v) -> append("S\t").append(esc(s)).append('\t').append(esc(k)).append('\t').append(esc(v)); termRev[s + SEP + k]?.let { append('\t').append(it) }; append('\n') } }
     }
 
@@ -139,7 +157,7 @@ class Glossary(entries: List<GlossaryEntry> = emptyList(), corrections: Map<Stri
                         val s = unesc(p[1]).trim(); val t = unesc(p[2]).trim()
                         if (s.isNotBlank() && t.isNotBlank()) g.loadTerm(s, t, p.getOrNull(3)?.toLongOrNull() ?: 0L)
                     }
-                    p.size == 3 && p[0] == "C" -> g.fixes[unesc(p[1])] = unesc(p[2])
+                    (p.size == 3 || p.size == 4) && p[0] == "C" -> { val k = unesc(p[1]); g.fixes[k] = unesc(p[2]); if (p.size == 4) g.fixText[k] = unesc(p[3]) }
                     (p.size == 4 || p.size == 5) && p[0] == "S" -> {
                         val series = unesc(p[1]); val s = unesc(p[2]).trim(); val t = unesc(p[3]).trim()
                         if (series.isNotBlank() && s.isNotBlank() && t.isNotBlank()) {

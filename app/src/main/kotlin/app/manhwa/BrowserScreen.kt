@@ -152,7 +152,7 @@ fun BrowserScreen(graph: AppGraph) {
                 ReaderOverlay(graph, onQuickSettings = { quick = true })
             }
             // propositions discrètes : reprendre le chapitre où l'on s'était arrêté ; corriger la traduction dont on regarde l'original
-            if (!(c.fullscreen && c.readerBar) && (c.resumeOffer > 0 || c.peekTarget != null || c.peekEmpty != null || c.navBlocked != null || c.undoBanner != null || c.eraser)) {
+            if (!(c.fullscreen && c.readerBar) && (c.resumeOffer > 0 || c.peekTarget != null || c.peekEmpty != null || c.navBlocked != null || c.undoBanner != null || c.eraser || c.discardMode)) {
                 Column(Modifier.align(Alignment.BottomCenter).padding(bottom = if (c.fullscreen) 28.dp else 20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (c.resumeOffer > 0) {
                         LaunchedEffect(c.resumeOffer) { delay(9000); c.dismissResumeOffer() }
@@ -173,6 +173,8 @@ fun BrowserScreen(graph: AppGraph) {
                     c.undoBanner?.let { Pill("${it.message} · Annuler", onClick = { c.runUndo() }) }
                     // gomme : les traductions entourées en rouge se suppriment d'un appui ; ce bouton la coupe
                     if (c.eraser) Pill("Gomme active · Terminer", onClick = { c.switchEraser(false) })
+                    // textes écartés : les cadres orange se traduisent d'un appui ; ce bouton coupe le mode
+                    if (c.discardMode) Pill("Textes écartés · Terminer", onClick = { c.switchDiscard(false) })
                     c.peekEmpty?.let {
                         if (c.peekImageIgnored()) {
                             Pill("Image ignorée · Rétablir", onClick = { c.unignorePeekImage() }, onClose = { c.peekEmpty = null })
@@ -312,6 +314,7 @@ private fun AddressBar(graph: AppGraph) {
                 DropdownMenuItem(text = { Text(if (c.translateOn && c.active) "Revenir à l'original" else "Traduire cette page") }, onClick = { menu = false; c.onTranslateButton() })
                 if (c.translateOn && c.active) DropdownMenuItem(text = { Text("Retraduire la page") }, onClick = { menu = false; c.start(force = true) })
                 if (c.translateOn && c.active) DropdownMenuItem(text = { Text(if (c.eraser) "Terminer la gomme" else "Gomme : supprimer des traductions") }, onClick = { menu = false; c.switchEraser(!c.eraser) })
+                if (c.translateOn && c.active) DropdownMenuItem(text = { Text(if (c.discardMode) "Terminer les textes écartés" else "Textes écartés : les voir et les traduire") }, onClick = { menu = false; c.switchDiscard(!c.discardMode) })
                 DropdownMenuItem(text = { Text(if (c.loading) "Arrêter le chargement" else "Actualiser") }, onClick = { menu = false; if (c.loading) c.stopLoading() else c.reload() })
                 DropdownMenuItem(text = { Text("Page suivante") }, enabled = c.canGoForward, onClick = { menu = false; c.forward() })
                 DropdownMenuItem(text = { Text("Accueil") }, onClick = { menu = false; c.goHome() })

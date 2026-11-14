@@ -54,6 +54,8 @@ data class AppSettings(
     /** Sites (domaines enregistrables, séparés par des virgules) sur lesquels le bloqueur est désactivé, et sites vers lesquels une page peut renvoyer sans confirmation. */
     val adAllowSites: String = "",
     val adAllowTargets: String = "",
+    /** Tri de la bibliothèque (identifiant d'un [SeriesSort]) : mémorisé entre les lancements. */
+    val librarySort: String = "recent",
 ) {
     val adAllowSiteSet: Set<String> get() = adAllowSites.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
     val adAllowTargetSet: Set<String> get() = adAllowTargets.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
@@ -71,7 +73,7 @@ data class AppSettings(
         it["maxPrefetchPages"] = maxPrefetchPages.toString(); it["cacheMaxMb"] = cacheMaxMb.toString()
         it["schema"] = "2"; it["engine"] = engine.name; it["useGpu"] = useGpu.toString(); it["diagnostic"] = diagnostic.toString(); it["enhancedOcr"] = enhancedOcr.toString(); it["refinePass"] = refinePass.toString(); it["blockAds"] = blockAds.toString(); it["autoReread"] = autoReread.toString(); it["translateSfx"] = translateSfx.toString()
         it["themeAccent"] = themeAccent; it["themeBackground"] = themeBackground; it["reducedMotion"] = reducedMotion.toString(); it["showMascot"] = showMascot.toString(); it["themeMascot"] = themeMascot; it["adAllowSites"] = adAllowSites; it["adAllowTargets"] = adAllowTargets
-        it["readTranslate"] = readTranslate.toString(); it["orbRight"] = orbRight.toString(); it["orbY"] = orbY.toString(); it["hideBarsWhileReading"] = hideBarsWhileReading.toString()
+        it["readTranslate"] = readTranslate.toString(); it["orbRight"] = orbRight.toString(); it["orbY"] = orbY.toString(); it["hideBarsWhileReading"] = hideBarsWhileReading.toString(); it["librarySort"] = librarySort
     }.let { p -> java.io.StringWriter().also { w -> p.store(w, null) }.toString() }
 
     companion object {
@@ -107,6 +109,7 @@ data class AppSettings(
                 p.getProperty("themeMascot")?.takeIf { it in ThemeChoices.mascots } ?: d.themeMascot,
                 p.getProperty("adAllowSites") ?: d.adAllowSites,
                 p.getProperty("adAllowTargets") ?: d.adAllowTargets,
+                p.getProperty("librarySort")?.takeIf { v -> SeriesSort.values().any { it.id == v } } ?: d.librarySort,
             ).sanitized()
         }
     }

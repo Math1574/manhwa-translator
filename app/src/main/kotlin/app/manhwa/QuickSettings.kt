@@ -38,7 +38,7 @@ import app.manhwa.core.TargetLang
 import java.util.Locale
 
 /**
- * Réglages rapides de la lecture, ouverts par un appui long sur le bouton Original | Traduit : langue, taille du texte traduit, onomatopées et « Retraduire la page ».
+ * Réglages rapides de la lecture, ouverts par un appui long sur le bouton Original | Traduit : langue, taille du texte traduit, onomatopées et « Retraduire la page » ; en dessous, les outils de lecture (gomme, textes écartés).
  * Rien ne se lance tout seul : changer un réglage ne traduit rien ; seul « Retraduire la page » relance le travail sur la page ouverte.
  * Un appui à côté du panneau, la croix ou le retour le referment.
  */
@@ -74,9 +74,11 @@ fun BoxScope.QuickSettings(graph: AppGraph, onClose: () -> Unit) {
                 Slider(value = s.textScale, onValueChange = { v -> store.update { it.copy(textScale = v) } }, valueRange = 0.5f..2f)
                 SwitchRow("Traduire les onomatopées", "Désactivé : CRACK, BOOM… restent tels quels.", s.translateSfx) { v -> store.update { it.copy(translateSfx = v) } }
                 val canRetranslate = c.translateOn && c.active
-                SwitchRow("Gomme à traductions", "Un appui sur une traduction la supprime (« Annuler » reste proposé 3 secondes). Se coupe en changeant de page.", c.eraser, enabled = canRetranslate || c.eraser) { v -> c.switchEraser(v); if (v) onClose() }
                 GradientButton("Retraduire la page", { c.start(force = true); onClose() }, Modifier.fillMaxWidth(), enabled = canRetranslate)
                 Hint(if (canRetranslate) "« Retraduire la page » applique ces choix à la page ouverte." else "Touchez d'abord le bouton rond pour traduire la page.")
+                SubTitle("Outils de lecture")
+                SwitchRow("Gomme à traductions", "Un appui sur une traduction la supprime (« Annuler » reste proposé 3 secondes). Se coupe en changeant de page.", c.eraser, enabled = canRetranslate || c.eraser) { v -> c.switchEraser(v); if (v) onClose() }
+                SwitchRow("Textes écartés", "Entoure ce que l'application a laissé de côté : un appui sur un cadre le traduit. Se coupe en changeant de page.", c.discardMode, enabled = canRetranslate || c.discardMode) { v -> c.switchDiscard(v); if (v) onClose() }
             }
         }
     }

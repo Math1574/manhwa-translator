@@ -30,9 +30,10 @@ object TestHooks {
      * Commandes pour les scénarios d'interface (builds debug, extra « mt_watch ») : l'application lit files/cmd.txt toutes les demi-secondes, exécute la commande puis écrit l'état dans
      * files/state.json. Commandes : peek (comme un appui long sur la première traduction), window <ms> (durée du bandeau « Annuler »), setedit <texte> (traduction écrite à la main),
      * clearedits (retire les corrections), peekign (appui long sur le premier texte ignoré), peekempty (appui long sur une image ignorée), eraser [off] (active ou coupe la gomme),
-     * erasetap (appui simple au centre de la première traduction visible), testcache [off] (le résultat en cache est repris, pour vérifier la mise à jour ciblée à l'affichage),
+     * erasetap (appui simple au centre de la première traduction visible), discard [off] (active ou coupe les textes écartés), disctap (appui simple au centre du premier cadre visible), testcache [off] (le résultat en cache est repris, pour vérifier la mise à jour ciblée à l'affichage),
      * termadd <terme>|<traduction>[|direct] (ajout d'un terme comme Réglages › Glossaire, avec aperçu ; « direct » : sans aperçu, comme « Garder tel quel »), termsave <terme>|<traduction> (comme « Enregistrer » de l'éditeur), termdel <terme>,
-     * termconfirm, termcancel (boutons de l'aperçu), state (écrit seulement l'état).
+     * savetr <texte> (« Enregistrer » de l'éditeur avec une traduction écrite : correction rangée sous la page ouverte, traduction retenue), fixadd <texte>|<traduction> (traduction retenue sans correction),
+     * libseed (trois œuvres de démonstration dans la bibliothèque : Zulu Quest, Mid Tale, Alpha Saga), libsort <recent|title|read> (tri de la bibliothèque), termconfirm, termcancel (boutons de l'aperçu), state (écrit seulement l'état).
      */
     private fun startWatcher(ctx: Context, graph: AppGraph) {
         if (watching) return
@@ -58,10 +59,16 @@ object TestHooks {
                         "peekempty" -> main.post { c.testPeekEmpty() }
                         "eraser" -> main.post { c.switchEraser(arg.trim() != "off") }
                         "erasetap" -> main.post { c.testEraseTap() }
+                        "discard" -> main.post { c.switchDiscard(arg.trim() != "off") }
+                        "disctap" -> main.post { c.testDiscardTap() }
                         "testcache" -> c.testCache = arg.trim() != "off"
                         "termadd" -> { val p = arg.split('|'); if (p.size >= 2) main.post { c.testTermAdd(p[0].trim(), p[1].trim(), forSeries = false, preview = p.getOrNull(2)?.trim() != "direct") } }
                         "termsave" -> { val p = arg.split('|'); if (p.size >= 2) main.post { c.testSaveWithTerm(p[0].trim(), p[1].trim()) } }
                         "termdel" -> main.post { c.testTermDel(arg.trim()) }
+                        "savetr" -> main.post { c.testSaveTranslation(arg) }
+                        "fixadd" -> { val p = arg.split('|'); if (p.size >= 2) main.post { graph.glossary.addCorrection(p[0].trim(), p[1].trim()) } }
+                        "libseed" -> main.post { graph.library.testSeed() }
+                        "libsort" -> main.post { graph.settingsStore.update { it.copy(librarySort = arg.trim()) } }
                         "termconfirm" -> main.post { c.confirmTermPreview() }
                         "termcancel" -> main.post { c.cancelTermPreview() }
                     }
@@ -77,6 +84,7 @@ object TestHooks {
         val c = graph.controller
         var blocks = 0; var hidden = 0; var edits = 0; var editTr = ""
         val trs = ArrayList<String>()
+        val discCounts = c.testDiscardCounts()
         val ids = c.testWorkIds()
         val keys = HashSet<String>()      // deux pages aux octets identiques partagent leurs corrections : on ne les compte qu'une fois
         for (id in ids) {
@@ -92,7 +100,9 @@ object TestHooks {
         val o = JSONObject().put("t", System.currentTimeMillis()).put("undo", c.undoBanner != null).put("peek", c.peekTarget != null)
             .put("works", ids.size).put("blocks", blocks).put("hidden", hidden).put("edits", edits).put("editTr", editTr)
             .put("ign", graph.ignored.rules.texts.size).put("ignImg", graph.ignored.rules.images.size).put("skipped", c.testSkippedCount()).put("banner", c.undoBanner?.message ?: "").put("eraser", c.eraser)
-            .put("peekE", c.peekEmpty != null).put("peekT", c.peekTarget != null)
+            .put("peekE", c.peekEmpty != null).put("peekT", c.peekTarget != null).put("discMode", c.discardMode).put("disc", discCounts.first).put("discKnown", discCounts.second)
+            .put("libSeries", graph.library.library.series().size).put("libFinished", graph.library.library.series().count { it.finished }).put("libSort", graph.settingsStore.settings.librarySort)
+            .put("corr", graph.edits.count()).put("corrOrig", graph.edits.originsSnapshot().size).put("fixes", graph.glossary.corrections.size)
             .put("terms", graph.glossary.terms.size + graph.glossary.seriesTerms.size).put("glossRev", graph.glossary.revision).put("refreshed", c.testRefreshed.get()).put("patched", c.testPatched.get())
             .put("tpv", c.termPreview?.let { if (it.computing) "computing" else "ready" } ?: "none").put("tpvRows", c.termPreview?.rows?.size ?: 0).put("tpvOthers", c.termPreview?.others ?: 0).put("trs", trs.sorted().joinToString("\u001f"))
         val tmp = File(ctx.filesDir, "state.json.tmp"); tmp.writeText(o.toString()); tmp.renameTo(File(ctx.filesDir, "state.json"))

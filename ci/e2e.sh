@@ -293,6 +293,26 @@ chk "mise à jour à l'affichage : un terme modifié sans aperçu ne retraduit q
 uidump gl5; shot ui 30
 appcmd "termdel disciple"; appcmd "termdel master"; appcmd clearedits; appcmd "testcache off"
 chk "retraduction ciblée : les termes et corrections de test sont retirés" $([ "$(okst waitst terms 0 25)" = 1 ] && [ "$(okst waitst edits 0 25)" = 1 ] && echo 1 || echo 0)
+# textes écartés : le mode entoure ce que la lecture a laissé de côté (ici l'onomatopée « Boom! ») ; un appui simple en traduit un, « Annuler » le retire.
+# L'appui est rejoué dans la page par une commande (événements tactiles), le reste (bouton « Terminer », bandeau, « Annuler ») est touché pour de vrai.
+appcmd window 20000
+appcmd discard on; uidump dc1; shot ui 31
+chk "textes écartés : activés, un bouton « Textes écartés · Terminer » est affiché" $([ "$(has dc1 'Textes [^ ]*cart')" = 1 ] && [ "$(okst waitst discMode True 8)" = 1 ] && echo 1 || echo 0)
+chk "textes écartés : au moins un texte laissé de côté est entouré (page reprise ou relue)" $(okst waitge disc 1 40)
+waitge discKnown "$(stv works)" 40 >/dev/null      # toutes les pages en mémoire ont leur liste (une relecture à la fois) : le nombre de cadres ne bouge plus ensuite
+d0=$(stv disc); say "textes écartés : $d0 cadre(s) proposé(s), listes connues pour $(stv discKnown) page(s) sur $(stv works)"
+appcmd disctap
+chk "textes écartés : un appui traduit le texte (correction enregistrée, cadre retiré)" $([ "$(okst waitst edits 1 25)" = 1 ] && [ "$(stv disc)" -lt "${d0:-0}" ] && echo 1 || echo 0)
+uidump dc2; shot ui 32
+chk "textes écartés : le bandeau « Texte traduit · Annuler » apparaît" $(has dc2 'Texte traduit')
+chk "textes écartés : le mode reste actif après un appui" $([ "$(stv discMode)" = True ] && [ "$(has dc2 'Textes [^ ]*cart')" = 1 ] && echo 1 || echo 0)
+tapt dc2 "Annuler" 1; sleep 1
+chk "textes écartés : « Annuler » retire la traduction et le cadre revient" $([ "$(okst waitst edits 0 25)" = 1 ] && [ "$(okst waitge disc "${d0:-1}" 25)" = 1 ] && echo 1 || echo 0)
+uidump dc3; tapt dc3 "Terminer" 1; sleep 1
+chk "textes écartés : « Terminer » coupe le mode" $([ "$(okst waitst discMode False 10)" = 1 ] && echo 1 || echo 0)
+uidump dc4; chk "textes écartés : le bouton disparaît" $(hasnot dc4 'Textes [^ ]*cart')
+appcmd clearedits
+chk "textes écartés : les corrections de test sont retirées" $(okst waitst edits 0 25)
 appcmd window 20000
 appcmd peek; uidump ig1; shot ui 17
 chk "ignorer : un appui long propose aussi « Ignorer ce texte… » (avec Corriger)" $([ "$(has ig1 'Ignorer ce texte')" = 1 ] && [ "$(has ig1 'Corriger cette traduction')" = 1 ] && echo 1 || echo 0)
@@ -355,6 +375,67 @@ chk "fiche d'une œuvre : liste des chapitres" $(has series 'Chapitres')
 chk "fiche d'une œuvre : page de l'œuvre et reprise proposées" $([ "$(has series 'Page de l')" = 1 ] && [ "$(has series 'Continuer')$(has series 'Reprendre')" != "00" ] && echo 1 || echo 0)
 adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump lib2
 chk "retour de la fiche vers la bibliothèque" $(has lib2 'Historique')
+# étape 10 : bibliothèque — recherche, pastilles de statut, tris, statut « Terminée », titres simples. Trois œuvres de démonstration s'ajoutent à « Test Series ».
+hasx() { if python3 ci/ui_tap.py "$OUT/reports/ui_$1.xml" "$2" >/dev/null 2>&1; then echo 1; else echo 0; fi; }      # un nœud dont le texte est exactement celui donné (« =texte »)
+order() { if python3 ci/ui_order.py "$OUT/reports/ui_$1.xml" "${@:2}" >> $OUT/run.log 2>&1; then echo 1; else echo 0; fi; }   # textes rangés du haut vers le bas dans l'ordre donné
+# choix dans le menu de tri : un appui sur l'entrée si le menu est dans l'export, sinon le réglage est posé par commande (puis un appui hors du menu le ferme) — seule la vérification du menu échoue alors
+pick_sort() { if [ "$(hasx $1 "=$2")" = 1 ]; then tapt $1 "=$2" 1; else appcmd "libsort $3"; tap 540 300; fi; sleep 1.5; }
+appcmd libseed
+chk "bibliothèque : trois œuvres de démonstration s'ajoutent (4 œuvres avec Test Series)" $(okst waitst libSeries 4 25)
+sleep 1.5; uidump lb0; shot ui 42
+chk "bibliothèque : champ de recherche, pastilles de statut, tri et historique" $([ "$(has lb0 'widget.EditText')" = 1 ] && [ "$(hasx lb0 '=Toutes (4)')" = 1 ] && [ "$(hasx lb0 '=En cours (4)')" = 1 ] && [ "$(hasx lb0 '=Terminées (0)')" = 1 ] && [ "$(hasx lb0 '=Trier')" = 1 ] && [ "$(hasx lb0 '=Historique')" = 1 ] && echo 1 || echo 0)
+chk "bibliothèque : par défaut, l'œuvre lue le plus récemment est en tête" $(order lb0 "Zulu Quest" "Mid Tale" "Alpha Saga")
+tapt lb0 "=Trier" 1; sleep 1.5; uidump lb1; shot ui 43
+chk "bibliothèque : le menu de tri propose trois façons de ranger" $([ "$(hasx lb1 '=Titre (A → Z)')" = 1 ] && [ "$(hasx lb1 '=Chapitres lus')" = 1 ] && [ "$(hasx lb1 '=Lues récemment')" = 1 ] && echo 1 || echo 0)
+pick_sort lb1 "Titre (A → Z)" title; uidump lb2
+chk "bibliothèque : tri par titre (A → Z)" $(order lb2 "Alpha Saga" "Mid Tale" "Zulu Quest")
+chk "bibliothèque : le tri choisi est retenu dans les réglages" $(okst waitst libSort title 10)
+tapt lb2 "=Trier" 1; sleep 1.5; uidump lb3
+pick_sort lb3 "Chapitres lus" read; uidump lb4
+chk "bibliothèque : tri par chapitres lus" $(order lb4 "Alpha Saga" "Zulu Quest" "Mid Tale")
+tapt lb4 "=Trier" 1; sleep 1.5; uidump lb5
+pick_sort lb5 "Lues récemment" recent; uidump lb6
+chk "bibliothèque : retour au tri par date de lecture" $(order lb6 "Zulu Quest" "Mid Tale" "Alpha Saga")
+# statut : « Terminée » depuis la fiche d'une œuvre
+tapt lb6 "=Alpha Saga" 1; sleep 2; uidump lb7; shot ui 44
+chk "fiche d'une œuvre : choix du statut En cours / Terminée" $([ "$(hasx lb7 '=En cours')" = 1 ] && [ "$(hasx lb7 '=Terminée')" = 1 ] && echo 1 || echo 0)
+tapt lb7 "=Terminée" 1; sleep 1.5; uidump lb8
+chk "fiche d'une œuvre : « Terminée » est retenu et expliqué" $([ "$(okst waitst libFinished 1 15)" = 1 ] && [ "$(has lb8 'Elle repasse en cours')" = 1 ] && echo 1 || echo 0)
+# étape 11 : glossaire de l'œuvre depuis la fiche (cette œuvre n'est pas celle de la page ouverte dans le lecteur)
+appstate; gt0=$(stv terms)
+tapt lb8 "Glossaire de cette" 1; sleep 2; uidump gl1; shot ui 48
+chk "glossaire de l'œuvre : la page s'ouvre sur l'œuvre de la bibliothèque, pas sur celle de la page lue" $([ "$(has gl1 'Cette [^ ]*uvre : Alpha Saga')" = 1 ] && [ "$(has gl1 'Ajouter [^ ]* cette [^ ]*uvre')" = 1 ] && echo 1 || echo 0)
+tapt gl1 "@EditText" 1; sleep 1; adb shell input text zzsrc; sleep 1; uidump gl1b
+tapt gl1b "@EditText" 2; sleep 1; adb shell input text zztgt; sleep 1; uidump gl2
+tapt gl2 "=Ajouter à cette œuvre" 1; sleep 2
+chk "glossaire de l'œuvre : un terme ajouté ici est enregistré (une page de cette œuvre n'est pas ouverte : pas d'aperçu)" $(okst waitst terms $((gt0 + 1)) 15)
+uidump gl3
+# le clavier reste ouvert après l'ajout et masque la liste des termes (sous le formulaire) : un retour le referme (sans quitter la page tant qu'il est affiché)
+if [ "$(has gl3 'text="Retirer"')" = 0 ]; then adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump gl3; fi
+shot ui 49
+chk "glossaire de l'œuvre : le terme est listé comme propre à l'œuvre" $([ "$(has gl3 'zzsrc')" = 1 ] && [ "$(has gl3 'Cette [^ ]*uvre')" = 1 ] && echo 1 || echo 0)
+tapt gl3 "=Retirer" 1; sleep 1.5
+chk "glossaire de l'œuvre : le terme se retire" $(okst waitst terms $gt0 15)
+for k in 1 2 3; do adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump glb; if [ "$(has glb 'Glossaire de cette')" = 1 ]; then break; fi; done
+chk "glossaire de l'œuvre : le retour ramène à la fiche de l'œuvre" $(has glb 'Glossaire de cette')
+adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump lb9; shot ui 45
+chk "bibliothèque : l'œuvre terminée porte sa pastille, les pastilles se recomptent" $([ "$(hasx lb9 '=Terminée')" = 1 ] && [ "$(hasx lb9 '=Terminées (1)')" = 1 ] && [ "$(hasx lb9 '=En cours (3)')" = 1 ] && echo 1 || echo 0)
+tapt lb9 "=Terminées (1)" 1; sleep 1.5; uidump lb10
+chk "bibliothèque : le filtre « Terminées » ne montre que les œuvres terminées" $([ "$(has lb10 'Alpha Saga')" = 1 ] && [ "$(hasnot lb10 'Zulu Quest')" = 1 ] && [ "$(hasnot lb10 'Mid Tale')" = 1 ] && echo 1 || echo 0)
+tapt lb10 "=En cours (3)" 1; sleep 1.5; uidump lb11
+chk "bibliothèque : le filtre « En cours » écarte les œuvres terminées" $([ "$(has lb11 'Zulu Quest')" = 1 ] && [ "$(hasnot lb11 'Alpha Saga')" = 1 ] && echo 1 || echo 0)
+tapt lb11 "=Toutes (4)" 1; sleep 1.5; uidump lb12
+# titres simples dans l'historique : l'œuvre et le chapitre, ni l'adresse ni le titre brut de la page
+tapt lb12 "=Historique" 1; sleep 2; uidump lb13; shot ui 46
+chk "historique : titres simples (œuvre et chapitre), ni adresse ni titre brut" $([ "$(has lb13 'Mid Tale')" = 1 ] && [ "$(has lb13 'Alpha Saga')" = 1 ] && [ "$(hasnot lb13 'Super Scans')" = 1 ] && [ "$(hasnot lb13 'comics/')" = 1 ] && echo 1 || echo 0)
+adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump lb14
+# recherche : on tape dans le champ (le clavier reste ouvert : c'est le dernier geste de ce bloc)
+tapt lb14 "@EditText" 1; sleep 1; adb shell input text zulu; sleep 2; uidump lb15; shot ui 47
+chk "bibliothèque : la recherche ne garde que l'œuvre cherchée" $([ "$(has lb15 'Zulu Quest')" = 1 ] && [ "$(hasnot lb15 'Alpha Saga')" = 1 ] && [ "$(hasnot lb15 'Mid Tale')" = 1 ] && echo 1 || echo 0)
+tapt lb15 "Effacer la recherche" 1; sleep 1.5; adb shell input text zzzz; sleep 2; uidump lb16
+chk "bibliothèque : une recherche sans résultat le dit" $(has lb16 'Aucune [^ ]*uvre ne correspond')
+tapt lb16 "Effacer la recherche" 1; sleep 1.5
+adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump lib2
 tapt lib2 "=Réglages" 1; sleep 2; uidump set; shot ui 4
 # l'accueil des réglages est plus long qu'un écran : on le fait défiler pour voir les derniers groupes, puis on remonte et on relit l'écran du haut
 adb shell input swipe 540 1900 540 500 400; sleep 1; uidump setb; shot ui 41
@@ -396,6 +477,33 @@ chk "ignorés : la recherche « ignor » ouvre la page « Textes et images ignor
 chk "ignorés : la règle posée en lisant (toutes les œuvres) y est listée avec « Retirer »" $([ "$(has ign1 'Toutes les [^ ]*uvres')" = 1 ] && [ "$(has ign1 'Retirer')" = 1 ] && echo 1 || echo 0)
 tapt ign1 "Retirer" 1; sleep 1.5; uidump ign2; shot ui 23
 chk "ignorés : « Retirer » supprime la règle de la liste et de l'application" $([ "$(has ign2 'Aucun texte ignor')" = 1 ] && [ "$(okst waitst ign 0 8)" = 1 ] && echo 1 || echo 0)
+# centre de corrections : une correction faite comme dans l'éditeur (traduction écrite, rangée sous la page ouverte), un terme du glossaire et une traduction retenue sans correction sont listés ;
+# chacun se défait depuis la page. La recherche des réglages y mène. Les textes sont choisis sans accent : la lecture de l'écran (uiautomator) les code parfois en entités.
+appcmd "savetr Texte du centre"; appcmd "termadd zzterme|yyterme|direct"; appcmd "fixadd TEXTE ORPHELIN|Traduction orpheline"
+waittr "texte du centre" 25 >/dev/null; appstate
+cc_corr=$(stv corr); cc_fix=$(stv fixes); cc_terms=$(stv terms)
+chk "centre de corrections : départ (une correction rangée sous la page ouverte, un terme, deux traductions retenues)" $([ "$cc_corr" -ge 1 ] && [ "$(stv corrOrig)" -ge 1 ] && [ "$cc_fix" -ge 2 ] && [ "$cc_terms" -ge 1 ] && echo 1 || echo 0)
+adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump cc0
+tapt cc0 "Effacer la recherche" 1; sleep 1; uidump cc0b
+tapt cc0b "@EditText" 1; sleep 1; adb shell input text corrections; sleep 2; uidump cc0c
+tapt cc0c "=Centre de corrections" 1; sleep 2.5; uidump cc1; shot ui 33
+hc() { if [ "$(has cc1 "$1")" = 1 ] || [ "$(has cc2 "$1")" = 1 ]; then echo 1; else echo 0; fi; }
+chk "centre de corrections : la recherche « corrections » ouvre la page" $([ "$(has cc1 'Aucune image ignor')" = 1 ] && [ "$(has cc1 'Termes du glossaire')" = 1 ] && echo 1 || echo 0)
+chk "centre de corrections : le terme du glossaire y est listé avec « Retirer »" $([ "$(has cc1 'zzterme')" = 1 ] && [ "$(has cc1 'yyterme')" = 1 ] && [ "$(has cc1 'text="Retirer"')" = 1 ] && echo 1 || echo 0)
+tapt cc1 "=Retirer" 1; sleep 1.5; appstate
+chk "centre de corrections : « Retirer » supprime le terme du glossaire" $([ "$(stv terms)" = "$((cc_terms - 1))" ] && echo 1 || echo 0)
+adb shell input swipe 540 1900 540 500 400; sleep 1; uidump cc2; shot ui 34
+chk "centre de corrections : les trois groupes sont là (ignorés, glossaire, corrections par chapitre)" $([ "$(hc 'Textes et images ignor')" = 1 ] && [ "$(hc 'Termes du glossaire')" = 1 ] && [ "$(hc 'Corrections par chapitre')" = 1 ] && echo 1 || echo 0)
+chk "centre de corrections : la correction est rangée sous son chapitre (œuvre et numéro), avec ce qui a été fait" $([ "$(hc 'Test Series')" = 1 ] && [ "$(hc 'Chapitre 1')" = 1 ] && [ "$(hc 'Traduction [^ ]*crite')" = 1 ] && [ "$(hc 'Texte du centre')" = 1 ] && echo 1 || echo 0)
+chk "centre de corrections : la traduction retenue sans correction est listée à part" $([ "$(hc 'Traductions retenues')" = 1 ] && [ "$(hc 'TEXTE ORPHELIN')" = 1 ] && echo 1 || echo 0)
+tapt cc2 "=Défaire" 1; sleep 1.5; appstate
+chk "centre de corrections : « Défaire » retire la correction et la traduction retenue qui lui est liée (pas l'autre)" $([ "$(stv corr)" = "$((cc_corr - 1))" ] && [ "$(stv fixes)" = "$((cc_fix - 1))" ] && echo 1 || echo 0)
+cc_gone=0; for i in $(seq 1 25); do appstate; [ "$(trhas 'texte du centre')" = 0 ] && cc_gone=1 && break; done
+chk "centre de corrections : la page retrouve sa traduction automatique après « Défaire »" $cc_gone
+uidump cc3; shot ui 35
+chk "centre de corrections : la liste des corrections se vide" $([ "$(has cc3 'Aucune correction')" = 1 ] && echo 1 || echo 0)
+tapt cc3 "=Retirer" 1; sleep 1.5; appstate
+chk "centre de corrections : « Retirer » oublie la traduction retenue sans correction" $([ "$(stv fixes)" = 0 ] && echo 1 || echo 0)
 # diagnostic : plantages ou blocages système pendant le scénario
 adb logcat -d -v brief 2>/dev/null | grep -iE "ANR in|Application Not Responding|FATAL EXCEPTION|AndroidRuntime|Process .* has died|am_crash|am_anr" | tail -30 > $OUT/reports/ui_logcat.txt
 echo "  [journal système] $(wc -l < $OUT/reports/ui_logcat.txt) ligne(s) d'ANR ou de plantage" | tee -a $OUT/run.log
