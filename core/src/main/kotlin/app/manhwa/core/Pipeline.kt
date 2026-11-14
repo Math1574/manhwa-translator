@@ -98,7 +98,10 @@ class PagePipeline(
         val g = glossary()
         val since = cache.revisionOf(key)
         val idx = TermRefresh.concerned(cached, g, since)
-        if (idx.isEmpty()) return PageOutcome.Done(cached, fromCache = true)
+        if (idx.isEmpty()) {
+            if (since < g.revision) cache.put(key, cached, g.revision)      // à jour pour ce glossaire : la prochaine vérification part de là
+            return PageOutcome.Done(cached, fromCache = true)
+        }
         val changes = try { refresher.retranslate(cached, idx, g, source, target) } catch (e: Exception) { emptyMap() }
         if (changes.isEmpty()) { log("glossaire : ${idx.size} texte(s) à retraduire, aucun n'a pu l'être (page gardée telle quelle)"); return PageOutcome.Done(cached, fromCache = true) }
         val updated = TermRefresh.withTranslations(cached, changes)

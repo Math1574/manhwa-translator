@@ -150,6 +150,8 @@ private fun Root(graph: AppGraph) {
     c.editTarget?.let { et -> BlockEditor(graph, et) { c.dismissEdit() } }
     // nouveautés de la version qui vient d'être installée (une seule fois)
     UpdateHost(graph)
+    // aperçu des textes concernés avant l'enregistrement de termes du glossaire (au-dessus de l'éditeur comme des réglages)
+    TermPreviewHost(graph)
     }
     }
 }

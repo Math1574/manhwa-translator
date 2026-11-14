@@ -268,7 +268,7 @@ fun GlossaryScreen(graph: AppGraph) {
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             "Le terme d'origine est remplacé par votre traduction ; un terme d'œuvre ne vaut que pour cette œuvre. " +
-                "Pour l'appliquer aux pages déjà traduites : vider le cache (Réglages › Données), puis retraduire.",
+                "Seuls les textes qui contiennent le terme sont retraduits : un aperçu est proposé pour les pages ouvertes, les autres pages déjà traduites se mettent à jour quand vous les affichez.",
             color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -283,7 +283,7 @@ fun GlossaryScreen(graph: AppGraph) {
                     suggestions.forEach { name ->
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Text(name, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-                            TextButton(onClick = { g.addForSeries(series!!, name, name); tick++ }) { Text("Garder tel quel") }
+                            TextButton(onClick = { g.addForSeries(series!!, name, name); tick++; c.refreshOpenPages() }) { Text("Garder tel quel") }
                             TextButton(onClick = { graph.names.ignore(name); tick++ }) { Text("Ignorer") }
                         }
                     }
@@ -292,7 +292,7 @@ fun GlossaryScreen(graph: AppGraph) {
         }
         OutlinedTextField(src, { src = it }, Modifier.fillMaxWidth(), label = { Text("Terme d'origine (ex. 성진우)") }, singleLine = true)
         OutlinedTextField(dst, { dst = it }, Modifier.fillMaxWidth(), label = { Text("Traduction (ex. Sung Jin-Woo)") }, singleLine = true)
-        Button(onClick = { if (forSeries) g.addForSeries(series!!, src, dst) else g.add(src, dst); src = ""; dst = "" }, enabled = src.isNotBlank() && dst.isNotBlank()) {
+        Button(onClick = { c.addTermsWithPreview(listOf(app.manhwa.core.GlossaryEntry(src.trim(), dst.trim())), if (forSeries) series else null) { src = ""; dst = ""; tick++ } }, enabled = src.isNotBlank() && dst.isNotBlank()) {
             Text(if (forSeries) "Ajouter à cette œuvre" else "Ajouter pour toutes les œuvres")
         }
         HorizontalDivider()

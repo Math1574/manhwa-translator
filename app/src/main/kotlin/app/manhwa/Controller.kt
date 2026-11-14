@@ -30,6 +30,7 @@ import app.manhwa.core.AdVerdict
 import app.manhwa.core.CdpClient
 import app.manhwa.core.OcrEngine
 import app.manhwa.core.TranslationEngine
+import app.manhwa.core.Glossary
 import app.manhwa.core.GlossaryEntry
 import app.manhwa.core.SourceLang
 import app.manhwa.core.BatchContext
@@ -63,6 +64,7 @@ import app.manhwa.core.OcrLine
 import app.manhwa.core.Protected
 import app.manhwa.core.RectF as CRect
 import app.manhwa.core.SeriesHint
+import app.manhwa.core.TermRefresh
 import app.manhwa.core.TextNormalizer
 import app.manhwa.core.TranslatedBlock
 import app.manhwa.core.UserRegion
@@ -80,6 +82,7 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
 import kotlin.math.abs
 
 private data class Candidate(
@@ -187,6 +190,14 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     private val refreshSoon = HashMap<String, Runnable>()
     /** Numéro du dernier retraitement lancé pour chaque page : un retraitement plus ancien encore en cours ne redessine pas la page (il écraserait le résultat à jour). */
     private val fixRuns = ConcurrentHashMap<String, Long>()
+    /** Fenêtre « Retraduire les textes concernés ? » ouverte avant l'enregistrement de termes du glossaire ; null quand il n'y en a pas. */
+    var termPreview by mutableStateOf<TermPreview?>(null)
+        private set
+    /** Tests automatiques : le résultat en cache est repris même en mode test (un test retraite tout par défaut), pour vérifier la mise à jour ciblée à l'affichage. */
+    @Volatile var testCache = false
+    /** Tests automatiques : textes retraduits à l'affichage (termes ajoutés depuis la traduction de la page) et textes mis à jour à l'enregistrement d'un aperçu. */
+    val testRefreshed = java.util.concurrent.atomic.AtomicInteger(0)
+    val testPatched = java.util.concurrent.atomic.AtomicInteger(0)
     /** Avancement à reprendre à l'ouverture de la page demandée (0 = aucun). */
     private var resumeTarget = 0
     private var resumeUrl = ""
@@ -997,7 +1008,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val pipeline = PagePipeline(
             graph.cache, timedOcr, timedTr, engineId,
             glossary = { graph.glossary.current(pageSeries) },
-            useCache = !s.diagnostic && !testing, // en diagnostic on veut voir la détection réelle, pas un résultat en cache
+            useCache = !s.diagnostic && (!testing || testCache), // en diagnostic on veut voir la détection réelle, pas un résultat en cache
             debugSink = { debug = it },
             // l'anglais est lu par OCR avec beaucoup de bruit : on écarte filigranes et débris, puis on répare mots collés et chiffres parasites
             // un texte libre sans zone du détecteur est écarté s'il ne contient aucun mot reconnu, même en gros lettrage (décor lu comme du texte : « IC », « RIC », « PY »)
@@ -1012,6 +1023,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             owns = { b -> !(ctxH > 0 || nextTakes) || Seams.owns(b.box, b.container, b.zone, ctxH, imageH, nextTakes) },
         )
         val out = pipeline.process(workBytes, s.source.code, s.target.code)
+        if (out is PageOutcome.Done && out.refreshed > 0) testRefreshed.addAndGet(out.refreshed)
         // noms qui reviennent d'une page à l'autre : proposés dans le glossaire de l'œuvre (anglais seulement, le lexique est anglais)
         if (out is PageOutcome.Done && s.source.code != "ja" && s.source.code != "ko" && s.source.code != "zh") {
             try { synchronized(graph.names) { graph.names.observe(pageSeries, c.id, out.result.blocks.map { it.source }, lexicon) } } catch (_: Throwable) {}
@@ -1262,12 +1274,21 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         return RegionRead(text, tr, sorted.map { it.box }, sorted.map { it.text }, vertical, if (hs.isEmpty()) 0f else hs[hs.size / 2])
     }
 
-    /** Enregistre la correction, les termes du glossaire, la consigne au journal, puis redessine la page. */
+    /**
+     * « Enregistrer » de l'éditeur : la correction et les termes du glossaire sont enregistrés. Si des termes sont ajoutés et que des textes de pages ouvertes en dépendent, un aperçu
+     * (avant → après) est d'abord proposé : l'éditeur reste ouvert dessous, et rien n'est enregistré avant la confirmation.
+     */
     fun saveEdit(sn: EditSession, edit: BlockEdit, terms: List<GlossaryEntry>, termsForSeries: Boolean) {
+        // un texte ajouté sans traduction n'a rien à afficher : on n'enregistre pas de zone vide
+        if (sn.isNew && edit.translation.isNullOrBlank()) { editTarget = null; return }
+        val series = if (termsForSeries) sn.info.series else null
+        proposeTerms(terms, series, sn, edit) { afterTerms -> doSaveEdit(sn, edit, terms, termsForSeries, afterTerms) }
+    }
+
+    /** Enregistre la correction, les termes du glossaire, la consigne au journal, puis redessine la page. [afterTerms] : appelé une fois les termes ajoutés, avant que la page ne soit redessinée. */
+    private fun doSaveEdit(sn: EditSession, edit: BlockEdit, terms: List<GlossaryEntry>, termsForSeries: Boolean, afterTerms: () -> Unit = {}) {
         val info = sn.info
         editTarget = null
-        // un texte ajouté sans traduction n'a rien à afficher : on n'enregistre pas de zone vide
-        if (sn.isNew && edit.translation.isNullOrBlank()) return
         graph.edits.upsert(info.imageKey, edit)
         val series = info.series
         var termAdded = false
@@ -1277,6 +1298,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             if (termsForSeries && series != null) graph.glossary.addForSeries(series, a, bb) else graph.glossary.add(a, bb)
             termAdded = true
         }
+        afterTerms()
         // la même traduction est reprise partout où le même texte est lu (comme avant) ; la correction porte sur le texte détecté, pas sur celui que l'on vient de corriger à la main
         val detected = info.result.blocks.firstOrNull { it.id == sn.block.id }?.source ?: sn.block.source
         val manualTr = edit.translation
@@ -1295,9 +1317,175 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             JSONObject().put("t", System.currentTimeMillis()).put("type", "correction").put("url", currentUrl).put("src", sn.block.source).put("before", sn.block.translated)
                 .put("after", edit.translation ?: "").put("edit", summary).put("term", terms.filter { it.source.isNotBlank() && it.target.isNotBlank() }.joinToString("; ") { "${it.source} = ${it.target}" }),
         )
-        // des termes ajoutés sans traduction saisie : la page est retraduite avec eux ; sinon, le résultat en cache est repris et seul le rendu est refait (quelques instants)
-        if (termAdded && edit.translation == null) keysById[info.imageId]?.let { graph.cache.remove(it) }
+        // les termes ajoutés ne retraduisent que les textes qui les contiennent (au redessin de la page, résultat en cache repris pour le reste) ; une traduction saisie à la main passe avant
         reprocess(info.imageId)
+    }
+
+    // ---------- termes du glossaire : retraduction ciblée, avec aperçu ----------
+
+    /**
+     * Page dont des textes dépendent de termes en cours d'ajout : ses blocs concernés, le glossaire tel qu'il sera après l'ajout, et si ces blocs sont les seuls en retard sur le glossaire
+     * ([complete] : aucun autre texte de la page n'attend un terme plus ancien).
+     */
+    private class TermPlan(val info: WorkInfo, val glossary: Glossary, val indices: List<Int>, val complete: Boolean) {
+        /** Retraductions calculées pour l'aperçu (indice du bloc → traduction) ; vide tant que rien n'est calculé. */
+        @Volatile var changes: Map<Int, String> = emptyMap()
+    }
+
+    /** Bloc dont le texte affiché est un choix de l'utilisateur (traduction saisie, texte masqué ou ignoré) : un terme du glossaire n'y touche pas. */
+    private fun userFixed(info: WorkInfo, b: TranslatedBlock): Boolean =
+        info.applied.editByBlock[b.id]?.let { it.hidden || it.translation != null } == true
+
+    /** Pages ouvertes (en mémoire) dont des textes dépendent des termes [changes] ; la page de l'éditeur d'abord. Le glossaire est simulé tel qu'il sera après l'ajout (termes d'œuvre compris). */
+    private fun planTerms(changes: List<GlossaryEntry>, series: String?, edited: EditSession?, edit: BlockEdit?): List<TermPlan> {
+        val sim = graph.glossary.copyAll()
+        val r0 = sim.revision
+        for (t in changes) if (series != null) sim.addSeriesTerm(series, t.source, t.target) else sim.addTerm(t.source, t.target)
+        val ids = workIds().reversed()
+        val first = edited?.info?.imageId
+        val ordered = if (first != null && first in ids) listOf(first) + ids.filter { it != first } else ids
+        val plans = ArrayList<TermPlan>()
+        for (id in ordered) {
+            val info = workInfo(id) ?: continue
+            val g = sim.forSeries(info.series)
+            val ownText = edited != null && edit?.translation != null && info.imageId == edited.info.imageId     // la traduction saisie dans l'éditeur passe avant le glossaire
+            val skip: (TranslatedBlock) -> Boolean = { b -> userFixed(info, b) || (ownText && b.id == edited!!.block.id) }
+            val idx = TermRefresh.concerned(info.result, g, r0, skip)
+            if (idx.isEmpty()) continue
+            val entryRev = keysById[id]?.let { graph.cache.revisionOf(it) } ?: 0L
+            plans.add(TermPlan(info, g, idx, complete = TermRefresh.concerned(info.result, g, entryRev, skip).size == idx.size))
+        }
+        return plans
+    }
+
+    /**
+     * Termes à ajouter au glossaire. Si des textes de pages ouvertes en dépendent, une fenêtre montre ce qu'ils deviendraient (avant → après) et rien n'est enregistré avant la confirmation ;
+     * sinon l'ajout se fait tout de suite. [commit] enregistre vraiment les termes (et ce qui les accompagne) ; il reçoit de quoi mettre le cache à jour entre l'ajout des termes et le redessin des pages.
+     * Les pages qui ne sont pas ouvertes se mettent à jour à leur affichage (voir PagePipeline).
+     */
+    private fun proposeTerms(terms: List<GlossaryEntry>, series: String?, edited: EditSession?, edit: BlockEdit?, commit: (afterTerms: () -> Unit) -> Unit) {
+        val changes = terms.map { GlossaryEntry(it.source.trim(), it.target.trim()) }
+            .filter { it.source.isNotEmpty() && it.target.isNotEmpty() && !graph.glossary.has(series, it.source, it.target) }
+        val plans = if (changes.isEmpty()) emptyList() else planTerms(changes, series, edited, edit)
+        if (plans.isEmpty()) { commit {}; refreshOpenPages(setOfNotNull(edited?.info?.imageId)); return }
+        termPreview?.cancelled = true
+        val pv = TermPreview(changes, if (series != null) "cette œuvre" else "toutes les œuvres")
+        pv.onConfirm = {
+            termPreview = null
+            commit { patchPlans(plans) }
+            val skip = setOfNotNull(edited?.info?.imageId)                       // l'éditeur redessine sa page lui-même
+            for (p in plans) if (p.info.imageId !in skip) reprocess(p.info.imageId)
+            refreshOpenPages(skip + plans.map { it.info.imageId })
+        }
+        termPreview = pv
+        computePreview(pv, plans)
+    }
+
+    /** Calcule l'aperçu à part (le moteur de traduction peut mettre quelques secondes) : les retraductions de la page de l'éditeur d'abord, au plus [PREVIEW_MAX_TEXTS] textes. */
+    private fun computePreview(pv: TermPreview, plans: List<TermPlan>) {
+        val s = graph.settingsStore.settings
+        val spec = LlmModels.specFor(s.engine)
+        val translator: TranslationEngine = if (spec == null) MlKitTranslation(graph.models) else graph.gemma     // le même moteur que « Traduire » de l'éditeur
+        val src = s.source.code; val dst = s.target.code
+        thread(name = "term-preview", isDaemon = true) {
+            val refresher = TermRefresh(translator)
+            val rows = ArrayList<TermPreviewRow>()
+            var others = 0; var computed = 0; var failedPages = 0
+            try {
+                for (p in plans) {
+                    if (pv.cancelled) return@thread
+                    if (computed >= PREVIEW_MAX_TEXTS) { others += p.indices.size; continue }
+                    val changes = refresher.retranslate(p.info.result, p.indices, p.glossary, src, dst)
+                    p.changes = changes
+                    if (changes.isEmpty()) failedPages++
+                    computed += p.indices.size
+                    for ((i, tr) in changes) {
+                        val b = p.info.result.blocks[i]
+                        if (tr != b.translated) rows.add(TermPreviewRow(b.source.trim(), b.translated.trim(), tr.trim()))
+                    }
+                }
+            } catch (e: Throwable) { failedPages++ }
+            val shown = rows.distinctBy { Triple(it.original, it.before, it.after) }          // le même texte sur plusieurs pages (bannière, onomatopée) n'est montré qu'une fois
+            main.post {
+                if (pv.cancelled || termPreview !== pv) return@post
+                pv.rows.addAll(shown); pv.others = others; pv.failed = failedPages > 0 && shown.isEmpty(); pv.computing = false
+                // les retraductions sont identiques aux traductions actuelles : rien à montrer, on enregistre
+                if (shown.isEmpty() && others == 0 && failedPages == 0) pv.onConfirm()
+            }
+        }
+    }
+
+    /** À la confirmation : les textes dont l'aperçu a été calculé sont mis à jour dans le cache (ce qui a été montré est ce qui sera affiché), avec la version actuelle du glossaire. */
+    private fun patchPlans(plans: List<TermPlan>) {
+        val rev = graph.glossary.revision
+        for (p in plans) {
+            // calcul incomplet, ou page en retard sur d'autres termes plus anciens : sa mise à jour se fera à l'affichage
+            if (!p.complete || p.changes.size != p.indices.size) continue
+            val key = keysById[p.info.imageId] ?: continue
+            graph.cache.put(key, TermRefresh.withTranslations(p.info.result, p.changes), rev)
+            testPatched.addAndGet(p.changes.size)
+        }
+    }
+
+    /** Pages ouvertes dont des textes dépendent de termes plus récents que leur traduction : redessinées (ces textes sont retraduits seuls, le reste vient du cache). */
+    fun refreshOpenPages(skip: Set<String> = emptySet()) {
+        for (id in workIds()) {
+            if (id in skip) continue
+            val info = workInfo(id) ?: continue
+            val key = keysById[id] ?: continue
+            val g = graph.glossary.current(info.series)
+            if (TermRefresh.concerned(info.result, g, graph.cache.revisionOf(key)) { b -> userFixed(info, b) }.isNotEmpty()) reprocess(id)
+        }
+    }
+
+    /** Réglages › Glossaire : ajoute des termes, avec l'aperçu des textes concernés quand des pages ouvertes en dépendent. [done] : appelé une fois les termes enregistrés. */
+    fun addTermsWithPreview(terms: List<GlossaryEntry>, series: String?, done: () -> Unit = {}) {
+        proposeTerms(terms, series, null, null) { afterTerms ->
+            var added = false
+            for (t in terms) {
+                val a = t.source.trim(); val b = t.target.trim()
+                if (a.isEmpty() || b.isEmpty()) continue
+                if (series != null) graph.glossary.addForSeries(series, a, b) else graph.glossary.add(a, b)
+                added = true
+            }
+            if (added) graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "glossaire").put("url", currentUrl).put("term", terms.filter { it.source.isNotBlank() && it.target.isNotBlank() }.joinToString("; ") { "${it.source} = ${it.target}" }))
+            afterTerms()
+            done()
+        }
+    }
+
+    fun confirmTermPreview() { termPreview?.let { if (!it.computing) it.onConfirm() } }
+
+    fun cancelTermPreview() { termPreview?.cancelled = true; termPreview = null }
+
+    /** Tests automatiques : ajout d'un terme par le même chemin que Réglages › Glossaire (avec aperçu) ou, sans aperçu, comme les suggestions « Garder tel quel ». */
+    fun testTermAdd(source: String, target: String, forSeries: Boolean, preview: Boolean) {
+        val series = if (forSeries) currentSeriesKey else null
+        if (preview) addTermsWithPreview(listOf(GlossaryEntry(source, target)), series)
+        else { if (series != null) graph.glossary.addForSeries(series, source, target) else graph.glossary.add(source, target); refreshOpenPages() }
+    }
+
+    /**
+     * Tests automatiques : « Enregistrer » de l'éditeur ouvert sur la première traduction visible, sans autre correction que le terme ajouté au glossaire (pour toutes les œuvres) :
+     * même chemin que l'éditeur, avec l'aperçu des textes concernés. Faux s'il n'y a aucune traduction.
+     */
+    fun testSaveWithTerm(source: String, target: String): Boolean {
+        for (id in testWorkIds()) {
+            val info = workInfo(id) ?: continue
+            val shown = info.applied.page.blocks.firstOrNull { info.applied.editByBlock[it.id]?.hidden != true } ?: continue
+            val orig = info.result.blocks.firstOrNull { it.id == shown.id } ?: shown
+            val sn = EditSession(info, shown, null, null)
+            val edit = BlockEdit("e" + java.util.UUID.randomUUID().toString().take(8), EditKind.ADJUST, imageRect(orig.box, info.ctxH), orig.source)
+            saveEdit(sn, edit, listOf(GlossaryEntry(source, target)), false)
+            return true
+        }
+        return false
+    }
+
+    /** Tests automatiques : retire un terme commun ou d'œuvre (nettoyage). */
+    fun testTermDel(source: String) {
+        graph.glossary.remove(source)
+        currentSeriesKey?.let { graph.glossary.removeForSeries(it, source) }
     }
 
     /** Rétablit la détection et la traduction automatiques d'un bloc. */
@@ -1639,6 +1827,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     companion object {
         /** Une traduction supprimée d'un geste peut être rétablie pendant 3 secondes. */
         const val UNDO_MS = 3000L
+        /** Nombre de textes retraduits au plus pour l'aperçu d'un ajout de termes (les pages ouvertes suivantes sont mises à jour à l'enregistrement, sans aperçu). */
+        const val PREVIEW_MAX_TEXTS = 8
         /** Les corrections issues d'un texte ignoré ne sont jamais enregistrées : leur identifiant commence ainsi. */
         const val IGNORE_EDIT_PREFIX = "ign:"
         const val MAX_IMAGE_BYTES = 30 * 1024 * 1024

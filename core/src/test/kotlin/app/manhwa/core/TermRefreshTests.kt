@@ -192,16 +192,28 @@ fun termRefreshTests() {
     T.test("pipeline: un terme propre à une œuvre ne retraduit que les pages de cette œuvre") {
         val calls = ArrayList<List<String>>()
         val eng = TranslationEngine { t, _, _ -> calls.add(t); t.map { "FR($it)" } }
-        val base = Glossary(); var series = "s|a"
-        val cache = ResultCache(tdir()); val key = CacheKey(sha256Hex(img), "en", "fr", "e")
-        cache.put(key, page, 0L)
-        val p = PagePipeline(cache, FakeOcr(ocrLines), eng, "e", { base.forSeries(series) })
+        val base = Glossary(); val key = CacheKey(sha256Hex(img), "en", "fr", "e")
+        val cacheA = ResultCache(tdir()); cacheA.put(key, page, 0L)
+        val cacheB = ResultCache(tdir()); cacheB.put(key, page, 0L)                     // une page de l'autre œuvre (images différentes dans la réalité)
+        val pa = PagePipeline(cacheA, FakeOcr(ocrLines), eng, "e", { base.forSeries("s|a") })
+        val pb = PagePipeline(cacheB, FakeOcr(ocrLines), eng, "e", { base.forSeries("s|b") })
         base.addSeriesTerm("s|a", "disciple", "apprenti")
-        series = "s|b"
-        val other = p.process(img, "en", "fr") as PageOutcome.Done
+        val other = pb.process(img, "en", "fr") as PageOutcome.Done
         T.ok(other.refreshed == 0 && calls.isEmpty(), "autre œuvre : rien à refaire")
-        series = "s|a"
-        val mine = p.process(img, "en", "fr") as PageOutcome.Done
-        T.eq(2, mine.refreshed)
+        val mine = pa.process(img, "en", "fr") as PageOutcome.Done
+        T.eq(2, mine.refreshed); T.eq("FR(Please take me as your apprenti)", mine.result.blocks[0].translated)
+    }
+    T.test("pipeline: une page que le nouveau terme ne concerne pas n'est pas retraduite, mais notée à jour (la prochaine vérification part de là)") {
+        val calls = ArrayList<List<String>>()
+        val eng = TranslationEngine { t, _, _ -> calls.add(t); t.map { "FR($it)" } }
+        val g = Glossary(); val cache = ResultCache(tdir()); val key = CacheKey(sha256Hex(img), "en", "fr", "e")
+        cache.put(key, page, 0L)
+        val p = PagePipeline(cache, FakeOcr(ocrLines), eng, "e", { g })
+        g.addTerm("zzz", "yyy"); g.addTerm("qqq", "rrr")
+        val a = p.process(img, "en", "fr") as PageOutcome.Done
+        T.ok(a.refreshed == 0 && calls.isEmpty(), "aucun texte concerné"); T.eq(g.revision, cache.revisionOf(key)); T.eq(2L, g.revision)
+        g.addTerm("disciple", "apprenti")
+        val b = p.process(img, "en", "fr") as PageOutcome.Done
+        T.eq(2, b.refreshed, "seul le dernier terme est récent pour cette page"); T.eq(listOf(listOf("Please take me as your ZQ0X", "The ZQ0X will not see anyone")), calls)
     }
 }
