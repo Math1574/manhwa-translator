@@ -47,7 +47,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SmallFloatingActionButton
@@ -262,7 +261,6 @@ fun GlossaryScreen(graph: AppGraph, fixed: Pair<String, String>? = null) {
     var src by remember { mutableStateOf("") }
     var dst by remember { mutableStateOf("") }
     var tick by remember { mutableStateOf(0) }
-    var suggestOpen by remember { mutableStateOf(false) }
     val forSeries = scopeSeries && series != null
     val known = remember(tick, g.terms.size, g.seriesTerms.size) {
         (g.terms.map { it.source.lowercase() } + g.seriesTerms.filter { it.series == series }.map { it.source.lowercase() }).toSet()
@@ -270,10 +268,6 @@ fun GlossaryScreen(graph: AppGraph, fixed: Pair<String, String>? = null) {
     val suggestions = remember(tick, series, known) { if (forSeries) graph.names.suggestions(series, known) else emptyList() }
     val rows = (if (forSeries) g.seriesTerms.filter { it.series == series }.map { GlossaryRow(it.series, it.source, it.target) } else emptyList()) +
         g.terms.map { GlossaryRow(null, it.source, it.target) }
-    if (suggestOpen && forSeries && series != null) {
-        AniListSuggestPage(graph, series, seriesName ?: "", onClose = { suggestOpen = false; tick++ })
-        return
-    }
     // toute la page défile (et pas seulement la liste des termes) : le clavier ouvert ou une longue liste de noms ne cachent plus le bouton « Ajouter »
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item(key = "intro") {
@@ -289,7 +283,6 @@ fun GlossaryScreen(graph: AppGraph, fixed: Pair<String, String>? = null) {
                 FilterChip(selected = forSeries, onClick = { scopeSeries = true }, enabled = series != null, label = { Text(if (seriesName != null) "Cette œuvre : $seriesName" else "Cette œuvre (ouvrez-en une)") })
             }
         }
-        if (forSeries && series != null) item(key = "anilist") { OutlinedButton(onClick = { suggestOpen = true }, Modifier.fillMaxWidth()) { Text("Suggestions de noms (AniList)") } }
         if (suggestions.isNotEmpty()) item(key = "names") {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                 Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {

@@ -13,7 +13,10 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -242,25 +245,33 @@ private fun Pill(text: String, onClick: () -> Unit, onClose: (() -> Unit)? = nul
     }
 }
 
-/** Interrupteur à deux positions : on voit ce qui est affiché et ce que le toucher va afficher. Un appui long ouvre les réglages rapides. */
+/**
+ * Interrupteur à deux positions : on voit ce qui est affiché et ce que le toucher va afficher. Un appui long de 3 secondes ouvre les réglages rapides.
+ * [onPress] : vrai tant qu'un doigt est posé dessus (le menu de lecture ne se range pas pendant l'appui, qui dure plus que ses 5 secondes de repos).
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun TranslationToggle(translated: Boolean, modifier: Modifier = Modifier, onLongPress: () -> Unit = {}, onToggle: () -> Unit) {
+private fun TranslationToggle(translated: Boolean, modifier: Modifier = Modifier, onLongPress: () -> Unit = {}, onPress: (Boolean) -> Unit = {}, onToggle: () -> Unit) {
     @Composable
     fun Seg(label: String, selected: Boolean) {
+        val touch = remember { MutableInteractionSource() }
+        val pressed by touch.collectIsPressedAsState()
+        LaunchedEffect(pressed) { onPress(pressed) }
         Text(
             label,
             modifier = Modifier.clip(CircleShape)
                 .background(if (selected) Brush.horizontalGradient(listOf(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.secondaryContainer)) else SolidColor(Color.Transparent))
-                .combinedClickable(onLongClickLabel = "Réglages rapides", onLongClick = onLongPress) { if (!selected) onToggle() }
+                .combinedClickable(interactionSource = touch, indication = LocalIndication.current, onLongClickLabel = "Réglages rapides", onLongClick = onLongPress) { if (!selected) onToggle() }
                 .padding(horizontal = 14.dp, vertical = 8.dp),
             color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.labelLarge,
         )
     }
-    Row(modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)).border(1.dp, Color.White.copy(alpha = 0.12f), CircleShape).padding(3.dp)) {
-        Seg("Original", !translated)
-        Seg("Traduit", translated)
+    WithLongPress(PANEL_LONG_PRESS_MS) {
+        Row(modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)).border(1.dp, Color.White.copy(alpha = 0.12f), CircleShape).padding(3.dp)) {
+            Seg("Original", !translated)
+            Seg("Traduit", translated)
+        }
     }
 }
 
@@ -383,7 +394,7 @@ private fun androidx.compose.foundation.layout.BoxScope.ReaderOverlay(graph: App
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             TextButton(onClick = { prev?.let { c.load(it) } }, enabled = prev != null) { Text("‹ Précédent", color = if (prev != null) Color.White else Color(0x66FFFFFF)) }
-            TranslationToggle(translated = c.translateOn && c.active, onLongPress = onQuickSettings) { c.onTranslateButton(); c.showReaderBar(true) }
+            TranslationToggle(translated = c.translateOn && c.active, onLongPress = onQuickSettings, onPress = { c.holdReaderBar(it) }) { c.onTranslateButton(); c.showReaderBar(true) }
             TextButton(onClick = { next?.let { c.load(it) } }, enabled = next != null) { Text("Suivant ›", color = if (next != null) Color.White else Color(0x66FFFFFF)) }
         }
     }

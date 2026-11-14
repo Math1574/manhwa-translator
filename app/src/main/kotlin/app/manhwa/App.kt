@@ -75,6 +75,9 @@ class AppGraph(ctx: Context) {
     val library = LibraryStore(File(ctx.filesDir, "library.tsv"))
     /** Icônes des sites lus, pour les tuiles de l'accueil. */
     val favicons = FaviconStore(File(ctx.filesDir, "favicons"))
+    /** Illustrations des œuvres de la bibliothèque (l'image que la page de l'œuvre annonce), et leur recherche en arrière-plan. */
+    val covers = CoverStore(File(ctx.filesDir, "covers"))
+    val coverFetcher = CoverFetcher(ctx, covers, { library.library }, { controller.translating })
     val journal = TranslationJournal(File(ctx.filesDir, "journal.jsonl"))
     /** Corrections manuelles des textes (zone, texte, position, taille, police), par image. */
     val edits = EditStore(File(ctx.filesDir, "edits.txt"), originsFile = File(ctx.filesDir, "edit_origins.txt"))
@@ -107,12 +110,6 @@ class AppGraph(ctx: Context) {
         }
     }
     val gpuTest = GpuTester(ctx, this)
-    /** Comparaison « normale / accélérée » de la traduction (réglages › Avancé). */
-    val reuseTest = ReuseTester(this)
-    init {
-        // l'essai de traduction accélérée a fait planter l'application au lancement précédent : on le désactive
-        if (gemma.reuseCrashed) settingsStore.update { it.copy(fastLlm = false, fastLlmNoSpec = false) }
-    }
     val blockReader = GemmaBlockReader(gemma) { settingsStore.settings }
     val visionTest = VisionTester(ctx, gemma)
     /** Noms propres probables repérés pendant la lecture (propositions du glossaire) ; remis à zéro quand l'application redémarre. */

@@ -161,6 +161,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     var canGoBack by mutableStateOf(false)
     var canGoForward by mutableStateOf(false)
     var active by mutableStateOf(false)
+    /** Une traduction est en cours (pages traitées < pages à traiter) : les tâches de fond, comme la recherche des illustrations, se font plus discrètes. */
+    val translating: Boolean get() = active && done + failed < total
     var fullscreen by mutableStateOf(false)
     /** Barre d'adresse masquée parce qu'on lit en descendant ; elle revient en remontant ou en touchant la page. */
     var barsHidden by mutableStateOf(false)
@@ -232,9 +234,39 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     private val workInfos = object : LinkedHashMap<String, WorkInfo>(16, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, WorkInfo>?): Boolean = size > 12
     }
-    /** Correction demandée sur une page qui n'est plus en mémoire : l'éditeur s'ouvre quand elle a été retraitée. */
-    @Volatile private var pendingEdit: EditTarget? = null
+    /** Gestes demandés (corriger, supprimer, ignorer, ajouter un texte…) sur une page qui n'est plus en mémoire : exécutés dès qu'elle a été retraitée. */
+    private val afterWork = ConcurrentHashMap<String, java.util.concurrent.CopyOnWriteArrayList<() -> Unit>>()
     fun workInfo(imageId: String): WorkInfo? = synchronized(workInfos) { workInfos[imageId] }
+
+    /**
+     * Exécute [action] quand le résultat de la page [id] est en mémoire : tout de suite s'il y est, sinon après l'avoir retraitée (résultat en cache : quelques secondes).
+     * Seules les 12 dernières pages traitées restent en mémoire ; sans cela un appui long sur une page plus ancienne ne faisait rien. Faux si la page n'est plus connue ou si la file est pleine.
+     */
+    private fun withWork(id: String, notify: Boolean = false, action: () -> Unit): Boolean {
+        if (workInfo(id) != null) { action(); return true }
+        val cand = candidatesById[id] ?: return false
+        val list = java.util.concurrent.CopyOnWriteArrayList<() -> Unit>().also { it.add(action) }
+        val waiting = afterWork.putIfAbsent(id, list)
+        if (waiting != null) { waiting.add(action); return true }         // déjà en cours de retraitement : on attend le même
+        val queued = queue.submit(PageJob(cand.id + "#edit" + System.nanoTime(), 0) { cancelled ->
+            // même si le traitement échoue, les gestes en attente sont libérés (sinon une demande ultérieure sur cette page resterait bloquée)
+            try { process(cand, cancelled) } finally {
+                afterWork.remove(id)?.let { todo ->
+                    main.post {
+                        if (workInfo(id) != null) todo.forEach { it() } else lastError = "Cette page n'a pas pu être rechargée : rouvrez-la puis recommencez."
+                    }
+                }
+            }
+        })
+        if (!queued) { afterWork.remove(id); return false }
+        if (notify) android.widget.Toast.makeText(ctx, "Préparation de la page…", android.widget.Toast.LENGTH_SHORT).show()      // quelques secondes d'attente : on le dit
+        return true
+    }
+
+    /** [withWork] pour un geste de l'utilisateur : si la page est introuvable, il en est averti au lieu que rien ne se passe. */
+    private fun needWork(id: String, action: () -> Unit) {
+        if (!withWork(id, notify = true, action = action)) lastError = "Cette page n'est plus en mémoire : rouvrez-la puis recommencez."
+    }
 
     // ---------- blocage des publicités ----------
     /** Ancienne liste de domaines : filet de sécurité pendant que le moteur de filtres se charge. */
@@ -399,6 +431,13 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         readerBar = show
         main.removeCallbacks(hideReaderBar)
         if (show) main.postDelayed(hideReaderBar, 5000)
+    }
+
+    /** Un doigt est posé sur le menu de lecture (appui long de 3 s sur Original | Traduit) : il reste ouvert tant que l'appui dure, puis reprend ses 5 secondes de repos. */
+    fun holdReaderBar(held: Boolean) {
+        if (!readerBar) return
+        main.removeCallbacks(hideReaderBar)
+        if (!held) main.postDelayed(hideReaderBar, 5000)
     }
 
     private var lastBarChange = 0L
@@ -758,7 +797,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
     private fun deleteTarget(t: EditTarget, soon: Boolean) {
         val id = t.imageId.removeSuffix("~up")
-        val info = workInfo(id) ?: return
+        val info = workInfo(id) ?: run { needWork(id) { deleteTarget(t, soon) }; return }
         val shown = info.applied.page.blocks.firstOrNull { it.id == t.bid } ?: return
         val prev = info.applied.editByBlock[shown.id]?.takeUnless { it.id.startsWith(IGNORE_EDIT_PREFIX) }      // une règle « ignorer » n'est pas une correction : jamais enregistrée comme telle
         val orig = info.result.blocks.firstOrNull { it.id == shown.id } ?: shown
@@ -851,7 +890,20 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     }
 
     /** Garde la proposition « Corriger / supprimer » affichée pendant le choix « Ignorer ce texte… » (sinon elle s'effacerait au bout de 7 s). */
-    fun holdPeek() { main.removeCallbacks(clearPeek) }
+    fun holdPeek() { peekHeld = true; main.removeCallbacks(clearPeek) }
+
+    /** La fenêtre « Ignorer ce texte… » est ouverte : le défilement de la page ne referme pas la proposition. */
+    @Volatile private var peekHeld = false
+
+    /** La page défile : les propositions ouvertes par un appui long (corriger, supprimer, ignorer, ajouter une traduction) disparaissent tout de suite. */
+    fun dismissPeek() {
+        if (peekHeld) return
+        if (peekTarget != null) { peekTarget = null; main.removeCallbacks(clearPeek) }
+        if (peekEmpty != null) { peekEmpty = null; main.removeCallbacks(clearPeekEmpty) }
+    }
+
+    /** Petite vibration quand l'appui long de 2 secondes a été pris en compte (rien ne change à l'écran tant que la proposition n'apparaît pas en bas). */
+    private fun longPressTick() { try { webView?.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS) } catch (_: Throwable) {} }
 
     /** Texte lu du bloc touché avant toute correction : c'est celui que les règles « ignorer » comparent au texte lu sur la page (une correction manuelle du texte n'y change rien). */
     private fun readSource(info: WorkInfo, bid: Int, fallback: String): String =
@@ -867,7 +919,12 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     fun ignorePeekText(everywhere: Boolean) {
         val t = peekTarget ?: return
         peekTarget = null; main.removeCallbacks(clearPeek)
-        val info = workInfo(t.imageId.removeSuffix("~up")) ?: return
+        ignoreTextNow(t, everywhere)
+    }
+
+    private fun ignoreTextNow(t: EditTarget, everywhere: Boolean) {
+        val id = t.imageId.removeSuffix("~up")
+        val info = workInfo(id) ?: run { needWork(id) { ignoreTextNow(t, everywhere) }; return }
         val src = readSource(info, t.bid, t.src)
         val scope = if (everywhere) IgnoredText.EVERYWHERE else (info.series ?: IgnoredText.EVERYWHERE)
         if (src.isEmpty() || !graph.ignored.addText(scope, src)) return
@@ -881,7 +938,12 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     fun unignorePeek() {
         val t = peekTarget ?: return
         peekTarget = null; main.removeCallbacks(clearPeek)
-        val info = workInfo(t.imageId.removeSuffix("~up")) ?: return
+        unignoreTextNow(t)
+    }
+
+    private fun unignoreTextNow(t: EditTarget) {
+        val id = t.imageId.removeSuffix("~up")
+        val info = workInfo(id) ?: run { needWork(id) { unignoreTextNow(t) }; return }
         val src = readSource(info, t.bid, t.src)
         val n = IgnoredMatch.normalize(src)
         val hits = graph.ignored.rules.texts.filter { r -> (r.scope == IgnoredText.EVERYWHERE || r.scope == info.series) && IgnoredMatch.same(n, IgnoredMatch.normalize(r.text)) }
@@ -898,7 +960,11 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     fun ignorePeekImage() {
         val id = peekImageId() ?: return
         peekTarget = null; peekEmpty = null; main.removeCallbacks(clearPeek); main.removeCallbacks(clearPeekEmpty)
-        val info = workInfo(id) ?: return
+        ignoreImageNow(id)
+    }
+
+    private fun ignoreImageNow(id: String) {
+        val info = workInfo(id) ?: run { needWork(id) { ignoreImageNow(id) }; return }
         // octets d'origine : ceux de la fenêtre traitée, sauf si elle porte le bas de l'image du dessus (on reprend alors l'image telle qu'elle a été téléchargée)
         val orig = if (info.ctxH == 0) info.bytes else synchronized(recentBytes) { recentBytes[info.imageSrc] }
         val fp = orig?.let { ImagePrint.of(it) }
@@ -940,6 +1006,27 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
     /** Nombre d'images de la page actuellement laissées telles quelles par une règle d'image. */
     fun testSkippedCount(): Int = skipped.size
+
+    /** Tests automatiques : la mémoire des pages traitées est vidée, comme après un long chapitre (seules les 12 dernières pages y restent). */
+    fun testEvict() { synchronized(workInfos) { workInfos.clear() } }
+
+    /** Tests automatiques : où poser un vrai doigt (pixels de l'écran) — au centre d'une traduction affichée (tx, ty) et sur une zone d'image sans traduction (ex, ey). */
+    @Volatile var testProbeJson: JSONObject? = null
+    fun testProbe() {
+        val wv = webView ?: return
+        testProbeJson = null
+        wv.evaluateJavascript("window.__mt&&window.__mt.probe()") { raw ->
+            try {
+                val str = org.json.JSONTokener(raw).nextValue() as? String ?: return@evaluateJavascript
+                val o = JSONObject(str)
+                val loc = IntArray(2); wv.getLocationOnScreen(loc)
+                val out = JSONObject()
+                for (k in listOf("tx", "ex")) if (o.has(k)) out.put(k, o.getInt(k) + loc[0])
+                for (k in listOf("ty", "ey")) if (o.has(k)) out.put(k, o.getInt(k) + loc[1])
+                testProbeJson = out
+            } catch (_: Throwable) {}
+        }
+    }
 
     /** Comme un appui long sur la première traduction non supprimée : la proposition « Corriger / supprimer » s'affiche 30 s. Faux s'il n'y a aucune traduction. */
     fun testPeek(ignored: Boolean = false): Boolean {
@@ -1009,8 +1096,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     fun openNewEdit() {
         val sp = peekEmpty ?: return
         peekEmpty = null; main.removeCallbacks(clearPeekEmpty)
-        if (workInfo(sp.imageId) == null) return
-        editTarget = EditTarget(sp.imageId, NEW_BLOCK_ID, "", "", sp.x, sp.y)
+        openEdit(EditTarget(sp.imageId, NEW_BLOCK_ID, "", "", sp.x, sp.y))      // page plus en mémoire : retraitée d'abord, l'éditeur s'ouvre ensuite
     }
     /** Revient à l'accueil : la page affichée est vidée (l'accueil lui-même est dessiné par l'application, voir [HomeScreen]) et plus aucune page n'est lue. */
     fun goHome() {
@@ -1093,6 +1179,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
     private fun stopWork() {
         queue.cancelAll()
+        afterWork.clear()      // les gestes en attente d'un retraitement n'ont plus d'objet : la page est quittée ou le travail arrêté
         val lost: List<String>
         synchronized(backlog) {
             lost = submitted.filter { it !in finishedIds }
@@ -1286,8 +1373,6 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             overlayForLog = own; overlayUpForLog = up
             if (own != null && out is PageOutcome.Done) journalLayout(c, pageUrl, out, own)
         }
-        // correction demandée sur cette page alors qu'elle n'était plus en mémoire : l'éditeur peut s'ouvrir
-        pendingEdit?.let { pe -> if (pe.imageId == c.id && basePage != null) { pendingEdit = null; main.post { editTarget = pe } } }
         if (testing) logForTest(c, out, debug, overlayForLog, System.currentTimeMillis() - t0, if (window != null) window.width to window.imageH else null, overlayUpForLog)
         // les informations propres à cette page ne servent plus
         pageNotes.remove(c.id); pageTiming.remove(c.id); batchInfo.remove(c.id); fetchInfo.remove(c.id); stageInfo.remove(c.id)
@@ -1362,11 +1447,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     fun openEdit(t: EditTarget) {
         val id = t.imageId.removeSuffix("~up")      // la partie d'un texte posée sur l'image du dessus a été traitée par cette image-ci
         val tt = t.copy(imageId = id)
-        if (workInfo(id) != null) { editTarget = tt; return }
-        val cand = candidatesById[id]
-        if (cand == null) { lastError = "Cette page n'est plus en mémoire : rouvrez-la puis recommencez."; return }
-        pendingEdit = tt
-        queue.submit(PageJob(cand.id + "#edit" + System.nanoTime(), 0) { cancelled -> process(cand, cancelled) })
+        needWork(id) { editTarget = tt }
     }
 
     fun editSession(t: EditTarget): EditSession? {
@@ -1908,16 +1989,24 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         @JavascriptInterface fun onProgress(percent: Int) { main.post { onProgressReported(percent) } }
         @JavascriptInterface fun onTap() { main.post { onPageTap() } }
         @JavascriptInterface fun onPeek(id: String, bid: String, src: String, tr: String) {
-            main.post { peekEmpty = null; peekTarget = EditTarget(id, bid.toIntOrNull() ?: -1, src, tr); main.removeCallbacks(clearPeek); main.postDelayed(clearPeek, 7000) }
+            main.post {
+                peekHeld = false; peekEmpty = null; peekTarget = EditTarget(id, bid.toIntOrNull() ?: -1, src, tr); main.removeCallbacks(clearPeek); main.postDelayed(clearPeek, 7000)
+                longPressTick()
+            }
         }
-        // appui long sur une image sans traduction à cet endroit (texte non détecté, zone ignorée) : seulement si l'image a été traitée
+        // appui long sur une image sans traduction à cet endroit (texte non détecté, zone ignorée) : seulement si l'image a été traitée, même si ses résultats ne sont plus en mémoire
         @JavascriptInterface fun onPeekEmpty(id: String, x: Double, y: Double) {
             main.post {
                 // (une image ignorée n'a pas de résultat en mémoire, mais on peut la rétablir d'un appui long dessus)
                 val bare = id.removeSuffix("~up")
-                if (workInfo(bare) != null || skipped.containsKey(bare)) { peekTarget = null; peekEmpty = EmptySpot(bare, x.toFloat(), y.toFloat()); main.removeCallbacks(clearPeekEmpty); main.postDelayed(clearPeekEmpty, 7000) }
+                if (workInfo(bare) != null || skipped.containsKey(bare) || (candidatesById.containsKey(bare) && finishedIds.contains(bare))) {
+                    peekHeld = false; peekTarget = null; peekEmpty = EmptySpot(bare, x.toFloat(), y.toFloat()); main.removeCallbacks(clearPeekEmpty); main.postDelayed(clearPeekEmpty, 7000)
+                    longPressTick()
+                }
             }
         }
+        // la page défile : les propositions de l'appui long disparaissent tout de suite
+        @JavascriptInterface fun onPeekGone() { main.post { dismissPeek() } }
         // appui simple sur une traduction pendant que la gomme est active : suppression, « Annuler » proposé
         @JavascriptInterface fun onErase(id: String, bid: String, src: String, tr: String) {
             main.post { if (eraser) eraseTouched(EditTarget(id, bid.toIntOrNull() ?: -1, src, tr)) }

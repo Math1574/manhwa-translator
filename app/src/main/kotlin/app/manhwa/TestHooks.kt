@@ -36,7 +36,8 @@ object TestHooks {
      * erasetap (appui simple au centre de la première traduction visible), discard [off] (active ou coupe les textes écartés), disctap (appui simple au centre du premier cadre visible), testcache [off] (le résultat en cache est repris, pour vérifier la mise à jour ciblée à l'affichage),
      * termadd <terme>|<traduction>[|direct] (ajout d'un terme comme Réglages › Glossaire, avec aperçu ; « direct » : sans aperçu, comme « Garder tel quel »), termsave <terme>|<traduction> (comme « Enregistrer » de l'éditeur), termdel <terme>,
      * savetr <texte> (« Enregistrer » de l'éditeur avec une traduction écrite : correction rangée sous la page ouverte, traduction retenue), fixadd <texte>|<traduction> (traduction retenue sans correction),
-     * libseed (trois œuvres de démonstration dans la bibliothèque : Zulu Quest, Mid Tale, Alpha Saga), libsort <recent|title|read> (tri de la bibliothèque), home (retour à l'accueil), anilist <adresse> (faux serveur pour les suggestions de noms, sans argument : le vrai), termconfirm, termcancel (boutons de l'aperçu),
+     * libseed (trois œuvres de démonstration dans la bibliothèque : Zulu Quest, Mid Tale, Alpha Saga), libsort <recent|title|read> (tri de la bibliothèque), home (retour à l'accueil), termconfirm, termcancel (boutons de l'aperçu),
+     evict (vide la mémoire des pages traitées), probe (relève où poser un doigt : tx, ty sur une traduction, ex, ey sur une zone sans traduction),
      edit (ouvre l'éditeur sur la première traduction), pinch <facteur> (deux doigts qui s'écartent ou se rapprochent au centre de l'image de l'éditeur : vrais événements tactiles), twopan <dx> <dy> (deux doigts qui glissent ensemble, en pixels), state (écrit seulement l'état).
      */
     private fun startWatcher(ctx: Context, graph: AppGraph) {
@@ -61,6 +62,8 @@ object TestHooks {
                         "clearedits" -> main.post { c.testClearEdits() }
                         "peekign" -> main.post { c.testPeek(ignored = true) }
                         "peekempty" -> main.post { c.testPeekEmpty() }
+                        "evict" -> c.testEvict()
+                        "probe" -> main.post { c.testProbe() }
                         "eraser" -> main.post { c.switchEraser(arg.trim() != "off") }
                         "erasetap" -> main.post { c.testEraseTap() }
                         "discard" -> main.post { c.switchDiscard(arg.trim() != "off") }
@@ -74,7 +77,6 @@ object TestHooks {
                         "libseed" -> main.post { graph.library.testSeed() }
                         "libsort" -> main.post { graph.settingsStore.update { it.copy(librarySort = arg.trim()) } }
                         "home" -> main.post { c.goHome() }
-                        "anilist" -> AniListClient.endpoint = arg.trim().ifEmpty { app.manhwa.core.AniList.ENDPOINT }
                         "termconfirm" -> main.post { c.confirmTermPreview() }
                         "termcancel" -> main.post { c.cancelTermPreview() }
                         "edit" -> main.post { c.testEdit() }
@@ -135,12 +137,13 @@ object TestHooks {
             .put("works", ids.size).put("blocks", blocks).put("hidden", hidden).put("edits", edits).put("editTr", editTr)
             .put("ign", graph.ignored.rules.texts.size).put("ignImg", graph.ignored.rules.images.size).put("skipped", c.testSkippedCount()).put("banner", c.undoBanner?.message ?: "").put("eraser", c.eraser)
             .put("peekE", c.peekEmpty != null).put("peekT", c.peekTarget != null).put("discMode", c.discardMode).put("disc", discCounts.first).put("discKnown", discCounts.second)
-            .put("libSeries", graph.library.library.series().size).put("libFinished", graph.library.library.series().count { it.finished }).put("libSort", graph.settingsStore.settings.librarySort)
+            .put("coverOk", graph.covers.book.records.count { it.ok }).put("coverFail", graph.covers.book.records.count { !it.ok }).put("coverWhy", graph.coverFetcher.lastWhy).put("libSeries", graph.library.library.series().size).put("libFinished", graph.library.library.series().count { it.finished }).put("libSort", graph.settingsStore.settings.librarySort)
             .put("home", c.currentUrl.isEmpty()).put("homeSites", app.manhwa.core.HomeView.sites(graph.library.library, app.manhwa.core.HomeView.pinned(graph.settingsStore.settings), app.manhwa.core.HomeView.hidden(graph.settingsStore.settings)).size)
             .put("homePinned", app.manhwa.core.HomeView.pinned(graph.settingsStore.settings).size).put("homeHidden", app.manhwa.core.HomeView.hidden(graph.settingsStore.settings).size)
-            .put("fastLlm", graph.settingsStore.settings.fastLlm).put("fastLlmNoSpec", graph.settingsStore.settings.fastLlmNoSpec).put("corr", graph.edits.count()).put("corrOrig", graph.edits.originsSnapshot().size).put("fixes", graph.glossary.corrections.size)
-            .put("terms", graph.glossary.terms.size + graph.glossary.seriesTerms.size).put("seriesTermSrc", graph.glossary.seriesTerms.map { it.source }.sorted().joinToString("|")).put("glossRev", graph.glossary.revision).put("refreshed", c.testRefreshed.get()).put("patched", c.testPatched.get())
+            .put("corr", graph.edits.count()).put("corrOrig", graph.edits.originsSnapshot().size).put("fixes", graph.glossary.corrections.size)
+            .put("terms", graph.glossary.terms.size + graph.glossary.seriesTerms.size).put("glossRev", graph.glossary.revision).put("refreshed", c.testRefreshed.get()).put("patched", c.testPatched.get())
             .put("tpv", c.termPreview?.let { if (it.computing) "computing" else "ready" } ?: "none").put("tpvRows", c.termPreview?.rows?.size ?: 0).put("tpvOthers", c.termPreview?.others ?: 0).put("trs", trs.sorted().joinToString("\u001f"))
+        c.testProbeJson?.let { pr -> for (k in pr.keys()) o.put(k, pr.get(k)) }
         val ed = EditorProbe.info
         o.put("edOpen", ed != null)
         ed?.invoke()?.forEach { (k, v) -> o.put(k, v) }
@@ -342,9 +345,7 @@ object TestHooks {
 
     /**
      * Banc d'essai de traduction : lit files/lab.json (pages de répliques), traduit chaque page avec chaque variante
-     * (v1, v2, v3 ; suffixes : r = relecture, c = consignes réutilisées (essai accéléré), a / o = décodage spéculatif ADAPTIVE / coupé)
-     * et écrit files/lab_<nom>.json. Le contexte de chapitre est conservé d'une page à l'autre. La variante « ab » lance la comparaison
-     * « normale / accélérée » des réglages (six répliques) et range son résultat sous « ab ».
+     * (v1, v2, v2r = v2 + relecture) et écrit files/lab_<nom>.json. Le contexte de chapitre est conservé d'une page à l'autre.
      */
     private fun runLab(ctx: Context, graph: AppGraph, intent: Intent) {
         running = true
@@ -353,36 +354,13 @@ object TestHooks {
         val engine = TranslationEngineChoice.values().firstOrNull { it.name == intent.getStringExtra("mt_engine") } ?: TranslationEngineChoice.GEMMA_E2B
         graph.settingsStore.update { it.copy(engine = engine, useGpu = false, source = SourceLang.EN, target = TargetLang.FR) }
         thread(name = "mt-lab") {
-            val result = JSONObject(); val variantsJson = JSONObject(); val notes = JSONArray(); val abJson = JSONObject()
+            val result = JSONObject(); val variantsJson = JSONObject(); val notes = JSONArray()
             try {
                 graph.llm.refresh()
                 val pages = JSONObject(File(ctx.filesDir, "lab.json").readText()).getJSONArray("pages")
                 for (v in variants) {
-                    if (v == "ab" || v == "abo") {
-                        // « ab » : la comparaison des réglages, avec le moteur tel que l'application le crée ; « abo » : même comparaison, décodage spéculatif coupé
-                        graph.gemma.reuseOverride = null
-                        val want = if (v == "abo") com.google.ai.edge.litertlm.SpeculativeDecodingMode.OFF else null
-                        if (want != graph.gemma.specOverride) { graph.gemma.specOverride = want; graph.gemma.release() }
-                        val one = JSONObject()
-                        val r = graph.gemma.compareReuse()
-                        one.put("note", r.note)
-                        r.outcome?.let { o ->
-                            one.put("normalMs", o.normalMs).put("sameBaseline", o.sameBaseline).put("lines", o.lines).put("skipped", JSONArray(o.skipped)).put("text", app.manhwa.core.SpeedReport.describe(o))
-                            fun tryJson(x: app.manhwa.core.SpeedTry?) = x?.let { JSONObject().put("ms", it.ms).put("same", it.same).put("failed", it.failed).put("tries", it.tries) }
-                            tryJson(o.copy)?.let { one.put("copy", it) }; tryJson(o.noSpec)?.let { one.put("noSpec", it) }
-                        }
-                        one.put("backend", graph.gemma.backendLabel)
-                        abJson.put(v, one)
-                        notes.put("comparaison $v terminée")
-                        File(ctx.filesDir, "lab_$name.partial.json").writeText(JSONObject().put("engine", engine.name).put("variants", variantsJson).put("ab", abJson).put("notes", notes).toString())
-                        continue
-                    }
-                    val flags = v.drop(2)
                     graph.gemma.promptVariant = when { v.startsWith("v1") -> 1; v.startsWith("v3") -> 3; else -> 2 }
-                    graph.gemma.refine = 'r' in flags
-                    graph.gemma.reuseOverride = 'c' in flags
-                    val mode = when { 'a' in flags -> com.google.ai.edge.litertlm.SpeculativeDecodingMode.ADAPTIVE; 'o' in flags -> com.google.ai.edge.litertlm.SpeculativeDecodingMode.OFF; else -> null }
-                    if (mode != graph.gemma.specOverride) { graph.gemma.specOverride = mode; graph.gemma.release() }   // le mode se choisit à la création du moteur
+                    graph.gemma.refine = v.endsWith("r")
                     graph.gemma.resetContext()
                     graph.gemma.seriesTitle = intent.getStringExtra("mt_series")
                     val out = JSONArray()
@@ -395,15 +373,13 @@ object TestHooks {
                     }
                     variantsJson.put(v, out)
                     notes.put("variante $v terminée")
-                    File(ctx.filesDir, "lab_$name.partial.json").writeText(JSONObject().put("engine", engine.name).put("variants", variantsJson).put("ab", abJson).put("notes", notes).toString())
+                    File(ctx.filesDir, "lab_$name.partial.json").writeText(JSONObject().put("engine", engine.name).put("variants", variantsJson).put("notes", notes).toString())
                 }
             } catch (e: Throwable) {
                 notes.put("exception : $e")
             }
-            graph.gemma.promptVariant = LlmPrompt.CURRENT; graph.gemma.refine = false; graph.gemma.reuseOverride = null; graph.gemma.specOverride = null
-            notes.put("réutilisation : " + graph.gemma.reuseStatus)
-            if (graph.gemma.reuseLastError.isNotEmpty()) notes.put("dernière erreur du moteur lors d'une copie ratée : " + graph.gemma.reuseLastError)
-            result.put("engine", engine.name).put("variants", variantsJson).put("ab", abJson).put("notes", notes)
+            graph.gemma.promptVariant = LlmPrompt.CURRENT; graph.gemma.refine = false
+            result.put("engine", engine.name).put("variants", variantsJson).put("notes", notes)
             val tmp = File(ctx.filesDir, "lab_$name.json.tmp"); tmp.writeText(result.toString()); tmp.renameTo(File(ctx.filesDir, "lab_$name.json"))
             Log.i(TAG, "REPORT_READY lab_$name.json")
             running = false

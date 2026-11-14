@@ -11,12 +11,6 @@ on:
       publier:
         description: 'oui pour publier l APK dans les Releases depuis main (par défaut, seul un envoi sur main publie)'
         default: 'non'
-      variants:
-        description: 'banc d essai (suite lab) : variantes de traduction, par exemple v3,v3c,ab ; vide = v2,v3'
-        default: ''
-      engines:
-        description: 'banc d essai (suite lab) : e2b, e4b ou les deux séparés par une espace ; vide = les deux'
-        default: ''
 concurrency:
   group: build-${{ github.ref }}-${{ github.event.inputs.suite || 'quick' }}
   cancel-in-progress: true
@@ -162,8 +156,6 @@ jobs:
     timeout-minutes: 120
     env:
       SUITE: ${{ github.event.inputs.suite || 'quick' }}
-      LAB_VARIANTS: ${{ github.event.inputs.variants }}
-      LAB_ENGINES: ${{ github.event.inputs.engines }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
