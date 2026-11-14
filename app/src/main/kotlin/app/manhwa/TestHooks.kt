@@ -48,7 +48,7 @@ object TestHooks {
                     val arg = cmd.substringAfter(' ', "")
                     when (cmd.substringBefore(' ')) {
                         "peek" -> main.post { c.testPeek() }
-                        "window" -> c.undoWindowMs = arg.toLongOrNull() ?: Controller.UNDO_MS
+                        "window" -> c.undoWindowMs = arg.toLongOrNull() ?: TranslationController.UNDO_MS
                         "setedit" -> main.post { c.testSetTranslation(arg) }
                         "clearedits" -> main.post { c.testClearEdits() }
                     }
