@@ -592,7 +592,7 @@ private fun FontTab(c: TranslationController, st: EditorState, modifier: Modifie
 private fun GlossaryTab(graph: AppGraph, st: EditorState) {
     val series = st.sn.info.series
     Text(
-        "Ajoutez les noms ou les termes à toujours traduire de la même façon : le texte est retraduit avec eux dès l'enregistrement (sauf si vous avez saisi la traduction vous-même).",
+        "Ajoutez les noms ou les termes à toujours traduire de la même façon. Seuls les textes qui les contiennent sont retraduits : un aperçu (avant → après) vous est montré avant l'enregistrement. Une traduction saisie par vous passe toujours avant.",
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

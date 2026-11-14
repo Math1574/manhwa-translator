@@ -240,6 +240,59 @@ chk "gomme : « Terminer » coupe la gomme" $([ "$(okst waitst eraser False 10)"
 uidump er5; chk "gomme : le bouton « Gomme active » disparaît" $(hasnot er5 'Gomme active')
 appcmd clearedits
 chk "gomme : les corrections de test sont retirées" $(okst waitst edits 0 25)
+# retraduction ciblée : un terme ajouté au glossaire ne retraduit que les textes qui le contiennent, avec un aperçu avant l'enregistrement ; une page reprise du cache se met à jour à l'affichage.
+# La page de test contient « disciple », « master » et « choice » (ML Kit les traduit « disciple », « maître » et « choix ») : les termes « apprenti », « sensei » et « alternative » changent donc la traduction.
+# L'état relevé liste les traductions de toutes les pages (triées, séparées par le caractère 31) : on compte celles qui ont changé.
+trdiff() { python3 -c "import sys,collections as c;a=c.Counter(sys.argv[1].split(chr(31)));b=c.Counter(sys.argv[2].split(chr(31)));print(sum((b-a).values()))" "$1" "$2"; }
+trhas() { case "$(stv trs | tr 'A-Z' 'a-z')" in *"$1"*) echo 1;; *) echo 0;; esac; }
+waittr() { local i; for i in $(seq 1 ${2:-25}); do appstate; [ "$(trhas "$1")" = 1 ] && return 0; done; return 1; }
+appcmd window 20000
+appcmd testcache on
+appstate; t0=$(stv terms); tr0=$(stv trs)
+chk "retraduction ciblée : départ sain (aucun terme enregistré, des textes traduits)" $([ "$t0" = 0 ] && [ -n "$tr0" ] && echo 1 || echo 0)
+# 1) Réglages › Glossaire : « disciple » → « apprenti » ; l'aperçu s'affiche, « Annuler » n'enregistre rien, « Enregistrer » ajoute le terme
+appcmd "termadd disciple|apprenti"
+if [ "$(okst waitst tpv ready 40)" = 1 ]; then
+  uidump gl1; shot ui 28
+  chk "retraduction ciblée : une fenêtre montre le terme et, pour chaque texte concerné, la traduction avant et après" $([ "$(has gl1 'Retraduire les textes concern')" = 1 ] && [ "$(has gl1 'apprenti')" = 1 ] && [ "$(has gl1 'Avant :')" = 1 ] && [ "$(has gl1 'Apr[^ ]* :')" = 1 ] && echo 1 || echo 0)
+  chk "retraduction ciblée : seuls les textes qui contiennent le terme sont retraduits (pas toute la page)" $([ "$(stv tpvRows)" -ge 1 ] && [ "$(stv tpvRows)" -lt "$(stv blocks)" ] && echo 1 || echo 0)
+  chk "retraduction ciblée : rien n'est enregistré avant la confirmation (aucun terme, traductions inchangées)" $([ "$(stv terms)" = "$t0" ] && [ "$(trdiff "$tr0" "$(stv trs)")" = 0 ] && echo 1 || echo 0)
+  tapt gl1 "=Annuler" 1; sleep 1.5; appstate; uidump gl1b
+  chk "retraduction ciblée : « Annuler » ferme la fenêtre sans rien enregistrer" $([ "$(stv tpv)" = none ] && [ "$(stv terms)" = "$t0" ] && [ "$(hasnot gl1b 'Retraduire les textes concern')" = 1 ] && echo 1 || echo 0)
+  appcmd "termadd disciple|apprenti"; waitst tpv ready 40 >/dev/null; uidump gl2; tapt gl2 "=Enregistrer" 1
+  chk "retraduction ciblée : « Enregistrer » ajoute le terme" $(okst waitst terms $((t0 + 1)) 25)
+  d1=$(waittr apprenti 30 && trdiff "$tr0" "$(stv trs)" || echo -1)
+  chk "retraduction ciblée : le texte concerné est retraduit avec le terme, les autres textes ne changent pas" $([ "$d1" -ge 1 ] && [ "$d1" -le 2 ] && [ "$(stv patched)" -ge 1 ] && echo 1 || echo 0)
+  uidump gl3; chk "retraduction ciblée : la fenêtre se referme après l'enregistrement" $(hasnot gl3 'Retraduire les textes concern')
+else
+  uidump gl1; shot ui 28
+  say "retraduction ciblée : aucune fenêtre d'aperçu (retraductions identiques aux actuelles, ou aucun texte concerné) ; état : $(cat $OUT/reports/state.json | cut -c1-400)"
+  chk "retraduction ciblée : une fenêtre montre le terme et, pour chaque texte concerné, la traduction avant et après" 0
+fi
+# 2) « Enregistrer » de l'éditeur (même chemin que la fenêtre de correction) avec un terme : « master » → « sensei »
+tr1=$(stv trs)
+appcmd "termsave master|sensei"
+if [ "$(okst waitst tpv ready 40)" = 1 ]; then
+  uidump gl4; shot ui 29
+  chk "retraduction ciblée : « Enregistrer » de l'éditeur avec un terme passe aussi par l'aperçu" $([ "$(has gl4 'Retraduire les textes concern')" = 1 ] && [ "$(has gl4 'sensei')" = 1 ] && echo 1 || echo 0)
+  tapt gl4 "=Enregistrer" 1
+  d2=$(waitst terms $((t0 + 2)) 25 && waittr sensei 30 && trdiff "$tr1" "$(stv trs)" || echo -1)
+  chk "retraduction ciblée : depuis l'éditeur, le terme est ajouté et le texte concerné retraduit" $([ "$d2" -ge 1 ] && [ "$d2" -le 2 ] && echo 1 || echo 0)
+else
+  say "retraduction ciblée : aucune fenêtre d'aperçu pour l'éditeur ; état : $(cat $OUT/reports/state.json | cut -c1-400)"
+  chk "retraduction ciblée : « Enregistrer » de l'éditeur avec un terme passe aussi par l'aperçu" 0
+  chk "retraduction ciblée : depuis l'éditeur, le terme est ajouté et le texte concerné retraduit" 0
+fi
+# 3) terme modifié sans aperçu (comme « Garder tel quel ») : les pages ouvertes reprennent leur résultat en cache et seul le texte concerné est retraduit à l'affichage.
+# On change la traduction de « disciple » (déjà vue à l'étape 1 : ML Kit garde le jeton qui protège ce mot). Un terme comme « choice » dans « no choice but to kill him » ne convient pas :
+# ML Kit y perd le jeton, la traduction sans protection ne change alors pas (limite connue de ML Kit ; Gemma reçoit le glossaire dans sa consigne).
+tr2=$(stv trs); rf0=$(stv refreshed)
+appcmd "termadd disciple|eleve|direct"
+d3=$(waittr eleve 40 && trdiff "$tr2" "$(stv trs)" || echo -1)
+chk "mise à jour à l'affichage : un terme modifié sans aperçu ne retraduit que le texte concerné (page reprise du cache)" $([ "$d3" -ge 1 ] && [ "$d3" -le 2 ] && [ "$(stv refreshed)" -ge $((rf0 + 1)) ] && echo 1 || echo 0)
+uidump gl5; shot ui 30
+appcmd "termdel disciple"; appcmd "termdel master"; appcmd clearedits; appcmd "testcache off"
+chk "retraduction ciblée : les termes et corrections de test sont retirés" $([ "$(okst waitst terms 0 25)" = 1 ] && [ "$(okst waitst edits 0 25)" = 1 ] && echo 1 || echo 0)
 appcmd window 20000
 appcmd peek; uidump ig1; shot ui 17
 chk "ignorer : un appui long propose aussi « Ignorer ce texte… » (avec Corriger)" $([ "$(has ig1 'Ignorer ce texte')" = 1 ] && [ "$(has ig1 'Corriger cette traduction')" = 1 ] && echo 1 || echo 0)

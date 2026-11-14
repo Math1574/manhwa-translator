@@ -215,6 +215,15 @@ class GlossaryStore(private val file: File) {
     /** Glossaire à utiliser pour une œuvre : termes communs puis termes de l'œuvre ([series] null : termes communs seuls). */
     fun current(series: String? = null): Glossary = snapshot.forSeries(series)
 
+    /** Numéro de version du glossaire (il augmente à chaque terme ajouté ou modifié) : les pages en cache gardent celui avec lequel elles ont été traduites. */
+    val revision: Long get() = snapshot.revision
+
+    /** Copie complète du glossaire (termes communs et d'œuvre, versions comprises) : sert à simuler un ajout sans rien enregistrer. */
+    fun copyAll(): Glossary = snapshot.copy()
+
+    /** Ce terme est-il déjà enregistré tel quel (pour cette œuvre si [series] est donnée, sinon pour toutes) ? */
+    fun has(series: String?, source: String, target: String): Boolean = snapshot.hasTerm(series, source, target)
+
     fun add(source: String, target: String) { glossary.addTerm(source, target); commit() }
     fun remove(source: String) { glossary.removeTerm(source); commit() }
     fun addForSeries(series: String, source: String, target: String) { glossary.addSeriesTerm(series, source, target); commit() }

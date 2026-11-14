@@ -30,7 +30,9 @@ object TestHooks {
      * Commandes pour les scénarios d'interface (builds debug, extra « mt_watch ») : l'application lit files/cmd.txt toutes les demi-secondes, exécute la commande puis écrit l'état dans
      * files/state.json. Commandes : peek (comme un appui long sur la première traduction), window <ms> (durée du bandeau « Annuler »), setedit <texte> (traduction écrite à la main),
      * clearedits (retire les corrections), peekign (appui long sur le premier texte ignoré), peekempty (appui long sur une image ignorée), eraser [off] (active ou coupe la gomme),
-     * erasetap (appui simple au centre de la première traduction visible), state (écrit seulement l'état).
+     * erasetap (appui simple au centre de la première traduction visible), testcache [off] (le résultat en cache est repris, pour vérifier la mise à jour ciblée à l'affichage),
+     * termadd <terme>|<traduction>[|direct] (ajout d'un terme comme Réglages › Glossaire, avec aperçu ; « direct » : sans aperçu, comme « Garder tel quel »), termsave <terme>|<traduction> (comme « Enregistrer » de l'éditeur), termdel <terme>,
+     * termconfirm, termcancel (boutons de l'aperçu), state (écrit seulement l'état).
      */
     private fun startWatcher(ctx: Context, graph: AppGraph) {
         if (watching) return
@@ -56,6 +58,12 @@ object TestHooks {
                         "peekempty" -> main.post { c.testPeekEmpty() }
                         "eraser" -> main.post { c.switchEraser(arg.trim() != "off") }
                         "erasetap" -> main.post { c.testEraseTap() }
+                        "testcache" -> c.testCache = arg.trim() != "off"
+                        "termadd" -> { val p = arg.split('|'); if (p.size >= 2) main.post { c.testTermAdd(p[0].trim(), p[1].trim(), forSeries = false, preview = p.getOrNull(2)?.trim() != "direct") } }
+                        "termsave" -> { val p = arg.split('|'); if (p.size >= 2) main.post { c.testSaveWithTerm(p[0].trim(), p[1].trim()) } }
+                        "termdel" -> main.post { c.testTermDel(arg.trim()) }
+                        "termconfirm" -> main.post { c.confirmTermPreview() }
+                        "termcancel" -> main.post { c.cancelTermPreview() }
                     }
                     Thread.sleep(300)   // laisse les gestes lancés sur le fil principal s'appliquer avant de relever l'état
                     writeState(ctx, graph)
@@ -68,11 +76,13 @@ object TestHooks {
     private fun writeState(ctx: Context, graph: AppGraph) {
         val c = graph.controller
         var blocks = 0; var hidden = 0; var edits = 0; var editTr = ""
+        val trs = ArrayList<String>()
         val ids = c.testWorkIds()
         val keys = HashSet<String>()      // deux pages aux octets identiques partagent leurs corrections : on ne les compte qu'une fois
         for (id in ids) {
             val info = c.workInfo(id) ?: continue
             blocks += info.applied.page.blocks.size
+            info.applied.page.blocks.forEach { trs.add(it.translated) }
             hidden += info.applied.editByBlock.values.count { it.hidden }
             if (!keys.add(info.imageKey)) continue
             val list = graph.edits.forImage(info.imageKey)
@@ -83,6 +93,8 @@ object TestHooks {
             .put("works", ids.size).put("blocks", blocks).put("hidden", hidden).put("edits", edits).put("editTr", editTr)
             .put("ign", graph.ignored.rules.texts.size).put("ignImg", graph.ignored.rules.images.size).put("skipped", c.testSkippedCount()).put("banner", c.undoBanner?.message ?: "").put("eraser", c.eraser)
             .put("peekE", c.peekEmpty != null).put("peekT", c.peekTarget != null)
+            .put("terms", graph.glossary.terms.size + graph.glossary.seriesTerms.size).put("glossRev", graph.glossary.revision).put("refreshed", c.testRefreshed.get()).put("patched", c.testPatched.get())
+            .put("tpv", c.termPreview?.let { if (it.computing) "computing" else "ready" } ?: "none").put("tpvRows", c.termPreview?.rows?.size ?: 0).put("tpvOthers", c.termPreview?.others ?: 0).put("trs", trs.sorted().joinToString("\u001f"))
         val tmp = File(ctx.filesDir, "state.json.tmp"); tmp.writeText(o.toString()); tmp.renameTo(File(ctx.filesDir, "state.json"))
     }
 
