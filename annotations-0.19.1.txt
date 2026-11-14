@@ -1,0 +1,289 @@
+######## ExperimentalFlags
+42:   #30 = Utf8               Lkotlin/Deprecated;
+89:   #77 = Utf8               Lcom/google/ai/edge/litertlm/ExperimentalApi;
+106:   #94 = Utf8               Deprecated
+112:  #100 = Utf8               RuntimeVisibleAnnotations
+129:    Deprecated: true
+152:    Deprecated: true
+171:  private com.google.ai.edge.litertlm.ExperimentalFlags();
+185:  public final boolean getEnableBenchmark();
+198:  public final void setEnableBenchmark(boolean);
+216:  public final java.lang.Boolean getEnableSpeculativeDecoding();
+228:    Deprecated: true
+233:  public final void setEnableSpeculativeDecoding(java.lang.Boolean);
+247:    Deprecated: true
+256:  public static void getEnableSpeculativeDecoding$annotations();
+262:    Deprecated: true
+263:    RuntimeVisibleAnnotations:
+265:        kotlin.Deprecated(
+266:          message="Use EngineConfig.speculativeDecodingConfig instead."
+269:  public final boolean getEnableConversationConstrainedDecoding();
+282:  public final void setEnableConversationConstrainedDecoding(boolean);
+300:  public final boolean getConvertCamelToSnakeCaseInToolDescription();
+313:  public final void setConvertCamelToSnakeCaseInToolDescription(boolean);
+331:  public final java.lang.Boolean getFilterChannelContentFromKvCache();
+347:  public final void setFilterChannelContentFromKvCache(java.lang.Boolean);
+369:  public final java.lang.String getOverwritePromptTemplate();
+381:    Deprecated: true
+386:  public final void setOverwritePromptTemplate(java.lang.String);
+400:    Deprecated: true
+409:  public static void getOverwritePromptTemplate$annotations();
+415:    Deprecated: true
+416:    RuntimeVisibleAnnotations:
+418:        kotlin.Deprecated(
+419:          message="Use ConversationConfig.chatTemplate instead."
+422:  public final java.lang.Integer getVisualTokenBudget();
+438:  public final void setVisualTokenBudget(java.lang.Integer);
+460:  public final java.lang.Boolean getEnableYnnpack();
+476:  public final void setEnableYnnpack(java.lang.Boolean);
+514:RuntimeVisibleAnnotations:
+521:      d2=["Lcom/google/ai/edge/litertlm/ExperimentalFlags;","","<init>","()V","enableBenchmark","","getEnableBenchmark","()Z","setEnableBenchmark","(Z)V","enableSpeculativeDecoding","getEnableSpeculativeDecoding$annotations","getEnableSpeculativeDecoding","()Ljava/lang/Boolean;","setEnableSpeculativeDecoding","(Ljava/lang/Boolean;)V","Ljava/lang/Boolean;","Lkotlin/Deprecated;","message","Use EngineConfig.speculativeDecodingConfig instead.","enableConversationConstrainedDecoding","getEnableConversationConstrainedDecoding","setEnableConversationConstrainedDecoding","convertCamelToSnakeCaseInToolDescription","getConvertCamelToSnakeCaseInToolDescription","setConvertCamelToSnakeCaseInToolDescription","filterChannelContentFromKvCache","getFilterChannelContentFromKvCache","setFilterChannelContentFromKvCache","overwritePromptTemplate","","getOverwritePromptTemplate$annotations","getOverwritePromptTemplate","()Ljava/lang/String;","setOverwritePromptTemplate","(Ljava/lang/String;)V","Use ConversationConfig.chatTemplate instead.","visualTokenBudget","","getVisualTokenBudget","()Ljava/lang/Integer;","setVisualTokenBudget","(Ljava/lang/Integer;)V","Ljava/lang/Integer;","enableYnnpack","getEnableYnnpack","setEnableYnnpack","third_party.odml.litert_lm.kotlin.java.com.google.ai.edge.litertlm_litertlm-android","Lcom/google/ai/edge/litertlm/ExperimentalApi;"]
+525:    com.google.ai.edge.litertlm.ExperimentalApi
+######## EngineConfig
+195:  #183 = Utf8               RuntimeVisibleAnnotations
+261:  public com.google.ai.edge.litertlm.EngineConfig(java.lang.String, com.google.ai.edge.litertlm.Backend, com.google.ai.edge.litertlm.Backend, com.google.ai.edge.litertlm.Backend, java.lang.Integer, java.lang.Integer, java.lang.String, com.google.ai.edge.litertlm.ActivationDataType, com.google.ai.edge.litertlm.SpeculativeDecodingConfig);
+437:  public com.google.ai.edge.litertlm.EngineConfig(java.lang.String, com.google.ai.edge.litertlm.Backend, com.google.ai.edge.litertlm.Backend, com.google.ai.edge.litertlm.Backend, java.lang.Integer, java.lang.Integer, java.lang.String, com.google.ai.edge.litertlm.ActivationDataType, com.google.ai.edge.litertlm.SpeculativeDecodingConfig, int, kotlin.jvm.internal.DefaultConstructorMarker);
+538:  public final java.lang.String getModelPath();
+555:  public final com.google.ai.edge.litertlm.Backend getBackend();
+572:  public final com.google.ai.edge.litertlm.Backend getVisionBackend();
+589:  public final com.google.ai.edge.litertlm.Backend getAudioBackend();
+606:  public final java.lang.Integer getMaxNumTokens();
+623:  public final java.lang.Integer getMaxNumImages();
+640:  public final java.lang.String getCacheDir();
+657:  public final com.google.ai.edge.litertlm.ActivationDataType getActivationDataType();
+674:  public final com.google.ai.edge.litertlm.SpeculativeDecodingConfig getSpeculativeDecodingConfig();
+996:  public java.lang.String toString();
+1028:  public int hashCode();
+1188:  public boolean equals(java.lang.Object);
+1305:  public com.google.ai.edge.litertlm.EngineConfig(java.lang.String, com.google.ai.edge.litertlm.Backend, com.google.ai.edge.litertlm.Backend, com.google.ai.edge.litertlm.Backend, java.lang.Integer, java.lang.Integer, java.lang.String, com.google.ai.edge.litertlm.ActivationDataType);
+1380:  public com.google.ai.edge.litertlm.EngineConfig(java.lang.String, com.google.ai.edge.litertlm.Backend, com.google.ai.edge.litertlm.Backend, com.google.ai.edge.litertlm.Backend, java.lang.Integer, java.lang.Integer, java.lang.String);
+1450:  public com.google.ai.edge.litertlm.EngineConfig(java.lang.String, com.google.ai.edge.litertlm.Backend, com.google.ai.edge.litertlm.Backend, com.google.ai.edge.litertlm.Backend, java.lang.Integer, java.lang.Integer);
+1515:  public com.google.ai.edge.litertlm.EngineConfig(java.lang.String, com.google.ai.edge.litertlm.Backend, com.google.ai.edge.litertlm.Backend, com.google.ai.edge.litertlm.Backend, java.lang.Integer);
+1575:  public com.google.ai.edge.litertlm.EngineConfig(java.lang.String, com.google.ai.edge.litertlm.Backend, com.google.ai.edge.litertlm.Backend, com.google.ai.edge.litertlm.Backend);
+1630:  public com.google.ai.edge.litertlm.EngineConfig(java.lang.String, com.google.ai.edge.litertlm.Backend, com.google.ai.edge.litertlm.Backend);
+1680:  public com.google.ai.edge.litertlm.EngineConfig(java.lang.String, com.google.ai.edge.litertlm.Backend);
+1725:  public com.google.ai.edge.litertlm.EngineConfig(java.lang.String);
+1765:RuntimeVisibleAnnotations:
+######## ConversationConfig
+170:  #158 = Utf8               Lkotlin/Deprecated;
+284:  #272 = Utf8               Deprecated
+291:  #279 = Utf8               RuntimeVisibleAnnotations
+377:    Deprecated: true
+396:  public com.google.ai.edge.litertlm.ConversationConfig(com.google.ai.edge.litertlm.Contents, java.util.List<com.google.ai.edge.litertlm.Message>, java.util.List<? extends com.google.ai.edge.litertlm.ToolProvider>, com.google.ai.edge.litertlm.SamplerConfig, boolean, java.util.List<com.google.ai.edge.litertlm.Channel>, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.LoraConfig, boolean, java.lang.Integer, com.google.ai.edge.litertlm.ThinkingConfig, boolean, java.lang.Boolean, java.lang.String, com.google.ai.edge.litertlm.SpeculativeDecodingConfig);
+594:  public com.google.ai.edge.litertlm.ConversationConfig(com.google.ai.edge.litertlm.Contents, java.util.List, java.util.List, com.google.ai.edge.litertlm.SamplerConfig, boolean, java.util.List, java.util.Map, com.google.ai.edge.litertlm.LoraConfig, boolean, java.lang.Integer, com.google.ai.edge.litertlm.ThinkingConfig, boolean, java.lang.Boolean, java.lang.String, com.google.ai.edge.litertlm.SpeculativeDecodingConfig, int, kotlin.jvm.internal.DefaultConstructorMarker);
+757:  public final com.google.ai.edge.litertlm.Contents getSystemInstruction();
+774:  public final java.util.List<com.google.ai.edge.litertlm.Message> getInitialMessages();
+792:  public final java.util.List<com.google.ai.edge.litertlm.ToolProvider> getTools();
+810:  public final com.google.ai.edge.litertlm.SamplerConfig getSamplerConfig();
+827:  public final boolean getAutomaticToolCalling();
+841:  public final java.util.List<com.google.ai.edge.litertlm.Channel> getChannels();
+859:  public final java.util.Map<java.lang.String, java.lang.Object> getExtraContext();
+877:  public final com.google.ai.edge.litertlm.LoraConfig getLoraConfig();
+894:  public final boolean getPrefillPrefaceOnInit();
+908:  public final java.lang.Integer getMaxOutputToken();
+925:  public final com.google.ai.edge.litertlm.ThinkingConfig getThinkingConfig();
+942:  public final boolean getEnableResponseFormat();
+956:  public final java.lang.Boolean getEnableSpeculativeDecoding();
+969:    Deprecated: true
+974:  public static void getEnableSpeculativeDecoding$annotations();
+980:    Deprecated: true
+981:    RuntimeVisibleAnnotations:
+983:        kotlin.Deprecated(
+984:          message="Use speculativeDecodingConfig (mode ON or OFF) instead."
+987:  public final java.lang.String getChatTemplate();
+1004:  public final com.google.ai.edge.litertlm.SpeculativeDecodingConfig getSpeculativeDecodingConfig();
+1499:  public java.lang.String toString();
+1543:  public int hashCode();
+1770:  public boolean equals(java.lang.Object);
+1939:  public com.google.ai.edge.litertlm.ConversationConfig(com.google.ai.edge.litertlm.Contents, java.util.List<com.google.ai.edge.litertlm.Message>, java.util.List<? extends com.google.ai.edge.litertlm.ToolProvider>, com.google.ai.edge.litertlm.SamplerConfig, boolean, java.util.List<com.google.ai.edge.litertlm.Channel>, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.LoraConfig, boolean, java.lang.Integer, com.google.ai.edge.litertlm.ThinkingConfig, boolean, java.lang.Boolean, java.lang.String);
+2048:  public com.google.ai.edge.litertlm.ConversationConfig(com.google.ai.edge.litertlm.Contents, java.util.List<com.google.ai.edge.litertlm.Message>, java.util.List<? extends com.google.ai.edge.litertlm.ToolProvider>, com.google.ai.edge.litertlm.SamplerConfig, boolean, java.util.List<com.google.ai.edge.litertlm.Channel>, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.LoraConfig, boolean, java.lang.Integer, com.google.ai.edge.litertlm.ThinkingConfig, boolean, java.lang.Boolean);
+2152:  public com.google.ai.edge.litertlm.ConversationConfig(com.google.ai.edge.litertlm.Contents, java.util.List<com.google.ai.edge.litertlm.Message>, java.util.List<? extends com.google.ai.edge.litertlm.ToolProvider>, com.google.ai.edge.litertlm.SamplerConfig, boolean, java.util.List<com.google.ai.edge.litertlm.Channel>, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.LoraConfig, boolean, java.lang.Integer, com.google.ai.edge.litertlm.ThinkingConfig, boolean);
+2251:  public com.google.ai.edge.litertlm.ConversationConfig(com.google.ai.edge.litertlm.Contents, java.util.List<com.google.ai.edge.litertlm.Message>, java.util.List<? extends com.google.ai.edge.litertlm.ToolProvider>, com.google.ai.edge.litertlm.SamplerConfig, boolean, java.util.List<com.google.ai.edge.litertlm.Channel>, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.LoraConfig, boolean, java.lang.Integer, com.google.ai.edge.litertlm.ThinkingConfig);
+2347:  public com.google.ai.edge.litertlm.ConversationConfig(com.google.ai.edge.litertlm.Contents, java.util.List<com.google.ai.edge.litertlm.Message>, java.util.List<? extends com.google.ai.edge.litertlm.ToolProvider>, com.google.ai.edge.litertlm.SamplerConfig, boolean, java.util.List<com.google.ai.edge.litertlm.Channel>, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.LoraConfig, boolean, java.lang.Integer);
+2438:  public com.google.ai.edge.litertlm.ConversationConfig(com.google.ai.edge.litertlm.Contents, java.util.List<com.google.ai.edge.litertlm.Message>, java.util.List<? extends com.google.ai.edge.litertlm.ToolProvider>, com.google.ai.edge.litertlm.SamplerConfig, boolean, java.util.List<com.google.ai.edge.litertlm.Channel>, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.LoraConfig, boolean);
+2524:  public com.google.ai.edge.litertlm.ConversationConfig(com.google.ai.edge.litertlm.Contents, java.util.List<com.google.ai.edge.litertlm.Message>, java.util.List<? extends com.google.ai.edge.litertlm.ToolProvider>, com.google.ai.edge.litertlm.SamplerConfig, boolean, java.util.List<com.google.ai.edge.litertlm.Channel>, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.LoraConfig);
+2607:  public com.google.ai.edge.litertlm.ConversationConfig(com.google.ai.edge.litertlm.Contents, java.util.List<com.google.ai.edge.litertlm.Message>, java.util.List<? extends com.google.ai.edge.litertlm.ToolProvider>, com.google.ai.edge.litertlm.SamplerConfig, boolean, java.util.List<com.google.ai.edge.litertlm.Channel>, java.util.Map<java.lang.String, ? extends java.lang.Object>);
+2685:  public com.google.ai.edge.litertlm.ConversationConfig(com.google.ai.edge.litertlm.Contents, java.util.List<com.google.ai.edge.litertlm.Message>, java.util.List<? extends com.google.ai.edge.litertlm.ToolProvider>, com.google.ai.edge.litertlm.SamplerConfig, boolean, java.util.List<com.google.ai.edge.litertlm.Channel>);
+2755:  public com.google.ai.edge.litertlm.ConversationConfig(com.google.ai.edge.litertlm.Contents, java.util.List<com.google.ai.edge.litertlm.Message>, java.util.List<? extends com.google.ai.edge.litertlm.ToolProvider>, com.google.ai.edge.litertlm.SamplerConfig, boolean);
+2820:  public com.google.ai.edge.litertlm.ConversationConfig(com.google.ai.edge.litertlm.Contents, java.util.List<com.google.ai.edge.litertlm.Message>, java.util.List<? extends com.google.ai.edge.litertlm.ToolProvider>, com.google.ai.edge.litertlm.SamplerConfig);
+2882:  public com.google.ai.edge.litertlm.ConversationConfig(com.google.ai.edge.litertlm.Contents, java.util.List<com.google.ai.edge.litertlm.Message>, java.util.List<? extends com.google.ai.edge.litertlm.ToolProvider>);
+2939:  public com.google.ai.edge.litertlm.ConversationConfig(com.google.ai.edge.litertlm.Contents, java.util.List<com.google.ai.edge.litertlm.Message>);
+2988:  public com.google.ai.edge.litertlm.ConversationConfig(com.google.ai.edge.litertlm.Contents);
+3028:  public com.google.ai.edge.litertlm.ConversationConfig();
+3061:RuntimeVisibleAnnotations:
+######## SessionConfig
+52:   #40 = Utf8               Lkotlin/Deprecated;
+128:  #116 = Utf8               Deprecated
+135:  #123 = Utf8               RuntimeVisibleAnnotations
+156:    Deprecated: true
+168:  public com.google.ai.edge.litertlm.SessionConfig(com.google.ai.edge.litertlm.SamplerConfig, com.google.ai.edge.litertlm.LoraConfig, java.lang.Boolean, com.google.ai.edge.litertlm.SpeculativeDecodingConfig);
+225:  public com.google.ai.edge.litertlm.SessionConfig(com.google.ai.edge.litertlm.SamplerConfig, com.google.ai.edge.litertlm.LoraConfig, java.lang.Boolean, com.google.ai.edge.litertlm.SpeculativeDecodingConfig, int, kotlin.jvm.internal.DefaultConstructorMarker);
+278:  public final com.google.ai.edge.litertlm.SamplerConfig getSamplerConfig();
+295:  public final com.google.ai.edge.litertlm.LoraConfig getLoraConfig();
+312:  public final java.lang.Boolean getEnableSpeculativeDecoding();
+325:    Deprecated: true
+330:  public static void getEnableSpeculativeDecoding$annotations();
+336:    Deprecated: true
+337:    RuntimeVisibleAnnotations:
+339:        kotlin.Deprecated(
+340:          message="Use speculativeDecodingConfig (mode ON or OFF) instead."
+343:  public final com.google.ai.edge.litertlm.SpeculativeDecodingConfig getSpeculativeDecodingConfig();
+509:  public java.lang.String toString();
+531:  public int hashCode();
+615:  public boolean equals(java.lang.Object);
+688:  public com.google.ai.edge.litertlm.SessionConfig(com.google.ai.edge.litertlm.SamplerConfig, com.google.ai.edge.litertlm.LoraConfig, java.lang.Boolean);
+727:  public com.google.ai.edge.litertlm.SessionConfig(com.google.ai.edge.litertlm.SamplerConfig, com.google.ai.edge.litertlm.LoraConfig);
+761:  public com.google.ai.edge.litertlm.SessionConfig(com.google.ai.edge.litertlm.SamplerConfig);
+790:  public com.google.ai.edge.litertlm.SessionConfig();
+812:RuntimeVisibleAnnotations:
+######## Conversation
+466:  #454 = Utf8               Lcom/google/ai/edge/litertlm/ExperimentalApi;
+701:  #689 = Utf8               RuntimeVisibleAnnotations
+742:  public com.google.ai.edge.litertlm.Conversation(long, com.google.ai.edge.litertlm.ToolManager, boolean, boolean);
+800:  public com.google.ai.edge.litertlm.Conversation(long, com.google.ai.edge.litertlm.ToolManager, boolean, boolean, int, kotlin.jvm.internal.DefaultConstructorMarker);
+849:  public final com.google.ai.edge.litertlm.ToolManager getToolManager();
+866:  public final boolean getAutomaticToolCalling();
+880:  public final boolean getEnableResponseFormat();
+894:  public final boolean isAlive();
+909:  private final com.google.ai.edge.litertlm.ResponseFormat resolveResponseFormat(com.google.gson.JsonObject, com.google.ai.edge.litertlm.ResponseFormat);
+970:  public final com.google.ai.edge.litertlm.Message sendMessage(com.google.ai.edge.litertlm.Message, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig, java.lang.Integer, com.google.ai.edge.litertlm.ThinkingConfig, com.google.ai.edge.litertlm.ResponseFormat);
+1348:  public final com.google.ai.edge.litertlm.Message sendMessage(com.google.ai.edge.litertlm.Contents, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig, java.lang.Integer, com.google.ai.edge.litertlm.ThinkingConfig, com.google.ai.edge.litertlm.ResponseFormat);
+1519:  public final com.google.ai.edge.litertlm.Message sendMessage(java.lang.String, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig, java.lang.Integer, com.google.ai.edge.litertlm.ThinkingConfig, com.google.ai.edge.litertlm.ResponseFormat);
+1691:  public final void sendMessageAsync(com.google.ai.edge.litertlm.Message, com.google.ai.edge.litertlm.MessageCallback, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig, java.lang.Integer, com.google.ai.edge.litertlm.ThinkingConfig, com.google.ai.edge.litertlm.ResponseFormat);
+2010:  public final void sendMessageAsync(com.google.ai.edge.litertlm.Contents, com.google.ai.edge.litertlm.MessageCallback, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig, java.lang.Integer, com.google.ai.edge.litertlm.ThinkingConfig, com.google.ai.edge.litertlm.ResponseFormat);
+2191:  public final void sendMessageAsync(java.lang.String, com.google.ai.edge.litertlm.MessageCallback, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig, java.lang.Integer, com.google.ai.edge.litertlm.ThinkingConfig, com.google.ai.edge.litertlm.ResponseFormat);
+2372:  public final kotlinx.coroutines.flow.Flow<com.google.ai.edge.litertlm.Message> sendMessageAsync(com.google.ai.edge.litertlm.Message, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig, java.lang.Integer, com.google.ai.edge.litertlm.ThinkingConfig, com.google.ai.edge.litertlm.ResponseFormat);
+2538:  public final kotlinx.coroutines.flow.Flow<com.google.ai.edge.litertlm.Message> sendMessageAsync(com.google.ai.edge.litertlm.Contents, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig, java.lang.Integer, com.google.ai.edge.litertlm.ThinkingConfig, com.google.ai.edge.litertlm.ResponseFormat);
+2710:  public final kotlinx.coroutines.flow.Flow<com.google.ai.edge.litertlm.Message> sendMessageAsync(java.lang.String, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig, java.lang.Integer, com.google.ai.edge.litertlm.ThinkingConfig, com.google.ai.edge.litertlm.ResponseFormat);
+2882:  private final com.google.gson.JsonObject handleToolCalls(com.google.gson.JsonObject);
+3043:  public final void cancelProcess();
+3063:  public final com.google.ai.edge.litertlm.BenchmarkInfo getBenchmarkInfo();
+3083:        com.google.ai.edge.litertlm.ExperimentalApi
+3087:  public final int getTokenCount();
+3106:  public final java.lang.String renderMessageIntoString(com.google.ai.edge.litertlm.Message, java.util.Map<java.lang.String, ? extends java.lang.Object>);
+3155:        com.google.ai.edge.litertlm.ExperimentalApi
+3193:  public final java.lang.String renderPrefaceIntoString();
+3213:        com.google.ai.edge.litertlm.ExperimentalApi
+3217:  public final com.google.ai.edge.litertlm.Conversation clone();
+3253:  public void close();
+3287:  private final void checkIsAlive();
+3319:  public final com.google.ai.edge.litertlm.Message sendMessage(com.google.ai.edge.litertlm.Message, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig, java.lang.Integer, com.google.ai.edge.litertlm.ThinkingConfig);
+3391:  public final com.google.ai.edge.litertlm.Message sendMessage(com.google.ai.edge.litertlm.Message, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig, java.lang.Integer);
+3458:  public final com.google.ai.edge.litertlm.Message sendMessage(com.google.ai.edge.litertlm.Message, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig);
+3520:  public final com.google.ai.edge.litertlm.Message sendMessage(com.google.ai.edge.litertlm.Message, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig);
+3577:  public final com.google.ai.edge.litertlm.Message sendMessage(com.google.ai.edge.litertlm.Message, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig);
+3629:  public final com.google.ai.edge.litertlm.Message sendMessage(com.google.ai.edge.litertlm.Message, java.util.Map<java.lang.String, ? extends java.lang.Object>);
+3676:  public final com.google.ai.edge.litertlm.Message sendMessage(com.google.ai.edge.litertlm.Message);
+3714:  public final com.google.ai.edge.litertlm.Message sendMessage(com.google.ai.edge.litertlm.Contents, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig, java.lang.Integer, com.google.ai.edge.litertlm.ThinkingConfig);
+3786:  public final com.google.ai.edge.litertlm.Message sendMessage(com.google.ai.edge.litertlm.Contents, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig, java.lang.Integer);
+3853:  public final com.google.ai.edge.litertlm.Message sendMessage(com.google.ai.edge.litertlm.Contents, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig);
+3915:  public final com.google.ai.edge.litertlm.Message sendMessage(com.google.ai.edge.litertlm.Contents, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig);
+3972:  public final com.google.ai.edge.litertlm.Message sendMessage(com.google.ai.edge.litertlm.Contents, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig);
+4024:  public final com.google.ai.edge.litertlm.Message sendMessage(com.google.ai.edge.litertlm.Contents, java.util.Map<java.lang.String, ? extends java.lang.Object>);
+4071:  public final com.google.ai.edge.litertlm.Message sendMessage(com.google.ai.edge.litertlm.Contents);
+4109:  public final com.google.ai.edge.litertlm.Message sendMessage(java.lang.String, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig, java.lang.Integer, com.google.ai.edge.litertlm.ThinkingConfig);
+4181:  public final com.google.ai.edge.litertlm.Message sendMessage(java.lang.String, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig, java.lang.Integer);
+4248:  public final com.google.ai.edge.litertlm.Message sendMessage(java.lang.String, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig);
+4310:  public final com.google.ai.edge.litertlm.Message sendMessage(java.lang.String, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig);
+4367:  public final com.google.ai.edge.litertlm.Message sendMessage(java.lang.String, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig);
+4419:  public final com.google.ai.edge.litertlm.Message sendMessage(java.lang.String, java.util.Map<java.lang.String, ? extends java.lang.Object>);
+4466:  public final com.google.ai.edge.litertlm.Message sendMessage(java.lang.String);
+4504:  public final void sendMessageAsync(com.google.ai.edge.litertlm.Message, com.google.ai.edge.litertlm.MessageCallback, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig, java.lang.Integer, com.google.ai.edge.litertlm.ThinkingConfig);
+4583:  public final void sendMessageAsync(com.google.ai.edge.litertlm.Message, com.google.ai.edge.litertlm.MessageCallback, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig, java.lang.Integer);
+4657:  public final void sendMessageAsync(com.google.ai.edge.litertlm.Message, com.google.ai.edge.litertlm.MessageCallback, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig);
+4726:  public final void sendMessageAsync(com.google.ai.edge.litertlm.Message, com.google.ai.edge.litertlm.MessageCallback, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig);
+4790:  public final void sendMessageAsync(com.google.ai.edge.litertlm.Message, com.google.ai.edge.litertlm.MessageCallback, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig);
+4849:  public final void sendMessageAsync(com.google.ai.edge.litertlm.Message, com.google.ai.edge.litertlm.MessageCallback, java.util.Map<java.lang.String, ? extends java.lang.Object>);
+4903:  public final void sendMessageAsync(com.google.ai.edge.litertlm.Message, com.google.ai.edge.litertlm.MessageCallback);
+4948:  public final void sendMessageAsync(com.google.ai.edge.litertlm.Contents, com.google.ai.edge.litertlm.MessageCallback, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig, java.lang.Integer, com.google.ai.edge.litertlm.ThinkingConfig);
+5027:  public final void sendMessageAsync(com.google.ai.edge.litertlm.Contents, com.google.ai.edge.litertlm.MessageCallback, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig, java.lang.Integer);
+5101:  public final void sendMessageAsync(com.google.ai.edge.litertlm.Contents, com.google.ai.edge.litertlm.MessageCallback, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig);
+5170:  public final void sendMessageAsync(com.google.ai.edge.litertlm.Contents, com.google.ai.edge.litertlm.MessageCallback, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig);
+5234:  public final void sendMessageAsync(com.google.ai.edge.litertlm.Contents, com.google.ai.edge.litertlm.MessageCallback, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig);
+5293:  public final void sendMessageAsync(com.google.ai.edge.litertlm.Contents, com.google.ai.edge.litertlm.MessageCallback, java.util.Map<java.lang.String, ? extends java.lang.Object>);
+5347:  public final void sendMessageAsync(com.google.ai.edge.litertlm.Contents, com.google.ai.edge.litertlm.MessageCallback);
+5392:  public final void sendMessageAsync(java.lang.String, com.google.ai.edge.litertlm.MessageCallback, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig, java.lang.Integer, com.google.ai.edge.litertlm.ThinkingConfig);
+5471:  public final void sendMessageAsync(java.lang.String, com.google.ai.edge.litertlm.MessageCallback, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig, java.lang.Integer);
+5545:  public final void sendMessageAsync(java.lang.String, com.google.ai.edge.litertlm.MessageCallback, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig);
+5614:  public final void sendMessageAsync(java.lang.String, com.google.ai.edge.litertlm.MessageCallback, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig);
+5678:  public final void sendMessageAsync(java.lang.String, com.google.ai.edge.litertlm.MessageCallback, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig);
+5737:  public final void sendMessageAsync(java.lang.String, com.google.ai.edge.litertlm.MessageCallback, java.util.Map<java.lang.String, ? extends java.lang.Object>);
+5791:  public final void sendMessageAsync(java.lang.String, com.google.ai.edge.litertlm.MessageCallback);
+5836:  public final kotlinx.coroutines.flow.Flow<com.google.ai.edge.litertlm.Message> sendMessageAsync(com.google.ai.edge.litertlm.Message, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig, java.lang.Integer, com.google.ai.edge.litertlm.ThinkingConfig);
+5908:  public final kotlinx.coroutines.flow.Flow<com.google.ai.edge.litertlm.Message> sendMessageAsync(com.google.ai.edge.litertlm.Message, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig, java.lang.Integer);
+5975:  public final kotlinx.coroutines.flow.Flow<com.google.ai.edge.litertlm.Message> sendMessageAsync(com.google.ai.edge.litertlm.Message, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig);
+6037:  public final kotlinx.coroutines.flow.Flow<com.google.ai.edge.litertlm.Message> sendMessageAsync(com.google.ai.edge.litertlm.Message, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig);
+6094:  public final kotlinx.coroutines.flow.Flow<com.google.ai.edge.litertlm.Message> sendMessageAsync(com.google.ai.edge.litertlm.Message, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig);
+6146:  public final kotlinx.coroutines.flow.Flow<com.google.ai.edge.litertlm.Message> sendMessageAsync(com.google.ai.edge.litertlm.Message, java.util.Map<java.lang.String, ? extends java.lang.Object>);
+6193:  public final kotlinx.coroutines.flow.Flow<com.google.ai.edge.litertlm.Message> sendMessageAsync(com.google.ai.edge.litertlm.Message);
+6232:  public final kotlinx.coroutines.flow.Flow<com.google.ai.edge.litertlm.Message> sendMessageAsync(com.google.ai.edge.litertlm.Contents, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig, java.lang.Integer, com.google.ai.edge.litertlm.ThinkingConfig);
+6304:  public final kotlinx.coroutines.flow.Flow<com.google.ai.edge.litertlm.Message> sendMessageAsync(com.google.ai.edge.litertlm.Contents, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig, java.lang.Integer);
+6371:  public final kotlinx.coroutines.flow.Flow<com.google.ai.edge.litertlm.Message> sendMessageAsync(com.google.ai.edge.litertlm.Contents, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig);
+6433:  public final kotlinx.coroutines.flow.Flow<com.google.ai.edge.litertlm.Message> sendMessageAsync(com.google.ai.edge.litertlm.Contents, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig);
+6490:  public final kotlinx.coroutines.flow.Flow<com.google.ai.edge.litertlm.Message> sendMessageAsync(com.google.ai.edge.litertlm.Contents, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig);
+6542:  public final kotlinx.coroutines.flow.Flow<com.google.ai.edge.litertlm.Message> sendMessageAsync(com.google.ai.edge.litertlm.Contents, java.util.Map<java.lang.String, ? extends java.lang.Object>);
+6589:  public final kotlinx.coroutines.flow.Flow<com.google.ai.edge.litertlm.Message> sendMessageAsync(com.google.ai.edge.litertlm.Contents);
+6628:  public final kotlinx.coroutines.flow.Flow<com.google.ai.edge.litertlm.Message> sendMessageAsync(java.lang.String, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig, java.lang.Integer, com.google.ai.edge.litertlm.ThinkingConfig);
+6700:  public final kotlinx.coroutines.flow.Flow<com.google.ai.edge.litertlm.Message> sendMessageAsync(java.lang.String, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig, java.lang.Integer);
+6767:  public final kotlinx.coroutines.flow.Flow<com.google.ai.edge.litertlm.Message> sendMessageAsync(java.lang.String, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig, com.google.ai.edge.litertlm.SuppressTokensConfig);
+6829:  public final kotlinx.coroutines.flow.Flow<com.google.ai.edge.litertlm.Message> sendMessageAsync(java.lang.String, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig, com.google.ai.edge.litertlm.NoRepeatNgramConfig);
+6886:  public final kotlinx.coroutines.flow.Flow<com.google.ai.edge.litertlm.Message> sendMessageAsync(java.lang.String, java.util.Map<java.lang.String, ? extends java.lang.Object>, com.google.ai.edge.litertlm.RepetitionPenaltyConfig);
+6938:  public final kotlinx.coroutines.flow.Flow<com.google.ai.edge.litertlm.Message> sendMessageAsync(java.lang.String, java.util.Map<java.lang.String, ? extends java.lang.Object>);
+6985:  public final kotlinx.coroutines.flow.Flow<com.google.ai.edge.litertlm.Message> sendMessageAsync(java.lang.String);
+7107:RuntimeVisibleAnnotations:
+7114:      d2=["Lcom/google/ai/edge/litertlm/Conversation;","Ljava/lang/AutoCloseable;","Lkotlin/AutoCloseable;","handle","","toolManager","Lcom/google/ai/edge/litertlm/ToolManager;","automaticToolCalling","","enableResponseFormat","<init>","(JLcom/google/ai/edge/litertlm/ToolManager;ZZ)V","getToolManager","()Lcom/google/ai/edge/litertlm/ToolManager;","getAutomaticToolCalling","()Z","getEnableResponseFormat","_isAlive","Ljava/util/concurrent/atomic/AtomicBoolean;","isAlive","resolveResponseFormat","Lcom/google/ai/edge/litertlm/ResponseFormat;","currentMessageJson","Lcom/google/gson/JsonObject;","responseFormat","sendMessage","Lcom/google/ai/edge/litertlm/Message;","message","extraContext","","","","repetitionPenaltyConfig","Lcom/google/ai/edge/litertlm/RepetitionPenaltyConfig;","noRepeatNgramConfig","Lcom/google/ai/edge/litertlm/NoRepeatNgramConfig;","suppressTokensConfig","Lcom/google/ai/edge/litertlm/SuppressTokensConfig;","maxOutputToken","","thinkingConfig","Lcom/google/ai/edge/litertlm/ThinkingConfig;","(Lcom/google/ai/edge/litertlm/Message;Ljava/util/Map;Lcom/google/ai/edge/litertlm/RepetitionPenaltyConfig;Lcom/google/ai/edge/litertlm/NoRepeatNgramConfig;Lcom/google/ai/edge/litertlm/SuppressTokensConfig;Ljava/lang/Integer;Lcom/google/ai/edge/litertlm/ThinkingConfig;Lcom/google/ai/edge/litertlm/ResponseFormat;)Lcom/google/ai/edge/litertlm/Message;","Lkotlin/jvm/JvmOverloads;","contents","Lcom/google/ai/edge/litertlm/Contents;","(Lcom/google/ai/edge/litertlm/Contents;Ljava/util/Map;Lcom/google/ai/edge/litertlm/RepetitionPenaltyConfig;Lcom/google/ai/edge/litertlm/NoRepeatNgramConfig;Lcom/google/ai/edge/litertlm/SuppressTokensConfig;Ljava/lang/Integer;Lcom/google/ai/edge/litertlm/ThinkingConfig;Lcom/google/ai/edge/litertlm/ResponseFormat;)Lcom/google/ai/edge/litertlm/Message;","text","(Ljava/lang/String;Ljava/util/Map;Lcom/google/ai/edge/litertlm/RepetitionPenaltyConfig;Lcom/google/ai/edge/litertlm/NoRepeatNgramConfig;Lcom/google/ai/edge/litertlm/SuppressTokensConfig;Ljava/lang/Integer;Lcom/google/ai/edge/litertlm/ThinkingConfig;Lcom/google/ai/edge/litertlm/ResponseFormat;)Lcom/google/ai/edge/litertlm/Message;","sendMessageAsync","","callback","Lcom/google/ai/edge/litertlm/MessageCallback;","(Lcom/google/ai/edge/litertlm/Message;Lcom/google/ai/edge/litertlm/MessageCallback;Ljava/util/Map;Lcom/google/ai/edge/litertlm/RepetitionPenaltyConfig;Lcom/google/ai/edge/litertlm/NoRepeatNgramConfig;Lcom/google/ai/edge/litertlm/SuppressTokensConfig;Ljava/lang/Integer;Lcom/google/ai/edge/litertlm/ThinkingConfig;Lcom/google/ai/edge/litertlm/ResponseFormat;)V","(Lcom/google/ai/edge/litertlm/Contents;Lcom/google/ai/edge/litertlm/MessageCallback;Ljava/util/Map;Lcom/google/ai/edge/litertlm/RepetitionPenaltyConfig;Lcom/google/ai/edge/litertlm/NoRepeatNgramConfig;Lcom/google/ai/edge/litertlm/SuppressTokensConfig;Ljava/lang/Integer;Lcom/google/ai/edge/litertlm/ThinkingConfig;Lcom/google/ai/edge/litertlm/ResponseFormat;)V","(Ljava/lang/String;Lcom/google/ai/edge/litertlm/MessageCallback;Ljava/util/Map;Lcom/google/ai/edge/litertlm/RepetitionPenaltyConfig;Lcom/google/ai/edge/litertlm/NoRepeatNgramConfig;Lcom/google/ai/edge/litertlm/SuppressTokensConfig;Ljava/lang/Integer;Lcom/google/ai/edge/litertlm/ThinkingConfig;Lcom/google/ai/edge/litertlm/ResponseFormat;)V","Lkotlinx/coroutines/flow/Flow;","(Lcom/google/ai/edge/litertlm/Message;Ljava/util/Map;Lcom/google/ai/edge/litertlm/RepetitionPenaltyConfig;Lcom/google/ai/edge/litertlm/NoRepeatNgramConfig;Lcom/google/ai/edge/litertlm/SuppressTokensConfig;Ljava/lang/Integer;Lcom/google/ai/edge/litertlm/ThinkingConfig;Lcom/google/ai/edge/litertlm/ResponseFormat;)Lkotlinx/coroutines/flow/Flow;","(Lcom/google/ai/edge/litertlm/Contents;Ljava/util/Map;Lcom/google/ai/edge/litertlm/RepetitionPenaltyConfig;Lcom/google/ai/edge/litertlm/NoRepeatNgramConfig;Lcom/google/ai/edge/litertlm/SuppressTokensConfig;Ljava/lang/Integer;Lcom/google/ai/edge/litertlm/ThinkingConfig;Lcom/google/ai/edge/litertlm/ResponseFormat;)Lkotlinx/coroutines/flow/Flow;","(Ljava/lang/String;Ljava/util/Map;Lcom/google/ai/edge/litertlm/RepetitionPenaltyConfig;Lcom/google/ai/edge/litertlm/NoRepeatNgramConfig;Lcom/google/ai/edge/litertlm/SuppressTokensConfig;Ljava/lang/Integer;Lcom/google/ai/edge/litertlm/ThinkingConfig;Lcom/google/ai/edge/litertlm/ResponseFormat;)Lkotlinx/coroutines/flow/Flow;","handleToolCalls","toolCallsJsonObject","cancelProcess","getBenchmarkInfo","Lcom/google/ai/edge/litertlm/BenchmarkInfo;","Lcom/google/ai/edge/litertlm/ExperimentalApi;","getTokenCount","renderMessageIntoString","renderPrefaceIntoString","clone","close","checkIsAlive","JniMessageCallbackImpl","Companion","third_party.odml.litert_lm.kotlin.java.com.google.ai.edge.litertlm_litertlm-android"]
+######## Session
+186:  #174 = Utf8               RuntimeVisibleAnnotations
+199:  public com.google.ai.edge.litertlm.Session(long);
+228:  public final boolean isAlive();
+243:  public void close();
+277:  public final void runPrefill(java.util.List<? extends com.google.ai.edge.litertlm.InputData>);
+326:  public final java.lang.String runDecode();
+348:  public final java.lang.String generateContent(java.util.List<? extends com.google.ai.edge.litertlm.InputData>);
+400:  public final void generateContentStream(java.util.List<? extends com.google.ai.edge.litertlm.InputData>, com.google.ai.edge.litertlm.ResponseCallback);
+468:  public final void cancelProcess();
+488:  public final com.google.ai.edge.litertlm.Session clone();
+513:  private final void checkIsAlive();
+576:RuntimeVisibleAnnotations:
+######## SpeculativeDecodingMode
+110:  #98 = Utf8               RuntimeVisibleAnnotations
+136:  private com.google.ai.edge.litertlm.SpeculativeDecodingMode(int);
+164:  public final int getValue();
+178:  public static com.google.ai.edge.litertlm.SpeculativeDecodingMode[] values();
+188:  public static com.google.ai.edge.litertlm.SpeculativeDecodingMode valueOf(java.lang.String);
+205:  public static kotlin.enums.EnumEntries<com.google.ai.edge.litertlm.SpeculativeDecodingMode> getEntries();
+217:  private static final com.google.ai.edge.litertlm.SpeculativeDecodingMode[] $values();
+280:RuntimeVisibleAnnotations:
+######## SpeculativeDecodingConfig
+92:  #80 = Utf8               RuntimeVisibleAnnotations
+102:  public com.google.ai.edge.litertlm.SpeculativeDecodingConfig(com.google.ai.edge.litertlm.SpeculativeDecodingMode);
+131:  public com.google.ai.edge.litertlm.SpeculativeDecodingConfig(com.google.ai.edge.litertlm.SpeculativeDecodingMode, int, kotlin.jvm.internal.DefaultConstructorMarker);
+151:  public final com.google.ai.edge.litertlm.SpeculativeDecodingMode getMode();
+227:  public java.lang.String toString();
+243:  public int hashCode();
+265:  public boolean equals(java.lang.Object);
+310:  public com.google.ai.edge.litertlm.SpeculativeDecodingConfig();
+329:RuntimeVisibleAnnotations:
+######## Backend$CPU
+42:   #30 = Utf8               Lkotlin/Deprecated;
+45:   #33 = Utf8               replaceWith
+46:   #34 = Utf8               Lkotlin/ReplaceWith;
+109:   #97 = Utf8               Deprecated
+116:  #104 = Utf8               RuntimeVisibleAnnotations
+131:    Deprecated: true
+136:  public com.google.ai.edge.litertlm.Backend$CPU(java.lang.Integer, java.lang.Integer);
+176:  public com.google.ai.edge.litertlm.Backend$CPU(java.lang.Integer, java.lang.Integer, int, kotlin.jvm.internal.DefaultConstructorMarker);
+209:  public final java.lang.Integer getThreadCount();
+226:  public final java.lang.Integer getNumOfThreads();
+239:    Deprecated: true
+244:  public static void getNumOfThreads$annotations();
+250:    Deprecated: true
+251:    RuntimeVisibleAnnotations:
+253:        kotlin.Deprecated(
+254:          message="Use threadCount instead"
+255:          replaceWith=@kotlin.ReplaceWith(
+350:  public java.lang.String toString();
+368:  public int hashCode();
+414:  public boolean equals(java.lang.Object);
+469:  public com.google.ai.edge.litertlm.Backend$CPU();
+488:RuntimeVisibleAnnotations:
