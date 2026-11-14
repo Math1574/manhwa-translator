@@ -144,6 +144,8 @@ chk() { printf '%s\t%s\n' "$1" "$2" >> $UI; }
 dismiss_anr() { for k in 1 2 3 4; do if adb shell dumpsys window | grep -q "Application Not Responding"; then say "fenêtre « ne répond plus » du système fermée"; adb shell input keyevent KEYCODE_BACK; sleep 1.5; else break; fi; done; }
 tap() { dismiss_anr; adb shell input tap "$@"; }
 tapt() { local xy; dismiss_anr; xy=$(python3 ci/ui_tap.py "$OUT/reports/ui_$1.xml" "$2" ${3:-1}) && adb shell input tap $xy; }
+# appui long : un « balayage » immobile d'un peu plus d'une seconde au centre du nœud
+holdt() { local xy; dismiss_anr; xy=$(python3 ci/ui_tap.py "$OUT/reports/ui_$1.xml" "$2" ${3:-1}) && adb shell input swipe $xy $xy 1100; }
 # l'émulateur affiche parfois « Pixel Launcher ne répond plus » : cette fenêtre absorbe le premier appui, on la ferme avant de commencer
 for k in 1 2 3; do
   uidump anr; if grep -q "isn't responding\|not responding" "$OUT/reports/ui_anr.xml" 2>/dev/null; then tapt anr "Wait" || adb shell input keyevent KEYCODE_BACK; sleep 1; else break; fi
@@ -166,12 +168,36 @@ adb shell dumpsys activity activities | grep -E "ResumedActivity" | head -2 | se
 tap 540 1200; sleep 2; adb shell dumpsys window | grep -E "mCurrentFocus" | head -1 | sed 's/^/  [après appui] /' | tee -a $OUT/run.log; uidump fs1; chk "plein écran : un appui ouvre le menu de lecture" $(has fs1 'Quitter le plein'); shot ui 1
 chk "plein écran : le menu propose Original | Traduit et les chapitres" $([ "$(has fs1 'Original')" = 1 ] && [ "$(has fs1 'Traduit')" = 1 ] && [ "$(has fs1 'Suivant')" = 1 ] && echo 1 || echo 0)
 tap 540 1200; sleep 2; uidump fs2; chk "plein écran : un second appui le referme" $(hasnot fs2 'Quitter le plein')
+# réglages rapides depuis le plein écran : appui long sur « Traduit » (ou « Original ») du menu de lecture ; le retour referme le panneau sans quitter le plein écran
+tap 540 1200; sleep 1.5; uidump fsq0
+{ holdt fsq0 "=Traduit" || holdt fsq0 "=Original"; }; sleep 1.5; uidump fsq1; shot ui 13
+chk "réglages rapides : un appui long sur Original | Traduit les ouvre aussi en plein écran" $(has fsq1 'glages rapides')
+if [ "$(has fsq1 'glages rapides')" = 1 ]; then
+  adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump fsq2
+  chk "réglages rapides : le retour referme le panneau et reste en plein écran" $([ "$(hasnot fsq2 'glages rapides')" = 1 ] && [ "$(hasnot fsq2 'Biblioth')" = 1 ] && echo 1 || echo 0)
+else
+  chk "réglages rapides : le retour referme le panneau et reste en plein écran" 0
+  sleep 4   # le menu de lecture se range seul au bout de 5 s : le prochain appui doit le rouvrir
+fi
 tap 540 1200; sleep 2; uidump fs3; tapt fs3 "Quitter le plein"; sleep 2; uidump nav
 chk "plein écran : le bouton du menu le quitte (onglets de retour)" $(has nav 'Biblioth')
 chk "onglets : Lecture, Bibliothèque, Réglages" $([ "$(has nav 'Lecture')" = 1 ] && [ "$(has nav 'Biblioth')" = 1 ] && [ "$(has nav 'glages')" = 1 ] && echo 1 || echo 0)
 chk "bouton rond Original | Traduit présent hors plein écran" $([ "$(has nav 'Traduction activ')" = 1 ] || [ "$(has nav 'Traduire')" = 1 ] && echo 1 || echo 0)
 shot ui 5
 adb shell dumpsys window | grep -E "mCurrentFocus|isStatusBarVisible|statusBar.*visible" | head -3 | tee -a $OUT/run.log
+# réglages rapides : un appui long sur le bouton rond ouvre le panneau sans basculer la traduction ; un choix de langue y est enregistré ; le retour referme le panneau
+orb_on=$(has nav 'Traduction activ')
+{ holdt nav "Traduction activ" || holdt nav "Traduire"; }; sleep 1.5; uidump qs; shot ui 12
+chk "réglages rapides : un appui long sur le bouton rond ouvre le panneau" $(has qs 'glages rapides')
+chk "réglages rapides : langue, taille du texte, onomatopées et retraduction y sont" $([ "$(has qs 'Langue du texte')" = 1 ] && [ "$(has qs 'Traduire vers')" = 1 ] && [ "$(has qs 'Taille du texte')" = 1 ] && [ "$(has qs 'onomatop')" = 1 ] && [ "$(has qs 'Retraduire la page')" = 1 ] && echo 1 || echo 0)
+chk "réglages rapides : l'appui long ne bascule pas la traduction" $([ "$(has qs 'Traduction activ')" = "$orb_on" ] && echo 1 || echo 0)
+if [ "$(has qs 'glages rapides')" = 1 ]; then
+  tapt qs "=Coréen" 1; sleep 1
+  adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump qs2
+  chk "réglages rapides : le retour referme le panneau, la page reste affichée" $([ "$(hasnot qs2 'glages rapides')" = 1 ] && [ "$(has qs2 'Biblioth')" = 1 ] && echo 1 || echo 0)
+else
+  chk "réglages rapides : le retour referme le panneau, la page reste affichée" 0
+fi
 tapt nav "=Bibliothèque" 1; sleep 2; uidump lib; shot ui 2
 chk "bibliothèque : l'œuvre est listée avec « Continuer la lecture »" $([ "$(has lib 'Test Series')" = 1 ] && [ "$(has lib 'Continuer la lecture')" = 1 ] && echo 1 || echo 0)
 tapt lib "=Test Series" 2 top; sleep 2; uidump series; shot ui 3
@@ -185,10 +211,13 @@ adb shell input swipe 540 1900 540 500 400; sleep 1; uidump setb; shot ui 41
 adb shell input swipe 540 500 540 1900 400; sleep 1; adb shell input swipe 540 500 540 1900 400; sleep 1; uidump set
 hs() { if [ "$(has set "$1")" = 1 ] || [ "$(has setb "$1")" = 1 ]; then echo 1; else echo 0; fi; }
 chk "réglages : une carte par thème" $([ "$(hs 'Reconnaissance du texte')" = 1 ] && [ "$(hs 'Navigation')" = 1 ] && [ "$(hs 'Donn')" = 1 ] && [ "$(hs 'Glossaire')" = 1 ] && [ "$(hs 'Mod.*les de traduction')" = 1 ] && [ "$(hs 'Avanc')" = 1 ] && echo 1 || echo 0)
+chk "réglages rapides : la langue choisie dans le panneau est enregistrée (résumé de Réglages)" $(has set 'Cor[^"]*Fran[^"]*ML Kit')
 chk "réglages : champ de recherche, carte de mise à jour et numéro de version sur l'accueil" $([ "$(has set 'Rechercher un r.*glage')" = 1 ] && [ "$(has set 'Mise .*jour de')" = 1 ] && [ "$(has set 'build [0-9]')" = 1 ] && echo 1 || echo 0)
 tapt set "=Traduction" 1 top; sleep 2; uidump settr
 chk "réglages : la carte Traduction ouvre ses options (langues)" $(has settr 'Langue du texte')
+tapt settr "=Anglais" 1 top; sleep 1
 adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump set2
+chk "réglages : choisir une langue dans la carte Traduction l'enregistre (résumé de Réglages)" $(has set2 'Anglais[^"]*Fran[^"]*ML Kit')
 tapt set2 "=Lecture" 1 top; sleep 2; uidump setrd; shot ui 6
 chk "réglages : la carte Lecture ouvre ses options (bouton, barres)" $([ "$(has setrd 'Masquer les barres')" = 1 ] && echo 1 || echo 0)
 adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump set3

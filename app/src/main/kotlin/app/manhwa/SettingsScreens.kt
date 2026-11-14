@@ -96,6 +96,7 @@ private val searchIndex: List<Pair<SearchEntry, Target>> = listOf(
     SearchEntry("engine", "Moteur de traduction", "Traduction › Moteur", "ML Kit Gemma E2B E4B qualité contexte rapide") to Target(SettingsPage.TRANSLATION, "moteur"),
     SearchEntry("sfx", "Traduire les onomatopées", "Traduction › Options", "bruitages sfx crack boom effets sonores") to Target(SettingsPage.TRANSLATION, "options"),
     SearchEntry("orb", "Bouton Original | Traduit", "Lecture › Bouton rond", "replacer déplacer glisser position") to Target(SettingsPage.READING, "bouton"),
+    SearchEntry("quick", "Réglages rapides de lecture", "Lecture › Bouton rond", "appui long panneau langue taille onomatopées retraduire page") to Target(SettingsPage.READING, "bouton"),
     SearchEntry("bars", "Masquer les barres en lisant", "Lecture › Affichage", "barre adresse onglets plein écran défilement") to Target(SettingsPage.READING, "affichage"),
     SearchEntry("size", "Taille du texte traduit", "Lecture › Affichage", "police agrandir réduire échelle") to Target(SettingsPage.READING, "affichage"),
     SearchEntry("prefetch", "Pages préparées en avance", "Lecture › Préparation en avance", "préchargement avance chauffe batterie anticiper") to Target(SettingsPage.READING, "avance"),
@@ -213,17 +214,17 @@ private fun SettingsGroup(title: String?, anchor: String? = null, content: @Comp
 }
 
 @Composable
-private fun SubTitle(text: String) {
+internal fun SubTitle(text: String) {
     Text(text, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 @Composable
-private fun Hint(text: String, color: Color = MaterialTheme.colorScheme.onSurfaceVariant) {
+internal fun Hint(text: String, color: Color = MaterialTheme.colorScheme.onSurfaceVariant) {
     Text(text, style = MaterialTheme.typography.bodySmall, color = color)
 }
 
 @Composable
-private fun SwitchRow(title: String, desc: String?, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
+internal fun SwitchRow(title: String, desc: String?, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f).padding(end = 12.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium)
@@ -255,9 +256,9 @@ private fun ChoiceRow(label: String, selected: Boolean, enabled: Boolean = true,
     }
 }
 
-/** Choix parmi quelques valeurs courtes (les langues) : des pastilles sur [columns] colonnes, au lieu d'une longue liste de boutons radio. */
+/** Choix parmi quelques valeurs courtes (les langues) : des pastilles sur [columns] colonnes, au lieu d'une longue liste de boutons radio. [compact] resserre les pastilles (quatre mots courts sur une ligne). */
 @Composable
-private fun <T> ChipGrid(options: List<Pair<T, String>>, selected: T, columns: Int = 2, onSelect: (T) -> Unit) {
+internal fun <T> ChipGrid(options: List<Pair<T, String>>, selected: T, columns: Int = 2, compact: Boolean = false, onSelect: (T) -> Unit) {
     val cs = MaterialTheme.colorScheme
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         options.chunked(columns).forEach { rowItems ->
@@ -268,7 +269,7 @@ private fun <T> ChipGrid(options: List<Pair<T, String>>, selected: T, columns: I
                         Modifier.weight(1f).clip(CircleShape)
                             .background(if (sel) cs.primary.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.05f))
                             .border(if (sel) 1.5.dp else 1.dp, if (sel) cs.primary else Color.White.copy(alpha = 0.16f), CircleShape)
-                            .clickable { onSelect(value) }.padding(horizontal = 10.dp, vertical = 11.dp),
+                            .clickable { onSelect(value) }.padding(horizontal = if (compact) 4.dp else 10.dp, vertical = 11.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(label, style = MaterialTheme.typography.labelLarge, color = if (sel) cs.primary else cs.onSurface, textAlign = TextAlign.Center, maxLines = 2)
@@ -280,11 +281,11 @@ private fun <T> ChipGrid(options: List<Pair<T, String>>, selected: T, columns: I
     }
 }
 
-private val sourceNames = mapOf(
+internal val sourceNames = mapOf(
     SourceLang.AUTO to "Automatique", SourceLang.JA to "Japonais", SourceLang.KO to "Coréen",
     SourceLang.ZH_HANS to "Chinois simplifié", SourceLang.ZH_HANT to "Chinois traditionnel", SourceLang.EN to "Anglais",
 )
-private val targetNames = mapOf(TargetLang.FR to "Français", TargetLang.EN to "Anglais", TargetLang.ES to "Espagnol", TargetLang.DE to "Allemand")
+internal val targetNames = mapOf(TargetLang.FR to "Français", TargetLang.EN to "Anglais", TargetLang.ES to "Espagnol", TargetLang.DE to "Allemand")
 
 // ---------- accueil ----------
 
@@ -518,7 +519,7 @@ private fun ReadingSettings(graph: AppGraph, focus: String?) {
     val s = store.settings
     PageScroll(focus) {
         SettingsGroup("Bouton rond", "bouton") {
-            Hint("Un appui lance la traduction, un second revient à l'original. Glissez le bouton pour l'écarter des boutons du site.")
+            Hint("Un appui lance la traduction, un second revient à l'original. Un appui long ouvre les réglages rapides (langue, taille du texte, onomatopées, « Retraduire la page »). Pour écarter le bouton des boutons du site, glissez-le sans attendre.")
             GhostButton("Replacer le bouton", { store.update { it.copy(orbRight = true, orbY = 0.42f) } })
         }
         SettingsGroup("Affichage", "affichage") {

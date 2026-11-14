@@ -9,9 +9,11 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -89,6 +91,8 @@ fun BrowserScreen(graph: AppGraph) {
     val c = graph.controller
     val st = graph.settingsStore.settings
     val running = c.active && c.done + c.failed < c.total
+    // réglages rapides (appui long sur le bouton Original | Traduit, ou sur l'interrupteur du plein écran)
+    var quick by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize()) {
         // Barre d'adresse : visible à l'arrêt, se masque quand on lit en descendant et revient en remontant ou en touchant la page.
@@ -133,6 +137,7 @@ fun BrowserScreen(graph: AppGraph) {
                     translateOn = c.translateOn, active = c.active, running = running, progress = if (c.total > 0) (c.done + c.failed).toFloat() / c.total else 0f,
                     right = st.orbRight, yFrac = st.orbY, onTap = { c.onTranslateButton() },
                     onMoved = { right, y -> graph.settingsStore.update { it.copy(orbRight = right, orbY = y) } },
+                    onLongPress = { quick = true },
                 )
                 val nextUrl = if (c.nearBottom) ChapterNav.next(c.currentUrl) else null
                 if (nextUrl != null) {
@@ -142,7 +147,7 @@ fun BrowserScreen(graph: AppGraph) {
                     ) { Text("Chapitre suivant") }
                 }
             } else {
-                ReaderOverlay(graph)
+                ReaderOverlay(graph, onQuickSettings = { quick = true })
             }
             // propositions discrètes : reprendre le chapitre où l'on s'était arrêté ; corriger la traduction dont on regarde l'original
             if (!(c.fullscreen && c.readerBar) && (c.resumeOffer > 0 || c.peekTarget != null || c.peekEmpty != null || c.navBlocked != null)) {
@@ -163,6 +168,7 @@ fun BrowserScreen(graph: AppGraph) {
                     }
                 }
             }
+            if (quick) QuickSettings(graph) { quick = false }
         }
     }
 }
@@ -190,16 +196,17 @@ private fun Pill(text: String, onClick: () -> Unit, onClose: (() -> Unit)? = nul
     }
 }
 
-/** Interrupteur à deux positions : on voit ce qui est affiché et ce que le toucher va afficher. */
+/** Interrupteur à deux positions : on voit ce qui est affiché et ce que le toucher va afficher. Un appui long ouvre les réglages rapides. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun TranslationToggle(translated: Boolean, modifier: Modifier = Modifier, onToggle: () -> Unit) {
+private fun TranslationToggle(translated: Boolean, modifier: Modifier = Modifier, onLongPress: () -> Unit = {}, onToggle: () -> Unit) {
     @Composable
     fun Seg(label: String, selected: Boolean) {
         Text(
             label,
             modifier = Modifier.clip(CircleShape)
                 .background(if (selected) Brush.horizontalGradient(listOf(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.secondaryContainer)) else SolidColor(Color.Transparent))
-                .clickable(enabled = !selected) { onToggle() }
+                .combinedClickable(onLongClickLabel = "Réglages rapides", onLongClick = onLongPress) { if (!selected) onToggle() }
                 .padding(horizontal = 14.dp, vertical = 8.dp),
             color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.labelLarge,
@@ -289,7 +296,7 @@ private fun AddressBar(graph: AppGraph) {
 
 /** Plein écran : rien à l'écran que la page. Un appui sur la page ouvre ce menu (quitter, chapitres, original ou traduit) ; il se referme seul. */
 @Composable
-private fun androidx.compose.foundation.layout.BoxScope.ReaderOverlay(graph: AppGraph) {
+private fun androidx.compose.foundation.layout.BoxScope.ReaderOverlay(graph: AppGraph, onQuickSettings: () -> Unit) {
     val c = graph.controller
     val prev = ChapterNav.previous(c.currentUrl)
     val next = ChapterNav.next(c.currentUrl)
@@ -309,7 +316,7 @@ private fun androidx.compose.foundation.layout.BoxScope.ReaderOverlay(graph: App
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             TextButton(onClick = { prev?.let { c.load(it) } }, enabled = prev != null) { Text("‹ Précédent", color = if (prev != null) Color.White else Color(0x66FFFFFF)) }
-            TranslationToggle(translated = c.translateOn && c.active) { c.onTranslateButton(); c.showReaderBar(true) }
+            TranslationToggle(translated = c.translateOn && c.active, onLongPress = onQuickSettings) { c.onTranslateButton(); c.showReaderBar(true) }
             TextButton(onClick = { next?.let { c.load(it) } }, enabled = next != null) { Text("Suivant ›", color = if (next != null) Color.White else Color(0x66FFFFFF)) }
         }
     }

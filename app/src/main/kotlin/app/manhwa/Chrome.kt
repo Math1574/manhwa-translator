@@ -7,9 +7,11 @@ import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -107,13 +109,14 @@ fun GlowNavBar(tabs: List<NavTab>, selected: Int, onSelect: (Int) -> Unit) {
 /**
  * Bouton rond Original | Traduit, posé au bord de l'écran et déplaçable au doigt (il se range sur le bord le plus proche et mémorise sa place) : on peut l'écarter des boutons du site.
  * Sobre pour la lecture, sans halo : verre quand la traduction est éteinte, contour d'accent quand elle est activée mais que cette page n'est pas un chapitre,
- * pastille à dégradé quand la page est traduite ; un anneau fin montre l'avancement du travail.
+ * pastille à dégradé quand la page est traduite ; un anneau fin montre l'avancement du travail. Un appui long ouvre les réglages rapides ([onLongPress]).
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TranslateOrb(
     translateOn: Boolean, active: Boolean, running: Boolean, progress: Float,
     right: Boolean, yFrac: Float, onTap: () -> Unit, onMoved: (right: Boolean, y: Float) -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier, onLongPress: () -> Unit = {},
 ) {
     val cs = MaterialTheme.colorScheme
     val haptic = LocalHapticFeedback.current
@@ -148,7 +151,11 @@ fun TranslateOrb(
                 .clip(CircleShape)
                 .background(if (active) Brush.linearGradient(listOf(cs.primary, cs.secondary)) else Brush.linearGradient(listOf(cs.surfaceVariant.copy(alpha = 0.94f), cs.surface.copy(alpha = 0.94f))))
                 .then(if (active) Modifier else Modifier.border(1.5.dp, if (translateOn) cs.primary else cs.outline, CircleShape))
-                .clickable { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onTap() },
+                .combinedClickable(
+                    onLongClickLabel = "Réglages rapides",
+                    onLongClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onLongPress() },
+                    onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onTap() },
+                ),
             contentAlignment = Alignment.Center,
         ) {
             Icon(AppIcons.Translate, null, Modifier.size(24.dp), tint = if (active) cs.onPrimary else if (translateOn) cs.primary else cs.onSurfaceVariant)
