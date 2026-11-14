@@ -8,6 +8,9 @@ on:
       suite:
         description: 'quick (ML Kit), full (ajoute Gemma) ou lab (banc d essai de traduction)'
         default: 'quick'
+      publier:
+        description: 'oui pour publier l APK dans les Releases depuis main (par défaut, seul un envoi sur main publie)'
+        default: 'non'
 concurrency:
   group: build-${{ github.ref }}-${{ github.event.inputs.suite || 'quick' }}
   cancel-in-progress: true
@@ -127,7 +130,7 @@ jobs:
           name: ManhwaTranslator-debug-apk
           path: apk-e2e/app-debug.apk
       - name: Publier l'APK dans les Releases
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.publier == 'oui' && github.ref == 'refs/heads/main')
         env: { GH_TOKEN: "${{ github.token }}" }
         run: |
           # les nouveautés montrées dans l'application sont le message de la modification (sans les mentions techniques de fin)
