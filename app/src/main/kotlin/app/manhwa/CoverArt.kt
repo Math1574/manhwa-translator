@@ -221,10 +221,13 @@ class CoverFetcher(private val ctx: Context, private val store: CoverStore, priv
         CoverCandidates(strings("shared"), strings("structured"), imgs)
     } catch (_: Throwable) { null }
 
+    /** Image annoncée en « http:// » par une page en « https:// » (réglage fréquent des sites bâtis sur WordPress derrière un relais) : le navigateur la prend en https, l'application aussi, car le clair y est refusé. */
+    private fun secure(url: String, page: String): String = if (page.startsWith("https://") && url.startsWith("http://")) "https://" + url.removePrefix("http://") else url
+
     /** Téléchargement séparé de l'image (avec la page comme Referer, puis sans) : 200 et les octets, sinon null. Fil d'arrière-plan. */
     private fun download(src: String, page: String): ByteArray? {
         for (withReferer in listOf(true, false)) {
-            var url = src
+            var url = secure(src, page)
             var code = 0
             for (hop in 0..5) {
                 val conn = URL(url).openConnection() as HttpURLConnection
@@ -240,7 +243,7 @@ class CoverFetcher(private val ctx: Context, private val store: CoverStore, priv
                     if (code in 301..308 && code != 304) {
                         val next = conn.getHeaderField("Location")?.let { URL(URL(url), it).toString() } ?: return null
                         if (!next.startsWith("http://") && !next.startsWith("https://")) return null
-                        url = next
+                        url = secure(next, page)
                         continue
                     }
                     if (code != 200) break
