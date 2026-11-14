@@ -412,7 +412,7 @@ chk "bibliothèque : l'œuvre est listée, sans carte « Continuer la lecture »
 # illustrations : la page de l'œuvre du faux site (/comics/test-series-1a2b3c) annonce son image (og:image) ; l'application la lit dans un navigateur caché, la télécharge et l'affiche (quelques secondes, en tâche de fond)
 for k in $(seq 1 20); do uidump libc; [ "$(has libc 'Illustration de Test Series')" = 1 ] && break; sleep 3; done
 shot ui 69; appstate
-say "illustrations : $(stv coverOk) trouvée(s), $(stv coverFail) sans résultat"
+say "illustrations : $(stv coverOk) trouvée(s), $(stv coverFail) sans résultat (« $(stv coverWhy) »)"
 chk "bibliothèque : l'œuvre affiche l'illustration annoncée par la page de l'œuvre du site" $(has libc 'Illustration de Test Series')
 uidump lib
 tapt lib "=Test Series" 1; sleep 2; uidump series; shot ui 3

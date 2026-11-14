@@ -5,6 +5,8 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.os.Handler
+import android.os.Looper
 import android.util.LruCache
 import android.webkit.CookieManager
 import android.webkit.WebResourceError
@@ -120,6 +122,11 @@ class CoverFetcher(private val ctx: Context, private val store: CoverStore, priv
     private val queued = HashSet<String>()
     private var worker: Job? = null
     private var web: WebView? = null
+    /** Les délais d'attente passent par le fil principal et non par le navigateur caché : n'étant attaché à aucune fenêtre, ses propres « postDelayed » ne s'exécuteraient jamais. */
+    private val handler = Handler(Looper.getMainLooper())
+    /** Dernier échec expliqué en quelques mots (pour les tests automatiques) ; vide si la dernière recherche a réussi. */
+    @Volatile var lastWhy: String = ""
+        private set
     private val userAgent: String by lazy { try { WebSettings.getDefaultUserAgent(ctx) } catch (_: Throwable) { "Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Chrome/130 Mobile Safari/537.36" } }
 
     /** Demande les illustrations qui manquent, dans l'ordre donné (celui de l'écran). Les œuvres déjà servies, déjà demandées ou récemment essayées sont ignorées. Fil principal. */
@@ -142,13 +149,18 @@ class CoverFetcher(private val ctx: Context, private val store: CoverStore, priv
 
     private suspend fun fetch(w: Wish) {
         val urls = library().history.filter { BrowsingLibrary.seriesKey(it.url) == w.key }.map { it.url }
+        var why = "aucune page d'œuvre connue"
         for (page in CoverPick.pagesFor(urls, max = 2)) {
-            val found = read(page) ?: continue
-            val img = CoverPick.choose(found, w.title) ?: continue
-            val jpeg = withContext(Dispatchers.IO) { download(img, page)?.let { shrink(it) } } ?: continue
-            store.save(w.key, img, jpeg)
+            val found = read(page)
+            if (found == null) { why = "page illisible ou trop lente"; continue }
+            val img = CoverPick.choose(found, w.title)
+            if (img == null) { why = "aucune image retenue (partage ${found.shared.size}, données ${found.structured.size}, page ${found.images.size})"; continue }
+            val jpeg = withContext(Dispatchers.IO) { download(img, page)?.let { shrink(it) } }
+            if (jpeg == null) { why = "image non téléchargée ou inutilisable"; continue }
+            lastWhy = if (store.save(w.key, img, jpeg)) "" else "image du site refusée"
             return
         }
+        lastWhy = why
         store.failed(w.key)
     }
 
@@ -184,12 +196,18 @@ class CoverFetcher(private val ctx: Context, private val store: CoverStore, priv
                         // page renvoyée ailleurs (publicité, autre site) : ce qu'elle annonce n'est pas l'illustration de l'œuvre
                         if (!Sites.sameSite(Sites.hostOf(url), Sites.hostOf(page))) { finish(null); return }
                         // une page en erreur (404, 403…) n'annonce rien de fiable ; une page d'attente d'un site protégé se remplace d'elle-même par la vraie : on lui laisse quelques secondes
-                        if (status >= 400) { view.postDelayed({ if (g == gen) finish(null) }, 8000L); return }
-                        view.postDelayed({ if (!done && g == gen) view.evaluateJavascript(EXTRACT) { raw -> finish(parse(raw)) } }, 700L)
+                        if (status >= 400) { handler.postDelayed(Runnable { if (g == gen) finish(null) }, 8000L); return }
+                        handler.postDelayed(Runnable { if (!done && g == gen) view.evaluateJavascript(EXTRACT) { raw -> finish(parse(raw)) } }, 700L)
                     }
                 }
-                cont.invokeOnCancellation { try { w.stopLoading() } catch (_: Throwable) {} }
+                cont.invokeOnCancellation { handler.removeCallbacksAndMessages(null); try { w.stopLoading() } catch (_: Throwable) {} }
                 w.loadUrl(page)
+                // filet : quand « page chargée » tarde (une ressource lente), ce que la page annonce dans son en-tête est lisible depuis longtemps ; on le relève au bout de 12 s si rien n'a abouti
+                handler.postDelayed(Runnable {
+                    if (done || status >= 400) return@Runnable
+                    if (!Sites.sameSite(Sites.hostOf(w.url), Sites.hostOf(page))) return@Runnable
+                    w.evaluateJavascript(EXTRACT) { raw -> finish(parse(raw)) }
+                }, 12_000L)
             }
         }
     }
