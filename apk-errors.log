@@ -24,10 +24,10 @@ w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kot
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/SettingsScreens.kt:254:27 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/SettingsScreens.kt:385:35 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/SettingsScreens.kt:405:31 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
-BUILD SUCCESSFUL in 2m 28s
-BUILD SUCCESSFUL in 10s
+BUILD SUCCESSFUL in 3m 28s
+BUILD SUCCESSFUL in 15s
 total 160416
-drwxr-xr-x 2 runner runner      4096 Nov 14 14:27 .
-drwxr-xr-x 3 runner runner      4096 Nov 14 14:27 ..
--rw-r--r-- 1 runner runner 164252207 Nov 14 14:27 app-debug.apk
--rw-r--r-- 1 runner runner       405 Nov 14 14:27 output-metadata.json
+drwxr-xr-x 2 runner runner      4096 Nov 14 14:28 .
+drwxr-xr-x 3 runner runner      4096 Nov 14 14:28 ..
+-rw-r--r-- 1 runner runner 164252207 Nov 14 14:28 app-debug.apk
+-rw-r--r-- 1 runner runner       405 Nov 14 14:28 output-metadata.json
