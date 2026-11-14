@@ -209,13 +209,15 @@ jobs:
         run: |
           python3 ci/analyze.py /tmp/e2e /tmp/site/synth || true
           python3 ci/lab/score.py /tmp/e2e ci/lab/corpus.json || true
-      - name: Publier les résultats (branche e2e-quick ou e2e-full)
+      - name: Publier les résultats (branche e2e-quick ou e2e-full, et e2e-quick-NOM-DE-BRANCHE hors main pour que deux contrôles en parallèle ne s ecrasent pas)
         if: always()
         run: |
+          RES="e2e-${SUITE}"
+          if [ "${GITHUB_REF_NAME}" != "main" ]; then RES="${RES}-$(echo "${GITHUB_REF_NAME}" | tr '/' '-')"; fi
           rm -rf /tmp/pub && mkdir -p /tmp/pub && cp -r /tmp/e2e/. /tmp/pub/ || true
           cp /tmp/server.log /tmp/pub/server.log || true
           mkdir -p /tmp/pub/synth && cp /tmp/site/synth/* /tmp/pub/synth/ || true
-          echo "${GITHUB_SHA} suite=${SUITE}" > /tmp/pub/COMMIT.txt
-          cd /tmp/pub && git init -q -b e2e-${SUITE} && git config user.name ci && git config user.email ci@example.invalid
+          echo "${GITHUB_SHA} suite=${SUITE} branche=${GITHUB_REF_NAME}" > /tmp/pub/COMMIT.txt
+          cd /tmp/pub && git init -q -b "${RES}" && git config user.name ci && git config user.email ci@example.invalid
           git add -A && git commit -q -m "e2e ${GITHUB_SHA}"
-          git push --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" e2e-${SUITE}
+          git push --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" "${RES}"
