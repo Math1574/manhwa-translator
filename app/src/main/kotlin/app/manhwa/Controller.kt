@@ -704,6 +704,14 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
     fun testWorkIds(): List<String> = workIds()
 
+    /** Comme un appui long sur une image sans traduction : la première image laissée telle quelle (sinon la première page en mémoire) ; la proposition s'affiche 30 s. Faux s'il n'y a aucune image. */
+    fun testPeekEmpty(): Boolean {
+        val id = skipped.keys.firstOrNull() ?: testWorkIds().firstOrNull() ?: return false
+        peekTarget = null; peekEmpty = EmptySpot(id, 0f, 0f)
+        main.removeCallbacks(clearPeekEmpty); main.postDelayed(clearPeekEmpty, 30_000)
+        return true
+    }
+
     /** Nombre d'images de la page actuellement laissées telles quelles par une règle d'image. */
     fun testSkippedCount(): Int = skipped.size
 
@@ -1472,7 +1480,9 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         // appui long sur une image sans traduction à cet endroit (texte non détecté, zone ignorée) : seulement si l'image a été traitée
         @JavascriptInterface fun onPeekEmpty(id: String, x: Double, y: Double) {
             main.post {
-                if (workInfo(id.removeSuffix("~up")) != null) { peekTarget = null; peekEmpty = EmptySpot(id.removeSuffix("~up"), x.toFloat(), y.toFloat()); main.removeCallbacks(clearPeekEmpty); main.postDelayed(clearPeekEmpty, 7000) }
+                // (une image ignorée n'a pas de résultat en mémoire, mais on peut la rétablir d'un appui long dessus)
+                val bare = id.removeSuffix("~up")
+                if (workInfo(bare) != null || skipped.containsKey(bare)) { peekTarget = null; peekEmpty = EmptySpot(bare, x.toFloat(), y.toFloat()); main.removeCallbacks(clearPeekEmpty); main.postDelayed(clearPeekEmpty, 7000) }
             }
         }
         @JavascriptInterface fun onImagesChanged() { main.post { if (active) start(false) } }

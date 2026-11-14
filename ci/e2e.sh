@@ -243,6 +243,13 @@ chk "image ignorée : le bandeau « Image ignorée · Annuler » apparaît" $(ha
 chk "image ignorée : la règle est enregistrée et l'image n'est plus traduite" $([ "$(okst waitge ignImg 1 20)" = 1 ] && [ "$(okst waitge skipped 1 40)" = 1 ] && echo 1 || echo 0)
 tapt ig10 "Annuler" 1; sleep 1
 chk "image ignorée : « Annuler » rétablit l'image (règle retirée, page de nouveau traduite)" $([ "$(okst waitst ignImg 0 20)" = 1 ] && [ "$(okst waitst skipped 0 60)" = 1 ] && echo 1 || echo 0)
+# même geste, puis rétablissement par un appui long sur l'image ignorée (« Image ignorée · Rétablir »)
+appcmd peek; uidump ig8b; tapt ig8b "Ignorer ce texte" 1; sleep 1.5; uidump ig9b; tapt ig9b "Toute cette image" 1; sleep 2
+chk "image ignorée : la règle est de nouveau enregistrée et l'image n'est plus traduite" $([ "$(okst waitge ignImg 1 20)" = 1 ] && [ "$(okst waitge skipped 1 40)" = 1 ] && echo 1 || echo 0)
+appcmd peekempty; uidump ig10b; shot ui 25
+chk "image ignorée : un appui long sur l'image propose de la rétablir" $([ "$(has ig10b 'Image ignor[^ ]* · R[^ ]*tablir')" = 1 ] && [ "$(hasnot ig10b 'Ajouter une traduction')" = 1 ] && echo 1 || echo 0)
+tapt ig10b "tablir" 1; sleep 1.5
+chk "image ignorée : « Rétablir » retire la règle et la page est de nouveau traduite" $([ "$(okst waitst ignImg 0 20)" = 1 ] && [ "$(okst waitst skipped 0 60)" = 1 ] && echo 1 || echo 0)
 # une règle de texte (toutes les œuvres) est laissée en place : la page des réglages doit la lister, puis la retirer
 appcmd peek; uidump ig11; tapt ig11 "Ignorer ce texte" 1; sleep 1.5; uidump ig12; tapt ig12 "dans toutes" 1; sleep 1.5
 waitge hidden 1 25 >/dev/null
