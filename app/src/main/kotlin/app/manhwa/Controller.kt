@@ -954,6 +954,17 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         return false
     }
 
+    /** Ouvre l'éditeur sur la première traduction non supprimée (comme « Corriger cette traduction » du menu d'un appui long, mais depuis n'importe quel onglet). */
+    fun testEdit(): Boolean {
+        for (id in testWorkIds()) {
+            val info = workInfo(id) ?: continue
+            val b = info.applied.page.blocks.firstOrNull { info.applied.editByBlock[it.id]?.hidden != true } ?: continue
+            openEdit(EditTarget(id, b.id, b.source, b.translated))
+            return true
+        }
+        return false
+    }
+
     /** Pose une traduction écrite à la main sur la première traduction non supprimée (comme l'éditeur), puis redessine la page. */
     fun testSetTranslation(text: String): Boolean {
         for (id in testWorkIds()) {

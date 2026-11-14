@@ -558,6 +558,83 @@ chk "accueil : « Rétablir les sites retirés » remet la liste" $(okst waitst 
 adb shell input swipe 540 600 540 1900 400; sleep 1; uidump hm7
 if [ "$(hasx hm7 '=Reprendre')" = 1 ]; then tapt hm7 "=Reprendre" 1; else tapt hm7 "=Chapitre suivant" 1; fi; sleep 5; uidump hm8; shot ui 55
 chk "accueil : « Reprendre » ouvre la page et l'accueil se retire" $([ "$(okst waitst home False 15)" = 1 ] && [ "$(hasnot hm8 'Derni[^ ]*re lecture')" = 1 ] && echo 1 || echo 0)
+# --- éditeur : zoom et déplacement à deux doigts, gomme du pinceau, défaire / refaire. Les gestes à un doigt sont de vrais appuis (adb) ; les gestes à deux doigts sont de vrais événements
+# tactiles envoyés à l'application (adb ne sait pas poser deux doigts). L'état de l'éditeur (vue, traits, historique) est relevé dans files/state.json ---
+say "=== éditeur"
+for k in $(seq 1 30); do appstate; [ "$(stv blocks)" -ge 1 ] 2>/dev/null && break; sleep 2; done
+appcmd edit
+if [ "$(okst waitst edOpen True 20)" = 1 ]; then
+  sleep 2; uidump ed1; shot ui 61
+  chk "éditeur : s'ouvre sur l'image avec les flèches défaire / refaire, la zone de dessin et les onglets" $([ "$(has ed1 'Corriger la traduction')" = 1 ] && [ "$(hasx ed1 '=Défaire')" = 1 ] && [ "$(hasx ed1 '=Refaire')" = 1 ] && [ "$(has ed1 'Zone de dessin')" = 1 ] && [ "$(hasx ed1 '=Zone')" = 1 ] && echo 1 || echo 0)
+  appstate
+  chk "éditeur : au départ rien à défaire ni à refaire, vue non zoomée, pas de « Vue d'origine »" $([ "$(stv edUndo)" = 0 ] && [ "$(stv edRedo)" = 0 ] && [ "$(stv edZoomed)" = False ] && [ "$(hasx ed1 "=Vue d'origine")" = 0 ] && echo 1 || echo 0)
+  crop0=$(stv edCrop); w0=$(stv edCropW)
+  IFS=, read al at ar ab <<< "$(stv edArea)"; cx=$(( (al + ar) / 2 )); cy=$(( (at + ab) / 2 ))
+  IFS=, read iw ih <<< "$(stv edWin)"
+  # doigts qui s'écartent : la vue se resserre ; l'image est ensuite redécodée nette sur la nouvelle vue
+  appcmd "pinch 2"; sleep 3.5; appstate; uidump ed2; shot ui 62
+  w1=$(stv edCropW); l1=$(stv edCropL)
+  chk "éditeur : deux doigts qui s'écartent zooment (vue resserrée, « Vue d'origine » proposé)" $([ "$w1" -lt $((w0 * 8 / 10)) ] && [ "$(stv edZoomed)" = True ] && [ "$(hasx ed2 "=Vue d'origine")" = 1 ] && echo 1 || echo 0)
+  covers() { python3 -c "
+import sys
+b=[int(v) for v in sys.argv[1].split(',')]; c=[int(v) for v in sys.argv[2].split(',')]
+print(1 if b[0]<=c[0] and b[1]<=c[1] and b[2]>=c[2] and b[3]>=c[3] and (b[2]-b[0])<=(c[2]-c[0])+3 and (b[3]-b[1])<=(c[3]-c[1])+3 else 0)" "$1" "$2" 2>/dev/null || echo 0; }
+  chk "éditeur : après le zoom, l'image est redécodée sur la vue (région couverte = vue, à un pixel près)" $(covers "$(stv edBase)" "$(stv edCrop)")
+  # un doigt dans un onglet sans outil (Texte) déplace la vue ; deux doigts aussi ; on va toujours vers l'intérieur de la fenêtre
+  if [ $(( l1 * 2 + w1 )) -lt "$iw" ]; then vdir=1; else vdir=-1; fi
+  adb shell input swipe $((cx + 100 * vdir)) $cy $((cx - 100 * vdir)) $cy 400; sleep 2; appstate
+  l2=$(stv edCropL)
+  chk "éditeur : un doigt qui glisse dans l'onglet Texte déplace la vue" $([ $(( (l2 - l1) * vdir )) -ge 5 ] && echo 1 || echo 0)
+  appcmd "twopan $((-140 * vdir)) 0"; sleep 3; appstate
+  l3=$(stv edCropL)
+  chk "éditeur : deux doigts qui glissent déplacent la vue, sans changer le zoom" $([ $(( (l3 - l2) * vdir )) -ge 5 ] && [ "$(stv edCropW)" = "$w1" ] && echo 1 || echo 0)
+  appcmd "pinch 0.4"; sleep 3.5; appstate
+  chk "éditeur : deux doigts qui se rapprochent éloignent la vue" $([ "$(stv edCropW)" -gt "$w1" ] && echo 1 || echo 0)
+  uidump ed3; tapt ed3 "=Vue d'origine" 1; sleep 2.5; appstate
+  chk "éditeur : « Vue d'origine » rend la vue de départ" $([ "$(stv edCrop)" = "$crop0" ] && [ "$(stv edZoomed)" = False ] && echo 1 || echo 0)
+  # pinceau libre : un trait, un coup de gomme qui le coupe, défaire / refaire
+  tapt ed3 "=Zone" 1; sleep 1.5; uidump ed4; tapt ed4 "=Pinceau libre" 1; sleep 1.5; uidump ed5; shot ui 63
+  chk "éditeur : onglet Zone en pinceau libre : « Peindre » et « Gommer » sont proposés" $([ "$(hasx ed5 '=Peindre')" = 1 ] && [ "$(hasx ed5 '=Gommer')" = 1 ] && [ "$(hasx ed5 '=Tout effacer')" = 1 ] && [ "$(hasnot ed5 'Annuler le trait')" = 1 ] && echo 1 || echo 0)
+  appstate
+  chk "éditeur : le pinceau libre est actif, le pinceau (pas la gomme) est choisi" $([ "$(stv edMode)" = BRUSH ] && [ "$(stv edErasing)" = False ] && echo 1 || echo 0)
+  adb shell input swipe $((cx - 200)) $cy $((cx + 200)) $cy 500; sleep 1.5; appstate
+  chk "éditeur : un trait de pinceau ajoute une zone peinte et un état à défaire" $([ "$(stv edStrokes)" = 1 ] && [ "$(stv edErase)" = 0 ] && [ "$(stv edUndo)" -ge 1 ] && echo 1 || echo 0)
+  u1=$(stv edUndo)
+  tapt ed5 "=Gommer" 1; sleep 1; appstate
+  chk "éditeur : « Gommer » passe le pinceau en gomme" $([ "$(stv edErasing)" = True ] && echo 1 || echo 0)
+  adb shell input swipe $cx $((cy - 150)) $cx $((cy + 150)) 500; sleep 1.5; appstate; shot ui 64
+  chk "éditeur : un coup de gomme ajoute un trait de gomme (la zone peinte reste, creusée)" $([ "$(stv edStrokes)" = 1 ] && [ "$(stv edErase)" = 1 ] && [ "$(stv edUndo)" = $((u1 + 1)) ] && echo 1 || echo 0)
+  uidump ed6; tapt ed6 "=Défaire" 1; sleep 1.5; appstate
+  chk "éditeur : « Défaire » retire le coup de gomme (et laisse le « Refaire »)" $([ "$(stv edErase)" = 0 ] && [ "$(stv edStrokes)" = 1 ] && [ "$(stv edRedo)" = 1 ] && echo 1 || echo 0)
+  tapt ed6 "=Refaire" 1; sleep 1.5; appstate
+  chk "éditeur : « Refaire » le remet" $([ "$(stv edErase)" = 1 ] && [ "$(stv edStrokes)" = 1 ] && [ "$(stv edRedo)" = 0 ] && echo 1 || echo 0)
+  tapt ed6 "=Défaire" 1; sleep 1; tapt ed6 "=Défaire" 1; sleep 1.5; appstate
+  chk "éditeur : défaire deux fois efface tout le dessin" $([ "$(stv edStrokes)" = 0 ] && [ "$(stv edErase)" = 0 ] && [ "$(stv edUndo)" = $((u1 - 1)) ] && echo 1 || echo 0)
+  # rectangle : un glissé déplace ou redimensionne la zone ; défaire la rend
+  tapt ed6 "=Rectangle" 1; sleep 1; appstate; r0=$(stv edRect); u2=$(stv edUndo)
+  adb shell input swipe $cx $cy $((cx + 120)) $((cy + 60)) 500; sleep 1.5; appstate
+  chk "éditeur : en mode rectangle un glissé change la zone et s'ajoute à l'historique" $([ "$(stv edRect)" != "$r0" ] && [ "$(stv edUndo)" = $((u2 + 1)) ] && echo 1 || echo 0)
+  tapt ed6 "=Défaire" 1; sleep 1.5; appstate
+  chk "éditeur : défaire rend la zone d'avant" $([ "$(stv edRect)" = "$r0" ] && echo 1 || echo 0)
+  # position du texte : un glissé le déplace ; défaire le remet
+  tapt ed6 "=Position" 1; sleep 1.5; appstate; dx0=$(stv edDx); dy0=$(stv edDy)
+  adb shell input swipe $cx $cy $((cx + 160)) $((cy + 80)) 500; sleep 1.5; appstate; shot ui 65
+  chk "éditeur : onglet Position : un glissé déplace le texte" $([ "$(stv edDx)" != "$dx0" ] || [ "$(stv edDy)" != "$dy0" ] && echo 1 || echo 0)
+  tapt ed6 "=Défaire" 1; sleep 1.5; appstate
+  chk "éditeur : défaire remet le texte à sa place" $([ "$(stv edDx)" = "$dx0" ] && [ "$(stv edDy)" = "$dy0" ] && echo 1 || echo 0)
+  # un doigt sur l'image sert toujours au travail de l'onglet quand on est zoomé : la vue ne bouge pas
+  tapt ed6 "=Annuler" 1; sleep 2; appstate
+  chk "éditeur : « Annuler » referme l'éditeur sans rien enregistrer" $([ "$(stv edOpen)" = False ] && echo 1 || echo 0)
+else
+  say "éditeur : ne s'ouvre pas ; état : $(cat $OUT/reports/state.json | cut -c1-300)"
+  for n in "s'ouvre sur l'image avec les flèches défaire / refaire, la zone de dessin et les onglets" "au départ rien à défaire ni à refaire, vue non zoomée, pas de « Vue d'origine »" \
+    "deux doigts qui s'écartent zooment (vue resserrée, « Vue d'origine » proposé)" "après le zoom, l'image est redécodée sur la vue (région couverte = vue, à un pixel près)" \
+    "un doigt qui glisse dans l'onglet Texte déplace la vue" "deux doigts qui glissent déplacent la vue, sans changer le zoom" "deux doigts qui se rapprochent éloignent la vue" \
+    "« Vue d'origine » rend la vue de départ" "onglet Zone en pinceau libre : « Peindre » et « Gommer » sont proposés" "un trait de pinceau ajoute une zone peinte et un état à défaire" \
+    "un coup de gomme ajoute un trait de gomme (la zone peinte reste, creusée)" "« Défaire » retire le coup de gomme (et laisse le « Refaire »)" "« Refaire » le remet" \
+    "défaire deux fois efface tout le dessin" "en mode rectangle un glissé change la zone et s'ajoute à l'historique" "défaire rend la zone d'avant" \
+    "onglet Position : un glissé déplace le texte" "défaire remet le texte à sa place" "« Annuler » referme l'éditeur sans rien enregistrer"; do chk "éditeur : $n" 0; done
+fi
 # diagnostic : plantages ou blocages système pendant le scénario
 adb logcat -d -v brief 2>/dev/null | grep -iE "ANR in|Application Not Responding|FATAL EXCEPTION|AndroidRuntime|Process .* has died|am_crash|am_anr" | tail -30 > $OUT/reports/ui_logcat.txt
 echo "  [journal système] $(wc -l < $OUT/reports/ui_logcat.txt) ligne(s) d'ANR ou de plantage" | tee -a $OUT/run.log
