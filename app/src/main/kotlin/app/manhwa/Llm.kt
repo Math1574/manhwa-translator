@@ -15,18 +15,21 @@ import app.manhwa.core.LlmPrompt
 import app.manhwa.core.ModelSpec
 import app.manhwa.core.ModelStatus
 import app.manhwa.core.ModelStore
+import app.manhwa.core.ReuseOutcome
 import app.manhwa.core.TranslationEngine
 import app.manhwa.core.VisionPrompt
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Content
+import com.google.ai.edge.litertlm.Conversation
 import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
 import com.google.ai.edge.litertlm.ExperimentalApi
-import com.google.ai.edge.litertlm.ExperimentalFlags
 import com.google.ai.edge.litertlm.Message
 import com.google.ai.edge.litertlm.SamplerConfig
+import com.google.ai.edge.litertlm.SpeculativeDecodingConfig
+import com.google.ai.edge.litertlm.SpeculativeDecodingMode
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -106,6 +109,34 @@ class GemmaTranslator(
     /** Noms et termes du chapitre en cours (mémoire) et rapport des contrôles de la dernière page. */
     private val memory = ChapterMemory()
     @Volatile var lastReport: List<LineReport> = emptyList()
+
+    /**
+     * Essai « traduction accélérée » : au lieu de relire les consignes de traduction à chaque page, le modèle les lit une fois dans une conversation préparée,
+     * et chaque page part d'une copie de celle-ci (même texte, moins de calcul). Null : suit le réglage ; le banc d'essai et la comparaison le forcent.
+     */
+    @Volatile var reuseOverride: Boolean? = null
+    /** Banc d'essai seulement : impose le mode du décodage spéculatif (ON, OFF ou ADAPTIVE) à la création du moteur. */
+    @Volatile var specOverride: SpeculativeDecodingMode? = null
+    /** Message pour les réglages quand l'essai a posé problème (plantage au lancement précédent, copie impossible sur ce téléphone). */
+    @Volatile var reuseStatus: String = ""
+        private set
+    /** Vrai quand le lancement précédent s'est arrêté en pleine copie de conversation : l'essai doit être désactivé. */
+    @Volatile var reuseCrashed: Boolean = false
+        private set
+    private var reuseFallbacks = 0
+    private var primed: Conversation? = null
+    private var primedKey = ""
+    private val reuseGuard = File(ctx.filesDir, "reuse_probe.state")
+
+    init {
+        // un plantage natif ne s'intercepte pas : « running » est écrit avant chaque demande en mode accéléré et effacé après ; s'il reste, l'essai est désactivé
+        try {
+            if (reuseGuard.exists()) {
+                if (reuseGuard.readText().trim() == "running") { reuseCrashed = true; reuseStatus = "L'essai de traduction accélérée a fait planter l'application : il a été désactivé." }
+                reuseGuard.delete()
+            }
+        } catch (_: Throwable) {}
+    }
 
     /** Noms propres repérés dans le chapitre (minuscules) : le réparateur de texte lu ne doit pas les « corriger ». */
     fun chapterNames(): Set<String> = memory.namesToKeep().map { it.lowercase() }.toSet()
@@ -201,15 +232,86 @@ class GemmaTranslator(
     }
 
     private fun ask(eng: Engine, texts: List<String>, source: String, target: String, glossary: List<GlossaryEntry>, series: String? = seriesTitle): MutableList<String?> {
-        val config = ConversationConfig(
-            systemInstruction = Contents.of(LlmPrompt.system(source, target, promptVariant)),
-            samplerConfig = SamplerConfig(topK = 20, topP = 0.9, temperature = 0.15),
-            maxOutputToken = LlmPrompt.maxOutputTokens(texts),
-        )
-        val reply = eng.createConversation(config).use { conv ->
-            withWatchdog(conv) { textOf(conv.sendMessage(LlmPrompt.user(texts, history.toList(), glossary, series, memory.namesToKeep()))) }
+        val system = LlmPrompt.system(source, target, promptVariant)
+        val sampler = SamplerConfig(topK = 20, topP = 0.9, temperature = 0.15)
+        val maxOut = LlmPrompt.maxOutputTokens(texts)
+        val prompt = LlmPrompt.user(texts, history.toList(), glossary, series, memory.namesToKeep())
+        // mode accéléré (essai) : en cas d'échec, quelle qu'en soit la raison, on retombe sur le chemin normal ci-dessous
+        val reused: String? = if (reuseOn()) { try { askReusing(eng, system, sampler, maxOut, prompt) } catch (t: Throwable) { reuseFailed(t); null } } else null
+        val reply: String = reused ?: eng.createConversation(ConversationConfig(systemInstruction = Contents.of(system), samplerConfig = sampler, maxOutputToken = maxOut)).use { conv ->
+            withWatchdog(conv) { textOf(conv.sendMessage(prompt)) }
         }
         return LlmPrompt.parse(reply, texts.size).toMutableList()
+    }
+
+    private fun reuseOn(): Boolean = reuseOverride ?: settings().fastLlm
+
+    private fun dropPrimed() {
+        try { primed?.close() } catch (_: Throwable) {}
+        primed = null; primedKey = ""
+    }
+
+    private fun reuseFailed(t: Throwable) {
+        dropPrimed(); reuseFallbacks++
+        reuseStatus = "La réutilisation des consignes a échoué sur ce téléphone (${t.message ?: t.javaClass.simpleName}) : la traduction normale est utilisée."
+    }
+
+    /**
+     * Demande en mode accéléré : une copie de la conversation préparée (créée à la première demande : le modèle y lit les consignes une fois, puis elle est gardée)
+     * reçoit la page. La limite de sortie se donne par message, car la conversation préparée sert à toutes les pages.
+     */
+    @OptIn(ExperimentalApi::class)
+    private fun askReusing(eng: Engine, system: String, sampler: SamplerConfig, maxOut: Int, prompt: String): String {
+        try { reuseGuard.writeText("running") } catch (_: Throwable) {}
+        try {
+            val key = "$engineKey|${sampler.temperature}|${system.length}|${system.hashCode()}"
+            val base: Conversation = primed?.takeIf { primedKey == key && it.isAlive } ?: run {
+                dropPrimed()
+                eng.createConversation(ConversationConfig(systemInstruction = Contents.of(system), samplerConfig = sampler, prefillPrefaceOnInit = true)).also { primed = it; primedKey = key }
+            }
+            return base.clone().use { c -> withWatchdog(c) { textOf(c.sendMessage(prompt, maxOutputToken = maxOut)) } }
+        } finally { try { reuseGuard.delete() } catch (_: Throwable) {} }
+    }
+
+    class ReuseCompareResult(val outcome: ReuseOutcome?, val note: String)
+
+    /**
+     * Comparaison sur le téléphone : les mêmes répliques traduites en mode normal (deux fois : chauffe, puis mesure) puis en mode accéléré (deux fois : préparation, puis vitesse de croisière).
+     * Le dialogue du chapitre en cours n'est pas touché.
+     */
+    @Synchronized fun compareReuse(): ReuseCompareResult {
+        val s = settings()
+        val spec = LlmModels.specFor(s.engine)?.takeIf { models.isReady(it) }
+            ?: return ReuseCompareResult(null, "Choisissez d'abord Gemma comme moteur de traduction (onglet Modèles).")
+        main.removeCallbacks(releaseTask)
+        val savedHistory = history.toList(); history.clear()
+        val savedOverride = reuseOverride
+        reuseFallbacks = 0
+        try {
+            val eng = ensureEngine(spec, s.useGpu, vision = visionReady && s.autoReread)
+            val lines = benchLines
+            fun once(reuse: Boolean): Pair<List<String?>, Long> {
+                reuseOverride = reuse
+                val t0 = System.currentTimeMillis()
+                val out = ask(eng, lines, "en", "fr", emptyList(), series = null)
+                return out to (System.currentTimeMillis() - t0)
+            }
+            val warm = once(false).first                 // chauffe (premiers calculs du moteur) : non mesurée
+            val (normal, tn) = once(false)
+            once(true)                                   // première fois : les consignes sont lues puis gardées
+            val (fast, tf) = once(true)                  // ensuite : la vitesse de croisière
+            if (reuseFallbacks > 0) return ReuseCompareResult(null, reuseStatus.ifEmpty { "La réutilisation des consignes n'a pas fonctionné." })
+            if (normal.any { it == null } || fast.any { it == null } || warm.any { it == null }) return ReuseCompareResult(null, "Le modèle a donné une réponse incomplète : refaites l'essai.")
+            val same = lines.indices.count { normal[it] == fast[it] }
+            val base = lines.indices.count { warm[it] == normal[it] }
+            return ReuseCompareResult(ReuseOutcome(tn, tf, same, base, lines.size), "")
+        } catch (t: Throwable) {
+            return ReuseCompareResult(null, "Comparaison impossible : ${t.message ?: t.javaClass.simpleName}")
+        } finally {
+            reuseOverride = savedOverride
+            history.clear(); history.addAll(savedHistory)
+            main.postDelayed(releaseTask, IDLE_RELEASE_MS)
+        }
     }
 
     /** Interrompt une génération qui dure trop longtemps (sécurité) : la réponse partielle reste exploitable ligne par ligne. */
@@ -232,10 +334,10 @@ class GemmaTranslator(
      */
     @OptIn(ExperimentalApi::class)
     private fun createEngine(path: String, backend: Backend, speculative: Boolean, vision: Boolean = false): Engine {
-        ExperimentalFlags.enableSpeculativeDecoding = speculative
+        val spec = SpeculativeDecodingConfig(specOverride ?: if (speculative) SpeculativeDecodingMode.ON else SpeculativeDecodingMode.OFF)
         // lecture d'image : encodeur de vision sur GPU (la voie CPU plante au deuxième tour d'image sur certains Snapdragon), une image à la fois
-        val cfg = if (vision) EngineConfig(modelPath = path, backend = backend, visionBackend = Backend.GPU(), maxNumTokens = 4096, maxNumImages = 1, cacheDir = ctx.cacheDir.path)
-        else EngineConfig(modelPath = path, backend = backend, maxNumTokens = 4096, cacheDir = ctx.cacheDir.path)
+        val cfg = if (vision) EngineConfig(modelPath = path, backend = backend, visionBackend = Backend.GPU(), maxNumTokens = 4096, maxNumImages = 1, cacheDir = ctx.cacheDir.path, speculativeDecodingConfig = spec)
+        else EngineConfig(modelPath = path, backend = backend, maxNumTokens = 4096, cacheDir = ctx.cacheDir.path, speculativeDecodingConfig = spec)
         return Engine(cfg).also { it.initialize() }
     }
 
@@ -361,6 +463,9 @@ class GemmaTranslator(
 
     class BenchResult(val label: String, val ok: Boolean, val initMs: Long, val translateMs: Long, val error: String?)
 
+    /** Six répliques types pour les mesures de vitesse. */
+    private val benchLines = listOf("I never thought I would see you again.", "Don't underestimate me!", "Master, the elders are waiting in the main hall.", "...Who are you? What do you want from me?", "HAHAHA! So the rumors were true after all!", "We have no choice but to fight.")
+
     /** Mesure de vitesse : charge le modèle avec le backend demandé, traduit six répliques types et rapporte les temps. */
     @Synchronized fun benchmark(spec: ModelSpec, gpu: Boolean): BenchResult {
         release()
@@ -376,7 +481,7 @@ class GemmaTranslator(
     private fun benchWith(eng: Engine, label: String, t0: Long): BenchResult {
         val initMs = System.currentTimeMillis() - t0
         return try {
-            val lines = listOf("I never thought I would see you again.", "Don't underestimate me!", "Master, the elders are waiting in the main hall.", "...Who are you? What do you want from me?", "HAHAHA! So the rumors were true after all!", "We have no choice but to fight.")
+            val lines = benchLines
             val config = ConversationConfig(
                 systemInstruction = Contents.of(LlmPrompt.system("en", "fr", promptVariant)),
                 samplerConfig = SamplerConfig(topK = 20, topP = 0.9, temperature = 0.1),
@@ -401,6 +506,7 @@ class GemmaTranslator(
     @Synchronized fun resetContext() { history.clear(); memory.reset() }
 
     @Synchronized fun release() {
+        dropPrimed()
         try { engine?.close() } catch (_: Throwable) {}
         engine = null; engineKey = ""; engineHasVision = false
     }
