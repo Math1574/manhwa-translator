@@ -5,22 +5,39 @@ permissions:
 jobs:
   probe:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - name: Sondage Hugging Face (fichiers et tailles)
-        run: python3 ci/probe_hf.py /tmp/hf.txt || true
-      - name: Signatures LiteRT-LM (annulation, limite de sortie)
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - name: API publique de litertlm-android (version utilisée et dernière version)
         run: |
           set +e +o pipefail
-          {
-          B=https://dl.google.com/dl/android/maven2/com/google/ai/edge/litertlm/litertlm-android/0.18.1
-          curl -sS -m 120 -o /tmp/lm.aar $B/litertlm-android-0.18.1.aar
-          mkdir -p /tmp/aar && cd /tmp/aar && unzip -oq /tmp/lm.aar
-          for c in Content 'Content$Text' 'Content$ImageBytes' 'Content$ImageFile' Contents Message ThinkingConfig 'Message$Companion' 'Contents$Companion'; do
-            echo "---- $c"; javap -public -cp classes.jar "com.google.ai.edge.litertlm.$c" 2>&1 | grep -vE "copy|component|hashCode|equals|\\\$default" | head -40
+          mkdir -p /tmp/out
+          G=https://dl.google.com/dl/android/maven2/com/google/ai/edge/litertlm/litertlm-android
+          curl -sS -m 60 -o /tmp/out/maven-metadata.xml $G/maven-metadata.xml
+          LATEST=$(grep -o '<version>[^<]*</version>' /tmp/out/maven-metadata.xml | sed 's/<[^>]*>//g' | tail -1)
+          echo "dernière version : $LATEST" | tee /tmp/out/versions.txt
+          grep -o '<version>[^<]*</version>' /tmp/out/maven-metadata.xml | sed 's/<[^>]*>//g' | tr '\n' ' ' >> /tmp/out/versions.txt
+          for V in 0.18.1 $LATEST; do
+            D=/tmp/v-$V; mkdir -p $D/aar $D/cls; cd $D
+            curl -sS -m 180 -o l.aar $G/$V/litertlm-android-$V.aar
+            curl -sS -m 60 -o /tmp/out/pom-$V.xml $G/$V/litertlm-android-$V.pom
+            unzip -oq l.aar -d aar
+            ( cd aar && find . -type f -printf '%p %s\n' | sort ) > /tmp/out/files-$V.txt
+            cp aar/AndroidManifest.xml /tmp/out/manifest-$V.xml 2>/dev/null
+            cp aar/proguard.txt /tmp/out/proguard-$V.txt 2>/dev/null
+            ( cd cls && unzip -oq ../aar/classes.jar )
+            ( cd cls && find . -name '*.class' | sed 's|^\./||; s|\.class$||; s|/|.|g' | sort ) > /tmp/out/classes-$V.txt
+            # API publique de toutes les classes (sans les classes anonymes)
+            javap -public -cp cls $(grep -v '\$[0-9]' /tmp/out/classes-$V.txt) > /tmp/out/api-$V.txt 2>&1
+            wc -l /tmp/out/api-$V.txt /tmp/out/classes-$V.txt
+            # chaînes de la bibliothèque native qui parlent de session, de cache, de point de reprise, etc.
+            for so in $(find aar/jni -name '*.so' | head -3); do
+              echo "== $so"; strings -n 6 $so | grep -i -E "prefix_cache|clone|checkpoint|kv_cache|session|num_threads|thread|npu|constrain|speculat|mtp|draft" | sort -u | head -150
+            done > /tmp/out/native-strings-$V.txt 2>&1
           done
-          } > /tmp/probe.txt 2>&1
           cd $GITHUB_WORKSPACE
           git config user.name ci; git config user.email ci@example.invalid
           git checkout --orphan probe-logs; git rm -rf . >/dev/null 2>&1 || true
-          cp /tmp/probe.txt probe.txt; cp /tmp/hf.txt hf.txt 2>/dev/null; cp /tmp/models/* . 2>/dev/null; git add -A; git commit -q -m probe; git push origin probe-logs --force
+          cp /tmp/out/* . ; git add -A; git commit -q -m probe; git push origin probe-logs --force
