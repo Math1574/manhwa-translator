@@ -1,0 +1,224 @@
+[site] "GET /index.html HTTP/1.1" 200 -
+[site] "GET /index.html HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -
+[site] "GET /index.html HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -
+[site] "GET /pc_en.html HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P01.jpg HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P02.jpg HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P03.jpg HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P04.jpg HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -
+[site] "GET /synth_en_caps.html HTTP/1.1" 200 -
+[site] "GET /synth/en_caps.png HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -
+[site] "GET /synth_en_mixed.html HTTP/1.1" 200 -
+[site] "GET /synth/en_mixed.png HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -
+[site] "GET /synth_en_variety.html HTTP/1.1" 200 -
+[site] "GET /synth/en_variety.jpg HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -
+[site] "GET /adtest.html HTTP/1.1" 200 -
+[site] "GET /synth/en_caps.png HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -
+[site] "GET /synth_layouts.html HTTP/1.1" 200 -
+[site] "GET /synth/layouts_0.png HTTP/1.1" 200 -
+[site] "GET /synth/layouts_1.png HTTP/1.1" 200 -
+[site] "GET /synth/layouts_2.png HTTP/1.1" 200 -
+[site] "GET /synth/layouts_3.png HTTP/1.1" 200 -
+[site] "GET /synth/layouts_5.png HTTP/1.1" 200 -
+[site] "GET /synth/layouts_4.png HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -
+[site] "GET /synth_atypical.html HTTP/1.1" 200 -
+[site] "GET /synth/atypical_0.png HTTP/1.1" 200 -
+[site] "GET /synth/atypical_1.png HTTP/1.1" 200 -
+[site] "GET /synth/atypical_2.png HTTP/1.1" 200 -
+[site] "GET /synth/atypical_3.png HTTP/1.1" 200 -
+[site] "GET /synth/atypical_4.png HTTP/1.1" 200 -
+[site] "GET /synth/atypical_5.png HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -
+[site] "GET /synth_en_fancy.html HTTP/1.1" 200 -
+[site] "GET /synth/en_fancy.png HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -
+[site] "GET /synth_en_fancy.html HTTP/1.1" 200 -
+[site] "GET /synth/en_fancy.png HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -
+[site] "GET /pc_en_ref.html HTTP/1.1" 200 -
+[site] "GET /ref/en/E01P02.jpg HTTP/1.1" 200 -
+[site] "GET /ref/en/E01P01.jpg HTTP/1.1" 200 -
+[site] "GET /ref/en/E01P03.jpg HTTP/1.1" 200 -
+[site] "GET /ref/en/E01P04.jpg HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -
+[site] "GET /seam_cut.html HTTP/1.1" 200 -
+[site] "GET /synth/seam_a1.png HTTP/1.1" 200 -
+[site] "GET /synth/seam_b1.png HTTP/1.1" 200 -
+[site] "GET /synth/seam_a2.png HTTP/1.1" 200 -
+[site] "GET /synth/seam_b2.png HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -
+[site] "GET /seam_cut.html HTTP/1.1" 200 -
+[site] "GET /synth/seam_a1.png HTTP/1.1" 200 -
+[site] "GET /synth/seam_a2.png HTTP/1.1" 200 -
+[site] "GET /synth/seam_b1.png HTTP/1.1" 200 -
+[site] "GET /synth/seam_b2.png HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -
+[site] "GET /pc_en.html HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P01.jpg HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P02.jpg HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P03.jpg HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P04.jpg HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -
+[site] "GET /pc_en_long.html HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P02.jpg?k=1 HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P01.jpg?k=0 HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P03.jpg?k=2 HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P04.jpg?k=3 HTTP/1.1" 200 -
+[site] "GET /pc/en/E06P01.jpg?k=4 HTTP/1.1" 200 -
+[site] "GET /pc/en/E06P02.jpg?k=5 HTTP/1.1" 200 -
+[site] "GET /pc/en/E06P03.jpg?k=6 HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P01.jpg?k=7 HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P02.jpg?k=8 HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P03.jpg?k=9 HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P04.jpg?k=10 HTTP/1.1" 200 -
+[site] "GET /pc/en/E06P01.jpg?k=11 HTTP/1.1" 200 -
+[site] "GET /pc/en/E06P02.jpg?k=12 HTTP/1.1" 200 -
+[site] "GET /pc/en/E06P03.jpg?k=13 HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P01.jpg?k=14 HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P02.jpg?k=15 HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P03.jpg?k=16 HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P04.jpg?k=17 HTTP/1.1" 200 -
+[site] "GET /pc/en/E06P01.jpg?k=18 HTTP/1.1" 200 -
+[site] "GET /pc/en/E06P03.jpg?k=20 HTTP/1.1" 200 -
+[site] "GET /pc/en/E06P02.jpg?k=19 HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P03.jpg?k=23 HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P02.jpg?k=22 HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P01.jpg?k=21 HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P04.jpg?k=24 HTTP/1.1" 200 -
+[site] "GET /pc/en/E06P01.jpg?k=25 HTTP/1.1" 200 -
+[site] "GET /pc/en/E06P02.jpg?k=26 HTTP/1.1" 200 -
+[site] "GET /pc/en/E06P03.jpg?k=27 HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P01.jpg?k=28 HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P02.jpg?k=29 HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P03.jpg?k=30 HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P04.jpg?k=31 HTTP/1.1" 200 -
+[site] "GET /pc/en/E06P01.jpg?k=32 HTTP/1.1" 200 -
+[site] "GET /pc/en/E06P02.jpg?k=33 HTTP/1.1" 200 -
+[site] "GET /pc/en/E06P03.jpg?k=34 HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P01.jpg?k=35 HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -
+[site] "GET /pc_en_toggle.html HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P01.jpg?k=0 HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P02.jpg?k=1 HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P03.jpg?k=2 HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P04.jpg?k=3 HTTP/1.1" 200 -
+[site] "GET /pc/en/E06P01.jpg?k=4 HTTP/1.1" 200 -
+[site] "GET /pc/en/E06P02.jpg?k=5 HTTP/1.1" 200 -
+[site] "GET /pc/en/E06P03.jpg?k=6 HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P01.jpg?k=7 HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P02.jpg?k=8 HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P03.jpg?k=9 HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P04.jpg?k=10 HTTP/1.1" 200 -
+[site] "GET /pc/en/E06P01.jpg?k=11 HTTP/1.1" 200 -
+[site] "GET /pc/en/E06P02.jpg?k=12 HTTP/1.1" 200 -
+[site] "GET /pc/en/E06P03.jpg?k=13 HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -
+[site] "GET /pc_en_once.html HTTP/1.1" 200 -
+[site] "GET /once/en/E01P01.jpg?n=1794654673080_0.34217409388958475 HTTP/1.1" 200 -
+[site] "GET /once/en/E01P02.jpg?n=1794654673080_0.8442975951676603 HTTP/1.1" 200 -
+[site] "GET /once/en/E01P03.jpg?n=1794654673080_0.9718520005414368 HTTP/1.1" 200 -
+[site] "GET /once/en/E01P04.jpg?n=1794654673080_0.46766642821652527 HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -
+[site] "GET /pc_en_strict.html HTTP/1.1" 200 -
+[site] "GET /strict/en/E01P01.jpg HTTP/1.1" 200 -
+[site] "GET /strict/en/E01P02.jpg HTTP/1.1" 200 -
+[site] "GET /strict/en/E01P03.jpg HTTP/1.1" 200 -
+[site] "GET /strict/en/E01P04.jpg HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -
+[site] "GET /strict/en/E01P01.jpg HTTP/1.1" 200 -
+[site] "GET /strict/en/E01P03.jpg HTTP/1.1" 200 -
+[site] "GET /strict/en/E01P02.jpg HTTP/1.1" 200 -
+[site] "GET /strict/en/E01P02.jpg HTTP/1.1" 200 -
+[site] "GET /pc_en_lazy.html HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -
+[site] "GET /pc/en/E01P01.jpg HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P02.jpg HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P03.jpg HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P04.jpg HTTP/1.1" 200 -
+[site] "GET /synth_ko.html HTTP/1.1" 200 -
+[site] "GET /synth/ko.png HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -
+[site] "GET /synth_ja_vertical.html HTTP/1.1" 200 -
+[site] "GET /synth/ja_vertical.png HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -
+[site] "GET /synth_zh.html HTTP/1.1" 200 -
+[site] "GET /synth/zh.png HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -
+[site] "GET /pc_ja.html HTTP/1.1" 200 -
+[site] "GET /pc/ja/E01P01.jpg HTTP/1.1" 200 -
+[site] "GET /pc/ja/E01P02.jpg HTTP/1.1" 200 -
+[site] "GET /pc/ja/E01P03.jpg HTTP/1.1" 200 -
+[site] "GET /pc/ja/E01P04.jpg HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -
+[site] "GET /adtest2.html HTTP/1.1" 200 -
+[site] "GET /__sites/cdn.test/bannieres-generiques/ok.png HTTP/1.1" 200 -
+[site] "GET /synth/en_caps.png HTTP/1.1" 200 -
+[site] "GET /__sites/cdn.test/images/p2.png HTTP/1.1" 200 -
+[site] "GET /__sites/cdn.test/images/p1.png HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -
+[site] "GET /__sites/friend.test/page.html HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /__sites/friend.test/favicon.ico HTTP/1.1" 404 -
+[site] "GET /adtest2.html HTTP/1.1" 200 -
+[site] "GET /synth/en_caps.png HTTP/1.1" 200 -
+[site] "GET /__sites/cdn.test/images/p2.png HTTP/1.1" 200 -
+[site] "GET /__sites/cdn.test/images/p1.png HTTP/1.1" 200 -
+[site] "GET /__sites/cdn.test/bannieres-generiques/ok.png HTTP/1.1" 200 -
+[site] "GET /adtest2_ch2.html HTTP/1.1" 200 -
+[site] "GET /adtest2.html HTTP/1.1" 200 -
+[site] "GET /__sites/cdn.test/bannieres-generiques/ok.png HTTP/1.1" 200 -
+[site] "GET /__sites/cdn.test/images/p2.png HTTP/1.1" 200 -
+[site] "GET /__sites/cdn.test/images/p1.png HTTP/1.1" 200 -
+[site] "GET /synth/en_caps.png HTTP/1.1" 200 -
+[site] "GET /adtest2.html HTTP/1.1" 200 -
+[site] "GET /__sites/adnet.test/ad.js HTTP/1.1" 200 -
+[site] "GET /__sites/adnet.test/banner.gif HTTP/1.1" 200 -
+[site] "GET /__sites/cdn.test/bannieres-generiques/ok.png HTTP/1.1" 200 -
+[site] "GET /__sites/cdn.test/images/p2.png HTTP/1.1" 200 -
+[site] "GET /__sites/cdn.test/images/p1.png HTTP/1.1" 200 -
+[site] "GET /__sites/cdn.test/ads/ad.png HTTP/1.1" 200 -
+[site] "GET /synth/en_caps.png HTTP/1.1" 200 -
+[site] "GET /__sites/adnet.test/frame.html HTTP/1.1" 200 -
+[site] "GET /__sites/popunder.test/landing HTTP/1.1" 200 -
+[site] "GET /adtest2.html HTTP/1.1" 200 -
+[site] "GET /__sites/cdn.test/images/p2.png HTTP/1.1" 200 -
+[site] "GET /__sites/cdn.test/bannieres-generiques/ok.png HTTP/1.1" 200 -
+[site] "GET /__sites/cdn.test/images/p1.png HTTP/1.1" 200 -
+[site] "GET /synth/en_caps.png HTTP/1.1" 200 -
+[site] "GET /comics/test-series-1a2b3c/chapter/1.html HTTP/1.1" 200 -
+[site] "GET /synth/en_mixed.png HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -
