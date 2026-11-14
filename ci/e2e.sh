@@ -418,7 +418,8 @@ uidump lib
 tapt lib "=Test Series" 1; sleep 2; uidump series; shot ui 3
 chk "fiche d'une œuvre : l'illustration est aussi en tête de la fiche" $(has series 'Illustration de Test Series')
 chk "fiche d'une œuvre : liste des chapitres" $(has series 'Chapitres')
-chk "fiche d'une œuvre : page de l'œuvre et reprise proposées" $([ "$(has series 'Page de l')" = 1 ] && [ "$(has series 'Continuer')$(has series 'Reprendre')" != "00" ] && echo 1 || echo 0)
+# la lecture proposée dépend de l'avancement relevé à 1,5 s (page courte = chapitre « Lu ») : « Continuer / Reprendre » ou, si le chapitre est marqué lu, « Lire le chapitre suivant / Relire »
+chk "fiche d'une œuvre : page de l'œuvre et lecture proposées" $([ "$(has series 'Page de l')" = 1 ] && [ "$(has series 'Continuer')$(has series 'Reprendre')$(has series 'Lire le chapitre')$(has series 'Relire')" != "0000" ] && echo 1 || echo 0)
 adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump lib2
 chk "retour de la fiche vers la bibliothèque" $(has lib2 'Historique')
 # étape 10 : bibliothèque — recherche, pastilles de statut, tris, statut « Terminée », titres simples. Trois œuvres de démonstration s'ajoutent à « Test Series ».
