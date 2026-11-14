@@ -1,0 +1,65 @@
+Performing Streamed Install
+Success
+Physical size: 1080x2400
+[e2e 10:52:36] === prep (index.html, MLKIT, EN→FR)
+[e2e 10:54:08] terminé : prep (92 s)
+[e2e 10:54:08] aucune image traitée : nouvel essai de prep
+[e2e 10:54:08] === prep (index.html, MLKIT, EN→FR)
+[e2e 10:55:04] terminé : prep (55 s)
+[e2e 10:55:04] === pc_en_mlkit (pc_en.html, MLKIT, EN→FR)
+[e2e 10:56:15] terminé : pc_en_mlkit (71 s)
+[e2e 10:56:15] === synth_en_caps_mlkit (synth_en_caps.html, MLKIT, EN→FR)
+[e2e 10:57:04] terminé : synth_en_caps_mlkit (48 s)
+[e2e 10:57:04] === synth_en_mixed_mlkit (synth_en_mixed.html, MLKIT, EN→FR)
+[e2e 10:57:54] terminé : synth_en_mixed_mlkit (49 s)
+[e2e 10:57:54] === synth_en_variety_combined (synth_en_variety.html, MLKIT, EN→FR)
+[e2e 10:58:50] terminé : synth_en_variety_combined (55 s)
+[e2e 10:58:50] === adblock_mlkit (adtest.html, MLKIT, EN→FR)
+[e2e 10:59:45] terminé : adblock_mlkit (55 s)
+[e2e 10:59:45] === synth_layouts_combined (synth_layouts.html, MLKIT, EN→FR)
+[e2e 11:01:17] terminé : synth_layouts_combined (92 s)
+[e2e 11:01:17] === synth_atypical_combined (synth_atypical.html, MLKIT, EN→FR)
+[e2e 11:02:31] terminé : synth_atypical_combined (73 s)
+[e2e 11:02:31] === synth_en_fancy_mlkitonly (synth_en_fancy.html, MLKIT, EN→FR)
+[e2e 11:03:15] terminé : synth_en_fancy_mlkitonly (43 s)
+[e2e 11:03:15] === synth_en_fancy_combined (synth_en_fancy.html, MLKIT, EN→FR)
+[e2e 11:04:10] terminé : synth_en_fancy_combined (55 s)
+[e2e 11:04:10] === pc_en_ref_mlkit (pc_en_ref.html, MLKIT, EN→FR)
+[e2e 11:05:21] terminé : pc_en_ref_mlkit (70 s)
+[e2e 11:05:21] === seam_mlkit (seam_cut.html, MLKIT, EN→FR)
+[e2e 11:06:41] terminé : seam_mlkit (79 s)
+[e2e 11:06:41] === seam_off_mlkit (seam_cut.html, MLKIT, EN→FR)
+[e2e 11:07:54] terminé : seam_off_mlkit (73 s)
+[e2e 11:07:54] === pc_en_batch_mlkit (pc_en.html, MLKIT, EN→FR)
+[e2e 11:09:05] terminé : pc_en_batch_mlkit (70 s)
+[e2e 11:09:06] === pc_en_long_mlkit (pc_en_long.html, MLKIT, EN→FR)
+[e2e 11:13:19] terminé : pc_en_long_mlkit (253 s)
+[e2e 11:13:19] === pc_en_toggle_mlkit (pc_en_toggle.html, MLKIT, EN→FR)
+[e2e 11:15:55] terminé : pc_en_toggle_mlkit (156 s)
+[e2e 11:15:55] === pc_en_once_mlkit (pc_en_once.html, MLKIT, EN→FR)
+[e2e 11:17:06] terminé : pc_en_once_mlkit (71 s)
+[e2e 11:17:06] === pc_en_strict_mlkit (pc_en_strict.html, MLKIT, EN→FR)
+[e2e 11:18:17] terminé : pc_en_strict_mlkit (71 s)
+[e2e 11:18:17] === pc_en_lazy_mlkit (pc_en_lazy.html, MLKIT, EN→FR)
+[e2e 11:19:27] terminé : pc_en_lazy_mlkit (70 s)
+[e2e 11:19:27] === synth_ko_mlkit (synth_ko.html, MLKIT, KO→FR)
+[e2e 11:20:17] terminé : synth_ko_mlkit (49 s)
+[e2e 11:20:17] === synth_ja_vert_mlkit (synth_ja_vertical.html, MLKIT, JA→FR)
+[e2e 11:21:12] terminé : synth_ja_vert_mlkit (55 s)
+[e2e 11:21:12] === synth_zh_mlkit (synth_zh.html, MLKIT, ZH_HANS→FR)
+[e2e 11:22:02] terminé : synth_zh_mlkit (49 s)
+[e2e 11:22:02] === pc_ja_mlkit (pc_ja.html, MLKIT, JA→FR)
+[e2e 11:23:25] terminé : pc_ja_mlkit (83 s)
+[e2e 11:23:25] === bloqueur de publicités
+[e2e 11:24:01] bloqueur terminé (6228 octets de rapport)
+[e2e 11:24:01] === interface
+  [avant appui]   mCurrentFocus=Window{32b64b7 u0 app.manhwa.translator/app.manhwa.MainActivity}
+  [avant appui]     topResumedActivity=ActivityRecord{94b8f00 u0 app.manhwa.translator/app.manhwa.MainActivity t33}
+  [avant appui]   ResumedActivity: ActivityRecord{94b8f00 u0 app.manhwa.translator/app.manhwa.MainActivity t33}
+  [après appui]   mCurrentFocus=Window{32b64b7 u0 app.manhwa.translator/app.manhwa.MainActivity}
+  mCurrentFocus=Window{32b64b7 u0 app.manhwa.translator/app.manhwa.MainActivity}
+        InsetsSource id=c830000 type=statusBars frame=[0,0][1080,128] visible=true flags= insetsRoundedCornerFrame=false
+        mSource=InsetsSource id=c830000 type=statusBars frame=[0,0][1080,128] visible=true flags= insetsRoundedCornerFrame=false
+[e2e 11:27:39] textes écartés : 2 cadre(s) proposé(s), listes connues pour 2 page(s) sur 2
+  [journal système] 30 ligne(s) d'ANR ou de plantage
+[e2e 11:32:15] toutes les scènes sont terminées

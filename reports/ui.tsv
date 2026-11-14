@@ -1,0 +1,104 @@
+plein écran : rien d'affiché au repos	1
+plein écran : un appui ouvre le menu de lecture	1
+plein écran : le menu propose Original | Traduit et les chapitres	1
+plein écran : un second appui le referme	1
+réglages rapides : un appui long sur Original | Traduit les ouvre aussi en plein écran	1
+réglages rapides : le retour referme le panneau et reste en plein écran	1
+plein écran : le bouton du menu le quitte (onglets de retour)	1
+onglets : Lecture, Bibliothèque, Réglages	1
+bouton rond Original | Traduit présent hors plein écran	1
+suppression : un appui long sur une traduction propose de la corriger ou de la supprimer	1
+suppression : l'état de départ est sain (aucune traduction supprimée, au moins un bloc)	1
+suppression : le bandeau « Annuler » apparaît après la suppression	1
+suppression : la proposition « Corriger » disparaît avec la corbeille	1
+suppression : la traduction est supprimée (original rétabli, correction enregistrée)	1
+suppression : le bloc reste repérable (même nombre de blocs que avant)	1
+annulation : « Annuler » rétablit la traduction (plus de bloc supprimé, aucune correction)	1
+annulation : le bandeau se referme	1
+annulation : une traduction corrigée à la main est enregistrée (départ)	1
+annulation : la traduction corrigée peut elle aussi être supprimée	1
+annulation : la correction faite à la main avant la suppression est rétablie telle quelle	1
+annulation : les corrections de test sont retirées	1
+suppression : le bandeau se referme seul au bout de 3 s	1
+suppression : sans annulation, la suppression est définitive	1
+gomme : activée, un bouton « Gomme active · Terminer » est affiché	1
+gomme : un appui sur une traduction la supprime (bloc masqué, correction enregistrée)	1
+gomme : le bandeau « Traduction supprimée · Annuler » apparaît	1
+gomme : l'appui n'a pas masqué la barre d'adresse (il ne sert qu'à effacer)	1
+gomme : elle reste active après un appui	1
+gomme : un deuxième appui supprime une deuxième traduction (autre bloc)	1
+gomme : « Annuler » ne rétablit que la dernière suppression	1
+gomme : « Terminer » coupe la gomme	1
+gomme : le bouton « Gomme active » disparaît	1
+gomme : les corrections de test sont retirées	1
+retraduction ciblée : départ sain (aucun terme enregistré, des textes traduits)	1
+retraduction ciblée : une fenêtre montre le terme et, pour chaque texte concerné, la traduction avant et après	1
+retraduction ciblée : seuls les textes qui contiennent le terme sont retraduits (pas toute la page)	1
+retraduction ciblée : rien n'est enregistré avant la confirmation (aucun terme, traductions inchangées)	1
+retraduction ciblée : « Annuler » ferme la fenêtre sans rien enregistrer	1
+retraduction ciblée : « Enregistrer » ajoute le terme	1
+retraduction ciblée : le texte concerné est retraduit avec le terme, les autres textes ne changent pas	1
+retraduction ciblée : la fenêtre se referme après l'enregistrement	1
+retraduction ciblée : « Enregistrer » de l'éditeur avec un terme passe aussi par l'aperçu	1
+retraduction ciblée : depuis l'éditeur, le terme est ajouté et le texte concerné retraduit	1
+mise à jour à l'affichage : un terme modifié sans aperçu ne retraduit que le texte concerné (page reprise du cache)	1
+retraduction ciblée : les termes et corrections de test sont retirés	1
+textes écartés : activés, un bouton « Textes écartés · Terminer » est affiché	1
+textes écartés : au moins un texte laissé de côté est entouré (page reprise ou relue)	1
+textes écartés : un appui traduit le texte (correction enregistrée, cadre retiré)	1
+textes écartés : le bandeau « Texte traduit · Annuler » apparaît	1
+textes écartés : le mode reste actif après un appui	1
+textes écartés : « Annuler » retire la traduction et le cadre revient	1
+textes écartés : « Terminer » coupe le mode	1
+textes écartés : le bouton disparaît	1
+textes écartés : les corrections de test sont retirées	1
+ignorer : un appui long propose aussi « Ignorer ce texte… » (avec Corriger)	1
+ignorer : la fenêtre propose cette œuvre, toutes les œuvres ou toute l'image	1
+ignorer : le bandeau « Texte ignoré · Annuler » apparaît	1
+ignorer : le texte reste tel quel (règle enregistrée, bloc masqué, aucune correction)	1
+ignorer : « Annuler » retire la règle et rétablit la traduction	1
+ignorer partout : la règle est enregistrée et le texte reste tel quel	1
+ignorer : un appui long sur un texte ignoré propose de le rétablir (pas de « Corriger »)	1
+ignorer : « Rétablir » retire la règle et rend la traduction	1
+image ignorée : le bandeau « Image ignorée · Annuler » apparaît	1
+image ignorée : la règle est enregistrée et l'image n'est plus traduite	1
+image ignorée : « Annuler » rétablit l'image (règle retirée, page de nouveau traduite)	1
+image ignorée : la règle est de nouveau enregistrée et l'image n'est plus traduite	1
+image ignorée : un appui long sur l'image propose de la rétablir	1
+image ignorée : « Rétablir » retire la règle et la page est de nouveau traduite	1
+réglages rapides : un appui long sur le bouton rond ouvre le panneau	1
+réglages rapides : langue, taille du texte, onomatopées et retraduction y sont	1
+réglages rapides : la gomme à traductions y est proposée	1
+réglages rapides : l'appui long ne bascule pas la traduction (même état du bouton avant et après)	1
+réglages rapides : le retour referme le panneau, la page reste affichée	1
+bibliothèque : l'œuvre est listée avec « Continuer la lecture »	1
+fiche d'une œuvre : liste des chapitres	1
+fiche d'une œuvre : page de l'œuvre et reprise proposées	1
+retour de la fiche vers la bibliothèque	1
+réglages : la page « Textes et images ignorés » est proposée à l'accueil	1
+réglages : une carte par thème	1
+réglages rapides : la langue choisie dans le panneau est enregistrée (résumé de Réglages)	1
+réglages : champ de recherche, carte de mise à jour et numéro de version sur l'accueil	1
+réglages : la carte Traduction ouvre ses options (langues)	1
+réglages : choisir une langue dans la carte Traduction l'enregistre (résumé de Réglages)	1
+réglages : la carte Lecture ouvre ses options (bouton, barres)	1
+réglages : la carte Apparence propose mascotte, accent et fond	1
+réglages : choisir une autre mascotte met à jour sa présentation	1
+réglages : la recherche « gpu » propose l'accélération GPU, rangée dans Avancé	1
+réglages : un résultat de recherche ouvre la page Avancé	1
+réglages : la recherche fait défiler la page jusqu'au groupe trouvé (bas de la page Avancé)	1
+ignorés : la recherche « ignor » ouvre la page « Textes et images ignorés »	1
+ignorés : la règle posée en lisant (toutes les œuvres) y est listée avec « Retirer »	1
+ignorés : « Retirer » supprime la règle de la liste et de l'application	1
+centre de corrections : départ (une correction rangée sous la page ouverte, un terme, deux traductions retenues)	1
+centre de corrections : la recherche « corrections » ouvre la page	1
+centre de corrections : le terme du glossaire y est listé avec « Retirer »	1
+centre de corrections : « Retirer » supprime le terme du glossaire	1
+centre de corrections : les trois groupes sont là (ignorés, glossaire, corrections par chapitre)	1
+centre de corrections : la correction est rangée sous son chapitre (œuvre et numéro), avec ce qui a été fait	1
+centre de corrections : la traduction retenue sans correction est listée à part	1
+centre de corrections : « Défaire » retire la correction et la traduction retenue qui lui est liée (pas l'autre)	1
+centre de corrections : la page retrouve sa traduction automatique après « Défaire »	1
+centre de corrections : la liste des corrections se vide	1
+centre de corrections : « Retirer » oublie la traduction retenue sans correction	1
+raccourci : « Reprendre la lecture » publié pour l'œuvre lue	1
