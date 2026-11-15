@@ -127,9 +127,12 @@ object ArtFill {
      * @param maxGrow épaisseur maximale (pixels) de lueur cherchée autour des lettres
      * @param ring largeur (pixels) du fondu extérieur : 3 en général ; plus large pour un halo diffus, que l'on ne doit pas voir finir en carré
      * @param robust 0 : les pixels voisins servent tels quels de référence ; sinon, demi-largeur (pixels) des traits fins que l'on en retire d'abord (voir [withoutThinLines])
+     * @param hatch traits fins sombres du décor sur fond clair (hachures, lignes de vitesse), null si le fond n'en a pas. Ils ne servent jamais de référence au remplissage (la moyenne des bords en
+     *   faisait une tache grise le long des traits), et ne comptent ni dans le profil de la lueur (un trait qui ne s'estompe pas n'est pas de la lueur : l'épaisseur mesurée saturait et le
+     *   masque s'élargissait sur toutes les hachures) ni dans la moyenne locale qui décide de l'élargissement du masque
      * @return null si la région ne contient pas assez de fond propre pour une reconstruction fiable (l'appelant garde l'ancienne méthode)
      */
-    fun reconstruct(px: IntArray, w: Int, h: Int, core: BooleanArray, limit: BooleanArray, avoid: BooleanArray?, maxGrow: Int, ring: Int = 3, robust: Int = 0): Result? {
+    fun reconstruct(px: IntArray, w: Int, h: Int, core: BooleanArray, limit: BooleanArray, avoid: BooleanArray?, maxGrow: Int, ring: Int = 3, robust: Int = 0, hatch: BooleanArray? = null): Result? {
         val ringAlpha = if (ring <= 3) RING_ALPHA else IntArray(ring + 1) { d -> if (d == 0) 255 else (255 * (Math.cos(Math.PI * d / (ring + 1)) + 1) / 2).toInt() }
         val bgRef = if (robust > 0) withoutThinLines(px, w, h, robust) else px
         val n = w * h
@@ -138,7 +141,7 @@ object ArtFill {
         val grow = max(1, maxGrow)
         // 1) fond propre estimé sous toute la bande de recherche de la lueur
         val band = TextErase.dilate(core, w, h, grow, limit)
-        val validBand = BooleanArray(n) { !band[it] && (avoid == null || !avoid[it]) }
+        val validBand = BooleanArray(n) { !band[it] && (avoid == null || !avoid[it]) && (hatch == null || !hatch[it]) }
         var known = 0; for (v in validBand) if (v) known++
         if (known < 300 || known < coreN / 8) return null
         val clean = TextErase.inpaintSmooth(bgRef, w, h, band, validBand)
@@ -163,7 +166,7 @@ object ArtFill {
             }
         }
         val hist = IntArray((grow + 1) * 256); val ringN = IntArray(grow + 1)
-        for (i in 0 until n) { val d = dcore[i]; if (d < 1 || (avoid != null && avoid[i])) continue; hist[d * 256 + min(255, TextErase.dist(px[i], clean[i]))]++; ringN[d]++ }
+        for (i in 0 until n) { val d = dcore[i]; if (d < 1 || (avoid != null && avoid[i]) || (hatch != null && hatch[i])) continue; hist[d * 256 + min(255, TextErase.dist(px[i], clean[i]))]++; ringN[d]++ }
         fun med(d: Int): Int { if (d < 1 || d > grow) return -1; val tot = ringN[d]; if (tot < 8) return -1; var acc = 0; for (v in 0..255) { acc += hist[d * 256 + v]; if (acc * 2 >= tot) return v }; return 255 }
         val near1 = max(med(1), med(2))
         // la lueur finit quand l'écart médian retombe sous le seuil (bruit du fond, ou 12 % de l'écart au bord des lettres) ; un écart qui ne décroît plus (palier) est du dessin, pas de la lueur
@@ -180,7 +183,7 @@ object ArtFill {
             }
         }
         // 4) la lueur gagne, dans cette épaisseur, les pixels qui s'écartent encore du fond propre (moyenne locale hors lettres : la texture fine n'en est pas)
-        val ref = IntArray(n) { if (core[it]) 0 else 1 }
+        val ref = IntArray(n) { if (core[it] || (hatch != null && hatch[it])) 0 else 1 }
         val integ = Array(4) { IntArray((w + 1) * (h + 1)) }
         for (y in 0 until h) {
             val rs = IntArray(4)
@@ -193,7 +196,7 @@ object ArtFill {
         val m = core.copyOf(); var added = 0
         val lowTau = max(7, (1.6f * sigma).toInt())
         if (thick > 0) for (i in 0 until n) {
-            val d = dcore[i]; if (d < 1 || d > thick || m[i]) continue
+            val d = dcore[i]; if (d < 1 || d > thick || m[i] || (hatch != null && hatch[i])) continue
             val x = i % w; val y = i / w
             val xa = max(0, x - 2); val xb = min(w, x + 3); val ya = max(0, y - 2); val yb = min(h, y + 3)
             fun box(k: Int) = integ[k][yb * (w + 1) + xb] - integ[k][ya * (w + 1) + xb] - integ[k][yb * (w + 1) + xa] + integ[k][ya * (w + 1) + xa]
@@ -207,7 +210,7 @@ object ArtFill {
         val safe = TextErase.dilate(m, w, h, 2, limit)
         val outer = TextErase.dilate(safe, w, h, ringAlpha.size - 1, limit)
         // 6) remplissage lisse à partir des pixels intacts qui touchent la couronne
-        val validF = BooleanArray(n) { !outer[it] && (avoid == null || !avoid[it]) }
+        val validF = BooleanArray(n) { !outer[it] && (avoid == null || !avoid[it]) && (hatch == null || !hatch[it]) }
         val fill = TextErase.inpaintSmooth(bgRef, w, h, outer, validF)
         // 7) opacité : pleine sur le masque sûr, en dégradé sur la couronne extérieure
         val alpha = IntArray(n)
