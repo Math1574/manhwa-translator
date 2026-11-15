@@ -20,6 +20,8 @@ interface PixelSource {
 object Erasure {
     /** Diagnostic (bancs d'essai) : reçoit les mesures qui décident entre aplat et effacement des lettres. Nul en production. */
     @JvmField var trace: ((String) -> Unit)? = null
+    /** Protège les traits fixes (contour de bulle, trait du décor) que l'effacement d'un texte sur dessin frôlerait ; sert aux tests, qui le coupent pour montrer le défaut. */
+    @JvmField var protectStructure = true
     /** Nettoyage du halo clair autour des lettres effacées sur fond blanc (mode ART). Désactivable pour comparer, dans les bancs d'essai. */
     @JvmField var haloClean: Boolean = true
     /** Bancs d'essai seulement : force le mode ART (même sur un fond uni) pour mesurer ses restes. */
@@ -489,6 +491,33 @@ object Erasure {
         val mask = if (plainWhite) TextErase.lightHalo(px, w, h, artInfo.mask, a.bg, max(6, (lh * 0.12f).toInt()), frameIgnore) else artInfo.mask
         // texte sur dessin : région élargie pour trouver de la vraie texture à copier à côté du trou (second passage)
         if (padOverride == 0f) planUnclipped(src, s, lineBoxes, lineH, imageW, imageH, max(40f, lineH * 1.6f), container, protect, free, outlines, extra, protectRound, confine, confineRect, exclude)?.let { if (it.mode == Mode.ART) return it }
+        // texte sur dessin (fond non blanc uni) : fond propre estimé par interpolation lisse, lueur et frange absorbées, raccord continu (voir ArtFill)
+        if (ArtFill.enabled && !plainWhite) {
+            val maxGrow = (lh * 0.3f).toInt().coerceIn(6, 24)
+            // zone où la lueur peut être effacée : les lignes de texte élargies, jamais les textes des blocs voisins
+            val limitGlow = TextErase.rectMask(w, h, rects(), maxGrow + 6)
+            for (i in limitGlow.indices) if (zoneArt[i]) limitGlow[i] = true
+            val neigh = (exclude + protect).map { l -> intArrayOf((l.left * s).toInt() - x0, (l.top * s).toInt() - y0, (l.right * s).toInt() - x0, (l.bottom * s).toInt() - y0) }
+            if (neigh.isNotEmpty()) { val raw = TextErase.rectMask(w, h, neigh, 0); for (i in limitGlow.indices) if (raw[i]) limitGlow[i] = false }
+            // références du remplissage : ni les textes voisins ni leur halo immédiat (un halo sombre collé au texte voisin assombrissait le fond reconstruit)
+            val avoidN0 = if (neigh.isEmpty()) null else TextErase.rectMask(w, h, neigh, max(3, (lh * 0.12f).toInt()))
+            // contour de bulle ou trait du décor qui traverse la zone, sur un fond dominant uni : jamais effacé (trou dans le contour) ni utilisé comme référence (tache grise le long du trait)
+            val fixed = if (protectStructure && a.bgShare >= 0.45f) fixedStructure(px, w, h, a.bg, a.threshold, textRect, mask) else null
+            ArtFill.trace?.invoke("structure fixe : ${fixed?.protect?.count { it } ?: 0} px dont ${fixed?.drop?.count { it } ?: 0} retirés du masque (part du fond ${a.bgShare}, texte ${textRect.toList()}, région ${w}x$h)")
+            val avoidN = if (fixed == null) avoidN0 else BooleanArray(w * h) { fixed.protect[it] || (avoidN0 != null && avoidN0[it]) }
+            if (fixed != null) for (i in limitGlow.indices) if (fixed.protect[i]) limitGlow[i] = false
+            // les quelques pixels de zone qui mordent sur le trait fixe ne sont pas du texte : on les laisse (sinon un trou dans le contour)
+            val dropped = fixed?.drop
+            val core0 = if (dropped == null) mask else BooleanArray(w * h) { mask[it] && !dropped[it] }
+            val rec = ArtFill.reconstruct(px, w, h, core0, limitGlow, avoidN, maxGrow)
+            if (rec != null) {
+                val smooth = TextErase.periodicFill(px, w, h, rec.safe, rec.fill) ?: ArtFill.addGrain(rec.fill, rec.mask, rec.sigma)
+                val layerN = IntArray(w * h) { if (rec.alpha[it] > 0) (rec.alpha[it] shl 24) or (smooth[it] and 0xFFFFFF) else 0 }
+                val inkN = TextErase.artMask(px, w, h, zoneArt, fillColor, 0, Int.MAX_VALUE, tightLines, reachCap)
+                val ciN = coreOf(px, w, h, inkN, a.bg, fillColor)
+                return Plan(Mode.ART, x0, y0, w, h, rec.mask, layerN, a.bg, fillColor, a.outlined || artInfo.outlined, null, null, TextErase.strokeWidth(inkN, w, h), inkN, meanFill(layerN), 0, ciN.mask, ciN.color, ciN.halo, ciN.haloPx)
+            }
+        }
         // texte sur dessin : couleur du plus proche voisin plutôt que diffusion (la diffusion mélange le blanc d'une bulle et le fond sombre en un gris voilé)
         val diffused = TextErase.inpaintNearest(px, w, h, mask)
         // trame de points ou motif répété autour du trou : on recopie le motif plutôt que de le lisser en un voile gris
@@ -505,6 +534,53 @@ object Erasure {
         val inkArt = TextErase.artMask(px, w, h, zoneArt, fillColor, 0, Int.MAX_VALUE, tightLines, reachCap)
         val ci = coreOf(px, w, h, inkArt, a.bg, fillColor)
         return Plan(Mode.ART, x0, y0, w, h, mask, layer, a.bg, fillColor, a.outlined || artInfo.outlined, null, null, TextErase.strokeWidth(inkArt, w, h), inkArt, meanFill(layer), 0, ci.mask, ci.color, ci.halo, ci.haloPx)
+    }
+
+    /** Traits fixes d'une région : [protect] = pixels que l'effacement ne doit ni élargir ni prendre pour références ; [drop] = parmi eux, ceux que la zone de texte mordait par erreur (à retirer du masque). */
+    internal class Fixed(val protect: BooleanArray, val drop: BooleanArray?)
+
+    /**
+     * Traits fixes de la région, sur un fond dominant [bg] : composantes de pixels différents du fond qui touchent le bord de la région (contour de bulle, bordure de case, trait du
+     * décor : elles se prolongent au-delà de la zone) ou dépassent la taille du texte lu ([textRect]), et que les lettres ([ink]) n'effleurent que très peu. Une composante qui porte du
+     * texte (lettrage posé sur un dessin, sur un trait : plus de 8 % de ses pixels) n'en fait pas partie : le texte y est effacé comme partout et ses pixels servent de références.
+     * Si les lettres n'en prennent presque rien (au plus 1 %, un angle de zone qui mord sur le contour), ces pixels sont retirés du masque (sinon un trou dans le contour) ;
+     * sinon le masque reste tel quel mais la marge de sécurité ne grignote pas le trait. Élargis d'un pixel (lissage des bords). Rend null s'il n'y en a pas.
+     */
+    internal fun fixedStructure(px: IntArray, w: Int, h: Int, bg: Int, thr: Int, textRect: IntArray, ink: BooleanArray): Fixed? {
+        val far = TextErase.farMask(px, bg, thr)
+        val maxW = ((textRect[2] - textRect[0]) * 1.2f).toInt() + 4; val maxH = ((textRect[3] - textRect[1]) * 1.2f).toInt() + 4
+        val seen = BooleanArray(w * h); val keepAll = BooleanArray(w * h); val keepClean = BooleanArray(w * h); val queue = IntArray(w * h)
+        var any = false; var anyClean = false
+        for (start in 0 until w * h) {
+            if (!far[start] || seen[start]) continue
+            var head = 0; var tail = 0; queue[tail++] = start; seen[start] = true
+            var border = false; var inkN = 0
+            var x0 = w; var x1 = -1; var y0 = h; var y1 = -1
+            while (head < tail) {
+                val i = queue[head++]; val x = i % w; val y = i / w
+                if (x == 0 || y == 0 || x == w - 1 || y == h - 1) border = true
+                if (ink[i]) inkN++
+                if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y
+                for (dy in -1..1) for (dx in -1..1) {
+                    if (dx == 0 && dy == 0) continue
+                    val nx = x + dx; val ny = y + dy
+                    if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
+                    val j = ny * w + nx
+                    if (far[j] && !seen[j]) { seen[j] = true; queue[tail++] = j }
+                }
+            }
+            if (!(border || x1 - x0 + 1 > maxW || y1 - y0 + 1 > maxH) || inkN > tail / 12) continue
+            any = true
+            val clean = inkN <= max(8, tail / 100)
+            for (k in 0 until tail) { keepAll[queue[k]] = true; if (clean) keepClean[queue[k]] = true }
+            if (clean) anyClean = true
+        }
+        if (!any) return null
+        val protect = TextErase.dilate(keepAll, w, h, 1)
+        val drop = if (anyClean) TextErase.dilate(keepClean, w, h, 1) else null
+        // les pixels de lettres des composantes non propres restent à effacer : ils ne sont pas protégés
+        for (i in protect.indices) if (ink[i] && !(drop != null && drop[i])) protect[i] = false
+        return Fixed(protect, drop)
     }
 
     /**
