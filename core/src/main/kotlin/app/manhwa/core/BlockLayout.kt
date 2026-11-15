@@ -24,9 +24,11 @@ class BlockPrep(
     val fontSlant: Float = 0f,                        // inclinaison mesurée du lettrage d'origine (0 = droit, environ −0,2 = italique)
     val fontInfo: String = "",                        // résumé de la décision de police, pour le journal
     val sizeHint: Float = 0f,                         // hauteur de lettre de référence (pixels de l'image d'origine) harmonisée avec les blocs de même taille d'origine ; 0 : mesure propre au bloc
+    val paint: TextPaint.Spec? = null,                // couleur et contour de la traduction déduits du lettrage d'origine ; null : couleur extrême du plan (ancien comportement)
+    val tilt: Float = 0f,                             // rotation du texte d'origine en degrés (> 0 : la ligne descend vers la droite), 0 = droit ; seulement pour un texte hors bulle
 ) {
-    fun withHard(h: List<RectF>) = BlockPrep(block, plan, style, text, bubble, obstacles, neighborBubbles, h, bubbleRect, container, font, fontSlant, fontInfo, sizeHint)
-    fun withFont(f: String?, slant: Float, info: String, size: Float) = BlockPrep(block, plan, style, text, bubble, obstacles, neighborBubbles, hardObstacles, bubbleRect, container, f, slant, info, size)
+    fun withHard(h: List<RectF>) = BlockPrep(block, plan, style, text, bubble, obstacles, neighborBubbles, h, bubbleRect, container, font, fontSlant, fontInfo, sizeHint, paint, tilt)
+    fun withFont(f: String?, slant: Float, info: String, size: Float) = BlockPrep(block, plan, style, text, bubble, obstacles, neighborBubbles, hardObstacles, bubbleRect, container, f, slant, info, size, paint, tilt)
 }
 
 object BlockLayout {
@@ -60,16 +62,36 @@ object BlockLayout {
         val plan = if (plan1 != null && edit?.precise == true) try { Erasure.inkOnly(plan1, max(2, (lineH * s * 0.08f).toInt())) } catch (e: Throwable) { plan1 } else plan1
         val flat = plan?.mode == Erasure.Mode.FLAT
         val rectangular = flat && plan?.shape == null && union.width > 2.2f * union.height && lineBoxes.size <= 2
-        // hauteur de ligne pour le choix du style : mesurée sur les lettres (les boîtes d'une ligne inclinée sont gonflées)
-        val inkH = measuredInkHeight(plan, b, s)
-        val lineHStyle = if (inkH > 0f && !b.vertical && inkH >= 0.49f * lineH) min(lineH, inkH / 0.8f) else lineH
-        val style = TextErase.chooseFont(b.source, lineHStyle, medianLine, flat, plan?.outlined ?: false, rectangular)
-        val text = if (target == "fr") Typography.french(b.translated) else b.translated
-        val obstacles = blocksAll.filter { it !== b }.map { o -> o.lineBoxes.ifEmpty { listOf(o.box) }.reduce { x, y -> x.union(y) } }
         // boîte de bulle non confirmée : retenue seulement si elle laisse de la marge autour du texte. Un texte libre que le détecteur a aussi marqué « bulle » a une boîte qui
         // épouse son texte : l'ellipse inscrite le rognerait et le réduirait
         val container = if (bubble == null) b.bubble?.takeIf { it.area >= 1.6f * union.area } else null
-        return BlockPrep(b, plan, style, text, bubble, obstacles, neighborBubbles, emptyList(), (bubble ?: container)?.let { isRect(it) } ?: false, container)
+        // rotation du texte d'origine (hors bulle seulement : un texte dans une bulle reste droit)
+        val boxesPlan = if (plan != null) lineBoxes.map { r -> intArrayOf((r.left * s).toInt() - plan.x0, (r.top * s).toInt() - plan.y0, (r.right * s).toInt() - plan.x0, (r.bottom * s).toInt() - plan.y0) } else emptyList()
+        val tiltDeg = if (plan != null && plan.ink != null && !b.vertical && bubble == null && container == null && plan.shape == null && edit?.manual != true) try { TextTilt.estimate(plan.ink, plan.w, plan.h, boxesPlan)?.degrees ?: 0f } catch (e: Throwable) { 0f } else 0f
+        val drop = if (tiltDeg == 0f) 0f else lineBoxes.map { it.width }.sorted().let { it[it.size / 2] } * abs(Math.tan(Math.toRadians(tiltDeg.toDouble()))).toFloat()
+        // hauteur de ligne pour le choix du style : mesurée sur les lettres (les boîtes d'une ligne inclinée sont gonflées de largeur × tan(angle))
+        val inkH = lessTilt(measuredInkHeight(plan, b, s), drop)
+        val lineHStyle = if (inkH > 0f && !b.vertical && inkH >= 0.49f * lineH) min(lessTilt(lineH, drop), inkH / 0.8f) else lessTilt(lineH, drop)
+        val style = TextErase.chooseFont(b.source, lineHStyle, medianLine, flat, plan?.outlined ?: false, rectangular)
+        val text = if (target == "fr") Typography.french(b.translated) else b.translated
+        val obstacles = blocksAll.filter { it !== b }.map { o -> o.lineBoxes.ifEmpty { listOf(o.box) }.reduce { x, y -> x.union(y) } }
+        // peinture de la traduction (couleur, contour) d'après les pixels d'origine
+        val paint = if (plan != null && src != null && plan.ink != null) try { paintOf(plan, src, boxesPlan, if (inkH > 0f) inkH * s else lineH * s * 0.7f) } catch (e: Throwable) { null } else null
+        return BlockPrep(b, plan, style, text, bubble, obstacles, neighborBubbles, emptyList(), (bubble ?: container)?.let { isRect(it) } ?: false, container, paint = paint, tilt = tiltDeg)
+    }
+
+    /** Peinture de la traduction d'après les pixels d'origine : couleur du corps des traits, contour coloré mesuré (voir TextPaint). [letterPx] : hauteur des lettres d'origine en pixels échantillonnés. */
+    private fun paintOf(plan: Erasure.Plan, src: PixelSource, boxes: List<IntArray>, letterPx: Float): TextPaint.Spec? {
+        val ink = plan.ink ?: return null
+        val core = plan.core
+        var nInk = 0; for (v in ink) if (v) nInk++
+        var nCore = 0; if (core != null) for (v in core) if (v) nCore++
+        val mask = if (core != null && nCore >= 0.4f * nInk) core else ink
+        val px = src.pixels(plan.x0, plan.y0, plan.w, plan.h)
+        val bgText = if (plan.fillMean != 0) plan.fillMean else plan.bg
+        val dark = ColorMath.luminance(plan.textColor) < ColorMath.luminance(bgText)
+        val lines = TextPaint.measure(px, plan.w, plan.h, mask, boxes, dark)
+        return TextPaint.decide(plan.mode, plan.bg, plan.fillMean, plan.textColor, plan.outlined, plan.haloColor, plan.haloPx, letterPx, lines)
     }
 
 
@@ -115,11 +137,21 @@ object BlockLayout {
         return if (inks.isEmpty()) 0f else (if (b.vertical) inks.map { it.w } else inks.map { it.letterHeight }).sorted().let { it[it.size / 2] } / s
     }
 
+    /** Hauteur (pixels de l'image) dont la rotation du texte gonfle la hauteur mesurée d'une ligne : largeur de ligne × tan(angle). 0 pour un texte droit. */
+    internal fun tiltDrop(p: BlockPrep): Float {
+        if (p.tilt == 0f) return 0f
+        val w = p.block.lineBoxes.ifEmpty { listOf(p.block.box) }.map { it.width }.sorted().let { it[it.size / 2] }
+        return w * abs(Math.tan(Math.toRadians(p.tilt.toDouble()))).toFloat()
+    }
+
+    /** [v] (hauteur mesurée sur des lignes penchées) moins le gonflement [drop] dû à la rotation, sans jamais passer sous 40 % de la mesure. */
+    internal fun lessTilt(v: Float, drop: Float): Float = if (drop <= 0f || v <= 0f) v else max(0.4f * v, v - drop)
+
     /** Hauteurs de référence de tous les blocs, harmonisées : les blocs de même taille d'origine (écart de 18 % au plus) prennent la hauteur médiane de leur groupe. Texte vertical : 0 (mesure propre). */
     fun harmonizedHeights(preps: List<BlockPrep>, s: Float): FloatArray {
         val raw = FloatArray(preps.size) { i ->
             val b = preps[i].block
-            if (b.vertical) 0f else { val lineH = lineHeightOf(b); baseHeightOf(inkHeightOf(preps[i], s), if (lineH > 0f) lineH / 1.12f else Float.MAX_VALUE, lineH) }
+            if (b.vertical) 0f else { val drop = tiltDrop(preps[i]); val lineH = lessTilt(lineHeightOf(b), drop); baseHeightOf(lessTilt(inkHeightOf(preps[i], s), drop), if (lineH > 0f) lineH / 1.12f else Float.MAX_VALUE, lineH) }
         }
         val out = raw.copyOf()
         val order = raw.indices.filter { raw[it] > 0f }.sortedBy { raw[it] }
@@ -177,21 +209,39 @@ object BlockLayout {
     }
 
     /** Résultat de la mise en page d'un bloc : lignes placées, corps cible, interligne, journal. */
-    class Result(val fit: ShapeFit, val art: Boolean, val allCaps: Boolean, val em: Float, val stepRatio: Float, val lay: String = "") {
+    class Result(val fit: ShapeFit, val art: Boolean, val allCaps: Boolean, val em: Float, val stepRatio: Float, val lay: String = "", val tilt: Float = 0f) {
         /** Même mise en page, agrandie ou réduite du facteur [k] autour du centre du texte (taille choisie à la main). */
-        fun scaled(k: Float): Result = Result(fit.scaled(k), art, allCaps, em * k, stepRatio, lay)
+        fun scaled(k: Float): Result = Result(fit.scaled(k), art, allCaps, em * k, stepRatio, lay, tilt)
 
         /** Même mise en page, texte décalé de ([dx], [dy]) pixels de l'image. */
-        fun shifted(dx: Float, dy: Float): Result = Result(ShapeFit(fit.size, fit.lineStep, fit.lines.map { PlacedLine(it.text, it.cx + dx, it.top + dy, it.width) }, fit.fits), art, allCaps, em, stepRatio, lay)
+        fun shifted(dx: Float, dy: Float): Result = Result(ShapeFit(fit.size, fit.lineStep, fit.lines.map { PlacedLine(it.text, it.cx + dx, it.top + dy, it.width) }, fit.fits), art, allCaps, em, stepRatio, lay, tilt)
 
-        /** Rectangle de chaque ligne placée : sert à ne pas recouvrir le texte d'un autre bloc avec un aplat d'effacement. */
-        fun lineRects(margin: Float): List<RectF> = fit.lines.map { ln -> RectF(ln.cx - ln.width / 2f - margin, ln.top - margin, ln.cx + ln.width / 2f + margin, ln.top + fit.lineStep + margin) }
+        /** Rectangle droit occupé par les lignes avant rotation ; son centre est le pivot de la rotation du bloc. */
+        fun flat(): RectF = placedOf(fit)
 
-        /** Rectangle occupé par le texte placé (lignes) : sert à détecter les collisions entre blocs. */
+        /** Rectangle englobant de [r] tourné de [tilt] degrés autour de ([cx], [cy]). */
+        private fun rotated(r: RectF, cx: Float, cy: Float): RectF {
+            if (tilt == 0f) return r
+            val a = Math.toRadians(tilt.toDouble()); val c = Math.cos(a).toFloat(); val s = Math.sin(a).toFloat()
+            var l = Float.MAX_VALUE; var t = Float.MAX_VALUE; var rr = -Float.MAX_VALUE; var b = -Float.MAX_VALUE
+            for ((x, y) in listOf(r.left to r.top, r.right to r.top, r.left to r.bottom, r.right to r.bottom)) {
+                val dx = x - cx; val dy = y - cy
+                val nx = cx + dx * c - dy * s; val ny = cy + dx * s + dy * c
+                l = min(l, nx); rr = max(rr, nx); t = min(t, ny); b = max(b, ny)
+            }
+            return RectF(l, t, rr, b)
+        }
+
+        /** Rectangle de chaque ligne placée (tourné avec le bloc) : sert à ne pas recouvrir le texte d'un autre bloc avec un aplat d'effacement. */
+        fun lineRects(margin: Float): List<RectF> {
+            val f = flat()
+            return fit.lines.map { ln -> rotated(RectF(ln.cx - ln.width / 2f, ln.top, ln.cx + ln.width / 2f, ln.top + fit.lineStep), f.centerX, f.centerY).inflate(margin, margin) }
+        }
+
+        /** Rectangle occupé par le texte placé (lignes, tourné avec le bloc) : sert à détecter les collisions entre blocs. */
         fun placed(margin: Float): RectF {
-            var l = Float.MAX_VALUE; var t = Float.MAX_VALUE; var r = -Float.MAX_VALUE; var b = -Float.MAX_VALUE
-            for (ln in fit.lines) { l = min(l, ln.cx - ln.width / 2f); r = max(r, ln.cx + ln.width / 2f); t = min(t, ln.top); b = max(b, ln.top + fit.lineStep) }
-            return RectF(l - margin, t - margin, r + margin, b + margin)
+            val f = flat()
+            return rotated(f, f.centerX, f.centerY).inflate(margin, margin)
         }
     }
 
@@ -203,13 +253,14 @@ object BlockLayout {
         val b = p.block; val plan = p.plan
         val lineBoxes = b.lineBoxes.ifEmpty { listOf(b.box) }
         val union = lineBoxes.reduce { a, c -> a.union(c) }
-        val lineH = lineHeightOf(b)
+        val drop = tiltDrop(p)                       // texte penché : les hauteurs mesurées sur les boîtes (et l'encre) sont gonflées de largeur × tan(angle)
+        val lineH = lessTilt(lineHeightOf(b), drop)
         val allCaps = TextNormalizer.isAllCaps(b.source)
 
         // police assortie au lettrage d'origine ; corps cible : même hauteur de capitales que l'encre d'origine
         val inks = lineInks(p, s)
         // texte vertical : la taille d'un caractère est la LARGEUR de la colonne (et non sa hauteur, qui est la longueur du texte)
-        val inkH = if (inks.isEmpty()) 0f else (if (b.vertical) inks.map { it.w } else inks.map { it.letterHeight }).sorted().let { it[it.size / 2] } / s       // pixels de l'image d'origine
+        val inkH = lessTilt(if (inks.isEmpty()) 0f else (if (b.vertical) inks.map { it.w } else inks.map { it.letterHeight }).sorted().let { it[it.size / 2] } / s, if (b.vertical) 0f else drop)       // pixels de l'image d'origine
         // la hauteur de ligne mesurée dans l'axe du texte borne la hauteur d'encre (lettres collées à un contour ou à une autre ligne)
         val capLimit = if (!b.vertical && lineH > 0f) lineH / 1.12f else Float.MAX_VALUE
         val baseH = if (p.sizeHint > 0f) p.sizeHint else baseHeightOf(inkH, capLimit, lineH)
@@ -325,7 +376,7 @@ object BlockLayout {
         if (fit0.lines.isEmpty()) return null
         val fit = clampToImage(fit0, iw, ih)
         val lay = "encre=%.0f emprise=%.0f ligne=%.0f pas=%.0f cible=%.0f taille=%.0f forme=%s".format(emInk, sFp, lineH, pitch, em, fit.size, if (fixedShape == null) "libre" else if (plan?.shape != null) "relevée" else "ellipse")
-        return Result(fit, art, allCaps, em, stepRatio, lay)
+        return Result(fit, art, allCaps, em, stepRatio, lay, p.tilt)
     }
 
     /**
