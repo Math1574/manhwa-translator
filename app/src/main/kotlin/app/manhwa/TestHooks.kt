@@ -38,7 +38,7 @@ object TestHooks {
      * savetr <texte> (« Enregistrer » de l'éditeur avec une traduction écrite : correction rangée sous la page ouverte, traduction retenue), fixadd <texte>|<traduction> (traduction retenue sans correction),
      * libseed (trois œuvres de démonstration dans la bibliothèque : Zulu Quest, Mid Tale, Alpha Saga), libsort <recent|title|read> (tri de la bibliothèque), home (retour à l'accueil), termconfirm, termcancel (boutons de l'aperçu),
      evict (vide la mémoire des pages traitées), probe (relève où poser un doigt : tx, ty sur une traduction, ex, ey sur une zone sans traduction),
-     edit (ouvre l'éditeur sur la première traduction), pinch <facteur> (deux doigts qui s'écartent ou se rapprochent au centre de l'image de l'éditeur : vrais événements tactiles), twopan <dx> <dy> (deux doigts qui glissent ensemble, en pixels), holdgemma <ms> (le moteur de langage reste occupé ce temps, comme une traduction en cours), goto <adresse> (ouvre la page, comme « Chapitre suivant »),
+     edit (ouvre l'éditeur sur la première traduction), pinch <facteur> (deux doigts qui s'écartent ou se rapprochent au centre de l'image de l'éditeur : vrais événements tactiles), twopan <dx> <dy> (deux doigts qui glissent ensemble, en pixels), holdgemma <ms> (le moteur de langage reste occupé ce temps, comme une traduction en cours), goto <adresse> (ouvre la page, comme « Chapitre suivant »), gotogen <adresse> (idem, mais à l'instant où le moteur de langage se met à traduire ; relève ensuite 20 s durant le plus long retard du fil principal),
      * crashrenderer (le processus qui dessine la page disparaît, comme un manque de mémoire), coverretry (cherche de nouveau les illustrations manquantes), coversonline <on|off> (réglage « annuaire AniList »), state (écrit seulement l'état).
      */
     private fun startWatcher(ctx: Context, graph: AppGraph) {
@@ -84,6 +84,7 @@ object TestHooks {
                         "pinch" -> { val f = arg.trim().toFloatOrNull() ?: 2f; main.post { twoFingers(main, 240f, 240f * f, 0f, 0f) } }
                         "holdgemma" -> graph.gemma.testBusy(arg.trim().toLongOrNull() ?: 10_000L)
                         "goto" -> main.post { c.load(arg.trim()) }
+                        "gotogen" -> gotoWhenGenerating(main, c, arg.trim())
                         "crashrenderer" -> main.post { c.testCrashRenderer() }
                         "coverretry" -> main.post { graph.coverFetcher.retry(graph.library.library.series()) }
                         "coversonline" -> main.post { graph.settingsStore.update { it.copy(coversOnline = arg.trim() != "off") } }
@@ -92,6 +93,31 @@ object TestHooks {
                     Thread.sleep(300)   // laisse les gestes lancés sur le fil principal s'appliquer avant de relever l'état
                     writeState(ctx, graph)
                 } catch (_: Throwable) {}
+            }
+        }
+    }
+
+    /**
+     * Ouvre la page [url] à l'instant où le moteur de langage se met à traduire (on l'attend jusqu'à 25 minutes), puis relève pendant 20 s le plus long retard de réponse du fil principal :
+     * un fil principal qui attendrait la fin de la traduction (le défaut corrigé : l'application se figeait puis était fermée) ferait monter ce retard jusqu'à la fin de la génération.
+     */
+    private fun gotoWhenGenerating(main: Handler, c: TranslationController, url: String) {
+        thread(name = "mt-gotogen", isDaemon = true) {
+            c.testNavGen = false; c.testNavMaxLag = -1L
+            val t0 = SystemClock.uptimeMillis()
+            while (SystemClock.uptimeMillis() - t0 < 25 * 60_000L && !c.testGenerating()) Thread.sleep(20)
+            c.testNavGen = c.testGenerating()
+            main.post { c.load(url) }
+            var worst = 0L
+            val end = SystemClock.uptimeMillis() + 20_000L
+            while (SystemClock.uptimeMillis() < end) {
+                val t = SystemClock.uptimeMillis()
+                val answered = java.util.concurrent.CountDownLatch(1)
+                main.post { answered.countDown() }
+                answered.await(60, java.util.concurrent.TimeUnit.SECONDS)
+                worst = maxOf(worst, SystemClock.uptimeMillis() - t)
+                c.testNavMaxLag = worst
+                Thread.sleep(100)
             }
         }
     }
@@ -145,7 +171,7 @@ object TestHooks {
         Handler(Looper.getMainLooper()).post { lagDone.countDown() }
         lagDone.await(30, java.util.concurrent.TimeUnit.SECONDS)
         val mainLag = SystemClock.uptimeMillis() - lagT
-        val o = JSONObject().put("t", System.currentTimeMillis()).put("mainLag", mainLag).put("url", c.currentUrl).put("prog", "${c.done}/${c.total}").put("epoch", c.testPageEpoch()).put("gen", c.testGenerating()).put("rendererLost", c.rendererLost).put("curDone", graph.library.library.progressOf(c.currentUrl)?.done ?: false)
+        val o = JSONObject().put("t", System.currentTimeMillis()).put("mainLag", mainLag).put("url", c.currentUrl).put("prog", "${c.done}/${c.total}").put("epoch", c.testPageEpoch()).put("gen", c.testGenerating()).put("navGen", c.testNavGen).put("navMaxLag", c.testNavMaxLag).put("rendererLost", c.rendererLost).put("curDone", graph.library.library.progressOf(c.currentUrl)?.done ?: false)
             .put("undo", c.undoBanner != null).put("peek", c.peekTarget != null)
             .put("works", ids.size).put("blocks", blocks).put("hidden", hidden).put("edits", edits).put("editTr", editTr)
             .put("ign", graph.ignored.rules.texts.size).put("ignImg", graph.ignored.rules.images.size).put("skipped", c.testSkippedCount()).put("banner", c.undoBanner?.message ?: "").put("eraser", c.eraser)

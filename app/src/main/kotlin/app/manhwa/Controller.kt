@@ -1052,6 +1052,9 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     fun testGenerating(): Boolean = runStage.values.any { it == "traduction" }
     /** Fait disparaître le processus d'affichage de la page, comme un manque de mémoire (adresse spéciale du navigateur prévue pour cela). */
     fun testCrashRenderer() { webView?.loadUrl("chrome://crash") }
+    /** Tests automatiques (suite « nav ») : la page a été changée alors que le moteur de langage traduisait ; et le plus long retard de réponse du fil principal relevé ensuite (−1 : pas encore relevé). */
+    @Volatile var testNavGen = false
+    @Volatile var testNavMaxLag = -1L
 
     /** Tests automatiques : où poser un vrai doigt (pixels de l'écran) — au centre d'une traduction affichée (tx, ty) et sur une zone d'image sans traduction (ex, ey). */
     @Volatile var testProbeJson: JSONObject? = null
