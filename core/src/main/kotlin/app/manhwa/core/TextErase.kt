@@ -630,12 +630,56 @@ object TextErase {
     }
 
     /**
+     * Retire de [src] les composantes qui ressemblent à des hachures : très fines (épaisseur moyenne sous [maxThickness] px, mesurée par 2 × aire / périmètre) et sans aucun pixel dans
+     * [near] (le voisinage des lignes lues par l'OCR). Les pointes d'un contour « étoile » et les traits de vitesse passent dans les coins de la zone de texte détectée, plus large que
+     * les lettres : chacune est une petite composante isolée qui passait pour une lettre, était effacée, et laissait une tache aux quatre coins de la zone. Une lettre est plus épaisse
+     * (trait de 3 px et plus) ; ponctuation et accents sont près des lignes lues, donc jamais retirés.
+     */
+    internal fun withoutHatch(src: BooleanArray, w: Int, h: Int, near: BooleanArray, maxThickness: Float = 2.4f): BooleanArray {
+        val out = src.copyOf(); val seen = BooleanArray(w * h); val queue = IntArray(w * h)
+        for (start in 0 until w * h) {
+            if (!src[start] || seen[start]) continue
+            var head = 0; var tail = 0; queue[tail++] = start; seen[start] = true
+            var touches = false; var edges = 0
+            while (head < tail) {
+                val i = queue[head++]; val x = i % w; val y = i / w
+                if (near[i]) touches = true
+                if (x == 0 || !src[i - 1]) edges++
+                if (x == w - 1 || !src[i + 1]) edges++
+                if (y == 0 || !src[i - w]) edges++
+                if (y == h - 1 || !src[i + w]) edges++
+                for (dy in -1..1) for (dx in -1..1) {
+                    if (dx == 0 && dy == 0) continue
+                    val nx = x + dx; val ny = y + dy
+                    if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
+                    val j = ny * w + nx
+                    if (src[j] && !seen[j]) { seen[j] = true; queue[tail++] = j }
+                }
+            }
+            if (!touches && edges > 0 && 2f * tail / edges < maxThickness) for (k in 0 until tail) out[queue[k]] = false
+        }
+        return out
+    }
+
+    /**
+     * Retire de [src] les traits fins (moins de 5 px de large) qui s'écartent de plus de 3 px des lignes lues [inner]. Ce qui est fin au-delà n'est pas
+     * du texte : c'est du décor soudé aux lettres (les hachures d'un contour de bulle qui finissent au bout d'une ligne, le peigne de traits d'un panneau voisin), que l'effacement prenait
+     * pour des lettres, et dont le voisinage clair s'effaçait avec lui : un bloc blanc taillé dans le dessin et une tache grise au bout des hachures. Les traits épais (lettrage gras,
+     * bordure) gardent leur forme : érosion de 2 px puis reprise du contour (3 px, dans [src]).
+     */
+    internal fun withoutThinOutside(src: BooleanArray, w: Int, h: Int, inner: BooleanArray): BooleanArray {
+        val keep = dilate(inner, w, h, 3)
+        val thick = dilate(erode(src, w, h, 2), w, h, 3, src)
+        return BooleanArray(w * h) { src[it] && (keep[it] || thick[it]) }
+    }
+
+    /**
      * Pixels de texte sur un dessin : remplissage des lettres (couleur proche de [textColor]) et leur contour (couleur dominante des
      * pixels voisins du remplissage), légèrement dilatés. Contrairement à un rectangle, on n'efface que les lettres : le dessin
      * autour est conservé, et une éventuelle lueur diffuse reste (la traduction est redessinée par-dessus avec son propre contour).
      */
-    fun artMask(pixels: IntArray, w: Int, h: Int, allowed: BooleanArray, textColor: Int, grow: Int, maxDim: Int = Int.MAX_VALUE, tight: BooleanArray? = null, maxReach: Int = 6, lines: List<IntArray>? = null, rescueAvoid: ((BooleanArray) -> BooleanArray?)? = null): BooleanArray =
-        artMaskInfo(pixels, w, h, allowed, textColor, grow, maxDim, tight, maxReach, lines, rescueAvoid).mask
+    fun artMask(pixels: IntArray, w: Int, h: Int, allowed: BooleanArray, textColor: Int, grow: Int, maxDim: Int = Int.MAX_VALUE, tight: BooleanArray? = null, maxReach: Int = 6, lines: List<IntArray>? = null, rescueAvoid: ((BooleanArray) -> BooleanArray?)? = null, nearLines: BooleanArray? = null, inner: BooleanArray? = null): BooleanArray =
+        artMaskInfo(pixels, w, h, allowed, textColor, grow, maxDim, tight, maxReach, lines, rescueAvoid, nearLines, inner).mask
 
     /** Masque du texte sur un dessin et résultat de la mesure du contour (le texte est-il cerné d'un trait contrasté ?). */
     class ArtMask(val mask: BooleanArray, val outlined: Boolean)
@@ -644,13 +688,17 @@ object TextErase {
      * [lines] : boîtes de lecture des lignes (gauche, haut, droite, bas, dans la région) ; elles servent à rattraper les lettres soudées à une grande surface (voir [rescueInLines]).
      * [rescueAvoid] : reçoit les lettres déjà retenues et rend les pixels que le rattrapage ne doit jamais prendre (contour de bulle, trait du décor : les coins d'une boîte de lecture
      * débordent sur eux), ou null.
+     * [nearLines] : voisinage des lignes lues ; une composante très fine qui n'y touche pas (pointe de contour, trait de vitesse dans un coin de la zone détectée) n'est pas une lettre (voir [withoutHatch]).
+     * [inner] : pixels des lignes lues elles-mêmes ; les traits fins soudés aux lettres hors de ces lignes ne sont pas du texte (voir [withoutThinOutside]).
      */
-    fun artMaskInfo(pixels: IntArray, w: Int, h: Int, allowed: BooleanArray, textColor: Int, grow: Int, maxDim: Int = Int.MAX_VALUE, tight: BooleanArray? = null, maxReach: Int = 6, lines: List<IntArray>? = null, rescueAvoid: ((BooleanArray) -> BooleanArray?)? = null): ArtMask {
+    fun artMaskInfo(pixels: IntArray, w: Int, h: Int, allowed: BooleanArray, textColor: Int, grow: Int, maxDim: Int = Int.MAX_VALUE, tight: BooleanArray? = null, maxReach: Int = 6, lines: List<IntArray>? = null, rescueAvoid: ((BooleanArray) -> BooleanArray?)? = null, nearLines: BooleanArray? = null, inner: BooleanArray? = null): ArtMask {
         // lettres = composantes isolées : une grande surface de couleur proche (fond d'un encadré voisin, bas d'une bulle, cheveux blancs) n'est pas une lettre.
         // L'isolement se juge sur toute la région (et non sur la seule zone autorisée, dont le bord coupe ces grandes surfaces et les ferait paraître isolées),
         // puis on écarte toute composante plus grande qu'une lettre ([maxDim] : quelques hauteurs de ligne).
         val color = BooleanArray(w * h) { dist(pixels[it], textColor) <= 70 }
-        val fill = enclosedMostlyIn(color, allowed, w, h, 0.7f)
+        val fill0 = enclosedMostlyIn(color, allowed, w, h, 0.7f)
+        val fill1 = if (nearLines != null) withoutHatch(fill0, w, h, nearLines) else fill0
+        val fill = if (inner != null) withoutThinOutside(fill1, w, h, inner) else fill1
         // lettres dont le remplissage touche une grande surface de même couleur (texte posé sur le bord d'une bulle blanche) : écartées ci-dessus avec la bulle. On les
         // récupère par leur contour : un pixel clair entouré de pixels sombres (contour noir de la lettre) est un pixel de lettre, un pixel de bulle ne l'est pas.
         rescueOutlined(color, fill, tight ?: allowed, pixels, w, h, textColor)

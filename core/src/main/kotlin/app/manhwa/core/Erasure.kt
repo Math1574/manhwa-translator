@@ -402,7 +402,10 @@ object Erasure {
             trace?.invoke("aplat : intérieur de bulle ${if (interior != null) "trouvé (${interior.count { it }} px)" else "absent"} ; cœur du texte ${core.count { it }} px ; région ${w}x$h")
             val thin = BooleanArray(w * h)
             val diagLimit = arrayOfNulls<BooleanArray>(1)
-            val raw = TextErase.textComponents(px, w, h, a.bg, a.threshold, allowedZone, 0, interior, core, thin, (lh * 0.6f).toInt(), reach = interior ?: interiorLoose, limitOut = diagLimit)
+            // voisinage des lignes lues (pas de la zone détectée) : les pointes d'un contour « étoile » et les traits fins qui passent dans les coins de la zone ne sont pas des lettres
+            val nearLinesF = TextErase.rectMask(w, h, lineBoxes.map { l -> intArrayOf((l.left * s).toInt() - x0, (l.top * s).toInt() - y0, (l.right * s).toInt() - x0, (l.bottom * s).toInt() - y0) }, max(4, (lh * 0.35f).toInt()))
+            val rawAll = TextErase.textComponents(px, w, h, a.bg, a.threshold, allowedZone, 0, interior, core, thin, (lh * 0.6f).toInt(), reach = interior ?: interiorLoose, limitOut = diagLimit)
+            val raw = TextErase.withoutHatch(rawAll, w, h, nearLinesF)
             val stroke = TextErase.strokeWidth(raw, w, h)
             // nettoyage de toute la zone : plus de « fantômes » (bruit de compression JPEG autour des lettres, points et ponctuation hors boîte OCR)
             val clean = BooleanArray(w * h)
@@ -411,7 +414,7 @@ object Erasure {
                 val far = TextErase.farMask(px, a.bg, a.threshold)
                 // composantes isolées de la taille du texte seulement : un contour de bulle fermé qui tient dans la région (gros lettrage dans une bulle ajustée) est « isolé » lui
                 // aussi, mais bien plus grand que le texte ; il est protégé, comme le contour relié au bord de la région
-                val enc = TextErase.limitSize(TextErase.enclosedOnly(far, w, h), w, h, ((textRect[2] - textRect[0]) * 1.2f).toInt() + 4, ((textRect[3] - textRect[1]) * 1.2f).toInt() + 4)
+                val enc = TextErase.withoutHatch(TextErase.limitSize(TextErase.enclosedOnly(far, w, h), w, h, ((textRect[2] - textRect[0]) * 1.2f).toInt() + 4, ((textRect[3] - textRect[1]) * 1.2f).toInt() + 4), w, h, nearLinesF)
                 // le nettoyage ne va pas au-delà de la portée du bruit de compression autour des lettres : sans contour de bulle relevé, tout le rectangle de la zone recevait l'aplat, et ses
                 // coins sortaient de la tache (ou de la bulle) sur le dessin voisin, un carré net derrière la traduction
                 val nearInk = TextErase.dilate(BooleanArray(w * h) { raw[it] || enc[it] }, w, h, max(4, (lh * 0.3f).toInt()))
@@ -420,6 +423,7 @@ object Erasure {
             val grown = TextErase.dilate(raw, w, h, max(2, (lh * 0.06f).toInt()), diagLimit[0])   // texte incliné : l'élargissement des lettres ne sort pas de la bulle (le contour de l'étiquette reste)
             // le contour fin soudé aux lettres (thin) n'est jamais effacé, ni par le nettoyage de la zone ni par la dilatation des lettres
             val mask = BooleanArray(w * h) { !thin[it] && (clean[it] || grown[it]) }
+            trace?.invoke("aplat : lettres=${raw.count { it }} (avant tri des hachures ${rawAll.count { it }}) zone=${zone.count { it }} nettoyage=${clean.count { it }} élargies=${grown.count { it }} retirées(fines)=${thin.count { it }} masque=${mask.count { it }}")
             // fond uni : aplat exact (comportement d'origine) ; fond en dégradé, ombré ou légèrement bruité : reconstruction qui suit le fond autour de la zone, avec bords adoucis
             val adaptiveFlat = TextErase.zoneFill(px, w, h, mask, a.bg)
             val featherF = if (adaptiveFlat != null) TextErase.featherAlpha(mask, w, h) else null
@@ -484,6 +488,11 @@ object Erasure {
         val lineRectsPx = lineBoxes.map { l -> intArrayOf((l.left * s).toInt() - x0, (l.top * s).toInt() - y0, (l.right * s).toInt() - x0, (l.bottom * s).toInt() - y0) }
         val tightForColor = TextErase.rectMask(w, h, lineRectsPx, 0)
         val fillColor = TextErase.extremeTextColor(px, zoneArt, tightForColor, w, h, lh.toInt())
+        fun lumOf(c: Int) = (((c shr 16) and 0xFF) * 77 + ((c shr 8) and 0xFF) * 150 + (c and 0xFF) * 29) shr 8
+        // texte sombre sur fond clair : les traits fins sombres à plus de 3 px des lignes lues sont du décor (hachures d'un contour, peigne de traits d'un panneau), jamais des lettres. La zone
+        // détectée ne sert pas ici : elle déborde de plusieurs pixels sur le décor voisin (la bordure du panneau y entrait)
+        val darkOnLight = lumOf(fillColor) < 100 && lumOf(a.bg) >= 200
+        val thinInner = if (darkOnLight) tightForColor else null
         // lettrage à lueur : on élargit le masque pour effacer aussi la lueur, de sorte que la reconstruction vienne des abords du halo
         // masque serré : lettres et contour, élargis de 2 à 4 px seulement. Un masque élargi à 14 px (ancienne règle, proportionnelle à la hauteur de ligne) fusionnait toutes
         // les lettres en un grand rectangle reconstruit par diffusion : un flou visible sur le dessin, avec des bords nets
@@ -492,7 +501,9 @@ object Erasure {
         // le rattrapage des lettres soudées (boîtes de lecture) ne prend jamais un trait fixe : le contour d'une bulle passe dans les coins de ces boîtes. Les traits sont repérés sur les
         // lettres déjà retenues, comme pour la protection plus bas
         val structureAvoid: ((BooleanArray) -> BooleanArray?)? = if (protectStructure && a.bgShare >= 0.45f) { ink0 -> fixedStructure(px, w, h, a.bg, a.threshold, textRect, ink0)?.protect } else null
-        val artInfo = TextErase.artMaskInfo(px, w, h, zoneArt, fillColor, 2, Int.MAX_VALUE, tightLines, reachCap, lineRectsPx, structureAvoid)
+        // pointes d'un contour « étoile » et traits fins loin des lignes lues : jamais des lettres (ils passent dans les coins de la zone détectée)
+        val nearLines = TextErase.rectMask(w, h, lineRectsPx, max(4, (lh * 0.35f).toInt()))
+        val artInfo = TextErase.artMaskInfo(px, w, h, zoneArt, fillColor, 2, Int.MAX_VALUE, tightLines, reachCap, lineRectsPx, structureAvoid, nearLines, thinInner)
         // fond blanc : le halo clair collé aux lettres (compression, lueur) est effacé avec elles, sans quoi il reste un fantôme de leur forme
         val plainWhite = haloClean && TextErase.ringIsPlainWhite(px, w, h, artInfo.mask, a.bg, frameIgnore)
         val mask = if (plainWhite) TextErase.lightHalo(px, w, h, artInfo.mask, a.bg, max(6, (lh * 0.12f).toInt()), frameIgnore) else artInfo.mask
@@ -520,19 +531,25 @@ object Erasure {
                 if (fixed != null) for (i in lg.indices) if (fixed.protect[i]) lg[i] = false
                 return lg
             }
-            var rec = ArtFill.reconstruct(px, w, h, core0, limitGlowFor(maxGrow), avoidN, maxGrow)
+            // hachures, lignes de vitesse, pointes d'étoile : traits fins sombres sur fond clair. Ni références du remplissage (la moyenne des bords en faisait une tache grise), ni lueur
+            // (un trait ne s'estompe pas avec la distance : l'épaisseur mesurée saturait, la recherche était élargie et le masque prenait la forme des lettres élargies, hachures comprises)
+            // seulement pour un texte sombre sur fond clair : sur un lettrage clair à lueur, les creux sombres entre les lettres seraient pris pour des traits
+            val hatch = if (darkOnLight) thinDarkOnLight(px, w, h, (lh * 0.06f).toInt().coerceIn(2, 4)) else BooleanArray(w * h)
+            val busy = busyRing(core0, hatch, fixed?.protect, w, h, maxGrow)
+            ArtFill.trace?.invoke("décor net autour du texte : ${if (busy) "oui (pas de recherche élargie)" else "non"}")
+            var rec = ArtFill.reconstruct(px, w, h, core0, limitGlowFor(maxGrow), avoidN, maxGrow, hatch = hatch)
             // halo diffus (lueur épaisse, qui occupe au moins 60 % de la recherche) : le fond « propre » estimé depuis le bord de la bande restait trop clair, et le remplissage finissait en
             // carré visible. La recherche est refaite plus large, avec un fondu extérieur plus doux. Un fond détaillé (cheveux, traits) ou une lueur mince ne donnent pas ce profil : jamais élargis.
             val wideGrow = (lh * 0.6f).toInt().coerceIn(maxGrow, 40)
-            if (rec != null && rec.thick >= 6 && rec.thick * 10 >= maxGrow * 6 && wideGrow > maxGrow + 2) {
-                val wide = ArtFill.reconstruct(px, w, h, core0, limitGlowFor(wideGrow), avoidN, wideGrow, ring = (lh * 0.2f).toInt().coerceIn(6, 12), robust = (lh * 0.12f).toInt().coerceIn(4, 10))
+            if (!busy && rec != null && rec.thick >= 6 && rec.thick * 10 >= maxGrow * 6 && wideGrow > maxGrow + 2) {
+                val wide = ArtFill.reconstruct(px, w, h, core0, limitGlowFor(wideGrow), avoidN, wideGrow, ring = (lh * 0.2f).toInt().coerceIn(6, 12), robust = (lh * 0.12f).toInt().coerceIn(4, 10), hatch = hatch)
                 ArtFill.trace?.invoke("halo diffus : épaisseur ${rec.thick} (limite $maxGrow) -> recherche élargie à $wideGrow : ${wide?.thick}")
                 if (wide != null) rec = wide
             }
             if (rec != null) {
                 val smooth = TextErase.periodicFill(px, w, h, rec.safe, rec.fill) ?: ArtFill.addGrain(rec.fill, rec.mask, rec.sigma)
                 val layerN = IntArray(w * h) { if (rec.alpha[it] > 0) (rec.alpha[it] shl 24) or (smooth[it] and 0xFFFFFF) else 0 }
-                val inkN = TextErase.artMask(px, w, h, zoneArt, fillColor, 0, Int.MAX_VALUE, tightLines, reachCap)
+                val inkN = TextErase.artMask(px, w, h, zoneArt, fillColor, 0, Int.MAX_VALUE, tightLines, reachCap, nearLines = nearLines, inner = thinInner)
                 val ciN = coreOf(px, w, h, inkN, a.bg, fillColor)
                 return Plan(Mode.ART, x0, y0, w, h, rec.mask, layerN, a.bg, fillColor, a.outlined || artInfo.outlined, null, null, TextErase.strokeWidth(inkN, w, h), inkN, meanFill(layerN), 0, ciN.mask, ciN.color, ciN.halo, ciN.haloPx)
             }
@@ -550,10 +567,41 @@ object Erasure {
                 (alpha[it] shl 24) or (if (plainWhite && TextErase.dist(f, bgPure) <= 14) bgPure else f)
             } else 0
         }
-        val inkArt = TextErase.artMask(px, w, h, zoneArt, fillColor, 0, Int.MAX_VALUE, tightLines, reachCap)
+        val inkArt = TextErase.artMask(px, w, h, zoneArt, fillColor, 0, Int.MAX_VALUE, tightLines, reachCap, nearLines = nearLines, inner = thinInner)
         val ci = coreOf(px, w, h, inkArt, a.bg, fillColor)
         return Plan(Mode.ART, x0, y0, w, h, mask, layer, a.bg, fillColor, a.outlined || artInfo.outlined, null, null, TextErase.strokeWidth(inkArt, w, h), inkArt, meanFill(layer), 0, ci.mask, ci.color, ci.halo, ci.haloPx)
     }
+
+    /**
+     * Traits fins sombres sur fond clair (hachures, lignes de vitesse, pointes d'étoile) : pixels nettement plus sombres que la même image débarrassée de ses traits fins (fermeture, voir
+     * [ArtFill.withoutThinLines]) dont celle-ci est claire. Un trait plus épais que 2·[radius]+1 px (bordure de case, grande masse sombre) n'en est pas un.
+     */
+    internal fun thinDarkOnLight(px: IntArray, w: Int, h: Int, radius: Int): BooleanArray {
+        val flat = ArtFill.withoutThinLines(px, w, h, radius)
+        fun lum(c: Int) = (((c shr 16) and 0xFF) * 77 + ((c shr 8) and 0xFF) * 150 + (c and 0xFF) * 29) shr 8
+        return BooleanArray(w * h) { val c = px[it]; val f = flat[it]; TextErase.dist(c, f) > HATCH_DIFF && lum(f) >= 175 && lum(f) - lum(c) >= 40 }
+    }
+
+    /** Écart minimal (par canal) entre un pixel et la même image sans traits fins pour qu'il compte comme trait fin du décor. */
+    private const val HATCH_DIFF = 40
+
+    /**
+     * Vrai si l'anneau de [reach] px autour des lettres [core] est chargé de décor net : au moins [BUSY_SHARE] de ses pixels sont des traits fins ([hatch]) ou des traits fixes ([fixed], bordure
+     * de case, masse sombre voisine). La lueur diffuse n'a pas d'arêtes : un écart au fond propre qui ne retombe pas, dans un tel anneau, est du dessin, pas de la lueur.
+     */
+    internal fun busyRing(core: BooleanArray, hatch: BooleanArray, fixed: BooleanArray?, w: Int, h: Int, reach: Int): Boolean {
+        val ring = TextErase.dilate(core, w, h, reach)
+        var n = 0; var b = 0
+        for (i in 0 until w * h) {
+            if (!ring[i] || core[i]) continue
+            n++
+            if (hatch[i] || (fixed != null && fixed[i])) b++
+        }
+        return n >= 100 && b >= BUSY_SHARE * n
+    }
+
+    /** Part de l'anneau de recherche occupée par du décor net à partir de laquelle la recherche élargie d'un halo diffus est écartée. */
+    private const val BUSY_SHARE = 0.04f
 
     /** Traits fixes d'une région : [protect] = pixels que l'effacement ne doit ni élargir ni prendre pour références ; [drop] = parmi eux, ceux que la zone de texte mordait par erreur (à retirer du masque). */
     internal class Fixed(val protect: BooleanArray, val drop: BooleanArray?)
