@@ -37,8 +37,8 @@ Solution: Please update the Gradle version to at least Gradle 8.14.4.
 > Task :app:processDebugResources
 > Task :app:mergeDebugAssets
 > Task :app:desugarDebugFileDependencies
-> Task :app:mergeDebugJniLibFolders
 > Task :app:checkDebugDuplicateClasses
+> Task :app:mergeDebugJniLibFolders
 > Task :app:validateSigningDebug
 > Task :app:writeDebugAppMetadata
 > Task :app:writeDebugSigningConfigVersions
@@ -91,9 +91,9 @@ w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kot
 > Task :app:packageDebug
 > Task :app:createDebugApkListingFileRedirect
 > Task :app:assembleDebug
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_4-1794726303447.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_4-1794726813946.json
 
-BUILD SUCCESSFUL in 1m 16s
+BUILD SUCCESSFUL in 1m 35s
 39 actionable tasks: 39 executed
 To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.10.2/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
 Daemon will be stopped at the end of the build 
@@ -139,8 +139,8 @@ Solution: Please update the Gradle version to at least Gradle 8.14.4.
 > Task :app:compileDebugShaders NO-SOURCE
 > Task :app:generateDebugAssets UP-TO-DATE
 > Task :app:mergeDebugAssets
-> Task :app:desugarDebugFileDependencies UP-TO-DATE
 > Task :app:compressDebugAssets
+> Task :app:desugarDebugFileDependencies UP-TO-DATE
 > Task :app:dexBuilderDebug UP-TO-DATE
 > Task :app:mergeDebugGlobalSynthetics UP-TO-DATE
 > Task :app:processDebugJavaRes UP-TO-DATE
@@ -158,7 +158,7 @@ Solution: Please update the Gradle version to at least Gradle 8.14.4.
 > Task :app:packageDebug
 > Task :app:createDebugApkListingFileRedirect UP-TO-DATE
 > Task :app:assembleDebug
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_5-1794726379205.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_5-1794726909402.json
 
-BUILD SUCCESSFUL in 9s
+BUILD SUCCESSFUL in 12s
 39 actionable tasks: 3 executed, 36 up-to-date
