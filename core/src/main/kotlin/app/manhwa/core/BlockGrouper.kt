@@ -160,8 +160,11 @@ class BlockGrouper(private val cfg: GrouperConfig = GrouperConfig()) {
         return rows.sortedBy { r -> r.map { it.box.centerY }.average() }.flatMap { r -> r.sortedBy { it.box.left } }
     }
 
-    /** Ligne horizontale penchée : son épaisseur mesurée dans l'axe du texte est nettement plus petite que sa boîte englobante, gonflée de largeur × tan(angle). */
-    private fun tilted(l: OcrLine): Boolean = !l.vertical && l.thickness > 0f && l.thickness < 0.8f * l.box.height
+    /**
+     * Ligne horizontale penchée : son épaisseur mesurée dans l'axe du texte est nettement plus petite que sa boîte englobante, gonflée de largeur × tan(angle). Une ligne penchée est longue
+     * (au moins 1,8 fois son épaisseur, comme le détecteur l'exige pour tracer un rectangle orienté) : un mot court et étroit (« I ») dont l'épaisseur mesurée est son petit côté n'en est pas une.
+     */
+    private fun tilted(l: OcrLine): Boolean = !l.vertical && l.thickness > 0f && l.thickness < 0.8f * l.box.height && l.box.width >= 1.8f * l.thickness
 
     /**
      * Deux lignes sont de la même rangée quand leurs boîtes se chevauchent verticalement d'au moins la moitié de la plus petite. Les lignes d'un paragraphe penché se chevauchent toutes à

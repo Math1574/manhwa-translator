@@ -211,6 +211,16 @@ fun tiltedReadingTests() {
         val blocks = BlockGrouper().group(lines.reversed())
         T.eq("ALPHA BRAVO CHARLIE", blocks[0].text, "ordre de lecture")
     }
+    T.test("lecture: un mot court et étroit (« I ») n'est pas pris pour une ligne penchée : même rangée que son voisin, lu avant lui") {
+        // « I » : boîte étroite de 24 × 64, épaisseur mesurée 24 (son petit côté) ; « KNOW » à sa droite, dont le centre est 15 px plus haut
+        val lines = listOf(
+            OcrLine("KNOW", RectF(160f, 100f, 340f, 150f), 0.95f, false, 50f),
+            OcrLine("I", RectF(100f, 108f, 124f, 172f), 0.95f, false, 24f),
+        )
+        val blocks = BlockGrouper().group(lines)
+        T.eq(1, blocks.size, "un seul bloc")
+        T.eq("I KNOW", blocks[0].text, "ordre de lecture")
+    }
     T.test("lecture: des lignes droites gardent leur ordre (rangée lue de gauche à droite, rangées de haut en bas)") {
         val lines = listOf(
             OcrLine("A", RectF(100f, 100f, 300f, 140f), 0.95f), OcrLine("B", RectF(320f, 102f, 500f, 142f), 0.95f),
