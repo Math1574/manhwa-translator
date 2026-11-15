@@ -323,6 +323,7 @@ object PageRenderer {
         val em: Float get() = r.em
         val stepRatio: Float get() = r.stepRatio
         val lay: String get() = r.lay
+        val tilt: Float get() = r.tilt
         fun scaled(k: Float): Laid = Laid(font, paint, r.scaled(k))
         fun shifted(dx: Float, dy: Float): Laid = Laid(font, paint, r.shifted(dx, dy))
         fun lineRects(margin: Float): List<RectF> = r.lineRects(margin)
@@ -343,6 +344,7 @@ object PageRenderer {
 
     /** Couleur du texte traduit d'un bloc : celle du texte d'origine, ramenée à une couleur lisible sur le fond réellement obtenu après effacement. */
     private fun textColorOf(p: Prep): Int {
+        p.paint?.let { return 0xFF000000.toInt() or it.fill }            // couleur du corps des traits, déjà ramenée à un contraste suffisant (voir TextPaint)
         val plan = p.plan
         // fond réellement obtenu après effacement (et non une estimation) : le texte doit toujours y être lisible
         val bgForText = plan?.let { if (it.fillMean != 0) it.fillMean else it.bg } ?: 0xFFFFFFFF.toInt()
@@ -359,14 +361,19 @@ object PageRenderer {
         paint.textSize = px
         val capPx = Rect().also { paint.getTextBounds("H", 0, 1, it) }.height().toFloat()
         val allCapsOut = TextNormalizer.isAllCaps(p.text)
+        val spec = p.paint
+        // texte d'origine penché : le bloc entier est tourné autour du centre de ses lignes (comme l'original), les lignes restent dessinées droites dans ce repère
+        val tilt = laid.tilt
+        val saved = tc.save()
+        if (tilt != 0f) { val f = laid.r.flat(); tc.rotate(tilt, (f.centerX - rect.left) * ss, (f.centerY - rect.top) * ss) }
         for (ln in fit.lines) {
             val cx = (ln.cx - rect.left) * ss
             val bandCenter = (ln.top + fit.lineStep / 2f - rect.top) * ss
             val base = bandCenter + (if (allCapsOut || allCaps) capPx / 2f else capPx * 0.5f)
             paint.textAlign = Paint.Align.CENTER
-            if (art) { // texte sur dessin : contour de couleur opposée pour rester lisible
-                paint.style = Paint.Style.STROKE; paint.strokeWidth = px * 0.11f; paint.strokeJoin = Paint.Join.ROUND
-                paint.color = if (ColorMath.luminance(fg) > 0.5f) 0xFF000000.toInt() else 0xFFFFFFFF.toInt()
+            if (art) { // texte sur dessin : contour pour rester lisible, de la couleur mesurée sur l'original quand elle est colorée, sinon de couleur opposée
+                paint.style = Paint.Style.STROKE; paint.strokeWidth = if (spec != null && spec.outlineRel > 0f) spec.outlineRel * capPx else px * 0.11f; paint.strokeJoin = Paint.Join.ROUND
+                paint.color = if (spec != null && spec.outline != 0) 0xFF000000.toInt() or spec.outline else if (ColorMath.luminance(fg) > 0.5f) 0xFF000000.toInt() else 0xFFFFFFFF.toInt()
                 tc.drawText(ln.text, cx, base, paint)
             }
             if (font.embolden > 0f) { paint.style = Paint.Style.FILL_AND_STROKE; paint.strokeWidth = font.embolden * px; paint.strokeJoin = Paint.Join.ROUND }
@@ -383,6 +390,7 @@ object PageRenderer {
             paint.color = fg
             tc.drawText(ln.text, cx, base, paint)
         }
+        tc.restoreToCount(saved)
         return fg
     }
 
@@ -393,7 +401,7 @@ object PageRenderer {
         // zone du patch : région effacée + toutes les lignes placées
         var l = Float.MAX_VALUE; var t = Float.MAX_VALUE; var r = -Float.MAX_VALUE; var bt = -Float.MAX_VALUE
         for (ln in fit.lines) { l = min(l, ln.cx - ln.width / 2f); r = max(r, ln.cx + ln.width / 2f); t = min(t, ln.top); bt = max(bt, ln.top + fit.lineStep) }
-        var rect = RectF(l - fit.size * 0.3f, t - fit.size * 0.3f, r + fit.size * 0.3f, bt + fit.size * 0.3f)
+        var rect = laid.placed(fit.size * 0.3f)            // englobe aussi le texte penché
         if (plan != null) rect = rect.union(RectF(plan.x0 / s, plan.y0 / s, (plan.x0 + plan.w) / s, (plan.y0 + plan.h) / s))
         rect = RectF(max(0f, rect.left), max(0f, rect.top), min(iw, rect.right), min(ih, rect.bottom))
         // double résolution pour les patches de taille normale ; réduite pour les très grands blocs afin de limiter mémoire et poids de l'envoi
@@ -444,7 +452,7 @@ object PageRenderer {
                 .put("orig", JSONArray(b.lineBoxes.ifEmpty { listOf(b.box) }.reduce { a, c -> a.union(c) }.let { u -> listOf(u.left, u.top, u.right, u.bottom).map { v -> Math.round(v) } }))
                 .put("cont", b.bubble?.let { c -> JSONArray(listOf(c.left, c.top, c.right, c.bottom).map { v -> Math.round(v) }) } ?: JSONObject.NULL)
                 .put("zoneBox", b.zone?.let { c -> JSONArray(listOf(c.left, c.top, c.right, c.bottom).map { v -> Math.round(v) }) } ?: JSONObject.NULL)
-                .put("family", font.family).put("fontInfo", p.fontInfo).put("skew", font.skew.toDouble()).put("embolden", font.embolden.toDouble()).put("scaleX", font.scaleX.toDouble()).put("wght", font.wght).put("wdth", font.wdth.toDouble()).put("em", em.toDouble()).put("stepRatio", stepRatio.toDouble())
+                .put("tilt", laid.tilt.toDouble()).put("paint", p.paint?.info ?: "").put("family", font.family).put("fontInfo", p.fontInfo).put("skew", font.skew.toDouble()).put("embolden", font.embolden.toDouble()).put("scaleX", font.scaleX.toDouble()).put("wght", font.wght).put("wdth", font.wdth.toDouble()).put("em", em.toDouble()).put("stepRatio", stepRatio.toDouble())
             if (sink != null) { sink.erase = patch; sink.text = textBmp; sink.rect = rect; sink.ss = ss; sink.report = rep; keep = true; return JSONObject() to rep }
             return patchJson to rep
         } finally {
