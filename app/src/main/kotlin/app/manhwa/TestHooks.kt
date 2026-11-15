@@ -106,10 +106,14 @@ object TestHooks {
             c.testNavGen = false; c.testNavMaxLag = -1L
             val t0 = SystemClock.uptimeMillis()
             var last = ""
+            var kicked = t0
             while (SystemClock.uptimeMillis() - t0 < 8 * 60_000L && !c.testGenerating()) {
                 // chaque changement d'état du traitement est noté (journal du système) : si la traduction ne vient pas, on voit où elle en est
                 val st = "total=${c.total} faites=${c.done} échecs=${c.failed} chargement=${c.loading} étapes=[${c.testStages()}] erreur=${c.lastError ?: ""}"
                 if (st != last) { last = st; Log.i(TAG, "gotogen : +${(SystemClock.uptimeMillis() - t0) / 1000} s : $st") }
+                // au démarrage à froid, la page peut être lue avant que son affichage soit en place (ses images ont alors une taille nulle) : rien ne relance la détection tant qu'on ne fait pas défiler.
+                // Comme un lecteur qui touche la page, on relance la détection des images toutes les 8 s tant qu'aucune n'est trouvée.
+                if (c.total == 0 && !c.loading && SystemClock.uptimeMillis() - kicked > 8_000L) { kicked = SystemClock.uptimeMillis(); Log.i(TAG, "gotogen : aucune image trouvée, la détection est relancée"); main.post { c.start(false) } }
                 Thread.sleep(20)
             }
             c.testNavGen = c.testGenerating()
