@@ -1,0 +1,23 @@
+11-15 01:14:44.399  5061  5201 I MTTEST  : gotogen : +0 s : total=0 faites=0 échecs=0 chargement=false étapes=[] erreur=
+11-15 01:14:46.020  5061  5201 I MTTEST  : gotogen : +1 s : total=0 faites=0 échecs=0 chargement=true étapes=[] erreur=
+11-15 01:14:50.509  5061  5201 I MTTEST  : gotogen : +6 s : total=0 faites=0 échecs=0 chargement=false étapes=[] erreur=
+11-15 01:14:52.412  5061  5201 I MTTEST  : gotogen : aucune image trouvée, la détection est relancée
+11-15 01:14:52.478  5061  5201 I MTTEST  : gotogen : +8 s : total=2 faites=0 échecs=0 chargement=false étapes=[] erreur=
+11-15 01:14:52.576  5061  5201 I MTTEST  : gotogen : +8 s : total=2 faites=0 échecs=0 chargement=false étapes=[téléchargement,téléchargement] erreur=
+11-15 01:14:53.055  5061  5201 I MTTEST  : gotogen : +8 s : total=2 faites=0 échecs=0 chargement=false étapes=[assemblage avec l'image du dessus,téléchargement] erreur=
+11-15 01:14:55.213  5061  5201 I MTTEST  : gotogen : +10 s : total=2 faites=0 échecs=0 chargement=false étapes=[attente de la lecture du texte,lecture du texte] erreur=
+11-15 01:15:25.357  5061  5201 I MTTEST  : gotogen : +40 s : total=2 faites=0 échecs=0 chargement=false étapes=[lecture du texte,lecture du texte] erreur=
+11-15 01:15:25.373  5061  5086 I MT      : écarté « You will regret this. » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-15 01:15:25.374  5061  5086 I MT      : écarté « Boom! » (onomatopée laissée telle quelle)
+11-15 01:15:25.398  5061  5201 I MTTEST  : gotogen : la page change (pendant une traduction : true), après 40 s ; étapes=[lecture du texte,traduction]
+11-15 01:15:45.439  5061  5201 I MTTEST  : gotogen : plus long retard du fil principal pendant les 20 s suivantes : 209 ms
+11-15 01:15:45.691  5061  5089 I MT      : écarté « anyone today. » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-15 01:15:45.692  5061  5089 I MT      : écarté « Do I have no choice but to kill him? » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-15 01:15:45.692  5061  5089 I MT      : écarté « You will regret this. » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-15 01:15:45.692  5061  5089 I MT      : écarté « Boom! » (onomatopée laissée telle quelle)
+11-15 01:16:21.079  5061  5086 I MT      : écarté « You will regret this. » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-15 01:16:21.080  5061  5086 I MT      : écarté « Boom! » (onomatopée laissée telle quelle)
+11-15 01:16:34.854  5061  5088 I MT      : écarté « anyone today. » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-15 01:16:34.855  5061  5088 I MT      : écarté « Do I have no choice but to kill him? » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-15 01:16:34.855  5061  5088 I MT      : écarté « You will regret this. » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-15 01:16:34.855  5061  5088 I MT      : écarté « Boom! » (onomatopée laissée telle quelle)

@@ -1,0 +1,7 @@
+[site] "GET /index.html HTTP/1.1" 200 -
+[site] "GET /comics/test-series-1a2b3c/chapter/1.html HTTP/1.1" 200 -
+[site] "GET /synth/en_mixed.png HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -
+[site] "GET /comics/test-series-1a2b3c/chapter/2.html HTTP/1.1" 200 -
+[site] "GET /synth/en_mixed.png HTTP/1.1" 200 -

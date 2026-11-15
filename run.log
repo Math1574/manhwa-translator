@@ -1,0 +1,14 @@
+Performing Streamed Install
+Success
+Physical size: 1080x2400
+[e2e 01:13:58] envoi du modèle gemma-4-E2B-it.litertlm sur l'émulateur
+total 2527520
+drwxrwxrwx 2 u0_a192 u0_a192       4096 2026-11-15 01:14 .
+drwxrwxrwx 3 u0_a192 u0_a192       4096 2026-11-15 01:14 ..
+-rw-rw-rw- 1 u0_a192 u0_a192 2588147712 2026-11-15 01:14 gemma-4-E2B-it.litertlm
+-rw-rw-rw- 1 u0_a192 u0_a192         64 2026-11-15 01:14 gemma-4-E2B-it.litertlm.ok
+[e2e 01:14:39] === chapitre suivant pendant une traduction par le vrai modèle (Gemma E2B)
+[e2e 01:15:28] nav : chapitre changé (ok=1) après 42 s ; page 3, pendant une traduction « True »
+[e2e 01:15:55] nav : plus long retard du fil principal pendant les 20 s suivantes : « 209 » ms
+[e2e 01:17:31] nav : nouveau chapitre traduit (ok=1) après 96 s, avancement « 2/2 »
+  [journal système] 0 ligne(s) d'ANR ou de plantage de l'application

@@ -1,0 +1,60 @@
+11-15 01:15:18.325  5061  5233 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794705278_2588147712.xnnpack_cache'.
+11-15 01:15:18.327  5061  5233 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794705278_2588147712.xnnpack_cache'.
+11-15 01:15:18.333  5061  5233 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794705278_2588147712.xnnpack_cache'.
+11-15 01:15:18.339  5061  5233 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794705278_2588147712.xnnpack_cache'.
+11-15 01:15:18.493  5061  5233 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794705278_2588147712.xnnpack_cache'.
+11-15 01:15:18.503  5061  5233 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794705278_2588147712.xnnpack_cache'.
+11-15 01:15:21.390  5061  5233 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794705278_2588147712.xnnpack_cache'.
+11-15 01:15:21.976  5061  5233 I litert  : [environment.cc:36] Creating LiteRT environment with options
+11-15 01:15:21.987  5061  5233 W litert  : [npu_registry.cc:34] NPU accelerator could not be loaded and registered: kLiteRtStatusErrorNotFound.
+11-15 01:15:21.987  5061  5233 I litert  : [accelerator_registry.cc:54] RegisterAccelerator: ptr=0x731e3f6fade0, name=LiteRT GPU
+11-15 01:15:21.988  5061  5233 I litert  : [gpu_registry.cc:113] Statically linked GPU accelerator registered.
+11-15 01:15:21.991  5061  5233 I litert  : [accelerator_registry.cc:54] RegisterAccelerator: ptr=0x731e3f6faad0, name=CpuAccelerator
+11-15 01:15:21.991  5061  5233 I litert  : [cpu_registry.cc:75] XNNPACK CPU accelerator registered.
+11-15 01:15:22.091  5061  5233 I litert  : [magic_number_utils.cc:101] Loaded: num_subgraphs=1, num_signatures=1
+11-15 01:15:22.092  5061  5233 I litert  : [magic_number_utils.cc:109]   signature=embedder, subgraph_index=0, num_tensors=16, num_inputs=1, num_outputs=1, num_ops=8
+11-15 01:15:22.092  5061  5233 I litert  : [magic_number_utils.cc:113] Magic number configs: num_configs=1
+11-15 01:15:22.092  5061  5233 I litert  : [magic_number_utils.cc:120]   config[0]: magic_number=32003, target_number=4096, signature_prefix=null
+11-15 01:15:22.092  5061  5233 I litert  : [compiled_model.cc:829] Flatbuffer model initialized directly from incoming litert model.
+11-15 01:15:22.147  5061  5233 I litert  : [magic_number_utils.cc:101] Loaded: num_subgraphs=1, num_signatures=1
+11-15 01:15:22.148  5061  5233 I litert  : [magic_number_utils.cc:109]   signature=eoa, subgraph_index=0, num_tensors=1, num_inputs=0, num_outputs=1, num_ops=0
+11-15 01:15:22.148  5061  5233 I litert  : [magic_number_utils.cc:113] Magic number configs: num_configs=1
+11-15 01:15:22.148  5061  5233 I litert  : [magic_number_utils.cc:120]   config[0]: magic_number=32003, target_number=4096, signature_prefix=null
+11-15 01:15:22.148  5061  5233 I litert  : [compiled_model.cc:829] Flatbuffer model initialized directly from incoming litert model.
+11-15 01:15:22.148  5061  5233 I litert  : [compiled_model.cc:1856] Tracked constant output tensor eoa_embedding with locked address
+11-15 01:15:22.148  5061  5233 I litert  : [magic_number_utils.cc:101] Loaded: num_subgraphs=1, num_signatures=1
+11-15 01:15:22.149  5061  5233 I litert  : [magic_number_utils.cc:109]   signature=eoi, subgraph_index=0, num_tensors=1, num_inputs=0, num_outputs=1, num_ops=0
+11-15 01:15:22.149  5061  5233 I litert  : [magic_number_utils.cc:113] Magic number configs: num_configs=1
+11-15 01:15:22.149  5061  5233 I litert  : [magic_number_utils.cc:120]   config[0]: magic_number=32003, target_number=4096, signature_prefix=null
+11-15 01:15:22.149  5061  5233 I litert  : [compiled_model.cc:829] Flatbuffer model initialized directly from incoming litert model.
+11-15 01:15:22.149  5061  5233 I litert  : [compiled_model.cc:1856] Tracked constant output tensor eoi_embedding with locked address
+11-15 01:15:22.260  5061  5233 I litert  : [magic_number_utils.cc:101] Loaded: num_subgraphs=1, num_signatures=1
+11-15 01:15:22.260  5061  5233 I litert  : [magic_number_utils.cc:109]   signature=per_layer_embedder, subgraph_index=0, num_tensors=83, num_inputs=1, num_outputs=1, num_ops=42
+11-15 01:15:22.260  5061  5233 I litert  : [magic_number_utils.cc:113] Magic number configs: num_configs=1
+11-15 01:15:22.260  5061  5233 I litert  : [magic_number_utils.cc:120]   config[0]: magic_number=32003, target_number=4096, signature_prefix=null
+11-15 01:15:22.260  5061  5233 I litert  : [compiled_model.cc:829] Flatbuffer model initialized directly from incoming litert model.
+11-15 01:15:22.600  5061  5233 I litert  : [magic_number_utils.cc:101] Loaded: num_subgraphs=30, num_signatures=1
+11-15 01:15:22.603  5061  5233 I litert  : [magic_number_utils.cc:109]   signature=mtp_drafter, subgraph_index=0, num_tensors=275, num_inputs=8, num_outputs=2, num_ops=198
+11-15 01:15:22.603  5061  5233 I litert  : [magic_number_utils.cc:113] Magic number configs: num_configs=1
+11-15 01:15:22.603  5061  5233 I litert  : [magic_number_utils.cc:120]   config[0]: magic_number=32003, target_number=4096, signature_prefix=null
+11-15 01:15:22.603  5061  5233 I litert  : [magic_number_utils.cc:536] 57 tensors of signature mtp_drafter have been updated for magic number  32003 to target number 4096
+11-15 01:15:22.603  5061  5233 I litert  : [compiled_model.cc:829] Flatbuffer model initialized directly from incoming litert model.
+11-15 01:15:22.618  5061  5233 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794705278_2588147712.mtp_drafter.xnnpack_cache'.
+11-15 01:15:22.625  5061  5233 I tflite  : XNNPack weight cache build for '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794705278_2588147712.mtp_drafter.xnnpack_cache' started.
+11-15 01:15:22.629  5061  5233 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794705278_2588147712.mtp_drafter.xnnpack_cache'.
+11-15 01:15:22.631  5061  5233 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794705278_2588147712.mtp_drafter.xnnpack_cache'.
+11-15 01:15:22.633  5061  5233 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794705278_2588147712.mtp_drafter.xnnpack_cache'.
+11-15 01:15:22.634  5061  5233 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794705278_2588147712.mtp_drafter.xnnpack_cache'.
+11-15 01:15:22.640  5061  5233 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794705278_2588147712.mtp_drafter.xnnpack_cache'.
+11-15 01:15:22.641  5061  5233 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794705278_2588147712.mtp_drafter.xnnpack_cache'.
+11-15 01:15:22.643  5061  5233 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794705278_2588147712.mtp_drafter.xnnpack_cache'.
+11-15 01:15:22.655  5061  5233 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794705278_2588147712.mtp_drafter.xnnpack_cache'.
+11-15 01:15:22.657  5061  5233 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794705278_2588147712.mtp_drafter.xnnpack_cache'.
+11-15 01:15:22.658  5061  5233 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794705278_2588147712.mtp_drafter.xnnpack_cache'.
+11-15 01:15:22.664  5061  5233 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794705278_2588147712.mtp_drafter.xnnpack_cache'.
+11-15 01:15:22.670  5061  5233 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794705278_2588147712.mtp_drafter.xnnpack_cache'.
+11-15 01:15:22.681  5061  5233 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794705278_2588147712.mtp_drafter.xnnpack_cache'.
+11-15 01:15:22.932  5061  5233 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794705278_2588147712.mtp_drafter.xnnpack_cache'.
+11-15 01:15:25.357  5061  5201 I MTTEST  : gotogen : +40 s : total=2 faites=0 échecs=0 chargement=false étapes=[lecture du texte,lecture du texte] erreur=
+11-15 01:15:25.398  5061  5201 I MTTEST  : gotogen : la page change (pendant une traduction : true), après 40 s ; étapes=[lecture du texte,traduction]
+11-15 01:15:45.439  5061  5201 I MTTEST  : gotogen : plus long retard du fil principal pendant les 20 s suivantes : 209 ms
