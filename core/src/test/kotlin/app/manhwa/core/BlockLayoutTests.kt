@@ -116,4 +116,15 @@ fun blockLayoutTests() {
         BlockLayout.resolveCollisions(preps, laids, { true }, fake(false))
         T.ok(laids[0] === first[0] && laids[1] === first[1], "épinglés : inchangés")
     }
+    // ----- texte penché : hauteur de ligne -----
+    T.test("texte penché: une épaisseur mesurée dans l'axe du texte n'est pas corrigée une seconde fois (« Unbelievable. » rendu à moins de la moitié)") {
+        val box = RectF(179f, 6255f, 411f, 6324f)                       // 232 × 69 : boîte gonflée par la rotation
+        val measured = TranslatedBlock(0, box, "Unbelievable.", "Incroyable.", false, 50f, listOf(box))      // épaisseur mesurée : 50 px
+        val drop = 232f * Math.tan(Math.toRadians(9.0)).toFloat()
+        T.eq(50f, BlockLayout.lineHeightFree(measured, drop), "épaisseur déjà exacte")
+        val inflated = TranslatedBlock(1, box, "Unbelievable.", "Incroyable.", false, 69f, listOf(box))     // pas d'épaisseur : hauteur de la boîte
+        T.ok(BlockLayout.lineHeightFree(inflated, drop) < 40f, "boîte gonflée : corrigée (${BlockLayout.lineHeightFree(inflated, drop)})")
+        T.eq(50f, BlockLayout.lineHeightFree(measured, 0f), "texte droit : inchangé")
+        T.eq(69f, BlockLayout.lineHeightFree(inflated, 0f), "texte droit : inchangé")
+    }
 }

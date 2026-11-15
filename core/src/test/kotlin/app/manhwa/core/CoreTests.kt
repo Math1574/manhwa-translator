@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); queueBatchTests(); readingOrderTests(); eraseWhiteBandTests(); fontPolicyTests(); blockEditTests(); seamTests(); modelTests(); settingsTests(); utilTests(); textTests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests(); openBubbleTests(); barrierShapeTests(); safetyTests(); artEraseTests(); updateTests(); settingsSearchTests(); ignoredTests(); termRefreshTests(); discardedTests(); correctionsTests(); libraryViewTests(); homeViewTests(); editorViewTests(); coverTests(); crashTraceTests(); artFillTests(); blockLayoutTests(); textPaintTests(); textTiltTests(); tiltedResultTests(); tiltedReadingTests()
+    groupingTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); queueBatchTests(); readingOrderTests(); eraseWhiteBandTests(); fontPolicyTests(); blockEditTests(); seamTests(); modelTests(); settingsTests(); utilTests(); textTests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests(); openBubbleTests(); barrierShapeTests(); safetyTests(); artEraseTests(); updateTests(); settingsSearchTests(); ignoredTests(); termRefreshTests(); discardedTests(); correctionsTests(); libraryViewTests(); homeViewTests(); editorViewTests(); coverTests(); crashTraceTests(); artFillTests(); blockLayoutTests(); textPaintTests(); textTiltTests(); tiltedResultTests(); tiltedReadingTests(); detectionTilesTests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -80,6 +80,22 @@ fun groupingTests() {
         T.eq(0, g.group(listOf(line("thud", 100f, 100f, 200f, 140f, c = 0.3f))).size)
     }
     T.test("groupement: aucune ligne → aucun bloc") { T.eq(0, g.group(emptyList()).size) }
+    // bruitage posé contre une bulle : dans la boîte de la bulle, mais hors de la zone de texte détectée
+    T.test("groupement: un bruitage plus haut que le texte de la bulle ne lui est plus fondu (« Ha! » au-dessus de « FAITH, MY ASS. »)") {
+        val lines = listOf(line("Ha!", 335f, 606f, 473f, 724f), line("FAITH,", 209f, 760f, 353f, 811f), line("MY ASS.", 178f, 815f, 381f, 860f))
+        val dets = listOf(Detection(RegionClass.BUBBLE, RectF(103f, 655f, 458f, 968f), 0.95f), Detection(RegionClass.TEXT_BUBBLE, RectF(166f, 749f, 395f, 870f), 0.92f))
+        val b = g.group(lines, dets)
+        T.eq(2, b.size)
+        val bubble = b.first { it.text.contains("FAITH") }
+        T.eq("FAITH, MY ASS.", bubble.text)
+        T.ok(b.any { it.text == "Ha!" }, "le bruitage forme son propre bloc : ${b.map { it.text }}")
+    }
+    T.test("groupement: une ligne de même taille que la bulle, dans sa boîte mais hors de la zone détectée, s'y rattache toujours") {
+        val lines = listOf(line("THIS IS THE FIRST", 200f, 300f, 600f, 350f), line("PART OF IT", 230f, 355f, 570f, 405f), line("AND THE LAST", 220f, 412f, 580f, 462f))
+        val dets = listOf(Detection(RegionClass.BUBBLE, RectF(150f, 250f, 650f, 520f), 0.95f), Detection(RegionClass.TEXT_BUBBLE, RectF(190f, 290f, 610f, 410f), 0.92f))
+        val b = g.group(lines, dets)
+        T.eq(1, b.size); T.eq(3, b[0].lines.size)
+    }
 }
 
 // ---------- glossaire ----------
@@ -1260,6 +1276,8 @@ fun safetyTests() {
         T.ok(!RenderGate.unchanged("SHUT UP", "TAIS-TOI"), "traduit")
         T.ok(RenderGate.tooUncertain("FREE", false, false, true, "AY TOR"), "libre, sans zone, sur dessin")
         T.ok(!RenderGate.tooUncertain("FREE", false, false, true, "ONE MONTH LATER ON THE ROAD"), "vraie phrase sur dessin : rendue")
+        T.ok(!RenderGate.tooUncertain("FREE", false, false, true, "Deal with it.") && !RenderGate.tooUncertain("FREE", false, false, true, "WHAT IS IT?"), "réplique courte de trois mots : rendue (« Deal with it. » restait en anglais)")
+        T.ok(RenderGate.tooUncertain("FREE", false, false, true, "JANG NEUNG-AK") && RenderGate.tooUncertain("FREE", false, false, true, "IS IT") && RenderGate.tooUncertain("FREE", false, false, true, "ODE IN AT"), "noms, deux mots ou lettres trop rares : laissés tels quels")
         T.ok(!RenderGate.tooUncertain("FREE", true, false, true, "AY TOR") && !RenderGate.tooUncertain("FREE", false, false, false, "AY TOR") && !RenderGate.tooUncertain("IN_BUBBLE", false, false, true, "AY TOR"), "autres cas : rendu")
         T.ok(!RenderGate.tooUncertain("UNKNOWN", false, false, true, "AY TOR"), "sans détecteur : aucune règle")
     }

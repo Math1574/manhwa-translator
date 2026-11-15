@@ -71,7 +71,8 @@ object BlockLayout {
         val drop = if (tiltDeg == 0f) 0f else lineBoxes.map { it.width }.sorted().let { it[it.size / 2] } * abs(Math.tan(Math.toRadians(tiltDeg.toDouble()))).toFloat()
         // hauteur de ligne pour le choix du style : mesurée sur les lettres (les boîtes d'une ligne inclinée sont gonflées de largeur × tan(angle))
         val inkH = lessTilt(measuredInkHeight(plan, b, s), drop)
-        val lineHStyle = if (inkH > 0f && !b.vertical && inkH >= 0.49f * lineH) min(lessTilt(lineH, drop), inkH / 0.8f) else lessTilt(lineH, drop)
+        val lineFree = lineHeightFree(b, drop)
+        val lineHStyle = if (inkH > 0f && !b.vertical && inkH >= 0.49f * lineH) min(lineFree, inkH / 0.8f) else lineFree
         val style = TextErase.chooseFont(b.source, lineHStyle, medianLine, flat, plan?.outlined ?: false, rectangular)
         val text = if (target == "fr") Typography.french(b.translated) else b.translated
         val obstacles = blocksAll.filter { it !== b }.map { o -> o.lineBoxes.ifEmpty { listOf(o.box) }.reduce { x, y -> x.union(y) } }
@@ -147,11 +148,24 @@ object BlockLayout {
     /** [v] (hauteur mesurée sur des lignes penchées) moins le gonflement [drop] dû à la rotation, sans jamais passer sous 40 % de la mesure. */
     internal fun lessTilt(v: Float, drop: Float): Float = if (drop <= 0f || v <= 0f) v else max(0.4f * v, v - drop)
 
+    /**
+     * Hauteur de ligne d'origine sans le gonflement dû à la rotation. Une hauteur mesurée dans l'axe du texte (épaisseur de la ligne : nettement plus basse que la boîte) est déjà celle des
+     * lettres : la corriger encore la réduisait deux fois (un mot penché, « Unbelievable. », était rendu à moins de la moitié de sa taille). Sans épaisseur mesurée, la hauteur est celle de
+     * la boîte, gonflée, et la correction s'applique.
+     */
+    internal fun lineHeightFree(b: TranslatedBlock, drop: Float): Float {
+        val h = lineHeightOf(b)
+        if (drop <= 0f || h <= 0f || b.vertical) return h
+        val boxes = b.lineBoxes.ifEmpty { listOf(b.box) }.map { it.height }.sorted()
+        val boxH = boxes[boxes.size / 2]
+        return if (b.lineHeight > 0f && b.lineHeight < 0.85f * boxH) h else lessTilt(h, drop)
+    }
+
     /** Hauteurs de référence de tous les blocs, harmonisées : les blocs de même taille d'origine (écart de 18 % au plus) prennent la hauteur médiane de leur groupe. Texte vertical : 0 (mesure propre). */
     fun harmonizedHeights(preps: List<BlockPrep>, s: Float): FloatArray {
         val raw = FloatArray(preps.size) { i ->
             val b = preps[i].block
-            if (b.vertical) 0f else { val drop = tiltDrop(preps[i]); val lineH = lessTilt(lineHeightOf(b), drop); baseHeightOf(lessTilt(inkHeightOf(preps[i], s), drop), if (lineH > 0f) lineH / 1.12f else Float.MAX_VALUE, lineH) }
+            if (b.vertical) 0f else { val drop = tiltDrop(preps[i]); val lineH = lineHeightFree(b, drop); baseHeightOf(lessTilt(inkHeightOf(preps[i], s), drop), if (lineH > 0f) lineH / 1.12f else Float.MAX_VALUE, lineH) }
         }
         val out = raw.copyOf()
         val order = raw.indices.filter { raw[it] > 0f }.sortedBy { raw[it] }
@@ -254,7 +268,7 @@ object BlockLayout {
         val lineBoxes = b.lineBoxes.ifEmpty { listOf(b.box) }
         val union = lineBoxes.reduce { a, c -> a.union(c) }
         val drop = tiltDrop(p)                       // texte penché : les hauteurs mesurées sur les boîtes (et l'encre) sont gonflées de largeur × tan(angle)
-        val lineH = lessTilt(lineHeightOf(b), drop)
+        val lineH = lineHeightFree(b, drop)
         val allCaps = TextNormalizer.isAllCaps(b.source)
 
         // police assortie au lettrage d'origine ; corps cible : même hauteur de capitales que l'encre d'origine
