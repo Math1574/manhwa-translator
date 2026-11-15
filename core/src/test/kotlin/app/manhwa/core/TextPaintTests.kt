@@ -184,3 +184,39 @@ fun tiltedResultTests() {
         T.ok(rects.all { all.contains(it.centerX, it.centerY) }, "lignes dans le bloc")
     }
 }
+
+/** Ordre de lecture des lignes d'un paragraphe penché. */
+fun tiltedReadingTests() {
+    // ligne penchée de [deg] degrés (positif : descend vers la droite) de centre (cx, cy), longueur len, épaisseur thick : boîte englobante et épaisseur mesurée
+    fun tl(text: String, cx: Float, cy: Float, len: Float, thick: Float, deg: Float): OcrLine {
+        val a = Math.toRadians(deg.toDouble()); val c = Math.abs(Math.cos(a)).toFloat(); val s = Math.abs(Math.sin(a)).toFloat()
+        val w = len * c + thick * s; val h = len * s + thick * c
+        return OcrLine(text, RectF(cx - w / 2f, cy - h / 2f, cx + w / 2f, cy + h / 2f), 0.95f, false, thick)
+    }
+    T.test("lecture: un paragraphe penché de 12° est lu de haut en bas, pas par rangées de boîtes englobantes qui se recouvrent") {
+        // quatre lignes centrées, de longueurs différentes, interligne 55 px pour 40 px d'épaisseur : les boîtes englobantes (122 px de haut) se recouvrent de plus de la moitié
+        val lines = listOf(
+            tl("ONE", 300f, 100f, 300f, 40f, 12f), tl("TWO", 300f, 155f, 420f, 40f, 12f),
+            tl("THREE", 300f, 210f, 250f, 40f, 12f), tl("FOUR", 300f, 265f, 380f, 40f, 12f),
+        )
+        val blocks = BlockGrouper().group(lines.shuffled(java.util.Random(7)))
+        T.eq(1, blocks.size, "un seul bloc")
+        T.eq("ONE TWO THREE FOUR", blocks[0].text, "ordre de lecture")
+    }
+    T.test("lecture: un paragraphe penché vers le haut (−9°) est lu de haut en bas aussi") {
+        val lines = listOf(
+            tl("ALPHA", 400f, 500f, 300f, 44f, -9f), tl("BRAVO", 400f, 560f, 460f, 44f, -9f),
+            tl("CHARLIE", 400f, 620f, 260f, 44f, -9f),
+        )
+        val blocks = BlockGrouper().group(lines.reversed())
+        T.eq("ALPHA BRAVO CHARLIE", blocks[0].text, "ordre de lecture")
+    }
+    T.test("lecture: des lignes droites gardent leur ordre (rangée lue de gauche à droite, rangées de haut en bas)") {
+        val lines = listOf(
+            OcrLine("A", RectF(100f, 100f, 300f, 140f), 0.95f), OcrLine("B", RectF(320f, 102f, 500f, 142f), 0.95f),
+            OcrLine("C", RectF(100f, 150f, 500f, 190f), 0.95f),
+        )
+        val blocks = BlockGrouper().group(lines.reversed())
+        T.eq("A B C", blocks[0].text, "ordre de lecture")
+    }
+}
