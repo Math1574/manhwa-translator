@@ -32,7 +32,7 @@ else
   # puis elle relève pendant 20 s le plus long retard de réponse de son fil principal
   appcmd "gotogen $CH2"
   ok=0; start=$(date +%s)
-  while [ $(( $(date +%s) - start )) -lt 900 ]; do
+  while [ $(( $(date +%s) - start )) -lt 600 ]; do
     appstate
     if [ "$(stv url)" = "$CH2" ]; then ok=1; break; fi
     [ -z "$(alive)" ] && { say "nav : l'application s'est arrêtée avant le changement de chapitre"; break; }
@@ -49,7 +49,7 @@ else
   chk "chapitre suivant pendant une traduction de Gemma : aucune fenêtre « ne répond pas » du système" $(hasnot nv1 "isn't responding")
   # le nouveau chapitre finit par être traduit par le modèle (la génération de l'ancien se termine d'abord)
   ok=0; start=$(date +%s)
-  while [ $(( $(date +%s) - start )) -lt 900 ]; do
+  while [ $(( $(date +%s) - start )) -lt 600 ]; do
     appstate
     if [ "$(stv url)" = "$CH2" ] && [ "$(stv prog)" = "2/2" ]; then ok=1; break; fi
     [ -z "$(alive)" ] && break
@@ -61,6 +61,10 @@ else
   # plantages ou blocages de CETTE application (les autres processus de l'émulateur, comme les services Google, s'arrêtent parfois sans rapport)
   adb logcat -d -v brief 2>/dev/null | grep -iE "ANR in|Application Not Responding|FATAL EXCEPTION|Fatal signal|am_crash|am_anr|F DEBUG|Process .* has died" | grep -E "$PKG|\( *$pid0\)" | tail -30 > $OUT/reports/nav_logcat.txt
   adb logcat -d | grep -E "MTTEST|litert|LiteRT|lowmemorykiller|OutOfMemory" | tail -60 > $OUT/reports/nav.log
+  # de quoi comprendre un écart : chronologie relevée par l'application (étapes du traitement), rapport du banc, journal de l'application
+  adb logcat -d | grep -E "MTTEST| MT +:" | cut -c1-400 > $OUT/reports/nav_mt.log
+  adb exec-out "run-as $PKG cat files/nav.json" > $OUT/reports/nav_report.json 2>/dev/null
+  adb exec-out "run-as $PKG cat files/journal.jsonl" 2>/dev/null | cut -c1-600 | tail -60 > $OUT/reports/nav_journal.jsonl
   chk "chapitre suivant pendant une traduction de Gemma : aucun plantage ni blocage de l'application dans le journal du système" $([ ! -s $OUT/reports/nav_logcat.txt ] && echo 1 || echo 0)
   echo "  [journal système] $(wc -l < $OUT/reports/nav_logcat.txt) ligne(s) d'ANR ou de plantage de l'application" | tee -a $OUT/run.log
 fi

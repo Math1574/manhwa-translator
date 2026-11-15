@@ -1050,6 +1050,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     fun testPageEpoch(): Int = pageEpoch
     /** Vrai tant qu'une image attend ou subit sa traduction par le moteur de langage. */
     fun testGenerating(): Boolean = runStage.values.any { it == "traduction" }
+    /** Étapes en cours des pages (tests automatiques, pour comprendre où un traitement en est). */
+    fun testStages(): String = runStage.values.sorted().joinToString(",")
     /** Fait disparaître le processus d'affichage de la page, comme un manque de mémoire (adresse spéciale du navigateur prévue pour cela). */
     fun testCrashRenderer() { webView?.loadUrl("chrome://crash") }
     /** Tests automatiques (suite « nav ») : la page a été changée alors que le moteur de langage traduisait ; et le plus long retard de réponse du fil principal relevé ensuite (−1 : pas encore relevé). */

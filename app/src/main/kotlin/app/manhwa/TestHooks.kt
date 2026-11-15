@@ -98,15 +98,22 @@ object TestHooks {
     }
 
     /**
-     * Ouvre la page [url] à l'instant où le moteur de langage se met à traduire (on l'attend jusqu'à 25 minutes), puis relève pendant 20 s le plus long retard de réponse du fil principal :
+     * Ouvre la page [url] à l'instant où le moteur de langage se met à traduire (on l'attend jusqu'à 8 minutes, sinon la page change quand même), puis relève pendant 20 s le plus long retard de réponse du fil principal :
      * un fil principal qui attendrait la fin de la traduction (le défaut corrigé : l'application se figeait puis était fermée) ferait monter ce retard jusqu'à la fin de la génération.
      */
     private fun gotoWhenGenerating(main: Handler, c: TranslationController, url: String) {
         thread(name = "mt-gotogen", isDaemon = true) {
             c.testNavGen = false; c.testNavMaxLag = -1L
             val t0 = SystemClock.uptimeMillis()
-            while (SystemClock.uptimeMillis() - t0 < 25 * 60_000L && !c.testGenerating()) Thread.sleep(20)
+            var last = ""
+            while (SystemClock.uptimeMillis() - t0 < 8 * 60_000L && !c.testGenerating()) {
+                // chaque changement d'état du traitement est noté (journal du système) : si la traduction ne vient pas, on voit où elle en est
+                val st = "total=${c.total} faites=${c.done} échecs=${c.failed} chargement=${c.loading} étapes=[${c.testStages()}] erreur=${c.lastError ?: ""}"
+                if (st != last) { last = st; Log.i(TAG, "gotogen : +${(SystemClock.uptimeMillis() - t0) / 1000} s : $st") }
+                Thread.sleep(20)
+            }
             c.testNavGen = c.testGenerating()
+            Log.i(TAG, "gotogen : la page change (pendant une traduction : ${c.testNavGen}), après ${(SystemClock.uptimeMillis() - t0) / 1000} s ; étapes=[${c.testStages()}]")
             main.post { c.load(url) }
             var worst = 0L
             val end = SystemClock.uptimeMillis() + 20_000L
@@ -119,6 +126,7 @@ object TestHooks {
                 c.testNavMaxLag = worst
                 Thread.sleep(100)
             }
+            Log.i(TAG, "gotogen : plus long retard du fil principal pendant les 20 s suivantes : $worst ms")
         }
     }
 
