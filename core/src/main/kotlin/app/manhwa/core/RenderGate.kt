@@ -17,11 +17,11 @@ object RenderGate {
 
     /**
      * Texte libre (« FREE » : le détecteur a fonctionné et n'a vu ni bulle ni zone) dont le fond est un dessin (mode « ART ») : on le laisse tel quel, sauf s'il s'agit
-     * manifestement d'une vraie phrase (au moins 12 lettres et 3 mots : narration sur le dessin). Sans détecteur (kind « UNKNOWN »), aucune règle ne s'applique.
+     * manifestement d'une vraie phrase (au moins 8 lettres et 3 mots : narration ou réplique courte sur le dessin, « Deal with it. »). Un nom ou une syllabe lue sur un motif reste laissé tel quel. Sans détecteur (kind « UNKNOWN »), aucune règle ne s'applique.
      */
     fun tooUncertain(kind: String, hasZone: Boolean, hasContainer: Boolean, artBackground: Boolean, source: String = ""): Boolean {
         if (kind != "FREE" || hasZone || hasContainer || !artBackground) return false
         val letters = source.count { it.isLetter() }; val words = source.split(Regex("\\s+")).count { w -> w.count { it.isLetter() } >= 2 }
-        return !(letters >= 12 && words >= 3)
+        return !(letters >= 8 && words >= 3)
     }
 }

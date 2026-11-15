@@ -96,7 +96,10 @@ class BlockGrouper(private val cfg: GrouperConfig = GrouperConfig()) {
                 val d = rectGap(ub, l.box)
                 // « même bulle » ne suffit pas : une ligne loin du texte (logo, filigrane, bruitage au bord de la boîte) n'en fait pas partie
                 val lh = ls.map { it.box.height }.sorted()[ls.size / 2]
-                if (!(sameBubble && d <= 2.2f * lh) && ls.none { shouldJoin(it, l) }) continue
+                // ni une ligne bien plus haute que le texte de la bulle : un bruitage (« Ha! », « Tch! ») posé contre la bulle, dans sa boîte, était fondu dans son bloc. Il était alors
+                // effacé et recouvert par la traduction, qui remontait avec lui sur le contour de la bulle
+                val sizeRatio = if (lh <= 0f || l.box.height <= 0f) 1f else max(lh, l.box.height) / min(lh, l.box.height)
+                if (!(sameBubble && d <= 2.2f * lh && sizeRatio <= 2f) && ls.none { shouldJoin(it, l) }) continue
                 if (d < bestD) { bestD = d; best = i }
             }
             if (best >= 0) byAnchor[best]!!.add(l) else rest.add(l)

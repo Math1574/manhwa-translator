@@ -29,8 +29,9 @@ object ArtFill {
      * @param alpha opacité du remplissage (255 sur [safe], dégradé sur la couronne extérieure, 0 ailleurs)
      * @param grown pixels de lueur ajoutés au masque de départ
      * @param sigma bruit (écart type) du fond autour du texte, pour le grain du remplissage
+     * @param thick épaisseur de lueur mesurée (pixels) ; égale à la limite de recherche quand la lueur ne retombe pas dans cette limite (halo diffus)
      */
-    class Result(val mask: BooleanArray, val safe: BooleanArray, val fill: IntArray, val alpha: IntArray, val grown: Int, val sigma: Float)
+    class Result(val mask: BooleanArray, val safe: BooleanArray, val fill: IntArray, val alpha: IntArray, val grown: Int, val sigma: Float, val thick: Int = 0)
 
     /** Opacité de la couronne extérieure au pixel 1, 2, 3 du masque sûr : le fondu se fait sur du fond déjà propre. */
     private val RING_ALPHA = intArrayOf(255, 205, 135, 65)
@@ -70,14 +71,67 @@ object ArtFill {
     }
 
     /**
+     * Copie de [px] sans les traits fins : par canal, une ouverture (retire ce qui est plus clair que le fond et plus étroit que 2·[radius]+1 px) ou une fermeture (retire ce qui est plus
+     * sombre), selon celle qui s'écarte le plus du pixel. Un dégradé, un grand aplat et un bord franc entre deux grandes zones restent tels quels ; une ligne lumineuse fine (trait de
+     * lumière, étoile, fil) disparaît. Sert de référence au remplissage : sans cela, les lignes qui touchent le trou en éclaircissaient tout l'intérieur (moyenne des bords).
+     */
+    internal fun withoutThinLines(px: IntArray, w: Int, h: Int, radius: Int): IntArray {
+        val n = w * h
+        val out = IntArray(n)
+        val chans = IntArray(n)
+        val low = IntArray(n); val high = IntArray(n)
+        val res = Array(3) { IntArray(n) }
+        for (k in 0..2) {
+            val sh = 16 - 8 * k
+            for (i in 0 until n) chans[i] = (px[i] shr sh) and 0xFF
+            // ouverture = dilatation de l'érosion ; fermeture = érosion de la dilatation
+            val er = slide(slide(chans, w, h, radius, false, true), w, h, radius, false, false)
+            val open = slide(slide(er, w, h, radius, true, true), w, h, radius, true, false)
+            val di = slide(slide(chans, w, h, radius, true, true), w, h, radius, true, false)
+            val close = slide(slide(di, w, h, radius, false, true), w, h, radius, false, false)
+            for (i in 0 until n) { val v = chans[i]; low[i] = open[i]; high[i] = close[i]; res[k][i] = if (v - low[i] >= high[i] - v) low[i] else high[i] }
+        }
+        for (i in 0 until n) out[i] = (0xFF shl 24) or (res[0][i] shl 16) or (res[1][i] shl 8) or res[2][i]
+        return out
+    }
+
+    /** Minimum ([max] faux) ou maximum glissant de demi-largeur [r], le long des lignes ([rows]) ou des colonnes ; file monotone, temps linéaire. */
+    private fun slide(src: IntArray, w: Int, h: Int, r: Int, max: Boolean, rows: Boolean): IntArray {
+        val out = IntArray(src.size)
+        val len = if (rows) w else h; val lines = if (rows) h else w
+        val dq = IntArray(len + 1)
+        for (l in 0 until lines) {
+            var head = 0; var tail = 0; var next = 0
+            for (k in 0 until len) {
+                val hi = min(len - 1, k + r)
+                while (next <= hi) {
+                    val v = src[if (rows) l * w + next else next * w + l]
+                    while (tail > head) {
+                        val last = src[if (rows) l * w + dq[tail - 1] else dq[tail - 1] * w + l]
+                        if (if (max) last <= v else last >= v) tail-- else break
+                    }
+                    dq[tail++] = next; next++
+                }
+                while (dq[head] < k - r) head++
+                out[if (rows) l * w + k else k * w + l] = src[if (rows) l * w + dq[head] else dq[head] * w + l]
+            }
+        }
+        return out
+    }
+
+    /**
      * @param px pixels de la région (w×h)
      * @param core masque serré des lettres (remplissage, contour et frange adoucie)
      * @param limit pixels que l'on a le droit d'effacer (zone du texte élargie, sans les textes voisins)
      * @param avoid pixels qui ne servent jamais de référence (textes voisins) ; null si aucun
      * @param maxGrow épaisseur maximale (pixels) de lueur cherchée autour des lettres
+     * @param ring largeur (pixels) du fondu extérieur : 3 en général ; plus large pour un halo diffus, que l'on ne doit pas voir finir en carré
+     * @param robust 0 : les pixels voisins servent tels quels de référence ; sinon, demi-largeur (pixels) des traits fins que l'on en retire d'abord (voir [withoutThinLines])
      * @return null si la région ne contient pas assez de fond propre pour une reconstruction fiable (l'appelant garde l'ancienne méthode)
      */
-    fun reconstruct(px: IntArray, w: Int, h: Int, core: BooleanArray, limit: BooleanArray, avoid: BooleanArray?, maxGrow: Int): Result? {
+    fun reconstruct(px: IntArray, w: Int, h: Int, core: BooleanArray, limit: BooleanArray, avoid: BooleanArray?, maxGrow: Int, ring: Int = 3, robust: Int = 0): Result? {
+        val ringAlpha = if (ring <= 3) RING_ALPHA else IntArray(ring + 1) { d -> if (d == 0) 255 else (255 * (Math.cos(Math.PI * d / (ring + 1)) + 1) / 2).toInt() }
+        val bgRef = if (robust > 0) withoutThinLines(px, w, h, robust) else px
         val n = w * h
         var coreN = 0; for (v in core) if (v) coreN++
         if (coreN == 0) return null
@@ -87,7 +141,7 @@ object ArtFill {
         val validBand = BooleanArray(n) { !band[it] && (avoid == null || !avoid[it]) }
         var known = 0; for (v in validBand) if (v) known++
         if (known < 300 || known < coreN / 8) return null
-        val clean = TextErase.inpaintSmooth(px, w, h, band, validBand)
+        val clean = TextErase.inpaintSmooth(bgRef, w, h, band, validBand)
         // 2) bruit du fond : un fond granuleux ou compressé ne doit pas être pris pour de la lueur
         val near = TextErase.dilate(band, w, h, 24)
         val sel = BooleanArray(n) { near[it] && validBand[it] }
@@ -151,27 +205,27 @@ object ArtFill {
         val closed = TextErase.erode(TextErase.dilate(m, w, h, 2), w, h, 2)
         for (i in 0 until n) if (closed[i] && limit[i]) m[i] = true
         val safe = TextErase.dilate(m, w, h, 2, limit)
-        val outer = TextErase.dilate(safe, w, h, RING_ALPHA.size - 1, limit)
+        val outer = TextErase.dilate(safe, w, h, ringAlpha.size - 1, limit)
         // 6) remplissage lisse à partir des pixels intacts qui touchent la couronne
         val validF = BooleanArray(n) { !outer[it] && (avoid == null || !avoid[it]) }
-        val fill = TextErase.inpaintSmooth(px, w, h, outer, validF)
+        val fill = TextErase.inpaintSmooth(bgRef, w, h, outer, validF)
         // 7) opacité : pleine sur le masque sûr, en dégradé sur la couronne extérieure
         val alpha = IntArray(n)
         val dd = IntArray(n) { if (safe[it]) 0 else -1 }
         var qh = 0; var qt = 0
-        for (i in 0 until n) if (safe[i]) { queue[qt++] = i; alpha[i] = RING_ALPHA[0] }
+        for (i in 0 until n) if (safe[i]) { queue[qt++] = i; alpha[i] = ringAlpha[0] }
         while (qh < qt) {
-            val i = queue[qh++]; val d = dd[i]; if (d >= RING_ALPHA.size - 1) continue
+            val i = queue[qh++]; val d = dd[i]; if (d >= ringAlpha.size - 1) continue
             val x = i % w; val y = i / w
             for (k in 0..3) {
                 val nx = x + (if (k == 0) 1 else if (k == 1) -1 else 0); val ny = y + (if (k == 2) 1 else if (k == 3) -1 else 0)
                 if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
                 val j = ny * w + nx
                 if (dd[j] >= 0 || !outer[j]) continue
-                dd[j] = d + 1; alpha[j] = RING_ALPHA[d + 1]; queue[qt++] = j
+                dd[j] = d + 1; alpha[j] = ringAlpha[d + 1]; queue[qt++] = j
             }
         }
         trace?.invoke("ArtFill : lettres=$coreN écart_proche=$near1 épaisseur_lueur=$thick (max $grow) lueur=+$added seuil=$tau bruit=%.1f sûr=${safe.count { it }} couronne=${outer.count { it } - safe.count { it }}".format(sigma))
-        return Result(outer, safe, fill, alpha, added, sigma)
+        return Result(outer, safe, fill, alpha, added, sigma, thick)
     }
 }

@@ -9,13 +9,13 @@ import android.graphics.BitmapFactory
 import android.graphics.BitmapRegionDecoder
 import android.graphics.Rect
 import app.manhwa.core.Detection
+import app.manhwa.core.DetectionTiles
 import app.manhwa.core.RectF
 import app.manhwa.core.RegionClass
 import java.io.IOException
 import java.nio.FloatBuffer
 import java.nio.LongBuffer
 import kotlin.math.max
-import kotlin.math.min
 
 /**
  * Détecteur de bulles et de texte de bande dessinée (RT-DETR « comic-text-and-bubble-detector », Apache-2.0, version quantifiée de 11 Mo) :
@@ -42,18 +42,14 @@ class ComicDetector(private val ctx: Context, private val env: OrtEnvironment) {
         @Suppress("DEPRECATION")
         val decoder = BitmapRegionDecoder.newInstance(imageBytes, 0, imageBytes.size, false) ?: return emptyList()
         try {
-            val tileH = max(640, (imageW * 1.5f).toInt())
-            val sample = if (imageW > 1600) 2 else 1
+            val sample = DetectionTiles.sample(imageW)
             val all = ArrayList<Detection>()
-            var y = 0
-            while (true) {
-                val end = if (imageH - y <= tileH * 1.05f) imageH else min(imageH, y + tileH)
-                val tile = decoder.decodeRegion(Rect(0, y, imageW, end), BitmapFactory.Options().apply { inSampleSize = sample }) ?: break
-                try { all += detectTile(tile, sample, y) } finally { tile.recycle() }
-                if (end >= imageH) break
-                y = end - (tileH * 0.15f).toInt()
+            for (t in DetectionTiles.tiles(imageW, imageH)) {
+                val tile = decoder.decodeRegion(Rect(0, t.start, imageW, t.end), BitmapFactory.Options().apply { inSampleSize = sample }) ?: break
+                try { all += detectTile(tile, sample, t.start) } finally { tile.recycle() }
             }
-            return nms(all, 0.6f)
+            // une bulle ou une zone de texte à cheval sur deux tuiles sort en deux morceaux tronqués : ils sont recollés avant la suppression des doublons
+            return nms(DetectionTiles.stitch(all, imageW, imageH), 0.6f)
         } finally { decoder.recycle() }
     }
 

@@ -634,13 +634,18 @@ object TextErase {
      * pixels voisins du remplissage), légèrement dilatés. Contrairement à un rectangle, on n'efface que les lettres : le dessin
      * autour est conservé, et une éventuelle lueur diffuse reste (la traduction est redessinée par-dessus avec son propre contour).
      */
-    fun artMask(pixels: IntArray, w: Int, h: Int, allowed: BooleanArray, textColor: Int, grow: Int, maxDim: Int = Int.MAX_VALUE, tight: BooleanArray? = null, maxReach: Int = 6): BooleanArray =
-        artMaskInfo(pixels, w, h, allowed, textColor, grow, maxDim, tight, maxReach).mask
+    fun artMask(pixels: IntArray, w: Int, h: Int, allowed: BooleanArray, textColor: Int, grow: Int, maxDim: Int = Int.MAX_VALUE, tight: BooleanArray? = null, maxReach: Int = 6, lines: List<IntArray>? = null, rescueAvoid: ((BooleanArray) -> BooleanArray?)? = null): BooleanArray =
+        artMaskInfo(pixels, w, h, allowed, textColor, grow, maxDim, tight, maxReach, lines, rescueAvoid).mask
 
     /** Masque du texte sur un dessin et résultat de la mesure du contour (le texte est-il cerné d'un trait contrasté ?). */
     class ArtMask(val mask: BooleanArray, val outlined: Boolean)
 
-    fun artMaskInfo(pixels: IntArray, w: Int, h: Int, allowed: BooleanArray, textColor: Int, grow: Int, maxDim: Int = Int.MAX_VALUE, tight: BooleanArray? = null, maxReach: Int = 6): ArtMask {
+    /**
+     * [lines] : boîtes de lecture des lignes (gauche, haut, droite, bas, dans la région) ; elles servent à rattraper les lettres soudées à une grande surface (voir [rescueInLines]).
+     * [rescueAvoid] : reçoit les lettres déjà retenues et rend les pixels que le rattrapage ne doit jamais prendre (contour de bulle, trait du décor : les coins d'une boîte de lecture
+     * débordent sur eux), ou null.
+     */
+    fun artMaskInfo(pixels: IntArray, w: Int, h: Int, allowed: BooleanArray, textColor: Int, grow: Int, maxDim: Int = Int.MAX_VALUE, tight: BooleanArray? = null, maxReach: Int = 6, lines: List<IntArray>? = null, rescueAvoid: ((BooleanArray) -> BooleanArray?)? = null): ArtMask {
         // lettres = composantes isolées : une grande surface de couleur proche (fond d'un encadré voisin, bas d'une bulle, cheveux blancs) n'est pas une lettre.
         // L'isolement se juge sur toute la région (et non sur la seule zone autorisée, dont le bord coupe ces grandes surfaces et les ferait paraître isolées),
         // puis on écarte toute composante plus grande qu'une lettre ([maxDim] : quelques hauteurs de ligne).
@@ -649,6 +654,7 @@ object TextErase {
         // lettres dont le remplissage touche une grande surface de même couleur (texte posé sur le bord d'une bulle blanche) : écartées ci-dessus avec la bulle. On les
         // récupère par leur contour : un pixel clair entouré de pixels sombres (contour noir de la lettre) est un pixel de lettre, un pixel de bulle ne l'est pas.
         rescueOutlined(color, fill, tight ?: allowed, pixels, w, h, textColor)
+        if (lines != null) rescueInLines(fill, pixels, w, h, textColor, lines, rescueAvoid?.invoke(fill))
         // épaisseur du contour mesurée : couleur médiane à chaque distance du remplissage, comparée à celle du fond lointain. Un contour (blanc autour de lettres noires,
         // noir autour de lettres blanches) a une couleur stable sur quelques pixels puis rejoint le fond ; sans contour, on n'efface que le lissage des bords
         val dmax = 12
@@ -738,6 +744,110 @@ object TextErase {
             if (!border && tail < w * h / 2 && inside >= ratio * tail) for (k in 0 until tail) if (zone[queue[k]]) out[queue[k]] = true
         }
         return out
+    }
+
+    /**
+     * Lettres écartées par la règle des composantes isolées : des lettres soudées, par des pixels de la couleur du texte (dégradé violet sous la dernière ligne, lueur, fond voisin), à une grande
+     * surface qui touche le bord de la région ; la surface et les lettres forment alors une seule grosse composante, rejetée en entier, et ces lettres restaient visibles sous la traduction
+     * (la fin d'une phrase en rouge sombre sur un fond qui s'éclaircit vers le bas). Dans la boîte de lecture d'une ligne, avec une tolérance de couleur plus serrée, la surface se détache des
+     * lettres : chaque composante restante qui a la hauteur d'une lettre sans remplir la boîte est du texte. Les lettres déjà retenues ne changent pas.
+     */
+    internal fun rescueInLines(fill: BooleanArray, pixels: IntArray, w: Int, h: Int, textColor: Int, lines: List<IntArray>, avoid: BooleanArray? = null) {
+        val tol = 40
+        for (lr in lines) {
+            val bx0 = max(0, lr[0]); val by0 = max(0, lr[1]); val bx1 = min(w, lr[2]); val by1 = min(h, lr[3])
+            val bw = bx1 - bx0; val bh = by1 - by0
+            if (bw < 8 || bh < 8) continue
+            val cand = BooleanArray(bw * bh) { k -> val i = (by0 + k / bw) * w + bx0 + k % bw; !fill[i] && !(avoid != null && avoid[i]) && dist(pixels[i], textColor) <= tol }
+            val seen = BooleanArray(bw * bh); val queue = IntArray(bw * bh)
+            for (start in 0 until bw * bh) {
+                if (!cand[start] || seen[start]) continue
+                var head = 0; var tail = 0; queue[tail++] = start; seen[start] = true
+                var cx0 = bw; var cx1 = -1; var cy0 = bh; var cy1 = -1
+                while (head < tail) {
+                    val k = queue[head++]; val x = k % bw; val y = k / bw
+                    if (x < cx0) cx0 = x; if (x > cx1) cx1 = x; if (y < cy0) cy0 = y; if (y > cy1) cy1 = y
+                    for (dy in -1..1) for (dx in -1..1) {
+                        if (dx == 0 && dy == 0) continue
+                        val nx = x + dx; val ny = y + dy
+                        if (nx < 0 || ny < 0 || nx >= bw || ny >= bh) continue
+                        val j = ny * bw + nx
+                        if (cand[j] && !seen[j]) { seen[j] = true; queue[tail++] = j }
+                    }
+                }
+                val ch = cy1 - cy0 + 1; val cw = cx1 - cx0 + 1
+                // une lettre (ou un mot) : au moins 40 % de la hauteur de la ligne, assez de pixels, et qui laisse du vide dans sa boîte (une plage pleine, un trait du décor, n'en laisse pas)
+                if (tail < 10 || ch < 0.4f * bh || tail > 0.85f * cw * ch) continue
+                for (q in 0 until tail) { val k = queue[q]; fill[(by0 + k / bw) * w + bx0 + k % bw] = true }
+            }
+        }
+        rescueWeakLines(fill, pixels, w, h, lines, avoid)
+    }
+
+    /**
+     * Ligne dont les lettres sont d'une autre couleur que celles des lignes voisines (dernière ligne d'un texte qui s'estompe vers le bas) : la couleur du texte mesurée sur tout le bloc ne
+     * les retrouve pas, et il en reste un fantôme sous la traduction. On la reconnaît à son encre : moins de la moitié de celle des autres lignes. Elle est alors segmentée sans connaître
+     * sa couleur : le fond sous la ligne est interpolé en hauteur entre les pixels juste au-dessus et juste au-dessous de sa boîte, et les lettres sont les pixels qui s'en écartent
+     * (seuil d'Otsu sur l'écart). Le résultat n'est retenu que s'il redonne à la ligne une encre comparable à celle des autres.
+     */
+    private fun rescueWeakLines(fill: BooleanArray, pixels: IntArray, w: Int, h: Int, lines: List<IntArray>, avoid: BooleanArray?) {
+        if (lines.size < 3) return
+        fun cover(lr: IntArray): Float {
+            val x0 = max(0, lr[0]); val y0 = max(0, lr[1]); val x1 = min(w, lr[2]); val y1 = min(h, lr[3])
+            if (x1 <= x0 || y1 <= y0) return 0f
+            var n = 0; for (y in y0 until y1) for (x in x0 until x1) if (fill[y * w + x]) n++
+            return n.toFloat() / ((x1 - x0) * (y1 - y0))
+        }
+        val cov = lines.map { cover(it) }
+        for ((k, lr) in lines.withIndex()) {
+            val others = cov.filterIndexed { j, _ -> j != k }.sorted(); val med = others[others.size / 2]
+            if (med < 0.3f || cov[k] >= 0.5f * med) continue
+            val bx0 = max(0, lr[0]); val by0 = max(0, lr[1]); val bx1 = min(w, lr[2]); val by1 = min(h, lr[3])
+            val bw = bx1 - bx0; val bh = by1 - by0
+            if (bw < 16 || bh < 12) continue
+            // fond sous la ligne : pour chaque colonne, médiane des pixels juste au-dessus et juste au-dessous de la boîte (bande de 4 pixels, fenêtre de 9 colonnes)
+            fun band(x: Int, yA: Int, yB: Int): IntArray? {
+                val rs = ArrayList<Int>(); val gs = ArrayList<Int>(); val bs = ArrayList<Int>()
+                for (yy in max(0, yA)..min(h - 1, yB)) for (xx in max(0, x - 4)..min(w - 1, x + 4)) { val c = pixels[yy * w + xx]; rs.add(r(c)); gs.add(g(c)); bs.add(b(c)) }
+                if (rs.size < 12) return null
+                rs.sort(); gs.sort(); bs.sort()
+                return intArrayOf(rs[rs.size / 2], gs[gs.size / 2], bs[bs.size / 2])
+            }
+            val diff = IntArray(bw * bh); var ok = true
+            for (xx in 0 until bw) {
+                val up = band(bx0 + xx, by0 - 5, by0 - 2); val dn = band(bx0 + xx, by1 + 2, by1 + 5)
+                if (up == null && dn == null) { ok = false; break }
+                for (yy in 0 until bh) {
+                    val t = (yy + 0.5f) / bh
+                    val bgc = IntArray(3) { c -> if (up != null && dn != null) (up[c] * (1f - t) + dn[c] * t).toInt() else (up ?: dn!!)[c] }
+                    val p = pixels[(by0 + yy) * w + bx0 + xx]
+                    diff[yy * bw + xx] = maxOf(abs(r(p) - bgc[0]), abs(g(p) - bgc[1]), abs(b(p) - bgc[2]))
+                }
+            }
+            if (!ok) continue
+            // seuil d'Otsu sur l'écart au fond
+            val hist = IntArray(256); for (d in diff) hist[min(255, d)]++
+            val total = diff.size; var sumAll = 0L; for (v in 0..255) sumAll += v.toLong() * hist[v]
+            var wB = 0; var sumB = 0L; var best = -1.0; var thr = 0
+            for (v in 0..255) {
+                wB += hist[v]; if (wB == 0) continue
+                val wF = total - wB; if (wF == 0) break
+                sumB += v.toLong() * hist[v]
+                val mB = sumB.toDouble() / wB; val mF = (sumAll - sumB).toDouble() / wF
+                val between = wB.toDouble() * wF * (mB - mF) * (mB - mF)
+                if (between > best) { best = between; thr = v }
+            }
+            if (thr < 18) continue
+            val text = BooleanArray(bw * bh) { diff[it] > thr && !(avoid != null && avoid[(by0 + it / bw) * w + bx0 + it % bw]) }
+            val share = text.count { it }.toFloat() / text.size
+            if (share < 0.12f || share > 0.8f) continue
+            // retenu seulement si la ligne retrouve une encre comparable à celle des autres
+            var added = 0; var existing = 0
+            for (q in text.indices) if (text[q]) { val i = (by0 + q / bw) * w + bx0 + q % bw; if (fill[i]) existing++ else added++ }
+            val newCover = (existing + added).toFloat() / text.size
+            if (newCover < 0.6f * med || newCover > 1.4f * med) continue
+            for (q in text.indices) if (text[q]) fill[(by0 + q / bw) * w + bx0 + q % bw] = true
+        }
     }
 
     private fun rescueOutlined(color: BooleanArray, fill: BooleanArray, allowed: BooleanArray, pixels: IntArray, w: Int, h: Int, textColor: Int) {
