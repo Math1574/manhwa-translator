@@ -154,14 +154,29 @@ class BlockGrouper(private val cfg: GrouperConfig = GrouperConfig()) {
     private fun readingOrder(ls: List<OcrLine>): List<OcrLine> {
         val rows = ArrayList<MutableList<OcrLine>>()
         for (l in ls.sortedBy { it.box.top }) {
-            val row = rows.firstOrNull { r ->
-                val ref = r.first().box
-                val inter = min(ref.bottom, l.box.bottom) - max(ref.top, l.box.top)
-                inter >= 0.5f * min(ref.height, l.box.height)
-            }
+            val row = rows.firstOrNull { r -> sameRow(r.first(), l) }
             if (row != null) row.add(l) else rows.add(mutableListOf(l))
         }
         return rows.sortedBy { r -> r.map { it.box.centerY }.average() }.flatMap { r -> r.sortedBy { it.box.left } }
+    }
+
+    /**
+     * Ligne horizontale penchée : son épaisseur mesurée dans l'axe du texte est nettement plus petite que sa boîte englobante, gonflée de largeur × tan(angle). Une ligne penchée est longue
+     * (au moins 1,8 fois son épaisseur, comme le détecteur l'exige pour tracer un rectangle orienté) : un mot court et étroit (« I ») dont l'épaisseur mesurée est son petit côté n'en est pas une.
+     */
+    private fun tilted(l: OcrLine): Boolean = !l.vertical && l.thickness > 0f && l.thickness < 0.8f * l.box.height && l.box.width >= 1.8f * l.thickness
+
+    /**
+     * Deux lignes sont de la même rangée quand leurs boîtes se chevauchent verticalement d'au moins la moitié de la plus petite. Les lignes d'un paragraphe penché se chevauchent toutes à
+     * cause de l'inclinaison (une ligne de 450 px penchée de 8° a une boîte plus haute de 63 px que son texte) : lues ensemble de gauche à droite, elles sortaient dans le désordre, début et fin
+     * de phrase mélangés. Dès que l'une des deux est penchée, la rangée se décide sur les centres, à moins d'une demi-épaisseur de texte.
+     */
+    private fun sameRow(a: OcrLine, b: OcrLine): Boolean {
+        if (!tilted(a) && !tilted(b)) {
+            val inter = min(a.box.bottom, b.box.bottom) - max(a.box.top, b.box.top)
+            return inter >= 0.5f * min(a.box.height, b.box.height)
+        }
+        return kotlin.math.abs(a.box.centerY - b.box.centerY) <= 0.5f * min(a.lineHeight, b.lineHeight)
     }
 
     private fun isUsable(l: OcrLine): Boolean = dropReason(l) == null
