@@ -1,0 +1,138 @@
+[
+ {
+  "kind": "bubble",
+  "lang": "en",
+  "text": "I HEARD THAT MANY PEOPLE WITH SEVERED MERIDIANS WERE GENIUSES.",
+  "box": [
+   175,
+   77,
+   475,
+   232
+  ],
+  "lines": [
+   [
+    175,
+    83,
+    476,
+    102
+   ],
+   [
+    225,
+    114,
+    424,
+    133
+   ],
+   [
+    258,
+    145,
+    392,
+    164
+   ],
+   [
+    195,
+    176,
+    453,
+    195
+   ],
+   [
+    246,
+    207,
+    403,
+    226
+   ]
+  ]
+ },
+ {
+  "kind": "dark",
+  "lang": "en",
+  "text": "THERE ARE COUNTLESS PEOPLE WHO DESTROYED THEIR OWN SECTS.",
+  "box": [
+   131,
+   446,
+   667,
+   548
+  ],
+  "lines": [
+   [
+    131,
+    446,
+    667,
+    468
+   ],
+   [
+    196,
+    486,
+    603,
+    508
+   ],
+   [
+    294,
+    526,
+    506,
+    548
+   ]
+  ]
+ },
+ {
+  "kind": "gradient",
+  "lang": "en",
+  "text": "ALL I DID WAS WATCH OVER THE STORAGE.",
+  "box": [
+   255,
+   811,
+   554,
+   909
+  ],
+  "lines": [
+   [
+    284,
+    811,
+    525,
+    833
+   ],
+   [
+    255,
+    849,
+    554,
+    871
+   ],
+   [
+    319,
+    887,
+    489,
+    909
+   ]
+  ]
+ },
+ {
+  "kind": "free-white",
+  "lang": "en",
+  "text": "HE THINKS I AM JUST A MARTIAL ARTIST HIDING MY ABILITIES... IS THAT SO?",
+  "box": [
+   70,
+   1068,
+   728,
+   1207
+  ],
+  "lines": [
+   [
+    70,
+    1068,
+    728,
+    1107
+   ],
+   [
+    88,
+    1122,
+    710,
+    1153
+   ],
+   [
+    277,
+    1176,
+    523,
+    1207
+   ]
+  ]
+ }
+]
