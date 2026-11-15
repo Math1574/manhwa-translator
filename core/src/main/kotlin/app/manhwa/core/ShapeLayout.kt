@@ -169,32 +169,55 @@ class ShapeFit(val size: Float, val lineStep: Float, val lines: List<PlacedLine>
 
 /** Mise en page d'une traduction dans une forme (bulle ovale, rectangle...) : taille maximale, retours à la ligne équilibrés, centrage ligne par ligne. */
 object ShapeLayout {
+    /** Journal des lignes placées (banc d\'essai uniquement). */
+    @JvmField var trace: ((String) -> Unit)? = null
 
     /**
      * @param stepRatio interligne (pas entre deux lignes / taille de police)
      * @param margin marge libre à gauche et à droite de chaque ligne, en pixels de l'image
      * @param minSize taille minimale ; en dessous, la meilleure mise en page possible est renvoyée avec fits = false
+     * @param anchorX axe vertical autour duquel chaque ligne est centrée (le centre du texte d'origine) : la ligne ne s'en écarte que si la forme ne lui laisse pas la place
+     *                (bord d'une bulle, voisin) ; null : chaque ligne est centrée dans l'étendue libre de sa rangée
      */
     fun fit(
         shape: RowShape, seedY: Float, text: String, measurer: TextMeasurer,
-        maxSize: Float, minSize: Float, stepRatio: Float, margin: Float,
+        maxSize: Float, minSize: Float, stepRatio: Float, margin: Float, anchorX: Float? = null,
     ): ShapeFit {
         val words = text.trim().split(' ').filter { it.isNotEmpty() }
         if (words.isEmpty()) return ShapeFit(maxSize, maxSize * stepRatio, emptyList(), true)
         var size = maxSize
         var best: ShapeFit? = null
         while (true) {
-            val r = tryFit(shape, seedY, words, measurer, size, stepRatio, margin)
+            val r = tryFit(shape, seedY, words, measurer, size, stepRatio, margin, anchorX)
             if (r != null) return r
             if (size <= minSize) break
             size = max(minSize, size - max(0.5f, size * 0.03f))
         }
         // aucune mise en page ne tient : meilleure tentative à la taille minimale (peut dépasser légèrement)
-        best = fallback(shape, seedY, words, measurer, minSize, stepRatio)
+        best = fallback(shape, seedY, words, measurer, minSize, stepRatio, anchorX)
         return best
     }
 
-    private fun tryFit(shape: RowShape, seedY: Float, words: List<String>, m: TextMeasurer, size: Float, ratio: Float, margin: Float): ShapeFit? {
+    /** Centre d'une ligne de largeur [lw] dans l'étendue [sl, sr] de sa rangée : sur l'axe [anchorX] quand la ligne y tient avec sa marge, sinon au plus près de cet axe. */
+    internal fun rowCenter(sl: Float, sr: Float, lw: Float, margin: Float, anchorX: Float?): Float {
+        val mid = (sl + sr) / 2f
+        if (anchorX == null) return mid
+        val lo = sl + margin + lw / 2f; val hi = sr - margin - lw / 2f
+        return if (lo > hi) mid else anchorX.coerceIn(lo, hi)
+    }
+
+    /**
+     * Axe unique de toutes les lignes : l'axe d'ancrage, ramené dans l'intervalle où chaque ligne tient dans l'étendue de sa rangée. Null s'il n'y a pas d'ancrage ou si aucun axe ne convient à
+     * toutes les lignes (les lignes se centrent alors chacune pour son compte).
+     */
+    internal fun commonAxis(spanL: FloatArray, spanR: FloatArray, lws: FloatArray, margin: Float, anchorX: Float?): Float? {
+        if (anchorX == null || lws.size < 2) return null
+        var lo = -Float.MAX_VALUE; var hi = Float.MAX_VALUE
+        for (k in lws.indices) { lo = max(lo, spanL[k] + margin + lws[k] / 2f); hi = min(hi, spanR[k] - margin - lws[k] / 2f) }
+        return if (lo > hi) null else anchorX.coerceIn(lo, hi)
+    }
+
+    private fun tryFit(shape: RowShape, seedY: Float, words: List<String>, m: TextMeasurer, size: Float, ratio: Float, margin: Float, anchorX: Float? = null): ShapeFit? {
         val step = size * ratio
         val maxLines = min(words.size, ((shape.bottom - shape.top) / step).toInt())
         if (maxLines < 1) return null
@@ -204,22 +227,26 @@ object ShapeLayout {
         for (n in 1..maxLines) {
             val blockH = n * step
             val yTop = (seedY - blockH / 2f).coerceIn(shape.top, max(shape.top, shape.bottom - blockH))
-            val limits = FloatArray(n); val centers = FloatArray(n); var ok = true
+            val limits = FloatArray(n); val spanL = FloatArray(n); val spanR = FloatArray(n); var ok = true
             for (k in 0 until n) {
                 val sp2 = shape.span(yTop + k * step, yTop + (k + 1) * step - 0.01f)
                 if (sp2 == null) { ok = false; break }
-                limits[k] = sp2[1] - sp2[0] - 2 * margin; centers[k] = (sp2[0] + sp2[1]) / 2f
+                limits[k] = sp2[1] - sp2[0] - 2 * margin; spanL[k] = sp2[0]; spanR[k] = sp2[1]
                 if (limits[k] <= size * 0.5f) { ok = false; break }
             }
             if (!ok) continue
             val assign = balancedBreaks(ww, sp, limits) ?: continue
             var cost = 0f
             val lines = ArrayList<PlacedLine>()
+            // largeur de chaque ligne, puis un axe commun à toutes les lignes quand la forme le permet : sans lui, chaque ligne collée à un bord différent décalerait les lignes les unes des autres
+            val lws = FloatArray(n); run { var q = 0; for (k in 0 until n) { val cnt = assign[k]; lws[k] = ww.slice(q until q + cnt).sum() + sp * (cnt - 1); q += cnt } }
+            val axis = commonAxis(spanL, spanR, lws, margin, anchorX)
+            if (trace != null && anchorX != null && n == 2) trace?.invoke("n=$n taille=%.0f ancre=%.0f axe=%s lignes: ".format(size, anchorX, axis?.let { "%.0f".format(it) } ?: "aucun") + (0 until n).joinToString(" ; ") { k -> "[%.0f..%.0f] l=%.0f".format(spanL[k], spanR[k], lws[k]) })
             var i = 0
             for (k in 0 until n) {
-                val cnt = assign[k]; val lw = ww.slice(i until i + cnt).sum() + sp * (cnt - 1)
+                val cnt = assign[k]; val lw = lws[k]
                 cost += ((limits[k] - lw) / limits[k]).let { it * it }
-                lines.add(PlacedLine(words.subList(i, i + cnt).joinToString(" "), centers[k], yTop + k * step, lw)); i += cnt
+                lines.add(PlacedLine(words.subList(i, i + cnt).joinToString(" "), axis ?: rowCenter(spanL[k], spanR[k], lw, margin, anchorX), yTop + k * step, lw)); i += cnt
             }
             // légère préférence pour moins de lignes à coût égal
             cost += 0.02f * n
@@ -251,7 +278,7 @@ object ShapeLayout {
         return out
     }
 
-    private fun fallback(shape: RowShape, seedY: Float, words: List<String>, m: TextMeasurer, size: Float, ratio: Float): ShapeFit {
+    private fun fallback(shape: RowShape, seedY: Float, words: List<String>, m: TextMeasurer, size: Float, ratio: Float, anchorX: Float? = null): ShapeFit {
         val step = size * ratio
         val n = max(1, min(words.size, ((shape.bottom - shape.top) / step).toInt().coerceAtLeast(1)))
         val yTop = (seedY - n * step / 2f).coerceIn(shape.top, max(shape.top, shape.bottom - n * step))
@@ -259,7 +286,8 @@ object ShapeLayout {
         val lines = words.chunked(per).mapIndexed { k, ws ->
             val sp2 = shape.span(yTop + k * step, min(shape.bottom, yTop + (k + 1) * step)) ?: floatArrayOf(shape.left[0], shape.right[0])
             val t = ws.joinToString(" ")
-            PlacedLine(t, (sp2[0] + sp2[1]) / 2f, yTop + k * step, m.width(t, size))
+            val lw = m.width(t, size)
+            PlacedLine(t, rowCenter(sp2[0], sp2[1], lw, 0f, anchorX), yTop + k * step, lw)
         }
         return ShapeFit(size, step, lines, false)
     }
