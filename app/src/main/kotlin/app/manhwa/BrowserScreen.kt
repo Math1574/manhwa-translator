@@ -56,6 +56,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -126,11 +127,14 @@ fun BrowserScreen(graph: AppGraph, onLibrary: () -> Unit = {}) {
             }
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            AndroidView(
-                factory = { c.obtainWebView(it) },
-                update = { it.keepScreenOn = c.fullscreen || c.active },
-                modifier = Modifier.fillMaxSize(),
-            )
+            // (la clé change quand le navigateur de la page a dû être remplacé : la vue est alors reconstruite)
+            key(c.webViewGeneration) {
+                AndroidView(
+                    factory = { c.obtainWebView(it) },
+                    update = { it.keepScreenOn = c.fullscreen || c.active },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
             // accueil : tant qu'aucune page n'est ouverte, il recouvre la page vide
             if (c.currentUrl.isEmpty() && !c.fullscreen) HomeScreen(graph, onLibrary)
             if (running && !c.fullscreen && c.total > 0) {
@@ -246,7 +250,7 @@ private fun Pill(text: String, onClick: () -> Unit, onClose: (() -> Unit)? = nul
 }
 
 /**
- * Interrupteur à deux positions : on voit ce qui est affiché et ce que le toucher va afficher. Un appui long de 3 secondes ouvre les réglages rapides.
+ * Interrupteur à deux positions : on voit ce qui est affiché et ce que le toucher va afficher. Un appui long (0,3 s de plus que l'appui long du système) ouvre les réglages rapides.
  * [onPress] : vrai tant qu'un doigt est posé dessus (le menu de lecture ne se range pas pendant l'appui, qui dure plus que ses 5 secondes de repos).
  */
 @OptIn(ExperimentalFoundationApi::class)
@@ -267,7 +271,7 @@ private fun TranslationToggle(translated: Boolean, modifier: Modifier = Modifier
             style = MaterialTheme.typography.labelLarge,
         )
     }
-    WithLongPress(PANEL_LONG_PRESS_MS) {
+    WithLongPress(PANEL_LONG_PRESS_EXTRA_MS) {
         Row(modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)).border(1.dp, Color.White.copy(alpha = 0.12f), CircleShape).padding(3.dp)) {
             Seg("Original", !translated)
             Seg("Traduit", translated)

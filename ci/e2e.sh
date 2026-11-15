@@ -79,6 +79,12 @@ lab() { # nom moteur variantes
   say "banc d'essai terminé : $1 ($(( $(date +%s) - start )) s)"
 }
 
+# suite « nav » : changer de chapitre pendant que le vrai modèle Gemma traduit (voir ci/e2e_nav.sh)
+if [ "$SUITE" = nav ]; then
+  source ci/e2e_nav.sh
+  exit 0
+fi
+
 if [ "$SUITE" != lab ]; then
 # --- préparation : téléchargement des modèles de traduction ML Kit (première utilisation lente) ---
 run prep index.html MLKIT EN FR "fr,ja,ko,zh" 30
@@ -144,7 +150,7 @@ chk() { printf '%s\t%s\n' "$1" "$2" >> $UI; }
 dismiss_anr() { for k in 1 2 3 4; do if adb shell dumpsys window | grep -q "Application Not Responding"; then say "fenêtre « ne répond plus » du système fermée"; adb shell input keyevent KEYCODE_BACK; sleep 1.5; else break; fi; done; }
 tap() { dismiss_anr; adb shell input tap "$@"; }
 tapt() { local xy; dismiss_anr; xy=$(python3 ci/ui_tap.py "$OUT/reports/ui_$1.xml" "$2" ${3:-1}) && adb shell input tap $xy; }
-# appui long : un « balayage » immobile au centre du nœud (1,1 s par défaut ; 4e argument : durée en ms — le panneau de réglages rapides demande 3 s)
+# appui long : un « balayage » immobile au centre du nœud (1,1 s par défaut ; 4e argument : durée en ms — le panneau de réglages rapides demande 1,5 s)
 holdt() { local xy; dismiss_anr; xy=$(python3 ci/ui_tap.py "$OUT/reports/ui_$1.xml" "$2" ${3:-1}) && adb shell input swipe $xy $xy ${4:-1100}; }
 # l'émulateur affiche parfois « Pixel Launcher ne répond plus » : cette fenêtre absorbe le premier appui, on la ferme avant de commencer
 for k in 1 2 3; do
@@ -153,7 +159,7 @@ done
 adb shell am force-stop $PKG
 adb shell "run-as $PKG rm -f files/ui.json"
 adb shell am start -n $PKG/app.manhwa.MainActivity --es mt_url "http://10.0.2.2:8000/comics/test-series-1a2b3c/chapter/1.html" --es mt_engine MLKIT --es mt_source EN \
-   --es mt_target FR --es mt_models "fr" --es mt_timeout 200 --es mt_report ui.json --es mt_fullscreen true --es mt_watch true --es mt_undo_ms 20000 >/dev/null
+   --es mt_target FR --es mt_models "fr" --es mt_timeout 200 --es mt_report ui.json --es mt_fullscreen true --es mt_watch true --es mt_undo_ms 20000 --es mt_anilist "http://10.0.2.2:8000/anilist" >/dev/null
 for i in $(seq 1 40); do sleep 6; adb shell "run-as $PKG ls files/ui.json" 2>/dev/null | grep -q ui.json && break; done
 adb exec-out "run-as $PKG cat files/ui.json" > $OUT/reports/fs.json
 sleep 5
@@ -170,7 +176,7 @@ chk "plein écran : le menu propose Original | Traduit et les chapitres" $([ "$(
 tap 540 1200; sleep 2; uidump fs2; chk "plein écran : un second appui le referme" $(hasnot fs2 'Quitter le plein')
 # réglages rapides depuis le plein écran : appui long sur « Traduit » (ou « Original ») du menu de lecture ; le retour referme le panneau sans quitter le plein écran
 tap 540 1200; sleep 1.5; uidump fsq0
-{ holdt fsq0 "=Traduit" 1 3600 || holdt fsq0 "=Original" 1 3600; }; sleep 1.5; uidump fsq1; shot ui 13
+{ holdt fsq0 "=Traduit" 1 1500 || holdt fsq0 "=Original" 1 1500; }; sleep 1.5; uidump fsq1; shot ui 13
 chk "réglages rapides : un appui long sur Original | Traduit les ouvre aussi en plein écran" $(has fsq1 'glages rapides')
 if [ "$(has fsq1 'glages rapides')" = 1 ]; then
   adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump fsq2
@@ -352,48 +358,48 @@ chk "image ignorée : « Rétablir » retire la règle et la page est de nouveau
 # une règle de texte (toutes les œuvres) est laissée en place : la page des réglages doit la lister, puis la retirer
 appcmd peek; uidump ig11; tapt ig11 "Ignorer ce texte" 1; sleep 1.5; uidump ig12; tapt ig12 "dans toutes" 1; sleep 1.5
 waitge hidden 1 25 >/dev/null
-# appuis longs réels sur la page (doigt posé sur l'écran, sans commande) : il en faut 2 s ; un défilement referme aussitôt la proposition
+# appuis longs réels sur la page (doigt posé sur l'écran, sans commande) : il en faut 0,75 s (les 0,45 s d'avant + 0,3 s) ; un défilement referme aussitôt la proposition
 say "=== appuis longs réels"
 appcmd probe; appstate
 rtx=$(stv tx); rty=$(stv ty); rex=$(stv ex); rey=$(stv ey)
 say "appuis longs : doigt posé en ($rtx,$rty) sur une traduction, en ($rex,$rey) sur une zone sans traduction"
 if [ -n "$rtx" ] && [ -n "$rty" ]; then
-  adb shell input swipe $rtx $rty $rtx $rty 1300; sleep 1; appstate
-  chk "appui long réel : 1,3 s sur une traduction ne propose rien (il en faut 2)" $([ "$(stv peekT)" = False ] && echo 1 || echo 0)
-  adb shell input swipe $rtx $rty $rtx $rty 2700; sleep 1; uidump rp1; shot ui 66
-  chk "appui long réel : 2,7 s sur une traduction propose de la corriger ou de la supprimer" $([ "$(has rp1 'Corriger cette traduction')" = 1 ] && [ "$(has rp1 'Supprimer cette traduction')" = 1 ] && echo 1 || echo 0)
+  adb shell input swipe $rtx $rty $rtx $rty 450; sleep 1; appstate
+  chk "appui long réel : 0,45 s (l'ancienne durée) sur une traduction ne propose plus rien (il en faut 0,75)" $([ "$(stv peekT)" = False ] && echo 1 || echo 0)
+  adb shell input swipe $rtx $rty $rtx $rty 1400; sleep 1; uidump rp1; shot ui 66
+  chk "appui long réel : 1,4 s sur une traduction propose de la corriger ou de la supprimer" $([ "$(has rp1 'Corriger cette traduction')" = 1 ] && [ "$(has rp1 'Supprimer cette traduction')" = 1 ] && echo 1 || echo 0)
   adb shell input swipe 540 1500 540 1000 300; sleep 1; uidump rp2; appstate
   chk "appui long réel : faire défiler l'écran referme aussitôt la proposition" $([ "$(hasnot rp2 'Corriger cette traduction')" = 1 ] && [ "$(stv peekT)" = False ] && echo 1 || echo 0)
 else
-  chk "appui long réel : 1,3 s sur une traduction ne propose rien (il en faut 2)" 0
-  chk "appui long réel : 2,7 s sur une traduction propose de la corriger ou de la supprimer" 0
+  chk "appui long réel : 0,45 s (l'ancienne durée) sur une traduction ne propose plus rien (il en faut 0,75)" 0
+  chk "appui long réel : 1,4 s sur une traduction propose de la corriger ou de la supprimer" 0
   chk "appui long réel : faire défiler l'écran referme aussitôt la proposition" 0
 fi
 if [ -n "$rex" ] && [ -n "$rey" ]; then
-  adb shell input swipe $rex $rey $rex $rey 2700; sleep 1; uidump rp3; shot ui 67
-  chk "appui long réel : 2,7 s sur une image sans traduction propose d'en ajouter une" $(has rp3 'Ajouter une traduction')
+  adb shell input swipe $rex $rey $rex $rey 1400; sleep 1; uidump rp3; shot ui 67
+  chk "appui long réel : 1,4 s sur une image sans traduction propose d'en ajouter une" $(has rp3 'Ajouter une traduction')
   adb shell input swipe 540 1500 540 1000 300; sleep 1
   # même geste quand la mémoire des pages traitées a été vidée (long chapitre) : la proposition doit venir quand même, et « Ajouter » ouvre l'éditeur après avoir préparé la page
   appcmd evict; appcmd probe; appstate; rex=$(stv ex); rey=$(stv ey)
-  adb shell input swipe $rex $rey $rex $rey 2700; sleep 1; uidump rp4; shot ui 68
+  adb shell input swipe $rex $rey $rex $rey 1400; sleep 1; uidump rp4; shot ui 68
   chk "appui long réel : la proposition d'ajout vient aussi pour une page dont la mémoire a été vidée" $(has rp4 'Ajouter une traduction')
   tapt rp4 "Ajouter une traduction" 1
   chk "appui long réel : « Ajouter une traduction » ouvre l'éditeur même pour une page oubliée (préparée à la demande)" $(okst waitst edOpen True 45)
   adb shell input keyevent KEYCODE_BACK; sleep 2
 else
-  chk "appui long réel : 2,7 s sur une image sans traduction propose d'en ajouter une" 0
+  chk "appui long réel : 1,4 s sur une image sans traduction propose d'en ajouter une" 0
   chk "appui long réel : la proposition d'ajout vient aussi pour une page dont la mémoire a été vidée" 0
   chk "appui long réel : « Ajouter une traduction » ouvre l'éditeur même pour une page oubliée (préparée à la demande)" 0
 fi
 adb shell input swipe 540 1000 540 1700 300; sleep 2; uidump nav
-# réglages rapides : un appui long de 3 s sur le bouton rond ouvre le panneau sans basculer la traduction (un choix de langue y est enregistré ; le retour referme le panneau) ; 1,5 s est un simple appui : il bascule, le panneau reste fermé
+# réglages rapides : un appui long (durée du système + 0,3 s) sur le bouton rond ouvre le panneau sans basculer la traduction (un choix de langue y est enregistré ; le retour referme le panneau) ; 0,45 s est un simple appui : il bascule, le panneau reste fermé
 orb_on=$(has nav 'Traduction activ')
-{ holdt nav "Traduction activ" 1 1500 || holdt nav "Traduire" 1 1500; }; sleep 2; uidump qs0
-chk "réglages rapides : 1,5 s d'appui sur le bouton rond n'ouvre pas le panneau (il en faut 3)" $(hasnot qs0 'glages rapides')
+{ holdt nav "Traduction activ" 1 450 || holdt nav "Traduire" 1 450; }; sleep 2; uidump qs0
+chk "réglages rapides : 0,45 s d'appui sur le bouton rond n'ouvre pas le panneau (il en faut un peu plus que l'appui long du système)" $(hasnot qs0 'glages rapides')
 if [ "$(has qs0 'glages rapides')" = 1 ]; then adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump nav
 else { tapt qs0 "Traduction activ" 1 || tapt qs0 "Traduire" 1; }; sleep 2; uidump nav; fi
 orb_on=$(has nav 'Traduction activ')
-{ holdt nav "Traduction activ" 1 3600 || holdt nav "Traduire" 1 3600; }; sleep 1.5; uidump qs; shot ui 12
+{ holdt nav "Traduction activ" 1 1500 || holdt nav "Traduire" 1 1500; }; sleep 1.5; uidump qs; shot ui 12
 chk "réglages rapides : un appui long sur le bouton rond ouvre le panneau" $(has qs 'glages rapides')
 chk "réglages rapides : langue, taille du texte, onomatopées et retraduction y sont" $([ "$(has qs 'Langue du texte')" = 1 ] && [ "$(has qs 'Traduire vers')" = 1 ] && [ "$(has qs 'Taille du texte')" = 1 ] && [ "$(has qs 'onomatop')" = 1 ] && [ "$(has qs 'Retraduire la page')" = 1 ] && echo 1 || echo 0)
 chk "réglages rapides : la gomme à traductions y est proposée" $(has qs 'Gomme')
@@ -611,6 +617,7 @@ print(1 if b[0]<=c[0] and b[1]<=c[1] and b[2]>=c[2] and b[3]>=c[3] and (b[2]-b[0
   appcmd "twopan $((-140 * vdir)) 0"; sleep 3; appstate
   l3=$(stv edCropL)
   chk "éditeur : deux doigts qui glissent déplacent la vue, sans changer le zoom" $([ $(( (l3 - l2) * vdir )) -ge 5 ] && [ "$(stv edCropW)" = "$w1" ] && echo 1 || echo 0)
+  say "éditeur : bord gauche de la vue $l1 → $l2 (un doigt) → $l3 (deux doigts), largeur $w1 → $(stv edCropW), sens $vdir, fenêtre de $iw px"
   appcmd "pinch 0.4"; sleep 3.5; appstate
   chk "éditeur : deux doigts qui se rapprochent éloignent la vue" $([ "$(stv edCropW)" -gt "$w1" ] && echo 1 || echo 0)
   uidump ed3; tapt ed3 "=Vue d'origine" 1; sleep 2.5; appstate
@@ -658,12 +665,79 @@ else
     "défaire deux fois efface tout le dessin" "en mode rectangle un glissé change la zone et s'ajoute à l'historique" "défaire rend la zone d'avant" \
     "onglet Position : un glissé déplace le texte" "défaire remet le texte à sa place" "« Annuler » referme l'éditeur sans rien enregistrer"; do chk "éditeur : $n" 0; done
 fi
+# chapitre trop court pour défiler (page d'attente, chapitre à venir) : rien n'y est lu, il ne doit pas être marqué « lu » (le script de la page signalait 100 % dès l'ouverture)
+say "=== chapitre trop court pour défiler"
+SHORT="http://10.0.2.2:8000/comics/short-series-9z9z9z/chapter/1.html"
+appcmd "goto $SHORT"
+sleep 7
+appstate
+chk "chapitre trop court pour défiler : n'est pas marqué comme lu" $([ "$(stv url)" = "$SHORT" ] && [ "$(stv curDone)" = False ] && echo 1 || echo 0)
+# changement de chapitre pendant qu'une traduction occupe le moteur de langage : le verrou du modèle reste pris 14 s (comme une génération de Gemma) pendant que l'on ouvre le chapitre suivant.
+# Le fil principal ne doit pas attendre la fin de la traduction : l'application se figeait, puis Android la fermait, quand on changeait de chapitre pendant une traduction.
+say "=== changement de chapitre pendant une traduction"
+CH2="http://10.0.2.2:8000/comics/test-series-1a2b3c/chapter/2.html"
+appstate; ep0=$(stv epoch)
+appcmd "holdgemma 14000"
+appcmd "goto $CH2"
+sleep 3
+appstate
+say "chapitre suivant pendant une traduction : retard du fil principal « $(stv mainLag) » ms, adresse « $(stv url) », page $(stv epoch) (avant : $ep0)"
+chk "chapitre suivant pendant une traduction : l'application répond sans attendre la fin de la traduction (retard du fil principal < 2,5 s)" $([ -n "$(stv mainLag)" ] && [ "$(stv mainLag)" -lt 2500 ] 2>/dev/null && echo 1 || echo 0)
+chk "chapitre suivant pendant une traduction : le nouveau chapitre s'ouvre" $(okst waitst url "$CH2" 20)
+chk "chapitre suivant pendant une traduction : le nouveau chapitre est traduit" $(okst waitst prog 2/2 90)
+dismiss_anr; uidump nv1; shot ui 70
+chk "chapitre suivant pendant une traduction : aucune fenêtre « ne répond pas » du système" $(hasnot nv1 "isn't responding")
+# le processus qui dessine la page disparaît (manque de mémoire, plantage) : sans réponse prévue, Android arrêtait toute l'application
+say "=== processus d'affichage de la page perdu"
+sleep 14      # (l'occupation simulée du moteur est finie)
+appstate; ep1=$(stv epoch)
+pid0=$(adb shell pidof $PKG | tr -d '\r' | awk '{print $1}')
+appcmd crashrenderer
+sleep 10
+pid1=$(adb shell pidof $PKG | tr -d '\r' | awk '{print $1}')
+appstate
+say "page perdue : processus $pid0 → $pid1, incidents comptés « $(stv rendererLost) », page $(stv epoch) (avant : $ep1), adresse « $(stv url) », avancement « $(stv prog) »"
+chk "page perdue : l'application reste ouverte (même processus)" $([ -n "$pid1" ] && [ "$pid1" = "$pid0" ] && echo 1 || echo 0)
+chk "page perdue : l'incident est reconnu et la page est rouverte" $([ "$(stv rendererLost)" = 1 ] && [ "$(stv epoch)" -gt "$ep1" ] 2>/dev/null && echo 1 || echo 0)
+chk "page perdue : la même adresse est rouverte et traduite de nouveau" $([ "$(stv url)" = "$CH2" ] && [ "$(okst waitst prog 2/2 90)" = 1 ] && echo 1 || echo 0)
+uidump rg; shot ui 71
+chk "page perdue : aucune fenêtre d'erreur du système (ni « ne répond pas », ni « s'arrête »)" $([ "$(hasnot rg "isn't responding")" = 1 ] && [ "$(hasnot rg 'keeps stopping')" = 1 ] && [ "$(hasnot rg 'has stopped')" = 1 ] && echo 1 || echo 0)
 # diagnostic : plantages ou blocages système pendant le scénario
 adb logcat -d -v brief 2>/dev/null | grep -iE "ANR in|Application Not Responding|FATAL EXCEPTION|AndroidRuntime|Process .* has died|am_crash|am_anr" | tail -30 > $OUT/reports/ui_logcat.txt
 echo "  [journal système] $(wc -l < $OUT/reports/ui_logcat.txt) ligne(s) d'ANR ou de plantage" | tee -a $OUT/run.log
 # raccourci « Reprendre la lecture » de l'icône : publié d'après la dernière œuvre lue
 adb shell dumpsys shortcut > $OUT/reports/shortcut.txt 2>/dev/null
 chk "raccourci : « Reprendre la lecture » publié pour l'œuvre lue" $([ "$(grep -c 'id=resume' $OUT/reports/shortcut.txt)" -gt 0 ] && grep -q 'Test Series' $OUT/reports/shortcut.txt && echo 1 || echo 0)
+
+# illustrations : trois œuvres de plus. (a) la page de l'œuvre annonce l'image du site (« og-image ») et construit l'illustration au titre de l'œuvre 1,8 s après son chargement ;
+# (b) le site n'a aucune image pour l'œuvre mais l'annuaire (faux serveur) en a une ; (c) la page de l'œuvre n'annonce que l'image du site et l'annuaire ne la connaît pas : la pastille doit rester.
+# Ordre des visites : la plus récente est cherchée en premier (a), puis (b) et (c) ; la page (a) passe donc avant les échecs de (b) et (c).
+say "=== illustrations : page construite par son script, annuaire, image de site seule"
+for p in generic-only-8c8c8c anilist-only-5e5e5e spa-series-7a7a7a; do appcmd "goto http://10.0.2.2:8000/comics/$p/chapter/1.html"; sleep 4; done
+appcmd home; sleep 1.5; uidump cv0
+tapt cv0 "=Bibliothèque" 1; sleep 2
+for k in $(seq 1 40); do uidump cv1; [ "$(has cv1 'Illustration de Spa Series')" = 1 ] && [ "$(has cv1 'Illustration de Anilist Only')" = 1 ] && break; sleep 3; done
+# la page de « Generic Only » est relue une dizaine de secondes avant de renoncer : on attend sa ligne au journal (une minute au plus)
+for k in $(seq 1 20); do adb exec-out "run-as $PKG cat files/journal.jsonl" > $OUT/reports/journal_covers.jsonl 2>/dev/null; grep -q '"series":"Generic Only"' $OUT/reports/journal_covers.jsonl && break; sleep 3; done
+sleep 3; uidump cv2; shot ui 72
+adb exec-out "run-as $PKG cat files/journal.jsonl" > $OUT/reports/journal_covers.jsonl 2>/dev/null
+grep '"type":"cover"' $OUT/reports/journal_covers.jsonl | cut -c1-400 >> $OUT/run.log
+chk "illustrations : une page d'œuvre qui construit son illustration par script (image de partage générique) affiche l'image au titre de l'œuvre" $(has cv2 'Illustration de Spa Series')
+chk "illustrations : l'illustration de cette œuvre vient du site (journal)" $(grep '"series":"Spa Series"' $OUT/reports/journal_covers.jsonl | grep -q '"source":"site"' && echo 1 || echo 0)
+chk "illustrations : l'annuaire donne l'illustration d'une œuvre dont le site n'a aucune image" $(has cv2 'Illustration de Anilist Only')
+chk "illustrations : celle-ci vient de l'annuaire (journal)" $(grep '"series":"Anilist Only"' $OUT/reports/journal_covers.jsonl | grep -q '"source":"annuaire"' && echo 1 || echo 0)
+chk "illustrations : une page qui n'annonce que l'image du site ne donne aucune illustration (la pastille reste)" $([ "$(hasnot cv2 'Illustration de Generic Only')" = 1 ] && grep '"series":"Generic Only"' $OUT/reports/journal_covers.jsonl | grep -q '"ok":false' && echo 1 || echo 0)
+chk "illustrations : l'échec est expliqué au journal" $(grep '"series":"Generic Only"' $OUT/reports/journal_covers.jsonl | grep -q 'aucune image retenue' && echo 1 || echo 0)
+chk "illustrations : l'image du site (partage générique) n'est jamais téléchargée" $([ "$(grep -c 'GET /site-og/og-image.png' /tmp/server.log 2>/dev/null; true)" = 0 ] && echo 1 || echo 0)
+chk "illustrations : l'image au titre de l'œuvre, apparue après le chargement, est celle qui est téléchargée" $([ "$(grep -c 'GET /comics/spa-series-7a7a7a/cover.png' /tmp/server.log 2>/dev/null; true)" -ge 1 ] && echo 1 || echo 0)
+# réglage « annuaire AniList » coupé : l'œuvre qui n'avait d'illustration que par l'annuaire n'en cherche plus (la demande de recherche n'interroge plus le faux annuaire)
+appcmd "coversonline off"; sleep 4
+before=$(grep -c "\[anilist\]" /tmp/server.log 2>/dev/null; true)
+appcmd coverretry; sleep 25
+after=$(grep -c "\[anilist\]" /tmp/server.log 2>/dev/null; true)
+say "illustrations : demandes à l'annuaire avant / après la recherche avec le réglage coupé : $before / $after"
+chk "illustrations : avec le réglage « annuaire » coupé, l'annuaire n'est plus interrogé" $([ "$after" = "$before" ] && echo 1 || echo 0)
+appcmd "coversonline on"
 
 fi # fin des scénarios web (absents de la suite lab)
 

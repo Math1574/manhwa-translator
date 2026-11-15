@@ -59,6 +59,8 @@ data class AppSettings(
     /** Accueil : sites épinglés (adresses d'accueil séparées par des espaces) et sites retirés de l'accueil (clés séparées par des virgules). */
     val homeSites: String = "",
     val homeHidden: String = "",
+    /** Illustrations des œuvres : si la page de l'œuvre sur le site n'en donne pas, on la cherche dans un annuaire public (AniList) d'après le titre de l'œuvre, seul envoyé. */
+    val coversOnline: Boolean = true,
 ) {
     val adAllowSiteSet: Set<String> get() = adAllowSites.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
     val adAllowTargetSet: Set<String> get() = adAllowTargets.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
@@ -76,7 +78,7 @@ data class AppSettings(
         it["maxPrefetchPages"] = maxPrefetchPages.toString(); it["cacheMaxMb"] = cacheMaxMb.toString()
         it["schema"] = "2"; it["engine"] = engine.name; it["useGpu"] = useGpu.toString(); it["diagnostic"] = diagnostic.toString(); it["enhancedOcr"] = enhancedOcr.toString(); it["refinePass"] = refinePass.toString(); it["blockAds"] = blockAds.toString(); it["autoReread"] = autoReread.toString(); it["translateSfx"] = translateSfx.toString()
         it["themeAccent"] = themeAccent; it["themeBackground"] = themeBackground; it["reducedMotion"] = reducedMotion.toString(); it["showMascot"] = showMascot.toString(); it["themeMascot"] = themeMascot; it["adAllowSites"] = adAllowSites; it["adAllowTargets"] = adAllowTargets
-        it["readTranslate"] = readTranslate.toString(); it["orbRight"] = orbRight.toString(); it["orbY"] = orbY.toString(); it["hideBarsWhileReading"] = hideBarsWhileReading.toString(); it["librarySort"] = librarySort; it["homeSites"] = homeSites; it["homeHidden"] = homeHidden
+        it["readTranslate"] = readTranslate.toString(); it["orbRight"] = orbRight.toString(); it["orbY"] = orbY.toString(); it["hideBarsWhileReading"] = hideBarsWhileReading.toString(); it["librarySort"] = librarySort; it["homeSites"] = homeSites; it["homeHidden"] = homeHidden; it["coversOnline"] = coversOnline.toString()
     }.let { p -> java.io.StringWriter().also { w -> p.store(w, null) }.toString() }
 
     companion object {
@@ -115,6 +117,7 @@ data class AppSettings(
                 p.getProperty("librarySort")?.takeIf { v -> SeriesSort.values().any { it.id == v } } ?: d.librarySort,
                 p.getProperty("homeSites") ?: d.homeSites,
                 p.getProperty("homeHidden") ?: d.homeHidden,
+                p.getProperty("coversOnline")?.toBooleanStrictOrNull() ?: d.coversOnline,
             ).sanitized()
         }
     }

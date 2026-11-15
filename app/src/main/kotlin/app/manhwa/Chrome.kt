@@ -109,7 +109,7 @@ fun GlowNavBar(tabs: List<NavTab>, selected: Int, onSelect: (Int) -> Unit) {
 /**
  * Bouton rond Original | Traduit, posé au bord de l'écran et déplaçable au doigt (il se range sur le bord le plus proche et mémorise sa place) : on peut l'écarter des boutons du site.
  * Sobre pour la lecture, sans halo : verre quand la traduction est éteinte, contour d'accent quand elle est activée mais que cette page n'est pas un chapitre,
- * pastille à dégradé quand la page est traduite ; un anneau fin montre l'avancement du travail. Un appui long de 3 secondes ouvre les réglages rapides ([onLongPress]).
+ * pastille à dégradé quand la page est traduite ; un anneau fin montre l'avancement du travail. Un appui long (0,3 s de plus que l'appui long du système) ouvre les réglages rapides ([onLongPress]).
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -131,8 +131,8 @@ fun TranslateOrb(
         val pos = drag ?: Offset(baseX, baseY)
         val desc = if (active) "Traduction activée : toucher pour revenir à l'original" else if (translateOn) "Traduire cette page" else "Traduire"
         val idleAlpha = if (active || drag != null) 1f else 0.88f
-        // appui long de 3 secondes (réglages rapides) : on ne l'ouvre plus sans le vouloir
-        WithLongPress(PANEL_LONG_PRESS_MS) {
+        // appui long d'avant + 0,3 s (réglages rapides) : un peu plus long qu'un appui long ordinaire, pour ne pas les ouvrir sans le vouloir
+        WithLongPress(PANEL_LONG_PRESS_EXTRA_MS) {
         Box(
             Modifier.offset { IntOffset(pos.x.roundToInt(), pos.y.roundToInt()) }.size(orb)
                 .semantics { contentDescription = desc }

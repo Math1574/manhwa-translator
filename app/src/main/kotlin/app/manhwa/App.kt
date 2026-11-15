@@ -32,6 +32,7 @@ class App : Application() {
     lateinit var graph: AppGraph
     override fun onCreate() {
         super.onCreate()
+        ExitReasons.install(this)
         graph = AppGraph(this)
         ExitReasons.record(this, graph.journal)
         graph.updater.onStart()
@@ -49,7 +50,33 @@ object ExitReasons {
         13 -> "autre"; 14 -> "gel par le système"; 15 -> "permission modifiée"; 16 -> "état du paquet modifié"; 17 -> "mise à jour"; else -> "code $r"
     }
 
+    private const val CRASH_FILE = "last_crash.txt"
+
+    /**
+     * À installer dès le lancement : une erreur imprévue de l'application (plantage Java) est notée avec sa pile avant que le processus ne s'arrête ; le lancement suivant la reprend au journal.
+     */
+    fun install(ctx: Context) {
+        try {
+            val previous = Thread.getDefaultUncaughtExceptionHandler()
+            Thread.setDefaultUncaughtExceptionHandler { t, e ->
+                try {
+                    val w = java.io.StringWriter(); e.printStackTrace(java.io.PrintWriter(w))
+                    File(ctx.filesDir, CRASH_FILE).writeText(System.currentTimeMillis().toString() + "\t" + t.name + "\n" + w.toString().take(8000))
+                } catch (_: Throwable) {}
+                previous?.uncaughtException(t, e)
+            }
+        } catch (_: Throwable) {}
+    }
+
     fun record(ctx: Context, journal: TranslationJournal) {
+        // plantage Java du lancement précédent : sa pile complète
+        try {
+            val f = File(ctx.filesDir, CRASH_FILE)
+            if (f.exists()) {
+                val text = f.readText(); f.delete()
+                journal.add(org.json.JSONObject().put("t", text.substringBefore('\t').toLongOrNull() ?: System.currentTimeMillis()).put("type", "crash").put("thread", text.substringAfter('\t').substringBefore('\n')).put("stack", text.substringAfter('\n')))
+            }
+        } catch (_: Throwable) {}
         if (android.os.Build.VERSION.SDK_INT < 30) return
         try {
             val prefs = ctx.getSharedPreferences("exit_reasons", Context.MODE_PRIVATE)
@@ -57,10 +84,13 @@ object ExitReasons {
             val am = ctx.getSystemService(android.app.ActivityManager::class.java) ?: return
             val list = am.getHistoricalProcessExitReasons(ctx.packageName, 0, 8).filter { it.timestamp > seen }.sortedBy { it.timestamp }
             for (e in list) {
-                journal.add(
-                    org.json.JSONObject().put("t", e.timestamp).put("type", "exit").put("reason", e.reason).put("why", name(e.reason)).put("description", e.description ?: "")
-                        .put("importance", e.importance).put("rssMb", e.rss shr 10).put("pssMb", e.pss shr 10).put("status", e.status),
-                )
+                val o = org.json.JSONObject().put("t", e.timestamp).put("type", "exit").put("reason", e.reason).put("why", name(e.reason)).put("description", e.description ?: "")
+                    .put("importance", e.importance).put("rssMb", e.rss shr 10).put("pssMb", e.pss shr 10).put("status", e.status)
+                // blocage (« ne répond plus ») : ce que le fil principal et celui de la traduction attendaient
+                if (e.reason == android.app.ApplicationExitInfo.REASON_ANR) {
+                    try { e.traceInputStream?.use { st -> o.put("trace", app.manhwa.core.CrashTrace.excerpt(st.bufferedReader().readText().take(600_000), listOf("main", "traduction-groupee"))) } } catch (_: Throwable) {}
+                }
+                journal.add(o)
             }
             if (list.isNotEmpty()) prefs.edit().putLong("seen", list.last().timestamp).apply()
         } catch (_: Throwable) {}
@@ -77,7 +107,7 @@ class AppGraph(ctx: Context) {
     val favicons = FaviconStore(File(ctx.filesDir, "favicons"))
     /** Illustrations des œuvres de la bibliothèque (l'image que la page de l'œuvre annonce), et leur recherche en arrière-plan. */
     val covers = CoverStore(File(ctx.filesDir, "covers"))
-    val coverFetcher = CoverFetcher(ctx, covers, { library.library }, { controller.translating })
+    val coverFetcher = CoverFetcher(ctx, covers, { library.library }, { controller.translating }, { settingsStore.settings.coversOnline }, { journal.add(it) })
     val journal = TranslationJournal(File(ctx.filesDir, "journal.jsonl"))
     /** Corrections manuelles des textes (zone, texte, position, taille, police), par image. */
     val edits = EditStore(File(ctx.filesDir, "edits.txt"), originsFile = File(ctx.filesDir, "edit_origins.txt"))

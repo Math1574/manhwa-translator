@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Faux site de lecture pour les tests : sert /tmp/site, avec une zone /ref/ exigeant Referer + cookie (comme certains sites)."""
-import http.server, os, sys
+import http.server, json, os, sys
 
 import threading
 LOCK = threading.Lock()
@@ -40,6 +40,21 @@ class H(http.server.SimpleHTTPRequestHandler):
             if not ok:
                 self.send_response(403); self.end_headers(); self.wfile.write(b"forbidden"); return
         super().do_GET()
+
+    def do_POST(self):
+        # /anilist : faux annuaire des illustrations (même forme de réponse qu'AniList) ; connaît une seule œuvre, « Anilist Only »
+        if self.path.split("?")[0] != "/anilist":
+            self.send_response(404); self.end_headers(); return
+        n = int(self.headers.get("Content-Length") or 0)
+        try: title = json.loads(self.rfile.read(n).decode("utf-8", "replace"))["variables"]["s"]
+        except Exception: title = ""
+        sys.stderr.write("[anilist] titre demandé : %r\n" % title)
+        media = []
+        if "".join(c for c in title.lower() if c.isalnum()) == "anilistonly":
+            media = [{"format": "MANGA", "countryOfOrigin": "KR", "popularity": 100, "title": {"romaji": "Anilist Only", "english": "Anilist Only", "native": None}, "synonyms": [],
+                      "coverImage": {"extraLarge": "http://10.0.2.2:%d/comics/anilist-only-5e5e5e/cover.png" % PORT, "large": None}}]
+        out = json.dumps({"data": {"Page": {"media": media}}}).encode()
+        self.send_response(200); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(out))); self.end_headers(); self.wfile.write(out)
 
     def log_message(self, fmt, *args):
         sys.stderr.write("[site] " + (fmt % args) + "\n")

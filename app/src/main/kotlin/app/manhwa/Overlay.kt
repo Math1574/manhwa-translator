@@ -155,8 +155,8 @@ object PageScript {
   window.addEventListener('scroll', function(){ if (!vpTick) { vpTick = true; setTimeout(vpReport, 250); } }, {passive:true});
   setTimeout(nbCheck, 800);
 
-  // appui long (2 secondes) sur une traduction : tant que le doigt reste posé, la traduction s'efface et l'original réapparaît dessous (aperçu) ; l'application propose alors de la corriger
-  var LP_MS = 2000, LP_SLOP = 14;
+  // appui long (0,75 s : les 0,45 s d'avant + 0,3 s) sur une traduction : tant que le doigt reste posé, la traduction s'efface et l'original réapparaît dessous (aperçu) ; l'application propose alors de la corriger
+  var LP_MS = 750, LP_SLOP = 14;
   var LP = {x:0, y:0, timer:null};
   var PK = {el:null, open:false, sy:0};
   // les propositions ouvertes par l'appui long disparaissent dès que l'on fait défiler la page
@@ -223,7 +223,9 @@ object PageScript {
     if (!sc.t) sc.t = setTimeout(function(){
       sc.t = null;
       var h = document.documentElement.scrollHeight - window.innerHeight;
-      var p = h <= 0 ? 100 : Math.max(0, Math.min(100, Math.round(100 * window.scrollY / h)));
+      // page pas encore (ou plus) défilable : images pas encore chargées, page en cours de remplacement… rien n'a été lu, on ne signale rien (« 100 % » marquait le chapitre comme lu dès l'ouverture)
+      if (h <= 0) return;
+      var p = Math.max(0, Math.min(100, Math.round(100 * window.scrollY / h)));
       if (p !== sc.sent) { sc.sent = p; try { AndroidMT.onProgress(p); } catch(e) {} }
     }, 1000);
   }

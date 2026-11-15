@@ -11,6 +11,7 @@ import android.os.SystemClock
 import android.util.Base64
 import android.view.ViewGroup
 import android.webkit.CookieManager
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
@@ -130,6 +131,13 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     private val main = Handler(Looper.getMainLooper())
     private val fonts by lazy { Typefaces(ctx) }
     private var webView: WebView? = null
+    /** Change quand la page affichée est remplacée par une neuve (son processus d'affichage a disparu) : l'interface reconstruit alors la vue. */
+    var webViewGeneration by mutableIntStateOf(0)
+        private set
+    /** Nombre de fois où le processus d'affichage de la page a disparu depuis le lancement (tests automatiques). */
+    @Volatile var rendererLost = 0
+        private set
+    private val rendererLosses = ArrayDeque<Long>()
     /** Lu une fois sur le thread principal : la WebView ne doit pas être appelée depuis les threads de traitement. */
     @Volatile private var userAgent: String = "Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Chrome/130 Mobile Safari/537.36"
     private val b64Waiters = ConcurrentHashMap<String, CompletableFuture<String>>()
@@ -433,7 +441,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         if (show) main.postDelayed(hideReaderBar, 5000)
     }
 
-    /** Un doigt est posé sur le menu de lecture (appui long de 3 s sur Original | Traduit) : il reste ouvert tant que l'appui dure, puis reprend ses 5 secondes de repos. */
+    /** Un doigt est posé sur le menu de lecture (appui long sur Original | Traduit) : il reste ouvert tant que l'appui dure, puis reprend ses 5 secondes de repos. */
     fun holdReaderBar(held: Boolean) {
         if (!readerBar) return
         main.removeCallbacks(hideReaderBar)
@@ -579,6 +587,12 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, errorResponse: WebResourceResponse) {
                 if (request.isForMainFrame && errorResponse.statusCode >= 400) pageError = "Le site a répondu avec l'erreur HTTP ${errorResponse.statusCode}"
             }
+
+            /** Le processus qui dessine la page a disparu : sans réponse de notre part, Android arrête toute l'application. */
+            override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+                rendererGone(view, detail.didCrash())
+                return true
+            }
         }
         wv.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(view: WebView, newProgress: Int) { progress = newProgress }
@@ -613,6 +627,29 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             apply(pm.currentThermalStatus)
             pm.addThermalStatusListener(ctx.mainExecutor) { status -> apply(status) }
         } catch (_: Throwable) { thermalWatching = false }
+    }
+
+    /**
+     * Le processus qui dessine la page a disparu (plantage, ou arrêt par Android faute de mémoire : le modèle de traduction en occupe beaucoup). Sans réponse prévue, Android arrête alors toute
+     * l'application, et c'est ce qui arrivait. On remplace la page perdue par une neuve et on rouvre la même adresse, là où la lecture en était. Si cela se répète en boucle (une page qui le fait
+     * planter à chaque ouverture), on revient à l'accueil plutôt que de recharger sans fin.
+     */
+    private fun rendererGone(dead: WebView, crashed: Boolean) {
+        rendererLost++
+        try { graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "renderer").put("crashed", crashed).put("url", currentUrl).put("sys", diag())) } catch (_: Throwable) {}
+        try { (dead.parent as? ViewGroup)?.removeView(dead) } catch (_: Throwable) {}
+        try { dead.destroy() } catch (_: Throwable) {}
+        if (dead !== webView) return          // cette page avait déjà été remplacée
+        webView = null
+        val now = SystemClock.uptimeMillis()
+        rendererLosses.addLast(now)
+        while (rendererLosses.isNotEmpty() && now - rendererLosses.first() > 120_000L) rendererLosses.removeFirst()
+        val again = rendererLosses.size <= 3
+        val url = currentUrl
+        stopWork(); active = false; loading = false
+        pendingOpen = if (again && url.startsWith("http")) url to pageProgress.coerceIn(0, 100) else null
+        webViewGeneration++
+        android.widget.Toast.makeText(ctx, if (again) "La page a dû être rechargée (incident du navigateur du téléphone)." else "Cette page fait planter le navigateur du téléphone : retour à l'accueil.", android.widget.Toast.LENGTH_LONG).show()
     }
 
     /** Raccourci « Reprendre la lecture » de l'icône : ouvre le chapitre et se replace là où la lecture s'était arrêtée. */
@@ -902,7 +939,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         if (peekEmpty != null) { peekEmpty = null; main.removeCallbacks(clearPeekEmpty) }
     }
 
-    /** Petite vibration quand l'appui long de 2 secondes a été pris en compte (rien ne change à l'écran tant que la proposition n'apparaît pas en bas). */
+    /** Petite vibration quand l'appui long de 0,75 s a été pris en compte (rien ne change à l'écran tant que la proposition n'apparaît pas en bas). */
     private fun longPressTick() { try { webView?.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS) } catch (_: Throwable) {} }
 
     /** Texte lu du bloc touché avant toute correction : c'est celui que les règles « ignorer » comparent au texte lu sur la page (une correction manuelle du texte n'y change rien). */
@@ -1009,6 +1046,17 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
     /** Tests automatiques : la mémoire des pages traitées est vidée, comme après un long chapitre (seules les 12 dernières pages y restent). */
     fun testEvict() { synchronized(workInfos) { workInfos.clear() } }
+    /** Nombre de pages ouvertes depuis le lancement (une nouvelle page, ou la même rouverte, l'augmente). */
+    fun testPageEpoch(): Int = pageEpoch
+    /** Vrai tant qu'une image attend ou subit sa traduction par le moteur de langage. */
+    fun testGenerating(): Boolean = runStage.values.any { it == "traduction" }
+    /** Étapes en cours des pages (tests automatiques, pour comprendre où un traitement en est). */
+    fun testStages(): String = runStage.values.sorted().joinToString(",")
+    /** Fait disparaître le processus d'affichage de la page, comme un manque de mémoire (adresse spéciale du navigateur prévue pour cela). */
+    fun testCrashRenderer() { webView?.loadUrl("chrome://crash") }
+    /** Tests automatiques (suite « nav ») : la page a été changée alors que le moteur de langage traduisait ; et le plus long retard de réponse du fil principal relevé ensuite (−1 : pas encore relevé). */
+    @Volatile var testNavGen = false
+    @Volatile var testNavMaxLag = -1L
 
     /** Tests automatiques : où poser un vrai doigt (pixels de l'écran) — au centre d'une traduction affichée (tx, ty) et sur une zone d'image sans traduction (ex, ey). */
     @Volatile var testProbeJson: JSONObject? = null

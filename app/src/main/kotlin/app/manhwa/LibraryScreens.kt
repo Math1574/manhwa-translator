@@ -281,6 +281,7 @@ private fun SeriesPage(graph: AppGraph, key: String, onBack: () -> Unit, onGloss
                 Box {
                     IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, "Plus d'actions") }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        DropdownMenuItem(text = { Text("Chercher l'illustration") }, onClick = { menu = false; graph.coverFetcher.retry(listOf(entry)) })
                         DropdownMenuItem(text = { Text("Oublier cette œuvre") }, onClick = { menu = false; confirm = true })
                     }
                 }
