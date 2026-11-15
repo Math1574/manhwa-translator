@@ -1,0 +1,26 @@
+11-15 18:26:13.269  7916  8102 I native  : I0000 00:00:1794767173.269748    8102 tflite_lstm_client_base.cc:371] Resizing interpreter pool to 4
+11-15 18:26:13.269  7916  8102 I tflite  : Initialized TensorFlow Lite runtime.
+11-15 18:26:13.309  7916  8106 I native  : I0000 00:00:1794767173.309452    8106 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/conv_model.fb
+11-15 18:26:13.310  7916  8106 I native  : I0000 00:00:1794767173.310938    8106 tflite_model_pooled_runner.cc:636] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/lstm_model.fb
+11-15 18:26:13.318  7916  8106 I native  : I0000 00:00:1794767173.318648    8106 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 4
+11-15 18:26:13.333  7916  8102 I native  : I0000 00:00:1794767173.333167    8102 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_splitting_custom_ops/model.tflite
+11-15 18:26:13.340  7916  8101 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+11-15 18:26:13.340  7916  8101 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-15 18:26:13.342  7916  8102 I native  : I0000 00:00:1794767173.342498    8102 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-15 18:26:13.342  7916  8102 I native  : I0000 00:00:1794767173.342796    8102 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_clustering_custom_ops/model.tflite
+11-15 18:26:13.343  7916  8102 I native  : I0000 00:00:1794767173.343101    8102 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-15 18:26:13.344  7916  8101 I native  : I0000 00:00:1794767173.344048    8101 tflite_detector_client_with_shape_cache.cc:105] Caching size: 10
+11-15 18:26:13.391  7916  8102 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-15 18:26:14.271  7916  8102 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-15 18:26:14.315  7916  8102 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-15 18:26:14.547  7916  8102 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-15 18:26:15.549  5736  8160 I ChimeraConfigurator: Detected pending changes for urgent request: [vision.ocr]. Pending module sets: container:2318189190800+mlkit.ocr.common,tflite_dynamite:2640104055100800+tflite_dynamite,vision_ocr:2316024025100000+vision.ocr
+11-15 18:26:17.971  7916  8101 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-15 18:26:18.589  7916  8101 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-15 18:26:18.719  7916  8101 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-15 18:26:19.787  7916  8101 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-15 18:26:20.807  7916  8101 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-15 18:26:25.649  5736  8207 I ChimeraConfigurator: Detected pending changes for urgent request: [vision.ocr]. Pending module sets: container:2318189190800+mlkit.ocr.common,tflite_dynamite:2640104055100800+tflite_dynamite,vision_ocr:2316024025100000+vision.ocr
+11-15 18:26:31.393  7916  8218 I tflite  : Initialized TensorFlow Lite runtime.
+11-15 18:26:31.394  7916  8218 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+11-15 18:26:46.426  7916  7963 I MTTEST  : REPORT_READY report.json

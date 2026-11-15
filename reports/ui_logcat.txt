@@ -1,0 +1,30 @@
+I/AndroidRuntime(20156): Using default boot image
+I/AndroidRuntime(20156): Leaving lock profiling enabled
+D/AndroidRuntime(20156): Calling main entry com.android.commands.uiautomator.Launcher
+D/AndroidRuntime(20156): Shutting down VM
+D/AndroidRuntime(20204): >>>>>> START com.android.internal.os.RuntimeInit uid 2000 <<<<<<
+I/AndroidRuntime(20204): Using default boot image
+I/AndroidRuntime(20204): Leaving lock profiling enabled
+D/AndroidRuntime(20204): Calling main entry com.android.commands.uiautomator.Launcher
+D/AndroidRuntime(20204): Shutting down VM
+D/AndroidRuntime(20235): >>>>>> START com.android.internal.os.RuntimeInit uid 2000 <<<<<<
+I/AndroidRuntime(20235): Using default boot image
+I/AndroidRuntime(20235): Leaving lock profiling enabled
+D/AndroidRuntime(20235): Calling main entry com.android.commands.uiautomator.Launcher
+D/AndroidRuntime(20235): Shutting down VM
+D/AndroidRuntime(20322): >>>>>> START com.android.internal.os.RuntimeInit uid 2000 <<<<<<
+I/AndroidRuntime(20322): Using default boot image
+I/AndroidRuntime(20322): Leaving lock profiling enabled
+D/AndroidRuntime(20322): Calling main entry com.android.commands.uiautomator.Launcher
+D/AndroidRuntime(20322): Shutting down VM
+D/AndroidRuntime(20596): >>>>>> START com.android.internal.os.RuntimeInit uid 2000 <<<<<<
+I/AndroidRuntime(20596): Using default boot image
+I/AndroidRuntime(20596): Leaving lock profiling enabled
+D/AndroidRuntime(20596): Calling main entry com.android.commands.uiautomator.Launcher
+D/AndroidRuntime(20596): Shutting down VM
+I/ActivityManager(  548): Process com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0 (pid 14824) has died: fg  BTOP
+D/AndroidRuntime(20692): >>>>>> START com.android.internal.os.RuntimeInit uid 2000 <<<<<<
+I/AndroidRuntime(20692): Using default boot image
+I/AndroidRuntime(20692): Leaving lock profiling enabled
+D/AndroidRuntime(20692): Calling main entry com.android.commands.uiautomator.Launcher
+D/AndroidRuntime(20692): Shutting down VM
