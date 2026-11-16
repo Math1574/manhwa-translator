@@ -127,14 +127,14 @@ object IdiomHints {
 ~get over | se remettre de, surmonter, passer à autre chose
 ~get in the way | gêner, se mettre en travers du chemin
 ~get * on * side | rallier à sa cause, mettre de son côté
-~get * out of * sight | ôter de ma vue, éloigner
+~get * out of * sight | hors de ma vue ! (disparais de ma vue) ; si c'est « get him out of my sight » : ôtez-le de ma vue
 ~get a grip | ressaisis-toi, reprends-toi
 ~get * together | se retrouver, se réunir ; « get it together » = se ressaisir
 ~get even with | se venger de, rendre la pareille à
 ~get through | traverser, venir à bout de, survivre à
 ~get ? wrong | se tromper ; « don't get me wrong » = ne te méprends pas, ne le prends pas mal
 ~get the better of | l'emporter sur, prendre le dessus sur
-~get hold of | mettre la main sur, se procurer
+~get hold of | mettre la main sur, se procurer ; « get hold of yourself » = ressaisis-toi
 # ===== « take », « put » =====
 ~take down | abattre, vaincre
 ~take it easy | du calme, vas-y doucement
@@ -143,11 +143,11 @@ object IdiomHints {
 ~take * life | tuer, ôter la vie
 ~take kindly to | apprécier, bien prendre
 ~put up with | supporter, tolérer
-~put * through | faire subir, faire endurer
+~put me/you/him/her/us/them/everyone through | faire subir, faire endurer, infliger (« put me through this » = m'infliger ça)
 ~put * in his/her/their/your/my place | remettre à sa place
 ~put * in * shoes | se mettre à la place de
 # ===== « go », « come » =====
-~go ? wrong | mal tourner
+~go ? wrong | mal tourner ; « where did I go wrong » = où me suis-je trompé
 ~come up with | trouver, imaginer
 ~come to think of it | à bien y réfléchir, maintenant que j'y pense
 # ===== « give », « turn », « look », « run » =====
@@ -158,7 +158,7 @@ object IdiomHints {
 ~run * mouth | l'ouvrir, jacasser, dire n'importe quoi
 ~run wild | se déchaîner
 # ===== « break », « hold », « let », « make » =====
-~break down | s'effondrer, tomber en panne
+~break down | s'effondrer, craquer, tomber en panne ; « break down a door/wall » = enfoncer, abattre
 ~hold * ground | tenir bon, ne pas reculer
 ~hand over | remettre, livrer, rendre
 ~hand * over | remettre, livrer
@@ -166,12 +166,12 @@ object IdiomHints {
 ~let ? off | épargner, laisser partir
 ~let * know | faire savoir, prévenir
 ~let * slide | laisser passer, fermer les yeux
-~make sense | avoir du sens, être logique ; « can't make sense of » = ne rien comprendre à | fai(t|s|sai[ts]?|ront|rait|ent)\w* du sens
+~make sense | avoir du sens, être logique, tenir debout (« ça n'a aucun sens », « ça ne tient pas debout ») ; « can't make sense of » = ne rien comprendre à | fai(t|s|sai[ts]?|ront|rait|ent)\w* du sens
 ~make up * mind | se décider
 ~make up for | compenser, se rattraper
 ~make a scene | faire un scandale
 # ===== autres verbes à particule =====
-~pull off | réussir, réaliser
+~pull off | réussir, réaliser (un coup) ; si c'est un objet : retirer, arracher
 ~pass away | décéder, mourir
 ~give birth to | mettre au monde, donner le jour à (« en le mettant au monde », « en lui donnant le jour » ; jamais « en le donnant naissance ») | \b(le|la|les) donn\w+ naissance
 ~show off | frimer, se vanter
@@ -185,7 +185,7 @@ object IdiomHints {
 ~pretend | faire semblant de | prétend
 # ===== expressions toutes faites (proverbes, images) =====
 ~kill two birds with one stone | faire d'une pierre deux coups | oiseau
-piece of cake | un jeu d'enfant, fastoche | gâteau
+@be * piece of cake | un jeu d'enfant, fastoche | gâteau
 ~rain cats and dogs | pleuvoir des cordes | chats et
 ~spill the beans | vendre la mèche, tout déballer | haricot
 ~let the cat out of the bag | vendre la mèche | chat (hors|sort)
@@ -221,7 +221,7 @@ on thin ice | en terrain glissant, en situation risquée | glace mince
 ~face the music | assumer les conséquences | musique
 ~jump the gun | agir trop vite, précipiter les choses
 ~miss the boat | rater le coche, laisser passer sa chance | bateau
-~pull * leg | faire marcher
+~pull my/your leg | faire marcher
 ~see eye to eye | être du même avis
 ~throw in the towel | jeter l'éponge | serviette
 ~walk on eggshells | marcher sur des œufs | coquilles d'œuf
@@ -259,12 +259,12 @@ over my dead body | il faudra me passer sur le corps
 leave it to me | laisse-moi faire, je m'en occupe
 mind your own business | occupe-toi de tes affaires
 none of your business | ça ne te regarde pas
-you'd better not | n'essaie surtout pas de, tu ferais mieux de ne pas | fais attention à ne pas
+you'd better not | ne t'avise pas de (menace), tu ferais mieux de ne pas (conseil) | fais attention à ne pas
 you'd better | tu ferais mieux de
 i'd better | je ferais mieux de
 had better | ferait mieux de
 what the hell | mais qu'est-ce que, bon sang
-who the hell | mais qui diable, qui est ce
+who the hell | mais qui diable, qui donc, qui es-tu, bon sang
 how the hell | comment diable
 i owe you one | je te dois une fière chandelle
 hold your horses | du calme, doucement
@@ -290,6 +290,7 @@ cover your ears | bouchez-vous les oreilles, bouche-toi les oreilles | \bcouvrir
 # ===== titres, rangs et termes d'arts martiaux =====
 eldest young master | jeune maître aîné (le fils aîné) | plus jeune maître|plus âgé des jeunes
 young lady | jeune demoiselle, mademoiselle
+your/his/her lordship | Votre Seigneurie, Sa Seigneurie (jamais « votre seigneur ») | \b(son|votre|ton) seigneur\b
 senior brother | grand frère d'armes, aîné | senior
 junior brother | petit frère d'armes, cadet | junior
 senior sister | grande sœur d'armes | senior
