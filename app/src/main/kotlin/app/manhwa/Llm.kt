@@ -25,9 +25,10 @@ import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
 import com.google.ai.edge.litertlm.ExperimentalApi
-import com.google.ai.edge.litertlm.ExperimentalFlags
 import com.google.ai.edge.litertlm.Message
 import com.google.ai.edge.litertlm.SamplerConfig
+import com.google.ai.edge.litertlm.SpeculativeDecodingConfig
+import com.google.ai.edge.litertlm.SpeculativeDecodingMode
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -277,20 +278,22 @@ class GemmaTranslator(
     private fun textOf(m: Message): String =
         m.contents.contents.filterIsInstance<Content.Text>().joinToString("") { it.text }.ifEmpty { m.toString() }
 
-    /** Description du moteur actif (« GPU + décodage spéculatif », « CPU »…), pour les réglages et le journal. */
+    /** Description du moteur actif (« GPU + décodage spéculatif adaptatif », « CPU »…), pour les réglages et le journal. */
     @Volatile var backendLabel: String = ""
         private set
 
     /**
      * Crée et initialise un moteur. Le décodage spéculatif (prédiction de plusieurs jetons) accélère la génération sur CPU comme sur GPU ;
      * il suppose un modèle récent (fichier publié après mai 2026) : en cas d'échec on réessaie sans.
+     * Depuis le moteur 0.19 il est « adaptatif » : le moteur mesure en continu, sur ce téléphone et sur ce texte, si prédire plusieurs jetons va plus vite que la génération normale,
+     * et ne l'utilise que tant que c'est le cas. La qualité ne change pas : chaque jeton prédit n'est gardé que s'il est identique à celui que le modèle complet vient de choisir lui-même.
      */
     @OptIn(ExperimentalApi::class)
     private fun createEngine(path: String, backend: Backend, speculative: Boolean, vision: Boolean = false): Engine {
-        ExperimentalFlags.enableSpeculativeDecoding = speculative
+        val spec = SpeculativeDecodingConfig(mode = if (speculative) SpeculativeDecodingMode.ADAPTIVE else SpeculativeDecodingMode.OFF)
         // lecture d'image : encodeur de vision sur GPU (la voie CPU plante au deuxième tour d'image sur certains Snapdragon), une image à la fois
-        val cfg = if (vision) EngineConfig(modelPath = path, backend = backend, visionBackend = Backend.GPU(), maxNumTokens = 4096, maxNumImages = 1, cacheDir = ctx.cacheDir.path)
-        else EngineConfig(modelPath = path, backend = backend, maxNumTokens = 4096, cacheDir = ctx.cacheDir.path)
+        val cfg = if (vision) EngineConfig(modelPath = path, backend = backend, visionBackend = Backend.GPU(), maxNumTokens = 4096, maxNumImages = 1, cacheDir = ctx.cacheDir.path, speculativeDecodingConfig = spec)
+        else EngineConfig(modelPath = path, backend = backend, maxNumTokens = 4096, cacheDir = ctx.cacheDir.path, speculativeDecodingConfig = spec)
         return Engine(cfg).also { it.initialize() }
     }
 
@@ -312,7 +315,7 @@ class GemmaTranslator(
                     val e = createEngine(path, if (useGpu) Backend.GPU() else Backend.CPU(), spec2, withVision)
                     engine = e; engineKey = spec.id + (if (gpu) ":gpu" else ":cpu") + (if (withVision) ":v" else "")
                     engineHasVision = withVision
-                    backendLabel = (if (useGpu) "GPU" else "CPU") + (if (spec2) " + décodage spéculatif" else "") + (if (withVision) " + lecture d'image" else "")
+                    backendLabel = (if (useGpu) "GPU" else "CPU") + (if (spec2) " + décodage spéculatif adaptatif" else "") + (if (withVision) " + lecture d'image" else "")
                     if (vision && !withVision) markVision(false, "le moteur n'a pas pu être créé avec la lecture d'image : ${last?.message ?: last?.javaClass?.simpleName}")
                     return e
                 } catch (t: Throwable) { last = t }
@@ -426,7 +429,7 @@ class GemmaTranslator(
         val eng = try { createEngine(path, if (gpu) Backend.GPU() else Backend.CPU(), true) } catch (t: Throwable) {
             return try { createEngine(path, if (gpu) Backend.GPU() else Backend.CPU(), false).let { e2 -> benchWith(e2, label, t0) } } catch (t2: Throwable) { BenchResult(label, false, 0, 0, t2.message ?: t2.javaClass.simpleName) }
         }
-        return benchWith(eng, "$label + décodage spéculatif", t0)
+        return benchWith(eng, "$label + décodage spéculatif adaptatif", t0)
     }
 
     private fun benchWith(eng: Engine, label: String, t0: Long): BenchResult {
