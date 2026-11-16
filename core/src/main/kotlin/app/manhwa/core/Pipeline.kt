@@ -11,6 +11,12 @@ fun interface TranslationEngine {
 
     fun translateWithGlossary(texts: List<String>, source: String, target: String, glossary: List<GlossaryEntry>): List<String> =
         translate(texts, source, target)
+
+    /**
+     * Mesure seulement, sans effet sur la traduction : détail des appels au modèle faits par le fil courant pour sa dernière traduction (durée, taille de la consigne et de la réponse de chacun),
+     * à joindre au journal pour comprendre où part le temps. Null si le moteur ne le tient pas.
+     */
+    fun lastCallDetail(): String? = null
 }
 
 sealed class PageOutcome {

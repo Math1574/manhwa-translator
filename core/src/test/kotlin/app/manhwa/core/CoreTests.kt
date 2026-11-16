@@ -2035,6 +2035,40 @@ fun queueBatchTests() {
         val th4 = listOf(Triple(0.0, "p0", g1), Triple(1.0, "p1", g1), Triple(2.0, "p2", g2), Triple(3.0, "p3", g1)).map { (o, t, g) -> Thread { BatchContext.order.set(o); b4.translateWithGlossary(listOf(t), "en", "fr", g) }.also { it.start(); Thread.sleep(40) } }
         gate4.countDown(); th4.forEach { it.join(4000) }
         T.ok(calls4.none { "p2" in it && it.size > 1 }, "un glossaire différent n'est jamais regroupé : $calls4")
+        // mesure : le détail des appels au modèle suit chaque page jusqu'au journal, y compris quand un groupe échoue et que ses pages sont retentées seules
+        val gate5 = java.util.concurrent.CountDownLatch(1)
+        val callNo = java.util.concurrent.atomic.AtomicInteger(0)
+        val lastOf = ThreadLocal<String?>()
+        val eng5 = object : TranslationEngine {
+            override fun translate(texts: List<String>, source: String, target: String) = translateWithGlossary(texts, source, target, emptyList())
+            override fun translateWithGlossary(texts: List<String>, source: String, target: String, glossary: List<GlossaryEntry>): List<String> {
+                val n = callNo.incrementAndGet(); lastOf.set("appel$n:${texts.size}")
+                if (n == 1) gate5.await(2, java.util.concurrent.TimeUnit.SECONDS)
+                if (texts.size > 1) throw IllegalStateException("groupe refusé")
+                return texts
+            }
+            override fun lastCallDetail(): String? = lastOf.get()
+        }
+        val b5 = TranslationBatcher(eng5, maxPages = 3)
+        val det = java.util.concurrent.ConcurrentHashMap<String, String>()
+        fun ask5(name: String, order: Double) = Thread { BatchContext.order.set(order); b5.translateWithGlossary(listOf(name), "en", "fr", emptyList()); det[name] = BatchContext.lastDetail.get() ?: "(aucun)" }.also { it.start() }
+        val ta = ask5("A", 0.0); Thread.sleep(60)
+        val tb = ask5("B", 1.0); val tc5 = ask5("C", 2.0)
+        Thread.sleep(80); gate5.countDown(); listOf(ta, tb, tc5).forEach { it.join(5000) }
+        T.ok(det["A"] == "appel1:1", "le détail de l'appel suit la page : ${det["A"]}")
+        T.ok(det["B"] == "retente(IllegalStateException: groupe refusé)[appel2:2] appel3:1", "page retentée seule : le groupe échoué et la nouvelle tentative sont notés : ${det["B"]}")
+        T.ok(det["C"] == "retente(IllegalStateException: groupe refusé)[appel2:2] appel4:1", "idem pour l'autre page : ${det["C"]}")
+        // un moteur qui ne tient pas de détail, ou dont le détail échoue, ne change rien à la traduction
+        val eng6 = object : TranslationEngine {
+            override fun translate(texts: List<String>, source: String, target: String) = texts.map { it + "!" }
+            override fun lastCallDetail(): String? = throw IllegalStateException("détail indisponible")
+        }
+        val res6 = java.util.concurrent.ConcurrentHashMap<String, Any>()
+        Thread { BatchContext.order.set(0.0); res6["r"] = TranslationBatcher(eng6).translateWithGlossary(listOf("x"), "en", "fr", emptyList()); res6["d"] = BatchContext.lastDetail.get() ?: "(aucun)" }.also { it.start(); it.join(4000) }
+        T.ok(res6["r"] == listOf("x!") && res6["d"] == "(aucun)", "un détail en échec n'empêche pas la traduction : $res6")
+        val res7 = java.util.concurrent.ConcurrentHashMap<String, Any>()
+        Thread { BatchContext.order.set(0.0); res7["r"] = b.translateWithGlossary(listOf("y"), "en", "fr", emptyList()); res7["d"] = BatchContext.lastDetail.get() ?: "(aucun)" }.also { it.start(); it.join(4000) }
+        T.ok(res7["r"] == listOf("Y!") && res7["d"] == "(aucun)", "un moteur sans détail : rien à joindre : $res7")
     }
 }
 
