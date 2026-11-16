@@ -1,0 +1,20 @@
+Performing Streamed Install
+Success
+Physical size: 1080x2400
+[e2e 18:16:31] envoi du modèle gemma-4-E2B-it.litertlm sur l'émulateur
+total 2527520
+drwxrwxrwx 2 u0_a192 u0_a192       4096 2026-11-16 18:16 .
+drwxrwxrwx 3 u0_a192 u0_a192       4096 2026-11-16 18:16 ..
+-rw-rw-rw- 1 u0_a192 u0_a192 2588147712 2026-11-16 18:16 gemma-4-E2B-it.litertlm
+-rw-rw-rw- 1 u0_a192 u0_a192         64 2026-11-16 18:16 gemma-4-E2B-it.litertlm.ok
+[e2e 18:16:56] === ja_gemma_1 (pc_ja.html, GEMMA_E2B, JA→FR)
+[e2e 18:18:26] terminé : ja_gemma_1 (89 s)
+[e2e 18:18:26] === en_gemma_ctrl (pc_en.html, GEMMA_E2B, EN→FR)
+[e2e 18:19:50] terminé : en_gemma_ctrl (83 s)
+[e2e 18:19:50] === ja_gemma_2 (pc_ja.html, GEMMA_E2B, JA→FR)
+[e2e 18:21:14] terminé : ja_gemma_2 (83 s)
+[e2e 18:21:14] === ja_gemma_nopaddle (pc_ja.html, GEMMA_E2B, JA→FR)
+[e2e 18:22:19] terminé : ja_gemma_nopaddle (65 s)
+[e2e 18:22:19] === ja_mlkit_nomodel (pc_ja.html, MLKIT, JA→FR)
+[e2e 18:23:43] terminé : ja_mlkit_nomodel (83 s)
+[e2e 18:23:43] jadiag terminé
