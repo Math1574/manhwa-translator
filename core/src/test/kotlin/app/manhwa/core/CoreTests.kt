@@ -387,6 +387,12 @@ fun textTests() {
         listOf("HMPH", "SHH", "..", "?!", "a", "#%&*", "TCH").forEach { T.ok(TextNormalizer.isNoise(it), "devrait être du bruit: $it") }
         listOf("Hello", "PLEASE...", "No way!", "털썩", "こんにちは", "你好", "I see").forEach { T.ok(!TextNormalizer.isNoise(it), "ne devrait pas être du bruit: $it") }
     }
+    T.test("texte: un mot court entouré de ponctuation est une réplique, les débris d'OCR restent du bruit") {
+        // relevés d'un journal : ces répliques étaient écartées comme « bruit » (la part de lettres sous 50 % à cause des points de suspension) et restaient en anglais
+        listOf("HUH...?", "B-BUT...!", "H-HOW...?", "...Ah!", "...Heh.", "...Huh?", "We...", "YO...", "Y-YO...", "UGH...!", "Oh...", "No...", "Go...", "E-EeK...! A-AH...", "\"Wait...\"", "I'm...").forEach { T.ok(!TextNormalizer.isNoise(it), "devrait être traduit: $it") }
+        // sans voyelle (onomatopées), chiffres et signes mêlés, lettre seule : toujours du bruit
+        listOf("Hmm...", "Hmm.", "NNGH...", "...NGH!", "TH-", "WH...", "TCH.", "Hmph!", "Mmm~", "124", "121)", "00", "2140 o O", "8 2419HH", "AH.. 444...", "ARK-2020", "Wot-.- Ot-..", "62-An5J", "S.", "D", ".....I", "#%&*").forEach { T.ok(TextNormalizer.isNoise(it), "devrait rester du bruit: $it") }
+    }
     T.test("texte: majuscules ramenées en casse de phrase, texte déjà mixte inchangé") {
         T.eq("Please... Take me as your disciple...!", TextNormalizer.fixCase("PLEASE... TAKE ME AS YOUR DISCIPLE...!"))
         T.eq("I think I know. Do you?", TextNormalizer.fixCase("I THINK I KNOW. DO YOU?"))

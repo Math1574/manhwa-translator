@@ -525,7 +525,19 @@ object Erasure {
         val zoneArt = TextErase.rectMask(w, h, rects(), min(if (a.outlined) 30 else 18, max(4, (lh * (if (a.outlined) 0.35f else 0.25f)).toInt())))
         val lineRectsPx = lineBoxes.map { l -> intArrayOf((l.left * s).toInt() - x0, (l.top * s).toInt() - y0, (l.right * s).toInt() - x0, (l.bottom * s).toInt() - y0) }
         val tightForColor = TextErase.rectMask(w, h, lineRectsPx, 0)
-        val fillColor = TextErase.extremeTextColor(px, zoneArt, tightForColor, w, h, lh.toInt())
+        val extremeColor = TextErase.extremeTextColor(px, zoneArt, tightForColor, w, h, lh.toInt())
+        // lettrage coloré sur une lueur claire : l'extrême de luminosité est la lueur, pas les lettres (voir TextErase.enrichedFill). Les boîtes des textes voisins ne comptent pas dans la comparaison.
+        val neighForColor = (exclude + protect).map { l -> intArrayOf((l.left * s).toInt() - x0, (l.top * s).toInt() - y0, (l.right * s).toInt() - x0, (l.bottom * s).toInt() - y0) }
+        val neighMaskColor = if (neighForColor.isEmpty()) null else TextErase.rectMask(w, h, neighForColor, 0)
+        // voisinage immédiat des boîtes seulement : la région de la seconde passe s'étend loin (ciel noir sous une lueur) et fausserait la comparaison
+        val nearBoxesColor = TextErase.rectMask(w, h, lineRectsPx, (lh * 0.6f).toInt().coerceIn(24, 80))
+        val outsideColor = BooleanArray(w * h) { nearBoxesColor[it] && !tightForColor[it] && (neighMaskColor == null || !neighMaskColor[it]) }
+        val enrichedColor = TextErase.enrichedFill(px, w, h, tightForColor, outsideColor, extremeColor)
+        if (enrichedColor != null) trace?.invoke("couleur du texte : %06X absente des lignes lues -> couleur des lettres %06X (la plus fréquente dans les lignes, rare dehors)".format(extremeColor and 0xFFFFFF, enrichedColor and 0xFFFFFF))
+        // La couleur enrichie ne sert qu'au masque d'effacement : la couleur déclarée du texte (peinture du texte traduit, choix de la police, corps cible) reste celle d'avant, que ces réglages
+        // connaissent. Mesurée à l'échelle réelle de l'application, la couleur des lettres faisait lire le contour sombre comme le corps des traits (texte rouge sombre) et grossir l'encre.
+        val fillColor = extremeColor
+        val maskColor = enrichedColor ?: extremeColor
         fun lumOf(c: Int) = (((c shr 16) and 0xFF) * 77 + ((c shr 8) and 0xFF) * 150 + (c and 0xFF) * 29) shr 8
         // texte sombre sur fond clair : les traits fins sombres à plus de 3 px des lignes lues sont du décor (hachures d'un contour, peigne de traits d'un panneau), jamais des lettres. La zone
         // détectée ne sert pas ici : elle déborde de plusieurs pixels sur le décor voisin (la bordure du panneau y entrait)
@@ -541,7 +553,7 @@ object Erasure {
         val structureAvoid: ((BooleanArray) -> BooleanArray?)? = if (protectStructure && a.bgShare >= 0.45f) { ink0 -> fixedStructure(px, w, h, a.bg, a.threshold, textRect, ink0)?.protect } else null
         // pointes d'un contour « étoile » et traits fins loin des lignes lues : jamais des lettres (ils passent dans les coins de la zone détectée)
         val nearLines = TextErase.rectMask(w, h, lineRectsPx, max(4, (lh * 0.35f).toInt()))
-        val artInfo = TextErase.artMaskInfo(px, w, h, zoneArt, fillColor, 2, Int.MAX_VALUE, tightLines, reachCap, lineRectsPx, structureAvoid, nearLines, thinInner)
+        val artInfo = TextErase.artMaskInfo(px, w, h, zoneArt, maskColor, 2, Int.MAX_VALUE, tightLines, reachCap, lineRectsPx, structureAvoid, nearLines, thinInner)
         // fond blanc : le halo clair collé aux lettres (compression, lueur) est effacé avec elles, sans quoi il reste un fantôme de leur forme
         val plainWhite = haloClean && TextErase.ringIsPlainWhite(px, w, h, artInfo.mask, a.bg, frameIgnore)
         val mask = if (plainWhite) TextErase.lightHalo(px, w, h, artInfo.mask, a.bg, max(6, (lh * 0.12f).toInt()), frameIgnore) else artInfo.mask

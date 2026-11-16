@@ -444,5 +444,59 @@ object BlockLayout {
             }
             if (!changed) break
         }
+        separateStacked(preps, laids, pinned, layoutFn)
+    }
+
+    /** Bloc rangé dans une bulle, un cadre ou une forme relevée : la résolution des collisions ci-dessus n'y touche pas (ils gardent leur place). */
+    private fun bubbleLike(p: BlockPrep): Boolean = p.bubble != null || p.container != null || p.plan?.shape != null
+
+    /**
+     * Plus fort recouvrement entre une ligne de [a] et une ligne de [b] (lignes de texte placées, tournées avec leur bloc), rapporté à la plus petite des deux lignes : 0 quand aucune ligne
+     * n'en touche une autre, 1 quand l'une est entièrement sur l'autre. La hauteur d'une ligne comprend son interligne : un recouvrement de quelques pour cent n'est pas encore du texte sur du texte.
+     */
+    internal fun textOverlap(a: Result, b: Result): Float {
+        val ra = a.lineRects(0f); val rb = b.lineRects(0f)
+        var worst = 0f
+        for (x in ra) for (y in rb) {
+            val i = x.intersection(y) ?: continue
+            worst = max(worst, i.area / max(1f, min(x.area, y.area)))
+        }
+        return worst
+    }
+
+    /** Recouvrement à partir duquel deux textes de bulle sont séparés, et recouvrement toléré une fois séparés (voir [textOverlap]). */
+    internal const val STACK_TRIGGER = 0.25f
+    internal const val STACK_TARGET = 0.08f
+
+    /**
+     * Deux blocs de bulle ou de cadre dont les lignes de texte se recouvrent : le titre et le paragraphe d'un même cadre (la traduction est plus longue que l'original et chaque bloc est mis en page
+     * seul dans la même forme : le paragraphe grandit vers le titre, qui lui-même passe sur deux lignes). Les deux restent dans leur bulle : on réduit leur corps (jusqu'à 80 %) et on garde la
+     * combinaison qui sépare les textes en réduisant le moins possible, la plus petite des deux réductions d'abord. Un texte un peu plus petit vaut mieux que deux textes l'un sur l'autre.
+     * Sans combinaison qui convienne, ou pour un bloc dont la position a été choisie, rien ne change.
+     */
+    internal fun separateStacked(preps: List<BlockPrep>, laids: MutableList<Result?>, pinned: (BlockPrep) -> Boolean, layoutFn: (BlockPrep, Float) -> Result?) {
+        val steps = floatArrayOf(1f, 0.95f, 0.9f, 0.85f, 0.8f)
+        for (round in 0 until 2) {
+            var changed = false
+            for (i in preps.indices) for (j in i + 1 until preps.size) {
+                val li = laids[i] ?: continue; val lj = laids[j] ?: continue
+                val pi = preps[i]; val pj = preps[j]
+                if (!bubbleLike(pi) || !bubbleLike(pj) || pinned(pi) || pinned(pj)) continue
+                if (li.placed(0f).intersection(lj.placed(0f)) == null || textOverlap(li, lj) < STACK_TRIGGER) continue
+                val ci = steps.map { k -> if (k == 1f) li else layoutFn(pi, k) }
+                val cj = steps.map { k -> if (k == 1f) lj else layoutFn(pj, k) }
+                var best: Triple<Result, Result, Float>? = null
+                for (a in steps.indices) for (b in steps.indices) {
+                    if (a == 0 && b == 0) continue
+                    val ri = ci[a] ?: continue; val rj = cj[b] ?: continue
+                    if (textOverlap(ri, rj) > STACK_TARGET) continue
+                    val score = min(steps[a], steps[b]) * 10f + steps[a] * steps[b]
+                    if (best == null || score > best.third) best = Triple(ri, rj, score)
+                }
+                val chosen = best ?: continue
+                laids[i] = chosen.first; laids[j] = chosen.second; changed = true
+            }
+            if (!changed) break
+        }
     }
 }
