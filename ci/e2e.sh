@@ -49,6 +49,12 @@ run() { # nom page moteur source cible modèles timeout [lazy]
   adb exec-out "run-as $PKG cat files/report.json" > $OUT/reports/$name.json
   adb shell dumpsys meminfo $PKG 2>/dev/null | grep -m3 -E "TOTAL" > $OUT/reports/$name.mem
   adb logcat -d > $OUT/reports/$name.full.log
+  if [ -n "$DIAG" ]; then
+    grep -v -E "tflite|litert|native  :|XlaCallModule|Replacing|magic_number" $OUT/reports/$name.full.log | tail -3000 > $OUT/reports/$name.diag.log
+    adb shell ps -A 2>/dev/null | grep -E "manhwa|webview|sandbox|chrome" > $OUT/reports/$name.ps
+    adb shell dumpsys meminfo 2>/dev/null | head -50 > $OUT/reports/$name.sysmem
+    adb exec-out "run-as $PKG cat files/journal.jsonl" > $OUT/reports/$name.journal 2>/dev/null
+  fi
   grep -E "MTTEST|FATAL|AndroidRuntime|litert|LiteRT|tflite|OutOfMemory|ANR| MT +: " $OUT/reports/$name.full.log | head -80 > $OUT/reports/$name.log
   rm -f $OUT/reports/$name.full.log
   for i in 1 2 3 4 5 6; do adb shell input swipe 540 700 540 2000 250; done; sleep 1
@@ -82,6 +88,12 @@ lab() { # nom moteur variantes
 # suite « nav » : changer de chapitre pendant que le vrai modèle Gemma traduit (voir ci/e2e_nav.sh)
 if [ "$SUITE" = nav ]; then
   source ci/e2e_nav.sh
+  exit 0
+fi
+
+# suite « jadiag » : diagnostic de la scène japonaise avec Gemma, journal complet de chaque scène (voir ci/e2e_jadiag.sh)
+if [ "$SUITE" = jadiag ]; then
+  source ci/e2e_jadiag.sh
   exit 0
 fi
 
