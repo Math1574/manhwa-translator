@@ -72,6 +72,31 @@ fun translationOrderTests() {
     }
 
     // ---------- file des pages ----------
+    T.test("passage à tour de rôle : le premier de la file attend un instant (borné, une seule fois par fil attendu) un fil plus proche encore en route, puis passe") {
+        val gate = OrderedTurn(recheckMs = 20, holdMaxMs = 300)
+        val coming = java.util.concurrent.atomic.AtomicBoolean(true)
+        gate.holdBack = { p, ignore -> "p1".takeIf { coming.get() && p > 1 && it !in ignore } }
+        val order = java.util.Collections.synchronizedList(ArrayList<Int>())
+        fun go(p: Int) = Thread { gate.run({ p }) { order.add(p); Thread.sleep(30) } }.also { it.start() }
+        val t3 = go(3); Thread.sleep(150)
+        T.ok(order.isEmpty(), "la page 3 attend la page 1 encore en route : $order")
+        val t1 = go(1); coming.set(false)
+        t1.join(3000); t3.join(3000)
+        T.eq(listOf(1, 3), order.toList(), "la page 1 arrive pendant l'attente et passe la première")
+        // l'autre page n'arrive jamais : l'attente s'arrête à la limite, et la suivante ne l'attend plus
+        val gate2 = OrderedTurn(recheckMs = 20, holdMaxMs = 300)
+        gate2.holdBack = { p, ignore -> "p1".takeIf { p > 1 && it !in ignore } }
+        val t0 = System.currentTimeMillis()
+        val th = Thread { gate2.run({ 3 }) { } }.also { it.start() }; th.join(3000)
+        val waited = System.currentTimeMillis() - t0
+        T.ok(waited in 250..1500, "après la limite, la page passe sans l'autre (attente $waited ms)")
+        val t2 = System.currentTimeMillis(); gate2.run({ 4 }) { }
+        T.ok(System.currentTimeMillis() - t2 < 150, "la page déjà abandonnée n'est plus attendue (${System.currentTimeMillis() - t2} ms)")
+        // sans durée d'attente : aucune attente
+        val gate3 = OrderedTurn(recheckMs = 20, holdMaxMs = 0); gate3.holdBack = { _, _ -> "p1" }
+        val t4 = System.currentTimeMillis(); gate3.run({ 3 }) { }
+        T.ok(System.currentTimeMillis() - t4 < 200, "durée d'attente nulle : le fil passe tout de suite")
+    }
     T.test("file : une page plus urgente prend la place de la moins urgente quand la file est pleine (celle-ci est rendue), une page moins urgente est refusée") {
         val displaced = CopyOnWriteArrayList<String>()
         val q = PageQueue(2, object : QueueListener { override fun onDisplaced(id: String) { displaced.add(id) } })
@@ -175,6 +200,22 @@ fun translationOrderTests() {
         val t1b = System.currentTimeMillis()
         val t5 = ask(5); t5.join(3000)
         T.ok(calls.size == 2 && System.currentTimeMillis() - t1b < 300, "la page déjà abandonnée n'est plus attendue (${System.currentTimeMillis() - t1b} ms)")
+        b.shutdown()
+    }
+    T.test("moteur : une page prête plus loin ne rejoint pas un groupe devant une page intermédiaire encore en route") {
+        val calls = Collections.synchronizedList(ArrayList<List<String>>())
+        val b = TranslationBatcher(recordingEngine(calls, 60), maxPages = 3, holdMaxMs = 4000)
+        // les pages 1, 2 et 3 sont en route (lecture du texte) ; la 4 est prête la première
+        val inFlight = java.util.concurrent.ConcurrentHashMap.newKeySet<Int>(); inFlight.addAll(listOf(1, 2, 3))
+        b.holdBack = { priority, ignore -> inFlight.filter { "p$it" !in ignore && it < priority }.minOrNull()?.let { "p$it" } }
+        fun ask(p: Int) = Thread { BatchContext.priority.set { p }; inFlight.remove(p); b.translateWithGlossary(listOf("p$p"), "en", "fr", emptyList()) }.also { it.start() }
+        val t4 = ask(4); Thread.sleep(150)
+        T.ok(calls.isEmpty(), "le moteur attend les pages 1 à 3 : $calls")
+        val t1 = ask(1); Thread.sleep(300)
+        T.ok(calls.size == 1 && calls[0] == listOf("p1"), "la page 1 part seule (la 2 et la 3 sont encore en route, la 4 ne passe pas devant) : $calls")
+        val t3 = ask(3); Thread.sleep(40); val t2 = ask(2)
+        listOf(t1, t2, t3, t4).forEach { it.join(5000) }
+        T.ok(calls.size == 2 && calls[1] == listOf("p2", "p3", "p4"), "puis les pages 2, 3 et 4 ensemble, dans l'ordre : $calls")
         b.shutdown()
     }
     T.test("moteur : sans fonction d'attente ni priorité, comportement d'avant (ordre d'arrivée, groupes)") {

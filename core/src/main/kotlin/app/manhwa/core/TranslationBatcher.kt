@@ -23,7 +23,8 @@ object BatchContext {
  * Si un groupe échoue, chaque page est retentée seule : l'échec d'une page ne fait pas perdre les autres.
  * Ordre : toujours la page la plus proche de la lecture d'abord (priorité relue à chaque choix), puis les suivantes dans l'ordre. Avant de partir, le moteur attend un instant
  * ([holdBack], au plus [holdMaxMs] par page attendue) si une page plus proche du lecteur est encore en route (téléchargement, lecture du texte) : sans cela il traduisait celles qui étaient
- * prêtes, plus loin dans le chapitre, et la page du début passait après, avec le groupe suivant.
+ * prêtes, plus loin dans le chapitre, et la page du début passait après, avec le groupe suivant. Une page ne rejoint pas un groupe devant une page intermédiaire encore en route
+ * (la 4 ne part pas avec la 1 pendant que la 2 et la 3 sont en lecture du texte) : elle attend le groupe suivant.
  */
 class TranslationBatcher(
     private val engine: TranslationEngine,
@@ -118,9 +119,12 @@ class TranslationBatcher(
                 val first = ordered.first()
                 batch.add(first)
                 var texts = first.texts.size; var chars = first.texts.sumOf { it.length }
+                val skip = gaveUp.keys.toSet()
                 for (r in ordered) {
                     if (r === first || !sameKind(first, r)) continue
                     if (batch.size >= maxPages) break
+                    // une page encore en route plus proche du lecteur que celle-ci (la 2 pendant que la 4 est prête) : la 4 ne part pas avec la 1 devant elle, elle attend le groupe suivant
+                    if (holdBack != null && runCatching { holdBack?.invoke(prioOf(r), skip) }.getOrNull() != null) break
                     val n = r.texts.size; val c = r.texts.sumOf { it.length }
                     if (texts + n > maxTexts || chars + c > maxChars) break
                     batch.add(r); texts += n; chars += c

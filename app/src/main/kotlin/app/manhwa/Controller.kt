@@ -387,7 +387,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     /** Candidats confiés à la file (en attente ou en cours) : leur priorité de lecture sert au moteur de traduction, qui attend une page plus proche du lecteur encore en route. */
     private val jobCand = ConcurrentHashMap<String, Candidate>()
     /** Passages dans l'ordre de lecture : la lecture du texte et l'affichage se font une page à la fois, la plus proche du lecteur d'abord (un simple verrou laissait passer n'importe laquelle). */
-    private val ocrTurns = OrderedTurn()
+    private val ocrTurns = OrderedTurn(holdMaxMs = 2000L).also { it.holdBack = { p, ignore -> earlierPageBeforeReading(p, ignore) } }
     private val renderTurns = OrderedTurn()
     /** Pages dont le traitement est terminé (réussi, sans texte ou en échec) : les autres, si le travail est interrompu, sont à redemander à la page. */
     private val finishedIds = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
@@ -1264,6 +1264,21 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             if (id in ignore) continue
             val stage = runStage[id] ?: continue
             if (stage == "traduction" || stage == "affichage") continue
+            val c = jobCand[id] ?: continue
+            if (c.priorityAt(viewportY, viewportH) < priority) return id
+        }
+        return null
+    }
+
+    /**
+     * Page plus proche du lecteur que [priority] encore en téléchargement ou en assemblage (et dont l'attente n'a pas été abandonnée, [ignore]) : la lecture du texte (une page à la fois,
+     * 5 à 10 s) l'attend un instant (2 s au plus) au lieu de partir avec une page plus loin, dont le téléchargement a simplement fini quelques centaines de millisecondes plus tôt.
+     */
+    private fun earlierPageBeforeReading(priority: Int, ignore: Set<String>): String? {
+        for (id in queue.runningIds()) {
+            if (id in ignore) continue
+            val stage = runStage[id] ?: continue
+            if (stage != "téléchargement" && !stage.startsWith("assemblage")) continue
             val c = jobCand[id] ?: continue
             if (c.priorityAt(viewportY, viewportH) < priority) return id
         }
