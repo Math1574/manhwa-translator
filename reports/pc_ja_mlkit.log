@@ -1,0 +1,60 @@
+11-16 11:43:19.574 14006 14120 I tflite  : Initialized TensorFlow Lite runtime.
+11-16 11:43:19.614 14006 14120 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+11-16 11:43:19.615 14006 14120 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 11:43:19.619 14006 14121 I native  : I0000 00:00:1794829399.619100   14121 tflite_lstm_client_base.cc:371] Resizing interpreter pool to 4
+11-16 11:43:19.627 14006 14120 I native  : I0000 00:00:1794829399.621060   14120 tflite_detector_client_with_shape_cache.cc:105] Caching size: 10
+11-16 11:43:19.636 14006 14121 I native  : I0000 00:00:1794829399.636947   14121 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_splitting_custom_ops/model.tflite
+11-16 11:43:19.637 14006 14121 I native  : I0000 00:00:1794829399.637681   14121 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-16 11:43:19.637 14006 14121 I native  : I0000 00:00:1794829399.637898   14121 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_clustering_custom_ops/model.tflite
+11-16 11:43:19.638 14006 14121 I native  : I0000 00:00:1794829399.638052   14121 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-16 11:43:19.644 14006 14131 I native  : I0000 00:00:1794829399.644717   14131 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Jpan_ctc/optical/conv_model.fb
+11-16 11:43:19.645 14006 14131 I native  : I0000 00:00:1794829399.645683   14131 tflite_model_pooled_runner.cc:636] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Jpan_ctc/optical/lstm_model.fb
+11-16 11:43:19.652 14006 14132 I native  : I0000 00:00:1794829399.652866   14132 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Hani_ctc/optical/conv_model.fb
+11-16 11:43:19.653 14006 14133 I native  : I0000 00:00:1794829399.653446   14133 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/conv_model.fb
+11-16 11:43:19.655 14006 14133 I native  : I0000 00:00:1794829399.655604   14133 tflite_model_pooled_runner.cc:636] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/lstm_model.fb
+11-16 11:43:19.655 14006 14131 I native  : I0000 00:00:1794829399.655193   14131 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 4
+11-16 11:43:19.656 14006 14132 I native  : I0000 00:00:1794829399.656242   14132 tflite_model_pooled_runner.cc:636] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Hani_ctc/optical/lstm_model.fb
+11-16 11:43:19.660 14006 14133 I native  : I0000 00:00:1794829399.660692   14133 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 4
+11-16 11:43:19.663 14006 14132 I native  : I0000 00:00:1794829399.663167   14132 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 4
+11-16 11:43:19.733 14006 14120 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 11:43:20.026 14006 14006 I MT      : ordre : repérage i1(n=0,haut=75) i2(n=1,haut=645) i3(n=2,haut=1215) ; vue 0/700 ; ajoutées 3
+11-16 11:43:20.031 14006 14030 I MT      : ordre : i1 démarre
+11-16 11:43:20.042 14006 14031 I MT      : ordre : i3 démarre
+11-16 11:43:20.042 14006 14032 I MT      : ordre : i2 démarre
+11-16 11:43:21.434 14006 14030 I MT      : ordre : i1 arrive à la lecture du texte (priorité 50000)
+11-16 11:43:21.434 14006 14030 I MT      : ordre : lecture (priorité 50000) passe ; en route : i1=attente de la lecture du texte/50000 i2=assemblage avec l'image du dessus/50001 i3=assemblage avec l'image du dessus/200002
+11-16 11:43:21.434 14006 14030 I MT      : ordre : i1 lit le texte (attente 1 ms)
+11-16 11:43:21.438 14006 14031 I MT      : ordre : i3 arrive à la lecture du texte (priorité 200002)
+11-16 11:43:21.441 14006 14120 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 11:43:21.985 14006 14120 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 11:43:22.012 14006 14032 I MT      : ordre : i2 arrive à la lecture du texte (priorité 50001)
+11-16 11:43:22.053 14006 14120 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 11:43:22.125 14006 14121 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 11:43:22.512 14006 14121 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 11:43:22.633 14006 14121 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 11:43:23.109 14006 14121 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 11:43:23.477 14006 14121 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 11:43:28.036 14006 14032 I MT      : ordre : lecture (priorité 50001) passe ; en route : i1=lecture du texte/50000 i2=attente de la lecture du texte/50001 i3=attente de la lecture du texte/200002
+11-16 11:43:28.036 14006 14032 I MT      : ordre : i2 lit le texte (attente 6025 ms)
+11-16 11:43:28.040 14006 14030 I MT      : écarté « G » (bruit, hors zone)
+11-16 11:43:28.173 14006 14121 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 11:43:28.221 14006 14121 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 11:43:28.261 14006 14121 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 11:43:28.376 14006 14195 I tflite  : Initialized TensorFlow Lite runtime.
+11-16 11:43:28.377 14006 14195 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+11-16 11:43:28.526 14006 14121 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 11:43:28.835 14006 14030 I MT      : ordre : i1 arrive à l'affichage (priorité 50000)
+11-16 11:43:28.837 14006 14030 I MT      : ordre : i1 s'affiche (attente 3 ms)
+11-16 11:43:29.057 14006 14121 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 11:43:29.164 14006 14121 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 11:43:37.620 14006 14031 I MT      : ordre : lecture (priorité 200002) passe ; en route : i2=lecture du texte/50001 i3=attente de la lecture du texte/200002
+11-16 11:43:37.621 14006 14031 I MT      : ordre : i3 lit le texte (attente 16183 ms)
+11-16 11:43:37.622 14006 14032 I MT      : écarté « どはどは » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-16 11:43:37.622 14006 14032 I MT      : écarté « ん » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-16 11:43:38.387 14006 14032 I MT      : ordre : i2 arrive à l'affichage (priorité 50001)
+11-16 11:43:38.387 14006 14032 I MT      : ordre : i2 s'affiche (attente 0 ms)
+11-16 11:43:41.981 14006 14031 I MT      : écarté « 18 » (bruit, hors zone)
+11-16 11:43:41.981 14006 14031 I MT      : écarté « 05/2014 » (bruit, hors zone)
+11-16 11:43:42.170 14006 14031 I MT      : ordre : i3 arrive à l'affichage (priorité 200002)
+11-16 11:43:42.170 14006 14031 I MT      : ordre : i3 s'affiche (attente 0 ms)
+11-16 11:43:50.957 14006 14039 I MTTEST  : REPORT_READY report.json

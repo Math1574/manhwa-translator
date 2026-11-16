@@ -1,0 +1,26 @@
+11-16 11:22:15.428  5621  6534 I ChimeraConfigurator: Detected pending changes for urgent request: [vision.ocr]. Pending module sets: container:2318189190800+mlkit.ocr.common,tflite_dynamite:2640104055100800+tflite_dynamite,vision_ocr:2316024025100000+vision.ocr
+11-16 11:22:15.515  5621  6517 I ChimeraConfigurator: Detected pending changes for urgent request: [vision.ocr]. Pending module sets: container:2318189190800+mlkit.ocr.common,tflite_dynamite:2640104055100800+tflite_dynamite,vision_ocr:2316024025100000+vision.ocr
+11-16 11:22:15.636  5621  6533 I ChimeraConfigurator: Detected pending changes for urgent request: [mlkit.barcode.ui]. Pending module sets: container:2318189190800+mlkit.barcode.ui+vision.barcode,tflite_dynamite:2640104055100800+tflite_dynamite
+11-16 11:22:15.903  5621  6534 I ChimeraConfigurator: Starting update, reason: 4 urgentFeatures: tflite_dynamite:-1
+11-16 11:22:15.954  5621  6534 I ChimeraConfigurator: Detected pending changes for urgent request: [tflite_dynamite]. Pending module sets: container:2318189190800,tflite_dynamite:2640104055100800+tflite_dynamite
+11-16 11:22:15.984  5621  6534 W ZappDownloader: No successful module downloads for requested features [tflite_dynamite].
+11-16 11:22:15.994  5621  6534 I GmsDebugLogger: [83] 1 [tflite_dynamite]
+11-16 11:22:16.036  5621  6534 I ChimeraConfigurator: Detected pending changes for urgent request: [vision.ocr]. Pending module sets: container:2318189190800+mlkit.ocr.common,tflite_dynamite:2640104055100800+tflite_dynamite,vision_ocr:2316024025100000+vision.ocr
+11-16 11:22:22.233  6403  6598 I tflite  : Initialized TensorFlow Lite runtime.
+11-16 11:22:22.246  6403  6599 I native  : I0000 00:00:1794828142.246217    6599 tflite_lstm_client_base.cc:371] Resizing interpreter pool to 4
+11-16 11:22:22.258  6403  6609 I native  : I0000 00:00:1794828142.258272    6609 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/conv_model.fb
+11-16 11:22:22.259  6403  6609 I native  : I0000 00:00:1794828142.259119    6609 tflite_model_pooled_runner.cc:636] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/lstm_model.fb
+11-16 11:22:22.266  6403  6609 I native  : I0000 00:00:1794828142.266145    6609 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 4
+11-16 11:22:22.268  6403  6599 I native  : I0000 00:00:1794828142.268065    6599 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_splitting_custom_ops/model.tflite
+11-16 11:22:22.268  6403  6599 I native  : I0000 00:00:1794828142.268429    6599 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-16 11:22:22.268  6403  6599 I native  : I0000 00:00:1794828142.268667    6599 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_clustering_custom_ops/model.tflite
+11-16 11:22:22.268  6403  6599 I native  : I0000 00:00:1794828142.268889    6599 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-16 11:22:22.280  6403  6598 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+11-16 11:22:22.281  6403  6598 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 11:22:22.282  6403  6598 I native  : I0000 00:00:1794828142.282885    6598 tflite_detector_client_with_shape_cache.cc:105] Caching size: 10
+11-16 11:22:22.329  6403  6598 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 11:22:23.036  6403  6598 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 11:22:23.060  6403  6598 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 11:22:23.063  6403  6598 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 11:22:33.555  5621  6643 I ChimeraConfigurator: Detected pending changes for urgent request: [vision.ocr]. Pending module sets: container:2318189190800+mlkit.ocr.common,tflite_dynamite:2640104055100800+tflite_dynamite,vision_ocr:2316024025100000+vision.ocr
+11-16 11:22:51.814  6403  6445 I MTTEST  : REPORT_READY report.json
