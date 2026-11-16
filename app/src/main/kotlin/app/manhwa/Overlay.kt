@@ -69,7 +69,7 @@ object PageScript {
         prev = null;
       }
       S.seen[id] = s;
-      out.push({id:id, src:s, w:im.naturalWidth, h:im.naturalHeight, top:top, sy:window.scrollY, dh:r.height, vh:window.innerHeight,
+      out.push({id:id, src:s, w:im.naturalWidth, h:im.naturalHeight, top:top, sy:window.scrollY, dh:r.height, vh:window.innerHeight, n:i,
                 prev: prev ? {id:idOf(prev), src:srcOf(prev), h:prev.naturalHeight} : null, next: next ? {h:next.naturalHeight} : null});
     }
     return out;

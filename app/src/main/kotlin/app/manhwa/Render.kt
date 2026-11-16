@@ -36,6 +36,7 @@ import app.manhwa.core.ScriptDetector
 import app.manhwa.core.ShapeLayout
 import app.manhwa.core.TextMeasurer
 import app.manhwa.core.TextNormalizer
+import app.manhwa.core.TextPaint
 import app.manhwa.core.Typography
 import app.manhwa.core.TextErase
 import app.manhwa.core.TextErase.FontStyle
@@ -353,9 +354,12 @@ object PageRenderer {
         return fg
     }
 
+    /** Bulle en dégradé (mode lissé) où le texte contraste mal avec une partie du fond : le bloc est dessiné avec un contour, comme sur dessin (voir TextPaint). */
+    private fun gradientOutline(p: Prep, laid: Laid, s: Float): Boolean = TextPaint.needsOutlineOnGradient(p.plan, textColorOf(p), laid.lineRects(0f), s)
+
     /** Dessine les lignes traduites d'un bloc sur [tc] (patch de rectangle [rect] à [ss] pixels par pixel de l'image) ; rend la couleur utilisée. */
-    private fun drawLines(tc: Canvas, p: Prep, laid: Laid, rect: RectF, ss: Float): Int {
-        val plan = p.plan; val font = laid.font; val paint = laid.paint; val fit = laid.fit; val art = laid.art; val allCaps = laid.allCaps
+    private fun drawLines(tc: Canvas, p: Prep, laid: Laid, rect: RectF, ss: Float, s: Float): Int {
+        val plan = p.plan; val font = laid.font; val paint = laid.paint; val fit = laid.fit; val art = laid.art || gradientOutline(p, laid, s); val allCaps = laid.allCaps
         val fg = textColorOf(p)
         val px = fit.size * ss
         paint.textSize = px
@@ -434,9 +438,9 @@ object PageRenderer {
             for ((np, nl) in neighbours) {
                 val pr = nl.placed(0f)
                 if (pr.right < rect.left || pr.left > rect.right || pr.bottom < rect.top || pr.top > rect.bottom) continue
-                drawLines(tc, np, nl, rect, ss)
+                drawLines(tc, np, nl, rect, ss, s)
             }
-            val fg = drawLines(tc, p, laid, rect, ss)
+            val fg = drawLines(tc, p, laid, rect, ss, s)
             val out = ByteArrayOutputStream()
             if (sink == null) patch.compress(Bitmap.CompressFormat.PNG, 100, out)
             val patchJson = JSONObject().put("x", rect.left.toDouble()).put("y", rect.top.toDouble()).put("w", (rect.right - rect.left).toDouble()).put("h", (rect.bottom - rect.top).toDouble())
@@ -452,7 +456,7 @@ object PageRenderer {
                 .put("orig", JSONArray(b.lineBoxes.ifEmpty { listOf(b.box) }.reduce { a, c -> a.union(c) }.let { u -> listOf(u.left, u.top, u.right, u.bottom).map { v -> Math.round(v) } }))
                 .put("cont", b.bubble?.let { c -> JSONArray(listOf(c.left, c.top, c.right, c.bottom).map { v -> Math.round(v) }) } ?: JSONObject.NULL)
                 .put("zoneBox", b.zone?.let { c -> JSONArray(listOf(c.left, c.top, c.right, c.bottom).map { v -> Math.round(v) }) } ?: JSONObject.NULL)
-                .put("tilt", laid.tilt.toDouble()).put("paint", p.paint?.info ?: "").put("family", font.family).put("fontInfo", p.fontInfo).put("skew", font.skew.toDouble()).put("embolden", font.embolden.toDouble()).put("scaleX", font.scaleX.toDouble()).put("wght", font.wght).put("wdth", font.wdth.toDouble()).put("em", em.toDouble()).put("stepRatio", stepRatio.toDouble())
+                .put("tilt", laid.tilt.toDouble()).put("paint", (p.paint?.info ?: "") + (if (gradientOutline(p, laid, s)) " contour sur dégradé" else "")).put("family", font.family).put("fontInfo", p.fontInfo).put("skew", font.skew.toDouble()).put("embolden", font.embolden.toDouble()).put("scaleX", font.scaleX.toDouble()).put("wght", font.wght).put("wdth", font.wdth.toDouble()).put("em", em.toDouble()).put("stepRatio", stepRatio.toDouble())
             if (sink != null) { sink.erase = patch; sink.text = textBmp; sink.rect = rect; sink.ss = ss; sink.report = rep; keep = true; return JSONObject() to rep }
             return patchJson to rep
         } finally {

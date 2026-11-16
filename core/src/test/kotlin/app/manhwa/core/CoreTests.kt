@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); queueBatchTests(); readingOrderTests(); eraseWhiteBandTests(); fontPolicyTests(); blockEditTests(); seamTests(); modelTests(); settingsTests(); utilTests(); textTests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests(); openBubbleTests(); barrierShapeTests(); safetyTests(); artEraseTests(); updateTests(); settingsSearchTests(); ignoredTests(); termRefreshTests(); discardedTests(); correctionsTests(); libraryViewTests(); homeViewTests(); editorViewTests(); coverTests(); crashTraceTests(); artFillTests(); blockLayoutTests(); textPaintTests(); textTiltTests(); tiltedResultTests(); tiltedReadingTests(); detectionTilesTests()
+    groupingTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); queueBatchTests(); readingOrderTests(); eraseWhiteBandTests(); fontPolicyTests(); blockEditTests(); seamTests(); modelTests(); settingsTests(); utilTests(); textTests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests(); openBubbleTests(); barrierShapeTests(); safetyTests(); artEraseTests(); updateTests(); settingsSearchTests(); ignoredTests(); termRefreshTests(); discardedTests(); correctionsTests(); libraryViewTests(); homeViewTests(); editorViewTests(); coverTests(); crashTraceTests(); artFillTests(); blockLayoutTests(); textPaintTests(); textTiltTests(); tiltedResultTests(); tiltedReadingTests(); detectionTilesTests(); translationOrderTests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -808,6 +808,11 @@ fun repairTests() {
         T.eq("AND I ALSO HAVE THE SECOND TALENT OF SUPER CRITICAL HIT.", OcrRepair.repair("I AND I ALSO HAVE THE SECOND TALENT OF SUPER CRITICAL HIT.", lx2))
         T.eq("BUT I ALSO HAVE THE SECOND TALENT", OcrRepair.repair("I BUT I ALSO HAVE THE SECOND TALENT", lx2))
         T.eq("YOU AND I ALSO HAVE IT", OcrRepair.repair("YOU AND I ALSO HAVE IT", lx2))            // « you and I » : intact
+        // « I » stylisé lu « P » devant un auxiliaire : corrigé en tête de texte ou de phrase ; jamais ailleurs, ni pour un nom du chapitre
+        T.eq("I WILL SWALLOW UP THE WHOLE WORLD", OcrRepair.repair("P WILL SWALLOW UP THE WHOLE WORLD", lx2))
+        T.eq("IT IS OVER. I WILL GO", OcrRepair.repair("IT IS OVER. P WILL GO", lx2))
+        T.eq("VITAMIN P WILL HELP", OcrRepair.repair("VITAMIN P WILL HELP", lx2))
+        T.eq("P WILL GO", OcrRepair.repair("P WILL GO", lx2, setOf("p")))
     }
     T.test("réparation : mots collés et ponctuation collée") {
         T.eq("LET'S GO CHECK", r("LET'S GOCHECK"))
@@ -1481,6 +1486,62 @@ fun artEraseTests() {
         var err = 0L; var n = 0
         for (i in mask.indices) if (mask[i]) { val a = out[i]; val b = truth[i]; err += (Math.abs(((a shr 16) and 0xFF) - ((b shr 16) and 0xFF)) + Math.abs(((a shr 8) and 0xFF) - ((b shr 8) and 0xFF)) + Math.abs((a and 0xFF) - (b and 0xFF))) / 3; n++ }
         T.ok(err.toDouble() / n < 2.5, "écart moyen ${"%.2f".format(err.toDouble() / n)}")
+    }
+
+    T.test("remplissage à bord net : un trou à cheval sur le bord d'une zone claire et d'une zone sombre garde le bord (pas de dégradé gris)") {
+        val W = 300; val H = 200
+        // bord droit, vertical
+        val truth = IntArray(W * H) { if (it % W < 150) packRgb(240, 240, 240) else packRgb(20, 20, 20) }
+        val mask = BooleanArray(W * H) { val x = it % W; val y = it / W; x in 100 until 200 && y in 70 until 130 }
+        val px = truth.copyOf(); for (i in px.indices) if (mask[i]) px[i] = 0xFF000000.toInt()
+        val edge = TextErase.inpaintEdge(px, W, H, mask)
+        val smooth = TextErase.inpaintSmooth(px, W, H, mask)
+        fun lum(c: Int) = (((c shr 16) and 0xFF) * 77 + ((c shr 8) and 0xFF) * 150 + (c and 0xFF) * 29) shr 8
+        var badEdge = 0; var badSmooth = 0; var n = 0
+        for (i in mask.indices) if (mask[i]) { n++; if (Math.abs(lum(edge[i]) - lum(truth[i])) > 40) badEdge++; if (Math.abs(lum(smooth[i]) - lum(truth[i])) > 40) badSmooth++ }
+        T.ok(badEdge <= 0.03 * n, "pixels faux avec le bord net : $badEdge sur $n")
+        T.ok(badSmooth > 3 * badEdge + 100, "le lissage seul mélangerait les deux zones : $badSmooth faux (bord net : $badEdge)")
+        // bord oblique
+        val truth2 = IntArray(W * H) { val x = it % W; val y = it / W; if (x + y < 230) packRgb(250, 250, 250) else packRgb(10, 10, 30) }
+        val mask2 = BooleanArray(W * H) { val x = it % W; val y = it / W; x in 90 until 210 && y in 50 until 120 }
+        val px2 = truth2.copyOf(); for (i in px2.indices) if (mask2[i]) px2[i] = 0xFF000000.toInt()
+        val edge2 = TextErase.inpaintEdge(px2, W, H, mask2)
+        var bad2 = 0; var n2 = 0
+        for (i in mask2.indices) if (mask2[i]) { n2++; if (Math.abs(lum(edge2[i]) - lum(truth2[i])) > 60) bad2++ }
+        T.ok(bad2 <= 0.08 * n2, "bord oblique : $bad2 pixels faux sur $n2")
+    }
+    T.test("remplissage à bord net : un dégradé, une trame de points ou un fond uni retombent sur le remplissage lisse (résultat identique)") {
+        val W = 240; val H = 160
+        val mask = BooleanArray(W * H) { val x = it % W; val y = it / W; x in 80 until 160 && y in 50 until 110 }
+        fun same(px0: IntArray): Boolean {
+            val px = px0.copyOf(); for (i in px.indices) if (mask[i]) px[i] = 0xFF000000.toInt()
+            return TextErase.inpaintEdge(px, W, H, mask).contentEquals(TextErase.inpaintSmooth(px, W, H, mask))
+        }
+        T.ok(same(IntArray(W * H) { packRgb(60 + (it % W) * 180 / W, 60 + (it % W) * 180 / W, 60 + (it % W) * 180 / W) }), "dégradé continu")
+        T.ok(same(IntArray(W * H) { val x = it % W; val y = it / W; if ((x / 3 + y / 3) % 2 == 0) packRgb(20, 20, 20) else packRgb(240, 240, 240) }), "damier fin (trame)")
+        T.ok(same(IntArray(W * H) { packRgb(200, 200, 200) }), "fond uni")
+        // une ligne fine sombre sur fond clair n'est pas un bord entre deux zones
+        T.ok(same(IntArray(W * H) { val x = it % W; if (x == 120 || x == 121) packRgb(10, 10, 10) else packRgb(245, 245, 245) }), "ligne fine")
+    }
+    T.test("remplissage à bord net : un bord qui ne fait que frôler le trou n'y prolonge pas l'autre couleur (pas de bosse), un bord qui le traverse reste net") {
+        val W = 240; val H = 160
+        val truth = IntArray(W * H) { if (it / W < 100) packRgb(205, 203, 195) else packRgb(252, 252, 252) }
+        fun lum(c: Int) = (((c shr 16) and 0xFF) * 77 + ((c shr 8) and 0xFF) * 150 + (c and 0xFF) * 29) shr 8
+        fun run(holeBottom: Int): Triple<Boolean, Int, Int> {
+            val mask = BooleanArray(W * H) { val x = it % W; val y = it / W; x in 60 until 180 && y in 40..holeBottom }
+            val px = truth.copyOf(); for (i in px.indices) if (mask[i]) px[i] = 0xFF000000.toInt()
+            val edge = TextErase.inpaintEdge(px, W, H, mask)
+            val smooth = TextErase.inpaintSmooth(px, W, H, mask)
+            var errEdge = 0; var errSmooth = 0
+            for (i in mask.indices) if (mask[i] && i / W < 75) { errEdge = maxOf(errEdge, Math.abs(lum(edge[i]) - lum(truth[i]))); errSmooth = maxOf(errSmooth, Math.abs(lum(smooth[i]) - lum(truth[i]))) }
+            return Triple(edge.contentEquals(smooth), errEdge, errSmooth)
+        }
+        val touch = run(99)
+        T.ok(touch.first, "le trou s'arrête au bord : remplissage lisse (résultat identique)")
+        val bite = run(102)
+        T.ok(bite.first || bite.second <= bite.third + 2, "le trou mord de 3 rangées : pas de bosse claire en haut (écart ${bite.second}, lisse ${bite.third})")
+        val cross = run(111)
+        T.ok(!cross.first && cross.second <= 4, "le trou traverse le bord : le haut reste de la couleur d'origine (écart ${cross.second}, lisse ${cross.third})")
     }
 
     // ---------- onomatopées ----------

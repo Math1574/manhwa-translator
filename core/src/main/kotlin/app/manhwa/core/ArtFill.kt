@@ -13,7 +13,9 @@ import kotlin.math.min
  * 1. le fond propre sous le texte est estimé par une interpolation lisse multi-échelle, à partir des seuls pixels éloignés des lettres ;
  * 2. l'écart entre l'image et ce fond propre, mesuré anneau par anneau autour des lettres, donne l'épaisseur de la lueur et de la frange : le masque grandit de cette épaisseur seulement
  *    (un dessin détaillé autour du texte n'est jamais effacé au-delà) ;
- * 3. le remplissage final est une interpolation lisse qui part des pixels intacts voisins du masque : raccord continu, sans losange ni bord franc ;
+ * 3. le remplissage final est une interpolation lisse qui part des pixels intacts voisins du masque : raccord continu, sans losange ni bord franc ; quand le trou est à cheval sur le bord net
+ *    de deux grandes régions (légende sur le bord d'une bulle, devant un fond sombre), chaque côté est prolongé avec sa couleur et le bord traverse le trou (voir [TextErase.inpaintEdge]) :
+ *    la moyenne lisse en faisait un dégradé gris (tache), et passait pour de la lueur (le masque s'agrandissait d'autant) ;
  * 4. les bords adoucis sont à l'extérieur du masque (les pixels déjà propres), jamais sur les lettres : plus de contour fantôme.
  */
 object ArtFill {
@@ -144,7 +146,7 @@ object ArtFill {
         val validBand = BooleanArray(n) { !band[it] && (avoid == null || !avoid[it]) && (hatch == null || !hatch[it]) }
         var known = 0; for (v in validBand) if (v) known++
         if (known < 300 || known < coreN / 8) return null
-        val clean = TextErase.inpaintSmooth(bgRef, w, h, band, validBand)
+        val clean = TextErase.inpaintEdge(bgRef, w, h, band, validBand)
         // 2) bruit du fond : un fond granuleux ou compressé ne doit pas être pris pour de la lueur
         val near = TextErase.dilate(band, w, h, 24)
         val sel = BooleanArray(n) { near[it] && validBand[it] }
@@ -211,7 +213,7 @@ object ArtFill {
         val outer = TextErase.dilate(safe, w, h, ringAlpha.size - 1, limit)
         // 6) remplissage lisse à partir des pixels intacts qui touchent la couronne
         val validF = BooleanArray(n) { !outer[it] && (avoid == null || !avoid[it]) && (hatch == null || !hatch[it]) }
-        val fill = TextErase.inpaintSmooth(bgRef, w, h, outer, validF)
+        val fill = TextErase.inpaintEdge(bgRef, w, h, outer, validF)
         // 7) opacité : pleine sur le masque sûr, en dégradé sur la couronne extérieure
         val alpha = IntArray(n)
         val dd = IntArray(n) { if (safe[it]) 0 else -1 }

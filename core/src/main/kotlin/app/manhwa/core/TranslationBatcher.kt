@@ -7,8 +7,10 @@ import java.util.concurrent.TimeUnit
 /** Renseigné par le fil qui traite une page, lu par le regroupeur : annulation de la page et ordre de lecture ; en retour : taille du groupe et durée du moteur. */
 object BatchContext {
     val cancelled = ThreadLocal<() -> Boolean>()
-    /** Position de la page dans le chapitre (les pages d'un même groupe sont traduites dans l'ordre de lecture). */
+    /** Position de la page dans le chapitre (repli : sert si [priority] n'est pas renseignée). */
     val order = ThreadLocal<Double>()
+    /** Priorité de lecture de la page, relue à chaque choix (valeur basse = traduite d'abord, voir [ReadingOrder]) : le moteur suit le lecteur qui défile. */
+    val priority = ThreadLocal<() -> Int>()
     /** Dernière traduction faite par ce fil : (pages dans le groupe, durée du moteur en ms). */
     val lastBatch = ThreadLocal<Pair<Int, Long>>()
 }
@@ -19,6 +21,9 @@ object BatchContext {
  * est en cours, les pages suivantes s'accumulent, et sont traduites ensemble au tour suivant. Aucun délai artificiel : si le moteur est libre, une page seule part tout de suite.
  * Un groupe ne mélange que des demandes de mêmes langues et de même glossaire, et reste borné (pages, lignes, caractères).
  * Si un groupe échoue, chaque page est retentée seule : l'échec d'une page ne fait pas perdre les autres.
+ * Ordre : toujours la page la plus proche de la lecture d'abord (priorité relue à chaque choix), puis les suivantes dans l'ordre. Avant de partir, le moteur attend un instant
+ * ([holdBack], au plus [holdMaxMs] par page attendue) si une page plus proche du lecteur est encore en route (téléchargement, lecture du texte) : sans cela il traduisait celles qui étaient
+ * prêtes, plus loin dans le chapitre, et la page du début passait après, avec le groupe suivant.
  */
 class TranslationBatcher(
     private val engine: TranslationEngine,
@@ -26,9 +31,13 @@ class TranslationBatcher(
     private val maxTexts: Int = 28,
     private val maxChars: Int = 1500,
     private val waitLimitMs: Long = 10 * 60 * 1000L,
+    private val holdMaxMs: Long = 20_000L,
 ) : TranslationEngine {
 
-    private class Req(val texts: List<String>, val source: String, val target: String, val glossary: List<GlossaryEntry>, val order: Double, val cancelled: () -> Boolean) {
+    /** Rend l'identifiant d'une page, en route vers le moteur, plus proche du lecteur que la priorité donnée (et qui n'est pas dans [ignore]), ou null. Renseigné par l'application. */
+    @Volatile var holdBack: ((priority: Double, ignore: Set<String>) -> String?)? = null
+
+    private class Req(val texts: List<String>, val source: String, val target: String, val glossary: List<GlossaryEntry>, val prio: () -> Double, val seq: Long, val cancelled: () -> Boolean) {
         val done = CountDownLatch(1)
         @Volatile var result: List<String>? = null
         @Volatile var error: Throwable? = null
@@ -39,7 +48,7 @@ class TranslationBatcher(
     private val lock = Object()
     private val waiting = ArrayList<Req>()
     @Volatile private var stopped = false
-    private var counter = 0.0
+    private var counter = 0L
 
     private val thread = Thread({ loop() }, "traduction-groupee").apply { isDaemon = true; start() }
 
@@ -53,9 +62,15 @@ class TranslationBatcher(
 
     override fun translateWithGlossary(texts: List<String>, source: String, target: String, glossary: List<GlossaryEntry>): List<String> {
         if (texts.isEmpty()) return emptyList()
-        val order = BatchContext.order.get() ?: synchronized(lock) { counter++ }
-        val r = Req(texts, source, target, glossary, order, BatchContext.cancelled.get() ?: { false })
-        synchronized(lock) { waiting.add(r); lock.notifyAll() }
+        val dyn = BatchContext.priority.get()
+        val fixed = BatchContext.order.get()
+        val prio: () -> Double = when {
+            dyn != null -> { { dyn().toDouble() } }
+            fixed != null -> { { fixed } }
+            else -> { { 0.0 } }
+        }
+        val r: Req
+        synchronized(lock) { r = Req(texts, source, target, glossary, prio, counter++, BatchContext.cancelled.get() ?: { false }); waiting.add(r); lock.notifyAll() }
         if (!r.done.await(waitLimitMs, TimeUnit.MILLISECONDS)) {
             synchronized(lock) { waiting.remove(r) }
             throw IllegalStateException("traduction : délai dépassé")
@@ -67,24 +82,44 @@ class TranslationBatcher(
 
     fun shutdown() { stopped = true; synchronized(lock) { lock.notifyAll() } }
 
+    private companion object { const val GIVE_UP_MEMORY_MS = 5 * 60 * 1000L }
+
     private fun sameKind(a: Req, b: Req) = a.source == b.source && a.target == b.target && a.glossary == b.glossary
 
+    private fun prioOf(r: Req): Double = try { r.prio() } catch (_: Throwable) { Double.MAX_VALUE }
+
+    /** Sous le verrou : les demandes en attente, de la plus proche du lecteur à la plus lointaine (priorité relue maintenant, puis ordre d'arrivée). */
+    private fun inOrder(list: List<Req>): List<Req> = list.map { it to prioOf(it) }.sortedWith(compareBy({ it.second }, { it.first.seq })).map { it.first }
+
     private fun loop() {
+        // pages en route que le moteur a renoncé à attendre (trop longues) : il ne les attend plus (pendant 5 minutes : au-delà, la page est abandonnée ou arrivée depuis longtemps)
+        val gaveUp = HashMap<String, Long>()
         while (!stopped) {
             val batch = ArrayList<Req>()
             synchronized(lock) {
+                var holdId: String? = null; var holdSince = 0L
                 while (!stopped) {
                     // les pages annulées pendant l'attente ne sont pas traduites
                     val dead = waiting.filter { runCatching { it.cancelled() }.getOrDefault(false) }
                     if (dead.isNotEmpty()) { waiting.removeAll(dead.toSet()); dead.forEach { it.error = CancellationException("page annulée"); it.done.countDown() } }
-                    if (waiting.isNotEmpty()) break
-                    lock.wait()
+                    if (waiting.isEmpty()) { holdId = null; lock.wait(); continue }
+                    // une page plus proche du lecteur arrive : on l'attend un instant (au plus holdMaxMs par page), puis on part sans elle
+                    val hb = holdBack
+                    val now = System.currentTimeMillis()
+                    gaveUp.values.removeIf { now - it > GIVE_UP_MEMORY_MS }
+                    val coming = if (hb == null) null else runCatching { hb(inOrder(waiting).first().let { prioOf(it) }, gaveUp.keys.toSet()) }.getOrNull()
+                    if (coming == null) break
+                    if (coming != holdId) { holdId = coming; holdSince = now }
+                    if (now - holdSince >= holdMaxMs) { gaveUp[coming] = now; holdId = null; continue }
+                    lock.wait(minOf(300L, holdMaxMs - (now - holdSince)).coerceAtLeast(1L))
                 }
                 if (stopped) return
-                val first = waiting.minBy { it.order }
+                val ordered = inOrder(waiting)
+                val first = ordered.first()
                 batch.add(first)
                 var texts = first.texts.size; var chars = first.texts.sumOf { it.length }
-                for (r in waiting.filter { it !== first && sameKind(first, it) }.sortedBy { it.order }) {
+                for (r in ordered) {
+                    if (r === first || !sameKind(first, r)) continue
                     if (batch.size >= maxPages) break
                     val n = r.texts.size; val c = r.texts.sumOf { it.length }
                     if (texts + n > maxTexts || chars + c > maxChars) break

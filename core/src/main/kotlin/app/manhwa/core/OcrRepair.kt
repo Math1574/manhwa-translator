@@ -45,6 +45,9 @@ object OcrRepair {
         var s = text.replace(Regex("([.!?])(?=[A-Za-z])"), "$1 ")         // « EVERYONE!IP » → « EVERYONE! IP »
         // « I AND I ALSO HAVE… » : un « I » parasite (bord de bulle, pointe) lu devant « AND I » ; la traduction donnait « MOI ET MOI AVONS ». Seulement en majuscules, en tête de texte.
         s = s.replace(Regex("^I (AND|BUT|SO|THEN|OR|YET) (I\\b)"), "$1 $2")
+        // « P WILL SWALLOW UP… » : le « I » d'un lettrage stylisé lu « P » devant un auxiliaire ou un verbe d'état (la traduction donnait « P VA ENGLOUTIR »). Un « P » isolé n'est pas un mot
+        // anglais ; seulement en majuscules, en tête de texte ou de phrase, et jamais si « P » est un nom du chapitre.
+        if ("p" !in protect) s = s.replace(Regex("(^|[.!?…] )P (?=(WILL|AM|HAVE|HAD|CAN|CAN'T|COULD|WOULD|SHALL|SHOULD|MUST|DON'T|DIDN'T|WON'T|WAS|WANT|NEED|KNOW|THINK|SWEAR|PROMISE)\\b)"), "$1I ")
         s = s.replace(Regex("(?<![A-Za-z0-9])[Oo](?=[.,]\\d)"), "0")      // « SET TO O.1% » → « SET TO 0.1% » : un O collé à une décimale est un zéro
         val letters = s.filter { it.isLetter() }
         val caps = letters.length >= 4 && letters.count { it.isUpperCase() }.toFloat() / letters.length >= 0.5f
