@@ -22,6 +22,21 @@ fun idiomHintsTests() {
         T.ok(frenchOf("It's raining cats and dogs.").contains("cordes"), "rain cats and dogs")
         T.ok(frenchOf("I'm fed up with this.").contains("marre") && frenchOf("She was fed up.").contains("marre"), "être fed up")
     }
+    T.test("expressions : le sens ordinaire n'est pas pris pour une expression (« get over here », « getting even stronger », chaussures, bras tordu, « he beats me »)") {
+        for (s in listOf("I'm getting even stronger!", "Put on your shoes.", "He twisted his arm behind his back.", "He beats me every day.", "You went to the wrong room.", "Let him go down the stairs.", "She touched her hair.",
+            "I want to think that you're right.", "He will break a leg if he falls.", "The carriage ran over the soldier.", "Let's go down.", "Put the sword in its place."))
+            T.eq(emptyList<IdiomHints.Hit>(), hint(s), "pas de conseil pour : $s")
+        T.ok(frenchOf("Get over here!").contains("viens ici") && !frenchOf("Get over here!").contains("surmonter"), "get over here : le plus long l'emporte")
+        T.ok(frenchOf("I'll get over it.").contains("surmonter"), "get over it")
+        T.ok(frenchOf("I'll get even with you!").contains("se venger"), "get even with")
+        T.ok(frenchOf("Don't get me wrong.").contains("méprends"), "don't get me wrong")
+        T.ok(frenchOf("Put yourself in my shoes.").contains("à la place"), "put yourself in my shoes")
+        T.ok(frenchOf("Put him in his place.").contains("remettre à sa place"), "put him in his place")
+        T.ok(frenchOf("You've let me down.").contains("décevoir") && frenchOf("Don't let them down.").contains("décevoir"), "let me down")
+        T.ok(frenchOf("Don't you dare lay a finger on her!").contains("toucher"), "lay a finger on")
+        T.ok(IdiomHints.calques("Don't you dare lay a finger on her!", "N'ose pas poser un doigt sur elle !").isNotEmpty(), "calque : poser un doigt")
+        T.ok(frenchOf("No matter what he says, I won't listen.").contains("peu importe ce que") && IdiomHints.calques("No matter what I try.", "Peu importe quoi j'essaie.").isNotEmpty(), "no matter what")
+    }
     T.test("expressions : titres d'arts martiaux, l'expression la plus longue l'emporte") {
         val h = hint("S-Senior brother?!")
         T.eq(1, h.size, "« senior » seul n'est pas ajouté à « senior brother » : $h"); T.ok(h[0].french.contains("grand frère d'armes"), "senior brother")

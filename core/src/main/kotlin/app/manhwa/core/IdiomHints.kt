@@ -9,7 +9,7 @@ package app.manhwa.core
  *  - [calques] repère, dans une traduction déjà faite, le rendu mot à mot de l'une d'elles : la ligne est refaite avec l'équivalent.
  *
  * Format de la table (une expression par ligne) : `expression anglaise | équivalent français | [rendu fautif en français, expression régulière]`.
- * Dans l'expression : `~verbe` (toutes les formes : « ~get » = get, gets, got, gotten, getting), `*` (zéro à trois mots quelconques), `a/b/c` (l'un de ces mots), `@be` (une forme du verbe être).
+ * Dans l'expression : `~verbe` (toutes les formes : « ~get » = get, gets, got, gotten, getting), `*` (zéro à trois mots quelconques), `?` (zéro ou un mot), `a/b/c` (l'un de ces mots), `@be` (une forme du verbe être).
  */
 object IdiomHints {
     /** Une expression repérée dans la ligne [line] (à partir de 1) : [matched] est le texte de la ligne, [french] ce qu'il faut dire. */
@@ -94,6 +94,7 @@ object IdiomHints {
             val last = i == toks.size - 1
             when {
                 t == "*" -> sb.append("(?:[a-z0-9']+ ){0,3}?")
+                t == "?" -> sb.append("(?:[a-z0-9']+ )?")
                 t == "@be" -> sb.append("(?:be|is|am|are|was|were|been|being|i'm|you're|he's|she's|we're|they're|it's|that's|i've|you've|we've|they've) ")
                 t.startsWith("~") -> sb.append("(?:").append(forms(t.substring(1)).joinToString("|") { Regex.escape(it) }).append(")").append(if (last) "" else " ")
                 t.contains('/') -> sb.append("(?:").append(t.split('/').joinToString("|") { Regex.escape(it) }).append(")").append(if (last) "" else " ")
@@ -122,15 +123,16 @@ object IdiomHints {
 # ===== verbes à particule : « get » =====
 ~get away | s'enfuir, s'échapper ; « get away from » = s'éloigner de, s'écarter de
 ~get away with | s'en tirer sans être puni, s'en sortir impunément
+~get over here/there | viens ici, approche (ici, « get over » ne veut pas dire se remettre)
 ~get over | se remettre de, surmonter, passer à autre chose
 ~get in the way | gêner, se mettre en travers du chemin
 ~get * on * side | rallier à sa cause, mettre de son côté
 ~get * out of * sight | ôter de ma vue, éloigner
 ~get a grip | ressaisis-toi, reprends-toi
-~get * together | se ressaisir ; réunir
-~get even | se venger, rendre la pareille
+~get * together | se retrouver, se réunir ; « get it together » = se ressaisir
+~get even with | se venger de, rendre la pareille à
 ~get through | traverser, venir à bout de, survivre à
-~get * wrong | se tromper, mal comprendre
+~get ? wrong | se tromper ; « don't get me wrong » = ne te méprends pas, ne le prends pas mal
 ~get the better of | l'emporter sur, prendre le dessus sur
 ~get hold of | mettre la main sur, se procurer
 # ===== « take », « put » =====
@@ -142,10 +144,10 @@ object IdiomHints {
 ~take kindly to | apprécier, bien prendre
 ~put up with | supporter, tolérer
 ~put * through | faire subir, faire endurer
-~put * in * place | remettre à sa place
-~put * shoes | se mettre à la place de
+~put * in his/her/their/your/my place | remettre à sa place
+~put * in * shoes | se mettre à la place de
 # ===== « go », « come » =====
-~go * wrong | mal tourner
+~go ? wrong | mal tourner
 ~come up with | trouver, imaginer
 ~come to think of it | à bien y réfléchir, maintenant que j'y pense
 # ===== « give », « turn », « look », « run » =====
@@ -155,14 +157,13 @@ object IdiomHints {
 ~look the other way | fermer les yeux, détourner le regard
 ~run * mouth | l'ouvrir, jacasser, dire n'importe quoi
 ~run wild | se déchaîner
-~run over | écraser, renverser
 # ===== « break », « hold », « let », « make » =====
 ~break down | s'effondrer, tomber en panne
 ~hold * ground | tenir bon, ne pas reculer
 ~hand over | remettre, livrer, rendre
 ~hand * over | remettre, livrer
-~let * down | décevoir
-~let * off | épargner, laisser partir
+~let ? down | décevoir
+~let ? off | épargner, laisser partir
 ~let * know | faire savoir, prévenir
 ~let * slide | laisser passer, fermer les yeux
 ~make sense | avoir du sens, être logique ; « can't make sense of » = ne rien comprendre à | fai(t|s|sai[ts]?|ront|rait|ent)\w* du sens
@@ -185,7 +186,6 @@ object IdiomHints {
 ~kill two birds with one stone | faire d'une pierre deux coups | oiseau
 piece of cake | un jeu d'enfant, fastoche | gâteau
 ~rain cats and dogs | pleuvoir des cordes | chats et
-~break a leg | bonne chance, merde | jambe
 ~spill the beans | vendre la mèche, tout déballer | haricot
 ~let the cat out of the bag | vendre la mèche | chat (hors|sort)
 under the weather | patraque, pas dans son assiette | sous le temps
@@ -221,7 +221,6 @@ on thin ice | en terrain glissant, en situation risquée | glace mince
 ~jump the gun | agir trop vite, précipiter les choses
 ~miss the boat | rater le coche, laisser passer sa chance | bateau
 ~pull * leg | faire marcher
-~twist * arm | forcer la main
 ~see eye to eye | être du même avis
 ~throw in the towel | jeter l'éponge | serviette
 ~walk on eggshells | marcher sur des œufs | coquilles d'œuf
@@ -250,7 +249,8 @@ take it with a grain of salt | à prendre avec des pincettes | grain de sel
 the whole nine yards | le grand jeu, tout le tralala | neuf mètres|neuf yards
 the writing on the wall | c'était écrit, les signes ne trompent pas
 in the nick of time | juste à temps, de justesse
-~touch * hair | toucher à un cheveu de (« il ne m'a pas touché un cheveu »)
+~touch a ? hair | toucher à un cheveu de (« il ne m'a pas touché un cheveu »)
+~lay a finger on | toucher, lever la main sur | poser un doigt|mettre un doigt|poser le doigt
 ~bite off more than * can chew | voir trop grand, viser trop haut
 # ===== formules de dialogue =====
 not a chance | pas question, jamais de la vie | pas une chance
@@ -266,14 +266,12 @@ what the hell | mais qu'est-ce que, bon sang
 who the hell | mais qui diable, qui est ce
 how the hell | comment diable
 i owe you one | je te dois une fière chandelle
-beats me | aucune idée
 hold your horses | du calme, doucement
-to think that | dire que, quand on pense que
 @be fed up | en avoir assez, en avoir marre
 what are you up to | qu'est-ce que tu manigances
 in heat | en chaleur | période de chaleur
 on edge | sur les nerfs
-no matter what | quoi qu'il arrive, coûte que coûte
+no matter what | quoi qu'il arrive, coûte que coûte ; « no matter what X » = peu importe ce que X | peu importe quoi
 no wonder | pas étonnant que
 # ===== faux amis et mots piégeux =====
 ~realize that/how/what/why/who/where/when/it/this/i/you/he/she/we/they/now/just | se rendre compte (de), comprendre, prendre conscience (jamais « réaliser » pour « comprendre ») | réalis(?!é par)
