@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import app.manhwa.core.AppSettings
 import app.manhwa.core.ConfirmationRequired
 import app.manhwa.core.GlossaryEntry
+import app.manhwa.core.GpuGuard
 import app.manhwa.core.InsufficientSpace
 import app.manhwa.core.ChapterMemory
 import app.manhwa.core.LlmModels
@@ -272,7 +273,16 @@ class GemmaTranslator(
     private fun <T> withWatchdog(conv: com.google.ai.edge.litertlm.Conversation, block: () -> T): T {
         val timer = java.util.Timer("mt-llm-watchdog", true)
         timer.schedule(object : java.util.TimerTask() { override fun run() { try { conv.cancelProcess() } catch (_: Throwable) {} } }, GENERATION_TIMEOUT_MS)
-        try { return block() } finally { timer.cancel() }
+        val guarded = engineIsGpu && gpuUnproven() // première génération sur le GPU avec cette version : sous garde (voir plus haut)
+        try {
+            if (guarded) gpuMark(GpuGuard.running(BuildConfig.BUILD_NUMBER))
+            val r = block()
+            if (guarded) gpuMark(GpuGuard.proven(BuildConfig.BUILD_NUMBER))
+            return r
+        } catch (t: Throwable) {
+            if (guarded) gpuMark(null) // une exception n'est pas un plantage : rien n'est prouvé, la garde reprendra
+            throw t
+        } finally { timer.cancel() }
     }
 
     private fun textOf(m: Message): String =
@@ -301,6 +311,39 @@ class GemmaTranslator(
     @Volatile var engineHasVision: Boolean = false
         private set
 
+    // ---------- garde du GPU : premier usage de chaque version ----------
+
+    /**
+     * Un plantage natif ne s'intercepte pas : il tue l'application, et le réglage GPU conservé la ferait replanter à chaque traduction (voir [GpuGuard]).
+     * Tant que le GPU n'a réussi aucune génération avec cette version, une marque est écrite avant chaque appel natif sur le GPU (création du moteur, génération) et effacée juste après ;
+     * au lancement suivant, une marque restée ET un plantage natif confirmé par le système coupent l'accélération GPU au lieu de la laisser replanter.
+     */
+    private val gpuGuardFile = File(ctx.filesDir, "gpu_guard.state")
+    /** Non nul si le lancement précédent est mort d'un plantage natif pendant le premier usage du GPU de cette version : description donnée par le système (pour le journal). */
+    @Volatile var gpuTripped: String? = null
+        private set
+    /** Vrai si le moteur chargé tourne sur le GPU. */
+    @Volatile private var engineIsGpu = false
+
+    private fun gpuUnproven(): Boolean = try { !GpuGuard.isProven(gpuGuardFile.readText(), BuildConfig.BUILD_NUMBER) } catch (_: Throwable) { true }
+    private fun gpuMark(mark: String?) { try { if (mark == null) gpuGuardFile.delete() else gpuGuardFile.writeText(mark) } catch (_: Throwable) {} }
+
+    init {
+        try {
+            if (gpuGuardFile.exists()) {
+                val mark = gpuGuardFile.readText()
+                if (GpuGuard.interrupted(mark, BuildConfig.BUILD_NUMBER) && android.os.Build.VERSION.SDK_INT >= 30) {
+                    // le système garde la cause de la mort du lancement précédent : seul un plantage natif coupe le GPU (arrêt par l'utilisateur ou manque de mémoire : non)
+                    val last = ctx.getSystemService(android.app.ActivityManager::class.java)?.getHistoricalProcessExitReasons(ctx.packageName, 0, 1)?.firstOrNull()
+                    val nativeCrash = last != null && last.reason == android.app.ApplicationExitInfo.REASON_CRASH_NATIVE
+                    if (GpuGuard.tripped(mark, BuildConfig.BUILD_NUMBER, nativeCrash)) gpuTripped = last?.description ?: "plantage natif"
+                }
+                // une marque « running » (de ce build ou d'un autre) ne survit pas au lancement ; la preuve « ok » de ce build reste
+                if (!GpuGuard.isProven(mark, BuildConfig.BUILD_NUMBER)) gpuGuardFile.delete()
+            }
+        } catch (_: Throwable) {}
+    }
+
     private fun ensureEngine(spec: ModelSpec, gpu: Boolean, vision: Boolean = false): Engine {
         val key = spec.id + (if (gpu) ":gpu" else ":cpu") + (if (vision) ":v" else "")
         engine?.let { if (engineKey == key) return it }
@@ -311,14 +354,18 @@ class GemmaTranslator(
         var last: Throwable? = null
         for (withVision in if (vision) listOf(true, false) else listOf(false)) {
             for ((useGpu, spec2) in attempts) {
+                val guarded = useGpu && gpuUnproven()
                 try {
+                    if (guarded) gpuMark(GpuGuard.running(BuildConfig.BUILD_NUMBER))
                     val e = createEngine(path, if (useGpu) Backend.GPU() else Backend.CPU(), spec2, withVision)
+                    if (guarded) gpuMark(null) // le processus a survécu à la création ; la preuve vient de la première génération réussie
                     engine = e; engineKey = spec.id + (if (gpu) ":gpu" else ":cpu") + (if (withVision) ":v" else "")
+                    engineIsGpu = useGpu
                     engineHasVision = withVision
                     backendLabel = (if (useGpu) "GPU" else "CPU") + (if (spec2) " + décodage spéculatif adaptatif" else "") + (if (withVision) " + lecture d'image" else "")
                     if (vision && !withVision) markVision(false, "le moteur n'a pas pu être créé avec la lecture d'image : ${last?.message ?: last?.javaClass?.simpleName}")
                     return e
-                } catch (t: Throwable) { last = t }
+                } catch (t: Throwable) { if (guarded) gpuMark(null); last = t }
             }
         }
         throw last ?: IllegalStateException("moteur indisponible")
@@ -420,8 +467,14 @@ class GemmaTranslator(
     /** [shortMs] et [outChars] : mesure seulement (durée d'un second appel très court, qui sépare la relecture des consignes du temps de génération ; taille de la réponse du premier). */
     class BenchResult(val label: String, val ok: Boolean, val initMs: Long, val translateMs: Long, val error: String?, val shortMs: Long = -1L, val outChars: Int = 0)
 
-    /** Mesure de vitesse : charge le modèle avec le backend demandé, traduit six répliques types et rapporte les temps. */
+    /** Mesure de vitesse : charge le modèle avec le backend demandé, traduit six répliques types et rapporte les temps. Un essai réussi sur le GPU le prouve pour cette version (garde du GPU). */
     @Synchronized fun benchmark(spec: ModelSpec, gpu: Boolean): BenchResult {
+        val r = benchmarkRaw(spec, gpu)
+        if (gpu && r.ok && r.label.startsWith("GPU")) gpuMark(GpuGuard.proven(BuildConfig.BUILD_NUMBER))
+        return r
+    }
+
+    private fun benchmarkRaw(spec: ModelSpec, gpu: Boolean): BenchResult {
         release()
         val label = if (gpu) "GPU" else "CPU"
         val path = models.fileOf(spec).absolutePath
@@ -476,7 +529,7 @@ class GemmaTranslator(
 
     @Synchronized fun release() {
         try { engine?.close() } catch (_: Throwable) {}
-        engine = null; engineKey = ""; engineHasVision = false
+        engine = null; engineKey = ""; engineHasVision = false; engineIsGpu = false
     }
 
     companion object {

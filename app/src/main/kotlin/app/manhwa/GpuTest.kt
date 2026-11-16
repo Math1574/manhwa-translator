@@ -35,6 +35,9 @@ class GpuTester(ctx: Context, private val graph: AppGraph) {
         } catch (_: Throwable) {}
     }
 
+    /** Message affiché sous le test (ex. : le GPU a été coupé après un plantage). */
+    fun notice(text: String) { summary = text }
+
     private fun fmt(r: GemmaTranslator.BenchResult) =
         if (r.ok) String.format(Locale.FRANCE, "%s : %.1f s pour 6 répliques (chargement %.1f s)", r.label, r.translateMs / 1000.0, r.initMs / 1000.0)
         else "${r.label} : échec (${r.error ?: "réponse incomplète"})"
