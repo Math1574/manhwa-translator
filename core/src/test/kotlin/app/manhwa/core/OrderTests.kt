@@ -97,6 +97,32 @@ fun translationOrderTests() {
         val t4 = System.currentTimeMillis(); gate3.run({ 3 }) { }
         T.ok(System.currentTimeMillis() - t4 < 200, "durée d'attente nulle : le fil passe tout de suite")
     }
+    T.test("passage à tour de rôle : quatre pages arrivent au même instant (déjà annoncées, pas encore inscrites) : la plus proche du lecteur passe la première, quel que soit celui qui prend le verrou le premier") {
+        // comme dans l'application : chaque page se déclare « en attente » juste avant d'entrer ; la porte cherche, parmi les pages en route, une plus proche du lecteur que celle qui va passer
+        // (la lecture de la priorité est ralentie : le fil qui tient le verrou y reste un moment, pendant lequel les autres, déjà déclarées, attendent à l'entrée)
+        fun first(announcedCount: Boolean): String? {
+            val prios = mapOf("p1" to 1, "p2" to 2, "p3" to 3, "p4" to 4)
+            val stage = ConcurrentHashMap<String, String>()
+            for (id in prios.keys) stage[id] = "téléchargement"
+            val turn = OrderedTurn(recheckMs = 5, holdMaxMs = 1500)
+            turn.holdBack = { p, ignore ->
+                prios.keys.firstOrNull { id -> id !in ignore && prios.getValue(id) < p && stage[id].let { s -> s == "téléchargement" || (announcedCount && s == "attente") } }
+            }
+            val firstId = java.util.concurrent.atomic.AtomicReference<String?>(null)
+            val start = java.util.concurrent.CyclicBarrier(prios.size)
+            val ths = prios.keys.map { id ->
+                Thread {
+                    start.await()
+                    stage[id] = "attente"
+                    turn.run({ Thread.sleep(1); prios.getValue(id) }) { firstId.compareAndSet(null, id); stage[id] = "lecture"; Thread.sleep(3) }
+                }.also { it.start() }
+            }
+            ths.forEach { it.join(6000) }
+            return firstId.get()
+        }
+        val results = (0 until 40).map { first(true) }
+        T.ok(results.all { it == "p1" }, "la page 1 passe toujours la première : ${results.groupingBy { it }.eachCount()}")
+    }
     T.test("file : une page plus urgente prend la place de la moins urgente quand la file est pleine (celle-ci est rendue), une page moins urgente est refusée") {
         val displaced = CopyOnWriteArrayList<String>()
         val q = PageQueue(2, object : QueueListener { override fun onDisplaced(id: String) { displaced.add(id) } })
