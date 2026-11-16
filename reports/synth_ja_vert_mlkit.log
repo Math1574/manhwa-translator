@@ -1,0 +1,37 @@
+11-16 16:37:19.399 13686 13801 I tflite  : Initialized TensorFlow Lite runtime.
+11-16 16:37:19.453 13686 13801 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+11-16 16:37:19.460 13686 13802 I native  : I0000 00:00:1794847039.460802   13802 tflite_lstm_client_base.cc:371] Resizing interpreter pool to 4
+11-16 16:37:19.472 13686 13801 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 16:37:19.488 13686 13801 I native  : I0000 00:00:1794847039.488192   13801 tflite_detector_client_with_shape_cache.cc:105] Caching size: 10
+11-16 16:37:19.490 13686 13812 I native  : I0000 00:00:1794847039.490280   13812 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/conv_model.fb
+11-16 16:37:19.490 13686 13812 I native  : I0000 00:00:1794847039.490638   13812 tflite_model_pooled_runner.cc:636] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/lstm_model.fb
+11-16 16:37:19.492 13686 13812 I native  : I0000 00:00:1794847039.492412   13812 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 4
+11-16 16:37:19.493 13686 13813 I native  : I0000 00:00:1794847039.493328   13813 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Hani_ctc/optical/conv_model.fb
+11-16 16:37:19.498 13686 13801 I native  : I0000 00:00:1794847039.498095   13801 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_splitting_custom_ops/model.tflite
+11-16 16:37:19.498 13686 13801 I native  : I0000 00:00:1794847039.498465   13801 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-16 16:37:19.498 13686 13814 I native  : I0000 00:00:1794847039.498628   13814 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Jpan_ctc/optical/conv_model.fb
+11-16 16:37:19.499 13686 13813 I native  : I0000 00:00:1794847039.498991   13813 tflite_model_pooled_runner.cc:636] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Hani_ctc/optical/lstm_model.fb
+11-16 16:37:19.501 13686 13801 I native  : I0000 00:00:1794847039.501705   13801 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_clustering_custom_ops/model.tflite
+11-16 16:37:19.505 13686 13814 I native  : I0000 00:00:1794847039.505244   13814 tflite_model_pooled_runner.cc:636] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Jpan_ctc/optical/lstm_model.fb
+11-16 16:37:19.505 13686 13801 I native  : I0000 00:00:1794847039.505794   13801 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-16 16:37:19.513 13686 13813 I native  : I0000 00:00:1794847039.513784   13813 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 4
+11-16 16:37:19.514 13686 13814 I native  : I0000 00:00:1794847039.514842   13814 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 4
+11-16 16:37:19.549 13686 13802 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 16:37:20.017 13686 13802 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 16:37:20.174 13686 13686 I MT      : ordre : repérage i1(n=0,haut=75) ; vue 0/700 ; ajoutées 1
+11-16 16:37:20.184 13686 13711 I MT      : ordre : i1 démarre
+11-16 16:37:20.613 13686 13802 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 16:37:20.873 13686 13802 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 16:37:21.406 13686 13711 I MT      : ordre : i1 arrive à la lecture du texte (priorité 50000)
+11-16 16:37:21.407 13686 13711 I MT      : ordre : lecture (priorité 50000) passe ; en route : i1=attente de la lecture du texte/50000
+11-16 16:37:21.407 13686 13711 I MT      : ordre : i1 lit le texte (attente 0 ms)
+11-16 16:37:21.493 13686 13802 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 16:37:22.061 13686 13802 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 16:37:22.389 13686 13802 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 16:37:22.509 13686 13802 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 16:37:22.681 13686 13802 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 16:37:35.439 13686 13876 I tflite  : Initialized TensorFlow Lite runtime.
+11-16 16:37:35.439 13686 13876 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+11-16 16:37:35.829 13686 13711 I MT      : ordre : i1 arrive à l'affichage (priorité 50000)
+11-16 16:37:35.829 13686 13711 I MT      : ordre : i1 s'affiche (attente 1 ms)
+11-16 16:37:46.851 13686 13721 I MTTEST  : REPORT_READY report.json

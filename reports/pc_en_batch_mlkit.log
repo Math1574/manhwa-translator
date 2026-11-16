@@ -1,0 +1,60 @@
+11-16 16:26:15.868 10969 11082 I tflite  : Initialized TensorFlow Lite runtime.
+11-16 16:26:15.943 10969 11082 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+11-16 16:26:15.945 10969 11082 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 16:26:15.996 10969 11082 I native  : I0000 00:00:1794846375.988412   11082 tflite_detector_client_with_shape_cache.cc:105] Caching size: 10
+11-16 16:26:16.008 10969 11083 I native  : I0000 00:00:1794846376.008019   11083 tflite_lstm_client_base.cc:371] Resizing interpreter pool to 4
+11-16 16:26:16.009 10969 11093 I native  : I0000 00:00:1794846376.009073   11093 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/conv_model.fb
+11-16 16:26:16.009 10969 11083 I native  : I0000 00:00:1794846376.009562   11083 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_splitting_custom_ops/model.tflite
+11-16 16:26:16.009 10969 11093 I native  : I0000 00:00:1794846376.009652   11093 tflite_model_pooled_runner.cc:636] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/lstm_model.fb
+11-16 16:26:16.009 10969 11083 I native  : I0000 00:00:1794846376.009966   11083 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-16 16:26:16.010 10969 11083 I native  : I0000 00:00:1794846376.010228   11083 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_clustering_custom_ops/model.tflite
+11-16 16:26:16.011 10969 11083 I native  : I0000 00:00:1794846376.011312   11083 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-16 16:26:16.013 10969 11093 I native  : I0000 00:00:1794846376.013612   11093 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 4
+11-16 16:26:16.057 10969 11083 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 16:26:16.996 10969 10969 I MT      : ordre : repérage i1(n=0,haut=75) i2(n=1,haut=645) i3(n=2,haut=1215) ; vue 0/700 ; ajoutées 3
+11-16 16:26:17.012 10969 10994 I MT      : ordre : i1 démarre
+11-16 16:26:17.018 10969 10996 I MT      : ordre : i2 démarre
+11-16 16:26:17.057 10969 10995 I MT      : ordre : i3 démarre
+11-16 16:26:17.857 10969 11083 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 16:26:18.153 10969 11083 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 16:26:18.301 10969 11083 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 16:26:18.754 10969 10994 I MT      : ordre : i1 arrive à la lecture du texte (priorité 50000)
+11-16 16:26:18.755 10969 10994 I MT      : ordre : lecture (priorité 50000) passe ; en route : i1=attente de la lecture du texte/50000 i2=assemblage avec l'image du dessus/50001 i3=assemblage avec l'image du dessus/200002
+11-16 16:26:18.755 10969 10994 I MT      : ordre : i1 lit le texte (attente 1 ms)
+11-16 16:26:18.825 10969 10995 I MT      : ordre : i3 arrive à la lecture du texte (priorité 200002)
+11-16 16:26:18.849 10969 11082 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 16:26:18.922 10969 11082 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 16:26:19.161 10969 10996 I MT      : ordre : i2 arrive à la lecture du texte (priorité 50001)
+11-16 16:26:19.301 10969 11082 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 16:26:19.413 10969 11082 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 16:26:19.705 10969 11082 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 16:26:27.989 10969 10996 I MT      : ordre : lecture (priorité 50001) passe ; en route : i1=lecture du texte/50000 i2=attente de la lecture du texte/50001 i3=attente de la lecture du texte/200002
+11-16 16:26:27.990 10969 10996 I MT      : ordre : i2 lit le texte (attente 8829 ms)
+11-16 16:26:28.003 10969 10994 I MT      : écarté « SHHSHH » (bruit, hors zone)
+11-16 16:26:28.003 10969 10994 I MT      : écarté « w » (bruit, hors zone)
+11-16 16:26:28.003 10969 10994 I MT      : écarté « 24 » (bruit, hors zone)
+11-16 16:26:28.004 10969 10994 I MT      : écarté « PLOP » (onomatopée laissée telle quelle, hors zone)
+11-16 16:26:28.004 10969 10994 I MT      : écarté « PLOP » (onomatopée laissée telle quelle, hors zone)
+11-16 16:26:28.169 10969 11082 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 16:26:28.377 10969 11082 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 16:26:28.405 10969 11156 I tflite  : Initialized TensorFlow Lite runtime.
+11-16 16:26:28.405 10969 11156 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+11-16 16:26:28.541 10969 11082 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 16:26:28.761 10969 10994 I MT      : ordre : i1 arrive à l'affichage (priorité 50000)
+11-16 16:26:28.761 10969 10994 I MT      : ordre : i1 s'affiche (attente 1 ms)
+11-16 16:26:29.251 10969 11082 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 16:26:30.089 10969 11082 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 16:26:30.409 10969 11082 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 16:26:38.453 10969 10995 I MT      : ordre : lecture (priorité 200002) passe ; en route : i2=lecture du texte/50001 i3=attente de la lecture du texte/200002
+11-16 16:26:38.454 10969 10995 I MT      : ordre : i3 lit le texte (attente 19629 ms)
+11-16 16:26:38.457 10969 10996 I MT      : écarté « PLOR » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-16 16:26:38.457 10969 10996 I MT      : écarté « PLOP » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-16 16:26:38.457 10969 10996 I MT      : écarté « 3 » (bruit, hors zone)
+11-16 16:26:39.196 10969 10996 I MT      : ordre : i2 arrive à l'affichage (priorité 50001)
+11-16 16:26:39.196 10969 10996 I MT      : ordre : i2 s'affiche (attente 1 ms)
+11-16 16:26:44.164 10969 10995 I MT      : écarté « ASH » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-16 16:26:44.165 10969 10995 I MT      : écarté « 18 » (bruit, hors zone)
+11-16 16:26:44.165 10969 10995 I MT      : écarté « 05/2014 » (bruit)
+11-16 16:26:44.358 10969 10995 I MT      : ordre : i3 arrive à l'affichage (priorité 200002)
+11-16 16:26:44.358 10969 10995 I MT      : ordre : i3 s'affiche (attente 0 ms)
+11-16 16:26:53.211 10969 11004 I MTTEST  : REPORT_READY report.json
