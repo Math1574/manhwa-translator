@@ -1,0 +1,89 @@
+Performing Streamed Install
+Success
+Physical size: 1080x2400
+[e2e 16:22:02] === prep (index.html, MLKIT, EN→FR)
+[e2e 16:24:05] terminé : prep (122 s)
+[e2e 16:24:05] aucune image traitée : nouvel essai de prep
+[e2e 16:24:05] === prep (index.html, MLKIT, EN→FR)
+[e2e 16:25:00] terminé : prep (55 s)
+[e2e 16:25:00] === pc_en_mlkit (pc_en.html, MLKIT, EN→FR)
+[e2e 16:26:09] terminé : pc_en_mlkit (69 s)
+[e2e 16:26:09] === synth_en_caps_mlkit (synth_en_caps.html, MLKIT, EN→FR)
+[e2e 16:26:58] terminé : synth_en_caps_mlkit (49 s)
+[e2e 16:26:58] === synth_en_mixed_mlkit (synth_en_mixed.html, MLKIT, EN→FR)
+[e2e 16:27:47] terminé : synth_en_mixed_mlkit (49 s)
+[e2e 16:27:47] === synth_en_variety_combined (synth_en_variety.html, MLKIT, EN→FR)
+[e2e 16:28:42] terminé : synth_en_variety_combined (54 s)
+[e2e 16:28:42] === adblock_mlkit (adtest.html, MLKIT, EN→FR)
+[e2e 16:29:37] terminé : adblock_mlkit (54 s)
+[e2e 16:29:37] === synth_layouts_combined (synth_layouts.html, MLKIT, EN→FR)
+[e2e 16:31:15] terminé : synth_layouts_combined (97 s)
+[e2e 16:31:15] === synth_atypical_combined (synth_atypical.html, MLKIT, EN→FR)
+[e2e 16:32:34] terminé : synth_atypical_combined (79 s)
+[e2e 16:32:34] === synth_en_fancy_mlkitonly (synth_en_fancy.html, MLKIT, EN→FR)
+[e2e 16:33:17] terminé : synth_en_fancy_mlkitonly (42 s)
+[e2e 16:33:17] === synth_en_fancy_combined (synth_en_fancy.html, MLKIT, EN→FR)
+[e2e 16:34:13] terminé : synth_en_fancy_combined (55 s)
+[e2e 16:34:13] === pc_en_ref_mlkit (pc_en_ref.html, MLKIT, EN→FR)
+[e2e 16:35:22] terminé : pc_en_ref_mlkit (69 s)
+[e2e 16:35:22] === seam_mlkit (seam_cut.html, MLKIT, EN→FR)
+[e2e 16:36:29] terminé : seam_mlkit (67 s)
+[e2e 16:36:29] === seam_off_mlkit (seam_cut.html, MLKIT, EN→FR)
+[e2e 16:37:42] terminé : seam_off_mlkit (73 s)
+[e2e 16:37:42] === pc_en_batch_mlkit (pc_en.html, MLKIT, EN→FR)
+[e2e 16:38:51] terminé : pc_en_batch_mlkit (69 s)
+[e2e 16:38:51] === pc_en_long_mlkit (pc_en_long.html, MLKIT, EN→FR)
+[e2e 16:43:14] terminé : pc_en_long_mlkit (263 s)
+[e2e 16:43:14] === pc_en_toggle_mlkit (pc_en_toggle.html, MLKIT, EN→FR)
+[e2e 16:45:48] terminé : pc_en_toggle_mlkit (153 s)
+[e2e 16:45:48] === pc_en_once_mlkit (pc_en_once.html, MLKIT, EN→FR)
+[e2e 16:46:57] terminé : pc_en_once_mlkit (68 s)
+[e2e 16:46:57] === pc_en_strict_mlkit (pc_en_strict.html, MLKIT, EN→FR)
+[e2e 16:48:07] terminé : pc_en_strict_mlkit (69 s)
+[e2e 16:48:07] === pc_en_lazy_mlkit (pc_en_lazy.html, MLKIT, EN→FR)
+[e2e 16:49:13] terminé : pc_en_lazy_mlkit (66 s)
+[e2e 16:49:13] === synth_ko_mlkit (synth_ko.html, MLKIT, KO→FR)
+[e2e 16:50:03] terminé : synth_ko_mlkit (49 s)
+[e2e 16:50:03] === synth_ja_vert_mlkit (synth_ja_vertical.html, MLKIT, JA→FR)
+[e2e 16:50:58] terminé : synth_ja_vert_mlkit (55 s)
+[e2e 16:50:58] === synth_zh_mlkit (synth_zh.html, MLKIT, ZH_HANS→FR)
+[e2e 16:51:47] terminé : synth_zh_mlkit (49 s)
+[e2e 16:51:47] === pc_ja_mlkit (pc_ja.html, MLKIT, JA→FR)
+[e2e 16:53:08] terminé : pc_ja_mlkit (81 s)
+[e2e 16:53:08] === bloqueur de publicités
+[e2e 16:53:46] bloqueur terminé (6063 octets de rapport)
+[e2e 16:53:46] === interface
+[e2e 16:53:48] fenêtre « ne répond plus » du système fermée
+[e2e 16:53:50] fenêtre « ne répond plus » du système fermée
+[e2e 16:53:51] fenêtre « ne répond plus » du système fermée
+[e2e 16:53:53] fenêtre « ne répond plus » du système fermée
+  [avant appui]   mCurrentFocus=Window{455b442 u0 com.google.android.apps.nexuslauncher/com.google.android.apps.nexuslauncher.NexusLauncherActivity}
+  [avant appui]   mCurrentFocus=Window{2669d10 u0 app.manhwa.translator/app.manhwa.MainActivity}
+  [avant appui]     topResumedActivity=ActivityRecord{f47ae16 u0 app.manhwa.translator/app.manhwa.MainActivity t33}
+  [avant appui]   ResumedActivity: ActivityRecord{f47ae16 u0 app.manhwa.translator/app.manhwa.MainActivity t33}
+  [après appui]   mCurrentFocus=Window{455b442 u0 com.google.android.apps.nexuslauncher/com.google.android.apps.nexuslauncher.NexusLauncherActivity}
+  mCurrentFocus=Window{455b442 u0 com.google.android.apps.nexuslauncher/com.google.android.apps.nexuslauncher.NexusLauncherActivity}
+        InsetsSource id=f65f0000 type=statusBars frame=[0,0][1080,128] visible=true flags= insetsRoundedCornerFrame=false
+        mSource=InsetsSource id=f65f0000 type=statusBars frame=[0,0][1080,128] visible=true flags= insetsRoundedCornerFrame=false
+[e2e 16:57:46] textes écartés : 2 cadre(s) proposé(s), listes connues pour 2 page(s) sur 2
+[e2e 16:59:29] === appuis longs réels
+[e2e 16:59:31] appuis longs : doigt posé en (722,1015) sur une traduction, en (54,569) sur une zone sans traduction
+[e2e 17:00:37] illustrations : 1 trouvée(s), 0 sans résultat («  »)
+[e2e 17:06:03] === éditeur
+[e2e 17:06:31] éditeur : bord gauche de la vue 154 → 206 (un doigt) → 246 (deux doigts), largeur 308 → 308, sens 1, fenêtre de 800 px
+[e2e 17:07:33] === chapitre trop court pour défiler
+[e2e 17:07:42] === changement de chapitre pendant une traduction
+[e2e 17:07:51] chapitre suivant pendant une traduction : retard du fil principal « 0 » ms, adresse « http://10.0.2.2:8000/comics/test-series-1a2b3c/chapter/2.html », page 9 (avant : 8)
+[e2e 17:07:56] === processus d'affichage de la page perdu
+[e2e 17:08:23] page perdue : processus 15108 → 15108, incidents comptés « 1 », page 10 (avant : 9), adresse « http://10.0.2.2:8000/comics/test-series-1a2b3c/chapter/2.html », avancement « 2/2 »
+  [journal système] 30 ligne(s) d'ANR ou de plantage
+[e2e 17:08:27] === illustrations : page construite par son script, annuaire, image de site seule
+{"t":1794848431321,"type":"cover","series":"Test Series","ok":true,"source":"site","why":"","page":"http:\/\/10.0.2.2:8000\/comics\/test-series-1a2b3c"}
+{"t":1794848449154,"type":"cover","series":"Zulu Quest","ok":false,"source":"","why":"site : page illisible ou trop lente ; annuaire : titre absent de l'annuaire","page":"https:\/\/seed.test\/comics\/zulu-quest-a1b2c3"}
+{"t":1794848449669,"type":"cover","series":"Mid Tale","ok":false,"source":"","why":"site : page illisible ou trop lente ; annuaire : titre absent de l'annuaire","page":"https:\/\/seed.test\/comics\/mid-tale-0a1b2c"}
+{"t":1794848450185,"type":"cover","series":"Alpha Saga","ok":false,"source":"","why":"site : page illisible ou trop lente ; annuaire : titre absent de l'annuaire","page":"https:\/\/seed.test\/comics\/alpha-saga-d4e5f6"}
+{"t":1794848933646,"type":"cover","series":"Spa Series","ok":true,"source":"site","why":"","page":"http:\/\/10.0.2.2:8000\/comics\/spa-series-7a7a7a"}
+{"t":1794848944401,"type":"cover","series":"Anilist Only","ok":true,"source":"annuaire","why":"site : aucune image retenue (partage 0, données 0, page 0)","page":""}
+{"t":1794848954647,"type":"cover","series":"Generic Only","ok":false,"source":"","why":"site : aucune image retenue (partage 1, données 0, page 0) ; annuaire : titre absent de l'annuaire","page":"http:\/\/10.0.2.2:8000\/comics\/generic-only-8c8c8c"}
+[e2e 17:09:52] illustrations : demandes à l'annuaire avant / après la recherche avec le réglage coupé : 5 / 5
+[e2e 17:09:54] toutes les scènes sont terminées
