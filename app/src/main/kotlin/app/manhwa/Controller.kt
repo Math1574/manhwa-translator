@@ -80,6 +80,7 @@ import app.manhwa.core.PagePipeline
 import app.manhwa.core.PageResult
 import app.manhwa.core.PageQueue
 import app.manhwa.core.QueueListener
+import app.manhwa.core.OrderedTurn
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
@@ -99,13 +100,15 @@ private data class Candidate(
     val height: Double = 0.0, val viewportH: Double = 0.0, val naturalH: Int = 0,
     /** Image collée au-dessus (identifiant, adresse, hauteur d'origine) et hauteur d'origine de l'image collée dessous : pour joindre un texte coupé par le découpage du chapitre. */
     val prevId: String? = null, val prevSrc: String? = null, val prevH: Int = 0, val nextH: Int? = null,
+    /** Rang de l'image dans la page (de haut en bas) : il ne change pas quand les images du dessus finissent de charger, contrairement à la position relevée au repérage. */
+    val index: Int = -1,
 ) {
     val priority: Int
         get() = priorityAt(scrollY, viewportH)
 
     /** Ordre de traitement pour une position de lecture donnée : visibles d'abord (de haut en bas), puis sous l'écran, puis au-dessus. */
     fun priorityAt(viewportY: Double, vh: Double): Int =
-        ReadingOrder.priority(top, if (height > 0) height else 1.0, viewportY, if (vh > 0) vh else if (viewportH > 0) viewportH else 800.0)
+        ReadingOrder.priority(top, if (height > 0) height else 1.0, viewportY, if (vh > 0) vh else if (viewportH > 0) viewportH else 800.0, index)
 }
 
 /** Bulle sélectionnée par appui long pour une correction manuelle. */
@@ -381,6 +384,11 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     private val pageNotes = ConcurrentHashMap<String, StringBuilder>()
     private val pageTiming = ConcurrentHashMap<String, String>()
     private val ocrLock = Any()
+    /** Candidats confiés à la file (en attente ou en cours) : leur priorité de lecture sert au moteur de traduction, qui attend une page plus proche du lecteur encore en route. */
+    private val jobCand = ConcurrentHashMap<String, Candidate>()
+    /** Passages dans l'ordre de lecture : la lecture du texte et l'affichage se font une page à la fois, la plus proche du lecteur d'abord (un simple verrou laissait passer n'importe laquelle). */
+    private val ocrTurns = OrderedTurn(holdMaxMs = 2000L).also { it.holdBack = { p, ignore -> earlierPageBeforeReading(p, ignore) } }
+    private val renderTurns = OrderedTurn()
     /** Pages dont le traitement est terminé (réussi, sans texte ou en échec) : les autres, si le travail est interrompu, sont à redemander à la page. */
     private val finishedIds = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     private val failEntries = java.util.concurrent.atomic.AtomicInteger(0)
@@ -400,8 +408,13 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
     private val queue = PageQueue(maxPending = 4, listener = object : QueueListener {
         override fun onStarted(id: String) { runStart[id] = SystemClock.uptimeMillis(); runStage[id] = "téléchargement" }
+        // une page en attente a cédé sa place à une page plus proche du lecteur : elle retourne dans la liste d'attente, rien n'est perdu
+        override fun onDisplaced(id: String) {
+            val c = jobCand.remove(id) ?: return
+            synchronized(backlog) { if (backlog.none { it.id == id }) backlog.add(c) }
+        }
         override fun onFinished(id: String, outcome: PageOutcome) {
-            runStart.remove(id); runStage.remove(id)
+            runStart.remove(id); runStage.remove(id); jobCand.remove(id)
             finishedIds.add(id)
             // un échec n'apparaissait nulle part dans le journal : on le note (étape et message), avec l'état de la mémoire, pour comprendre un arrêt
             if (outcome is PageOutcome.Failed && failEntries.incrementAndGet() <= 60) {
@@ -424,7 +437,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             }
             pump()
         }
-        override fun onCancelled(id: String) { runStart.remove(id); runStage.remove(id); main.post { pump() } }
+        override fun onCancelled(id: String) { runStart.remove(id); runStage.remove(id); jobCand.remove(id); main.post { pump() } }
     }, workers = 4)
 
     // ---------- plein écran et lecture ----------
@@ -1242,6 +1255,36 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         }
     }
 
+    /**
+     * Page plus proche du lecteur que [priority] encore en route vers le moteur de traduction (téléchargement, assemblage, lecture du texte) : le moteur l'attend un instant
+     * plutôt que de traduire d'abord des pages plus loin dans le chapitre. Les pages dont il a renoncé à attendre la fin ([ignore]) ne comptent plus.
+     */
+    private fun earlierPageComing(priority: Double, ignore: Set<String>): String? {
+        for (id in queue.runningIds()) {
+            if (id in ignore) continue
+            val stage = runStage[id] ?: continue
+            if (stage == "traduction" || stage == "affichage") continue
+            val c = jobCand[id] ?: continue
+            if (c.priorityAt(viewportY, viewportH) < priority) return id
+        }
+        return null
+    }
+
+    /**
+     * Page plus proche du lecteur que [priority] encore en téléchargement ou en assemblage (et dont l'attente n'a pas été abandonnée, [ignore]) : la lecture du texte (une page à la fois,
+     * 5 à 10 s) l'attend un instant (2 s au plus) au lieu de partir avec une page plus loin, dont le téléchargement a simplement fini quelques centaines de millisecondes plus tôt.
+     */
+    private fun earlierPageBeforeReading(priority: Int, ignore: Set<String>): String? {
+        for (id in queue.runningIds()) {
+            if (id in ignore) continue
+            val stage = runStage[id] ?: continue
+            if (stage != "téléchargement" && !stage.startsWith("assemblage")) continue
+            val c = jobCand[id] ?: continue
+            if (c.priorityAt(viewportY, viewportH) < priority) return id
+        }
+        return null
+    }
+
     private fun onCandidates(raw: String?) {
         if (raw.isNullOrBlank() || raw == "null") return
         val arr = try { JSONArray(raw) } catch (e: Exception) { lastError = "page : réponse du script illisible"; return }
@@ -1254,6 +1297,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                     o.getString("id"), o.getString("src"), o.getDouble("top"), o.getDouble("sy"),
                     height = o.optDouble("dh", 0.0), viewportH = o.optDouble("vh", 0.0), naturalH = o.optInt("h", 0),
                     prevId = pv?.optString("id")?.ifEmpty { null }, prevSrc = pv?.optString("src")?.ifEmpty { null }, prevH = pv?.optInt("h", 0) ?: 0, nextH = nx?.optInt("h", 0)?.takeIf { it > 0 },
+                    index = o.optInt("n", -1),
                 )
                 if (submitted.add(c.id)) { backlog.add(c); added++ }
             }
@@ -1267,12 +1311,14 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     private fun pump() {
         synchronized(backlog) {
             queue.maxPending = if (thermalHot) 1 else graph.settingsStore.settings.maxPrefetchPages + 1
+            queue.maxExpress = if (thermalHot) 0 else 2
             ensureWatchdog()
             backlog.sortBy { it.priorityAt(viewportY, viewportH) }
             while (backlog.isNotEmpty()) {
                 val c = backlog.first()
                 // la priorité est relue à chaque choix : on traite ce que le lecteur regarde maintenant, pas ce qui était proche au repérage de l'image
-                if (queue.submit(PageJob(c.id, c.priorityAt(viewportY, viewportH), { c.priorityAt(viewportY, viewportH) }) { cancelled -> process(c, cancelled) })) backlog.removeAt(0) else break
+                jobCand[c.id] = c
+                if (queue.submit(PageJob(c.id, c.priorityAt(viewportY, viewportH), { c.priorityAt(viewportY, viewportH) }) { cancelled -> process(c, cancelled) })) backlog.removeAt(0) else { jobCand.remove(c.id); break }
             }
         }
     }
@@ -1283,7 +1329,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         fun staleFix() = fix && fixRuns[c.id] != fixRun
         val pageUrl = currentUrl
         val pageSeries = BrowsingLibrary.seriesKey(pageUrl)
-        BatchContext.cancelled.set(cancelled); BatchContext.order.set(c.top); BatchContext.lastBatch.remove()
+        BatchContext.cancelled.set(cancelled); BatchContext.order.set(c.top); BatchContext.priority.set { c.priorityAt(viewportY, viewportH) }; BatchContext.lastBatch.remove()
         runStage[c.id] = "téléchargement"
         val bytes = try { fetch(c, pageUrl) } catch (e: Exception) {
             val f = PageOutcome.Failed("image", e.message ?: "téléchargement impossible")
@@ -1322,7 +1368,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val ctxH = window?.ctxH ?: 0
         val seamTag = if (ctxH > 0 || nextTakes) "+sm$ctxH" + (if (nextTakes) "n" else "") else ""
         val spec = LlmModels.specFor(s.engine)
-        val translator: TranslationEngine = if (spec == null) (if (testBatch) graph.mlkitBatch else MlKitTranslation(graph.models)) else graph.gemmaBatch
+        val translator: TranslationEngine = if (spec == null) (if (testBatch) graph.mlkitBatch.also { it.holdBack = { p, ignore -> earlierPageComing(p, ignore) } } else MlKitTranslation(graph.models))
+        else graph.gemmaBatch.also { it.holdBack = { p, ignore -> earlierPageComing(p, ignore) } }
         val enhanced = s.enhancedOcr && graph.paddleModels.available
         val ocrEngine = CombinedOcr(s.source, MlKitOcr(s.source), if (enhanced) graph.paddle else null, Lexicon.get(ctx), parallel = !thermalHot)
         val rereadOn = spec != null && s.source.code == "en" && graph.blockReader.available
@@ -1340,10 +1387,13 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         // une seule lecture du texte à la fois (elle occupe déjà tous les cœurs) ; pendant ce temps l'autre page peut attendre sa traduction ou s'afficher
         val timedOcr = OcrEngine { b ->
             runStage[c.id] = "attente de la lecture du texte"
-            synchronized(ocrLock) {
-                runStage[c.id] = "lecture du texte"
-                val t = SystemClock.uptimeMillis()
-                try { ocrEngine.recognize(b).also { pageNotes[c.id] = StringBuilder(OcrDebug.note); pageTiming[c.id] = OcrDebug.timing } } finally { stages[0] += SystemClock.uptimeMillis() - t }
+            // les pages qui attendent leur tour passent dans l'ordre de lecture (la plus proche du lecteur d'abord), pas dans un ordre quelconque
+            ocrTurns.run({ c.priorityAt(viewportY, viewportH) }) {
+                synchronized(ocrLock) {
+                    runStage[c.id] = "lecture du texte"
+                    val t = SystemClock.uptimeMillis()
+                    try { ocrEngine.recognize(b).also { pageNotes[c.id] = StringBuilder(OcrDebug.note); pageTiming[c.id] = OcrDebug.timing } } finally { stages[0] += SystemClock.uptimeMillis() - t }
+                }
             }
         }
         val timedTr = TimedTranslator(translator, { stages[1] += it }) { runStage[c.id] = "traduction" }
@@ -1394,7 +1444,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         if (out is PageOutcome.Done && !out.fromCache) journalPage(c, pageUrl, engineId, s.target.code, out, System.currentTimeMillis() - t0)
         if (!cancelled() && !staleFix()) {
             val tRender = SystemClock.uptimeMillis()
-            val json = synchronized(renderLock) {
+            val json = renderTurns.run({ c.priorityAt(viewportY, viewportH) }) { synchronized(renderLock) {
                 when {
                     out is PageOutcome.Done -> PageRenderer.render(fonts, workBytes, applied?.page ?: out.result, s, debug, graph.fontMemory, pageSeries, applied?.render ?: emptyMap())
                     // page sans texte détecté mais avec des textes ajoutés à la main
@@ -1402,7 +1452,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                     s.diagnostic && debug != null -> OverlayBuilder.debugOnly(debug!!)
                     else -> null
                 }
-            }
+            } }
             stages[2] = SystemClock.uptimeMillis() - tRender
             json?.optJSONArray("blocks")?.let { arr ->
                 val m = HashMap<Int, String>()
@@ -2064,7 +2114,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             main.post { if (discardMode) translateDiscarded(id, did.toIntOrNull() ?: return@post) }
         }
         @JavascriptInterface fun onImagesChanged() { main.post { if (active) start(false) } }
-        @JavascriptInterface fun onViewport(y: Double, h: Double) { viewportY = y; if (h > 0) viewportH = h }
+        // le lecteur a défilé : les pages en attente sont reclassées (celles qu'il regarde maintenant prennent la place des plus lointaines)
+        @JavascriptInterface fun onViewport(y: Double, h: Double) { viewportY = y; if (h > 0) viewportH = h; if (active) pump() }
         @JavascriptInterface fun onB64(id: String, data: String) { b64Waiters[id]?.complete(data) }
         @JavascriptInterface fun onEdit(id: String, bid: String, src: String, tr: String) { main.post { openEdit(EditTarget(id, bid.toIntOrNull() ?: -1, src, tr)) } }
         // script de garde du bloqueur

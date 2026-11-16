@@ -456,7 +456,20 @@ object Erasure {
                 val letters = TextErase.limitSize(farS, w, h, (textUnion.width * s).toInt() + 6, (textUnion.height * s).toInt() + 6)
                 val farText = BooleanArray(w * h) { textOnly[it] && letters[it] && !prot[it] }
                 val farTextG = TextErase.dilate(farText, w, h, max(2, (lh * 0.1f).toInt()), zone)
-                val mask = BooleanArray(w * h) { i -> zone[i] && (shape.contains((x0 + i % w + 0.5f) / s, (y0 + i / w + 0.5f) / s) || encG[i] || (coreLines[i] && farS[i] && !prot[i]) || (farTextG[i] && !prot[i])) }
+                // frange des lettres soudées à un trait du décor (mèche de cheveux, contour) : leur composante dépasse la taille du texte, elle n'était donc pas élargie, et le bord adouci de
+                // leurs traits (gris clair, anneau de compression) restait en « fantômes » pointillés sous la traduction. Seuls les pixels un peu différents de leur voisinage (écart 14 à 40,
+                // le reste est déjà de l'encre) à moins de 2 px de l'encre effacée des lignes de texte partent avec elle : rien n'est élargi plus loin, ni autour d'un trait hors des lignes
+                val soft = TextErase.localFarMask(px, w, h, max(5, (lh * 0.6f).toInt()), 14)
+                val inkLines = BooleanArray(w * h) { coreLines[it] && farS[it] && !prot[it] }
+                val nearInkLines = TextErase.dilate(inkLines, w, h, max(2, (lh * 0.1f).toInt()), zone)
+                val mask0 = BooleanArray(w * h) { i -> zone[i] && (shape.contains((x0 + i % w + 0.5f) / s, (y0 + i / w + 0.5f) / s) || encG[i] || (coreLines[i] && farS[i] && !prot[i]) || (farTextG[i] && !prot[i]) || (soft[i] && nearInkLines[i] && !prot[i])) }
+                // pixels isolés restés hors du masque au milieu de l'effacement (pointes des lettres) : bouchés, sans quoi des fragments pointillés restent sous la traduction
+                val mask = TextErase.fillHoles(mask0, w, h, max(8, (lh * lh * 0.08f).toInt()))
+                if (trace != null) {
+                    var inShape = 0; var inkTotal = 0; var inkOut = 0
+                    for (i in 0 until w * h) { if (zone[i] && shape.contains((x0 + i % w + 0.5f) / s, (y0 + i / w + 0.5f) / s)) inShape++; if (coreLines[i] && farS[i]) { inkTotal++; if (!mask[i]) inkOut++ } }
+                    trace?.invoke("lissé : zone=${zone.count { it }} dans la forme=$inShape masque=${mask.count { it }} lettres dans les lignes=$inkTotal dont hors masque=$inkOut")
+                }
                 if (mask.count { it } > 0) {
                     // références du remplissage : seulement l'intérieur de la bulle (ni la page blanche autour, ni le contour)
                     val outside = BooleanArray(w * h) { i -> !shape.contains((x0 + i % w + 0.5f) / s, (y0 + i / w + 0.5f) / s) }
@@ -469,17 +482,42 @@ object Erasure {
                     val textSm = TextErase.rectMask(w, h, lineBoxes.map { l -> intArrayOf((l.left * s).toInt() - x0, (l.top * s).toInt() - y0, (l.right * s).toInt() - x0, (l.bottom * s).toInt() - y0) }, max(1, (lh * 0.1f).toInt()))
                     val neighboursSm = (exclude + protect + protectRound + outlines).map { l -> intArrayOf((l.left * s).toInt() - x0, (l.top * s).toInt() - y0, (l.right * s).toInt() - x0, (l.bottom * s).toInt() - y0) }
                     val ignoreSm = if (neighboursSm.isEmpty()) null else TextErase.rectMask(w, h, neighboursSm, max(6, (lh * 0.3f).toInt()))
-                    val stSm = TextErase.structure(px, w, h, zone, textSm, BooleanArray(w * h) { !outside[it] && (ignoreSm == null || !ignoreSm[it]) })
+                    val limitSm = BooleanArray(w * h) { !outside[it] && (ignoreSm == null || !ignoreSm[it]) }
+                    val stSm = TextErase.structure(px, w, h, zone, textSm, limitSm)
                     // et si presque tous les pixels connus de la région servent de source (fond proche de la couleur de la bulle) : sinon la reconstruction manque de références
                     var knownN = 0; var validN = 0; for (i in 0 until w * h) if (!unknownS[i]) { knownN++; if (validS[i]) validN++ }
-                    val smoothInterior = stSm[0] <= 0.012f && stSm[2] <= 0.10f && knownN > 0 && validN.toFloat() / knownN >= 0.9f
-                    val fill = if (!smoothInterior) TextErase.inpaint(px, w, h, unknownS) else TextErase.inpaintSmooth(px, w, h, unknownS, validS)
-                    val alpha = TextErase.featherAlpha(mask, w, h)
-                    val layer = IntArray(w * h) { if (mask[it]) (alpha[it] shl 24) or (fill[it] and 0xFFFFFF) else 0 }
-                    val fc = TextErase.extremeTextColor(px, zone)
-                    val ink = TextErase.artMask(px, w, h, zone, fc, 0)
-                    val ci = coreOf(px, w, h, ink, a.bg, fc)
-                    return Plan(Mode.SMOOTH, x0, y0, w, h, mask, layer, a.bg, fc, false, null, shape, TextErase.strokeWidth(ink, w, h), ink, meanFill(layer), 0, ci.mask, ci.color, ci.halo, ci.haloPx)
+                    var smoothInterior = stSm[0] <= 0.012f && stSm[2] <= 0.10f && knownN > 0 && validN.toFloat() / knownN >= 0.9f
+                    var sources = validS
+                    trace?.invoke("lissé : structure bords=${stSm[0]} masse=${stSm[2]} connus=$knownN sources=$validN -> ${if (smoothInterior) "intérieur lisse (reconstruction multi-échelle)" else "fond non uni"}")
+                    // Dégradé net (de la bulle entière) : ni la couleur médiane ni « proche de la couleur dominante » ne le représentent, l'intérieur passait pour du dessin et la zone recevait
+                    // la diffusion depuis la moyenne (une bande grise plate au milieu du dégradé). Le fond est alors ajusté par une surface lisse (second degré) : si les pixels connus la suivent
+                    // (pas de bords francs, peu d'écarts à la surface), l'intérieur est lisse et la reconstruction multi-échelle part des seuls pixels conformes à la surface.
+                    if (!smoothInterior && stSm[0] <= 0.012f && knownN > 0) {
+                        val usable = BooleanArray(w * h) { !unknownS[it] && !farS[it] && !encG[it] }
+                        val surf = TextErase.smoothSurface(px, w, h, usable)
+                        if (surf != null) {
+                            val stG = TextErase.structure(px, w, h, zone, textSm, limitSm, surf)
+                            val validG = BooleanArray(w * h) { !unknownS[it] && TextErase.dist(px[it], surf[it]) <= 45 }
+                            val validGN = validG.count { it }
+                            val okG = stG[2] <= 0.10f && validGN.toFloat() / knownN >= 0.9f
+                            trace?.invoke("lissé : dégradé ajusté masse=${stG[2]} sources=$validGN/$knownN -> ${if (okG) "intérieur lisse (dégradé)" else "ancienne diffusion"}")
+                            if (okG) { smoothInterior = true; sources = validG }
+                        }
+                    }
+                    // Presque aucun pixel de référence dans la « bulle » (texte posé sur un décor, la forme trouvée ne couvre que quelques pixels de la zone) et intérieur non lisse : l'ancienne diffusion
+                    // n'a rien d'où partir et remplit toute la zone d'un gris plat (un carré visible, ou les lettres restent en fantômes dessous). Le texte est alors traité comme un texte sur dessin :
+                    // seules les lettres sont reconstruites (branche suivante).
+                    val noReference = !smoothInterior && knownN < max(64, zone.count { it } / 20)
+                    if (noReference) trace?.invoke("lissé : presque aucun pixel de référence ($knownN) -> texte sur dessin (reconstruction des lettres)")
+                    else {
+                        val fill = if (!smoothInterior) TextErase.inpaint(px, w, h, unknownS) else TextErase.inpaintSmooth(px, w, h, unknownS, sources)
+                        val alpha = TextErase.featherAlpha(mask, w, h)
+                        val layer = IntArray(w * h) { if (mask[it]) (alpha[it] shl 24) or (fill[it] and 0xFFFFFF) else 0 }
+                        val fc = TextErase.extremeTextColor(px, zone)
+                        val ink = TextErase.artMask(px, w, h, zone, fc, 0)
+                        val ci = coreOf(px, w, h, ink, a.bg, fc)
+                        return Plan(Mode.SMOOTH, x0, y0, w, h, mask, layer, a.bg, fc, false, null, shape, TextErase.strokeWidth(ink, w, h), ink, meanFill(layer), 0, ci.mask, ci.color, ci.halo, ci.haloPx)
+                    }
                 }
             }
         }
@@ -684,7 +722,15 @@ object Erasure {
         if (w < 16 || h < 16 || w.toLong() * h > 2_000_000L) return null
         val px = src.pixels(x0, y0, w, h)
         val text = intArrayOf((union.left * s).toInt() - x0, (union.top * s).toInt() - y0, (union.right * s).toInt() - x0, (union.bottom * s).toInt() - y0)
-        val mask = (if (smooth) BubbleMask.interiorSmooth(px, w, h, text, maxFill = 0.97f) else BubbleMask.interior(px, w, h, text, bg, tol = tol, maxFill = 0.97f)) ?: return null
+        // bulle ronde détectée à fond non uni : remplissage borné à son ellipse, sans limite de couleur. Un dégradé blanc-noir dépasse l'écart toléré par rapport à la couleur autour du texte
+        // (le haut clair de la bulle restait hors de la forme : lignes poussées de côté, forme étroite) ; l'ellipse borne la fuite par le contour flou. Sinon, comportement d'origine.
+        val bounded: BooleanArray? = if (smooth && container != null && !BubbleVerifier.isRectangular(src, s, container, imageW, imageH)) {
+            val cx = (container.left + container.right) / 2f; val cy = (container.top + container.bottom) / 2f
+            val rx = container.width / 2f * 0.98f; val ry = container.height / 2f * 0.98f
+            val area = BooleanArray(w * h) { i -> val ex = ((x0 + i % w + 0.5f) / s - cx) / rx; val ey = ((y0 + i / w + 0.5f) / s - cy) / ry; ex * ex + ey * ey <= 1f }
+            BubbleMask.interiorSmooth(px, w, h, text, maxFill = 0.97f, farLimit = 255, allowed = area)
+        } else null
+        val mask = bounded ?: (if (smooth) BubbleMask.interiorSmooth(px, w, h, text, maxFill = 0.97f) else BubbleMask.interior(px, w, h, text, bg, tol = tol, maxFill = 0.97f)) ?: return null
         // bulle détectée : le remplissage ne doit pas déborder de sa boîte (fuite vers le décor ou une bulle voisine)
         if (container != null) {
             val c = container.inflate(4f, 4f)

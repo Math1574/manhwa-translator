@@ -112,6 +112,37 @@ object TextPaint {
         }
     }
 
+    /** Contraste minimal de luminance avec la partie la plus défavorable du fond sous une ligne, en mode lissé (bulle en dégradé) : en dessous, le bloc reçoit un contour. */
+    const val GRADIENT_MIN_CONTRAST = 0.30f
+
+    /**
+     * Texte sur un fond en dégradé (mode lissé). La couleur du texte est choisie pour le fond moyen : sur une grande bulle qui va du blanc au noir, la partie claire (ou sombre) la rendait
+     * illisible (un « JE » blanc sur le haut clair du dégradé). Pour chaque ligne placée ([rects], pixels de l'image ; [s] : échelle de l'image échantillonnée), le fond obtenu après
+     * effacement est échantillonné dans la couche du plan ; si le texte [fg] est à moins de [GRADIENT_MIN_CONTRAST] de luminance de l'une des extrémités (10e ou 90e centile) du fond
+     * sous une ligne, tout le bloc est dessiné avec un contour de la couleur opposée, comme sur dessin. Jamais hors du mode lissé, ni quand le contraste est bon partout.
+     */
+    fun needsOutlineOnGradient(plan: Erasure.Plan?, fg: Int, rects: List<RectF>, s: Float): Boolean {
+        if (plan == null || plan.mode != Erasure.Mode.SMOOTH) return false
+        val f = lum(fg and 0xFFFFFF)
+        for (rc in rects) {
+            val x0 = max(0, (rc.left * s).toInt() - plan.x0); val x1 = min(plan.w, (rc.right * s).toInt() - plan.x0)
+            val y0 = max(0, (rc.top * s).toInt() - plan.y0); val y1 = min(plan.h, (rc.bottom * s).toInt() - plan.y0)
+            if (x1 <= x0 || y1 <= y0) continue
+            val ls = ArrayList<Float>()
+            var y = y0
+            while (y < y1) {
+                var x = x0
+                while (x < x1) { val c = plan.layer[y * plan.w + x]; if ((c ushr 24) >= 200) ls.add(lum(c and 0xFFFFFF)); x += 2 }
+                y += 2
+            }
+            if (ls.size < 40) continue
+            ls.sort()
+            val lo = ls[(ls.size * 0.1f).toInt()]; val hi = ls[min(ls.size - 1, (ls.size * 0.9f).toInt())]
+            if (min(abs(f - lo), abs(f - hi)) < GRADIENT_MIN_CONTRAST) return true
+        }
+        return false
+    }
+
     /**
      * Peinture du bloc. [mode] : mode d'effacement (ART = texte sur dessin). [bg] : fond estimé, [fillMean] : couleur moyenne réellement obtenue après effacement (0 si inconnue). [textColor] :
      * couleur extrême mesurée. [haloColor], [haloPx] : halo mesuré (0 : aucun), [letterHeightPx] : hauteur des lettres d'origine, dans la même unité que [haloPx]. [lines] : couleur du corps des

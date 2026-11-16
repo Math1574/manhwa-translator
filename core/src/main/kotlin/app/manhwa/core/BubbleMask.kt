@@ -118,8 +118,11 @@ object BubbleMask {
      * Intérieur d'une bulle à fond non uni (dégradé, ombre, lueur sombre) : remplissage par proximité locale. Un pixel rejoint la zone s'il
      * ressemble au pixel voisin déjà retenu (écart ≤ [step]) : les dégradés lents sont suivis, les contours et les lettres (sauts francs) arrêtent
      * le remplissage ; les lettres entourées deviennent des « trous » ajoutés à l'intérieur. Null si le remplissage s'échappe de la région.
+     * [farLimit] : écart maximal (par canal) entre un pixel retenu et la couleur médiane de l'anneau de graines. 140 par défaut : un dégradé qui va du blanc au noir dépasse cet écart
+     * (le haut clair de la bulle restait hors de la forme, qui n'y gardait que le dehors sombre). [allowed] : si fourni, le remplissage ne sort jamais de ces pixels (ellipse d'une bulle
+     * détectée) ; la fuite est alors bornée, ce qui permet de lever la limite de couleur (sans elle, le contour flou d'une bulle sur page blanche laissait couler le remplissage dehors).
      */
-    fun interiorSmooth(pixels: IntArray, w: Int, h: Int, text: IntArray, step: Int = 14, maxFill: Float = 0.85f): BooleanArray? {
+    fun interiorSmooth(pixels: IntArray, w: Int, h: Int, text: IntArray, step: Int = 14, maxFill: Float = 0.85f, farLimit: Int = 140, allowed: BooleanArray? = null): BooleanArray? {
         if (w < 8 || h < 8) return null
         val x0 = text[0].coerceIn(0, w - 1); val y0 = text[1].coerceIn(0, h - 1); val x1 = text[2].coerceIn(x0 + 1, w); val y1 = text[3].coerceIn(y0 + 1, h)
         fun ch(c: Int, sh: Int) = (c shr sh) and 0xFF
@@ -141,7 +144,7 @@ object BubbleMask {
                 val nx = x + (if (d == 0) 1 else if (d == 1) -1 else 0); val ny = y + (if (d == 2) 1 else if (d == 3) -1 else 0)
                 if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
                 val j = ny * w + nx
-                if (!flood[j] && close(pixels[i], pixels[j]) && maxOf(abs(ch(pixels[j], 16) - ch(med, 16)), abs(ch(pixels[j], 8) - ch(med, 8)), abs(ch(pixels[j], 0) - ch(med, 0))) <= 140) { flood[j] = true; queue[tail++] = j }
+                if (!flood[j] && (allowed == null || allowed[j]) && close(pixels[i], pixels[j]) && maxOf(abs(ch(pixels[j], 16) - ch(med, 16)), abs(ch(pixels[j], 8) - ch(med, 8)), abs(ch(pixels[j], 0) - ch(med, 0))) <= farLimit) { flood[j] = true; queue[tail++] = j }
             }
         }
         if (tail > maxFill * w * h) return null

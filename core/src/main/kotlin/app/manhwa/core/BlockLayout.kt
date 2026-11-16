@@ -334,6 +334,7 @@ object BlockLayout {
         val anchorX = union.centerX            // axe du texte d'origine : la traduction s'y centre tant que la forme lui laisse la place
         // bulle ronde confirmée : jamais au-delà de son ellipse (un contour ouvert laisse la forme relevée déborder sur la page)
         val ellipseLimit: RowShape? = limitBox?.takeIf { !p.bubbleRect }?.let { c -> RowShape.ellipse(c.left + c.width * 0.015f, c.top + c.height * 0.015f, c.right - c.width * 0.015f, c.bottom - c.height * 0.015f) }
+        var freeInfo = ""   // journal : quelle zone libre a été retenue pour un texte hors bulle (niveau d'agrandissement, forme, bulles voisines proches)
         val fit0: ShapeFit = if (fixedShape != null) {
             // l'emprise d'origine reste toujours disponible dans la bulle (le texte d'origine y tenait), bornée par l'ellipse un peu élargie : la forme relevée, parfois trop
             // étroite (bords en dégradé, lueur), ne doit pas imposer un texte plus petit que l'original
@@ -371,7 +372,7 @@ object BlockLayout {
                     // formes « autour de la bulle » (les suivantes de la liste) : le bloc doit encore recouvrir l'emplacement d'origine (centres éloignés de moins de 40 % de la somme des dimensions)
                     if (near.isNotEmpty() && si > 0) { val pr = placedOf(cand); if (abs(pr.centerY - centerY) > 0.4f * (pr.height + union.height) || abs(pr.centerX - union.centerX) > 0.4f * (pr.width + union.width)) continue }
                     val cur = best
-                    if (cur == null || (cand.fits && !cur.fits) || (cand.fits == cur.fits && quality(cand) > quality(cur) * 1.02f)) best = cand
+                    if (cur == null || (cand.fits && !cur.fits) || (cand.fits == cur.fits && quality(cand) > quality(cur) * 1.02f)) { best = cand; freeInfo = "g=%.2f forme#%d près=%d".format(g, si, near.size) }
                 }
                 // rien ne tient entre la bulle voisine et la place d'origine : on reste en place, sur le rectangle simple (le chevauchement léger d'une boîte de bulle vaut mieux qu'un texte relogé ailleurs)
                 if (near.isNotEmpty() && best?.fits != true) {
@@ -379,7 +380,7 @@ object BlockLayout {
                     val shp = RowShape.rect(area.left, area.top, area.right, area.bottom).let { r -> if (guard != null) (r.intersect(guard) ?: r) else r }
                     val cand = ShapeLayout.fit(shp, sy, p.text, measurer, em, max(5f, em * 0.5f), step, margin, anchorX)
                     trace?.invoke("bloc ${b.id} g=$g repli rect -> taille=%.0f tient=${cand.fits}".format(cand.size))
-                    if (cand.lines.isNotEmpty() && cand.fits) best = cand
+                    if (cand.lines.isNotEmpty() && cand.fits) { best = cand; freeInfo = "g=%.2f repli près=%d".format(g, near.size) }
                 }
                 val bestNow = best
                 // premier niveau : on s'arrête dès que le texte atteint 90 % du corps visé ; ensuite 72 % (comme avant) : la zone ne s'agrandit que si le texte reste trop petit
@@ -389,7 +390,8 @@ object BlockLayout {
         }
         if (fit0.lines.isEmpty()) return null
         val fit = clampToImage(fit0, iw, ih)
-        val lay = "encre=%.0f emprise=%.0f ligne=%.0f pas=%.0f cible=%.0f taille=%.0f forme=%s".format(emInk, sFp, lineH, pitch, em, fit.size, if (fixedShape == null) "libre" else if (plan?.shape != null) "relevée" else "ellipse")
+        val lay = "encre=%.0f emprise=%.0f ligne=%.0f pas=%.0f cible=%.0f taille=%.0f forme=%s".format(emInk, sFp, lineH, pitch, em, fit.size, if (fixedShape == null) "libre" else if (plan?.shape != null) "relevée" else "ellipse") +
+            (if (fixedShape == null) " zone[$freeInfo obst=${p.obstacles.size} voisines=${p.neighborBubbles.size} durs=${p.hardObstacles.size}]" else "")
         return Result(fit, art, allCaps, em, stepRatio, lay, p.tilt)
     }
 

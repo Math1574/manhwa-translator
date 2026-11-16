@@ -116,6 +116,32 @@ object TextErase {
         }
     }
 
+    /**
+     * Bouche les petits trous d'un masque : les composantes (4 voisins) de pixels hors du masque qui ne touchent pas le bord de la région et couvrent au plus [maxArea] pixels. Des pixels
+     * isolés d'un bord adouci (pointes et sommets des lettres) restaient hors de l'effacement : leurs voisins n'étaient remplacés qu'en partie (bord adouci du masque) et ces points
+     * ressortaient en fragments pointillés sous la traduction ; ils servaient aussi de références au remplissage.
+     */
+    fun fillHoles(mask: BooleanArray, w: Int, h: Int, maxArea: Int): BooleanArray {
+        val out = mask.copyOf(); val seen = BooleanArray(w * h); val stack = IntArray(w * h)
+        val members = IntArray(maxArea + 1)
+        for (start in 0 until w * h) {
+            if (mask[start] || seen[start]) continue
+            var sp = 0; var n = 0; var border = false
+            stack[sp++] = start; seen[start] = true
+            while (sp > 0) {
+                val i = stack[--sp]; if (n < members.size) members[n] = i; n++
+                val x = i % w; val y = i / w
+                if (x == 0 || y == 0 || x == w - 1 || y == h - 1) border = true
+                if (x > 0 && !mask[i - 1] && !seen[i - 1]) { seen[i - 1] = true; stack[sp++] = i - 1 }
+                if (x < w - 1 && !mask[i + 1] && !seen[i + 1]) { seen[i + 1] = true; stack[sp++] = i + 1 }
+                if (y > 0 && !mask[i - w] && !seen[i - w]) { seen[i - w] = true; stack[sp++] = i - w }
+                if (y < h - 1 && !mask[i + w] && !seen[i + w]) { seen[i + w] = true; stack[sp++] = i + w }
+            }
+            if (!border && n <= maxArea) for (k in 0 until n) out[members[k]] = true
+        }
+        return out
+    }
+
     /** Érosion (4 voisins) : retire [times] fois les pixels qui ont un voisin hors du masque (ou hors de l'image). */
     fun erode(src: BooleanArray, w: Int, h: Int, times: Int): BooleanArray {
         var cur = src
@@ -955,6 +981,71 @@ object TextErase {
     }
 
     /**
+     * Surface lisse : polynôme du second degré par canal, ajusté aux moindres carrés sur les pixels [usable] (échantillon régulier), en écartant en quelques itérations ceux qui s'en
+     * éloignent (lettres restantes, dessin). Elle suit un dégradé ou un ombrage régulier que ni la couleur médiane ni un aplat ne représentent. null si trop peu de pixels ou si
+     * l'ajustement est dégénéré.
+     */
+    fun smoothSurface(pixels: IntArray, w: Int, h: Int, usable: BooleanArray): IntArray? {
+        val n = w * h
+        var cnt = 0; for (i in 0 until n) if (usable[i]) cnt++
+        if (cnt < 300 || w < 4 || h < 4) return null
+        val step = maxOf(1, cnt / 6000)
+        val idx = IntArray(cnt / step + 2); var m = 0; var seen = 0
+        for (i in 0 until n) if (usable[i]) { if (seen % step == 0 && m < idx.size) idx[m++] = i; seen++ }
+        val bx = DoubleArray(m * 6)
+        for (k in 0 until m) {
+            val i = idx[k]; val x = (i % w) / (w - 1.0) * 2 - 1; val y = (i / w) / (h - 1.0) * 2 - 1
+            bx[k * 6] = 1.0; bx[k * 6 + 1] = x; bx[k * 6 + 2] = y; bx[k * 6 + 3] = x * x; bx[k * 6 + 4] = x * y; bx[k * 6 + 5] = y * y
+        }
+        val keep = BooleanArray(m) { true }
+        var coef = Array(3) { DoubleArray(6) }
+        fun solve(): Array<DoubleArray>? {
+            val out = Array(3) { DoubleArray(6) }
+            for (ch in 0 until 3) {
+                val a = Array(6) { DoubleArray(7) }
+                for (k in 0 until m) {
+                    if (!keep[k]) continue
+                    val c = when (ch) { 0 -> r(pixels[idx[k]]); 1 -> g(pixels[idx[k]]); else -> b(pixels[idx[k]]) }.toDouble()
+                    for (p in 0 until 6) { val bp = bx[k * 6 + p]; for (q in 0 until 6) a[p][q] += bp * bx[k * 6 + q]; a[p][6] += bp * c }
+                }
+                for (p in 0 until 6) a[p][p] += 1e-6
+                for (col in 0 until 6) {
+                    var piv = col; for (rw in col + 1 until 6) if (abs(a[rw][col]) > abs(a[piv][col])) piv = rw
+                    if (abs(a[piv][col]) < 1e-9) return null
+                    val tmp = a[col]; a[col] = a[piv]; a[piv] = tmp
+                    for (rw in 0 until 6) if (rw != col) { val f = a[rw][col] / a[col][col]; if (f != 0.0) for (q in col until 7) a[rw][q] -= f * a[col][q] }
+                }
+                for (p in 0 until 6) out[ch][p] = a[p][6] / a[p][p]
+            }
+            return out
+        }
+        for (thr in intArrayOf(255, 70, 48, 36)) {
+            if (thr < 255) {
+                val cf = coef; var kept = 0
+                for (k in 0 until m) {
+                    var worst = 0
+                    for (ch in 0 until 3) {
+                        var v = 0.0; for (p in 0 until 6) v += cf[ch][p] * bx[k * 6 + p]
+                        val c = when (ch) { 0 -> r(pixels[idx[k]]); 1 -> g(pixels[idx[k]]); else -> b(pixels[idx[k]]) }
+                        worst = maxOf(worst, abs(c - v.toInt()))
+                    }
+                    keep[k] = worst <= thr; if (keep[k]) kept++
+                }
+                if (kept < 200) break
+            }
+            coef = solve() ?: return null
+        }
+        val out = IntArray(n)
+        for (i in 0 until n) {
+            val x = (i % w) / (w - 1.0) * 2 - 1; val y = (i / w) / (h - 1.0) * 2 - 1
+            val b6 = doubleArrayOf(1.0, x, y, x * x, x * y, y * y)
+            val ch = IntArray(3) { c -> var v = 0.0; for (p in 0 until 6) v += coef[c][p] * b6[p]; v.toInt().coerceIn(0, 255) }
+            out[i] = pack(ch[0], ch[1], ch[2])
+        }
+        return out
+    }
+
+    /**
      * Reconstruction lisse d'une zone : initialisation par la couleur du plus proche pixel valide, puis relaxation (moyenne des 4 voisins) qui lisse les raccords. Contrairement à
      * [inpaint], dont l'initialisation est la moyenne de toute la région et qui ne converge pas sur une grande zone (d'où une teinte de « carré » différente du fond), le résultat
      * suit le dégradé du fond autour de la zone. Seuls les pixels [valid] (non masqués) servent de sources : un contour ou un dessin voisin ne salit pas le remplissage.
@@ -1020,11 +1111,145 @@ object TextErase {
     }
 
     /**
+     * Comme [inpaintSmooth], mais sans mélanger deux régions très différentes. Quand le trou est à cheval sur un bord net (légende posée sur le bord d'une bulle claire devant un fond sombre,
+     * cadre, ombre portée), la moyenne lisse des pixels voisins fait un dégradé gris entre les deux : une tache. Ici, chaque côté du bord est prolongé avec sa propre couleur, et la frontière
+     * est la courbe où l'interpolation lisse d'une carte « clair / sombre » des pixels voisins vaut un demi : le bord traverse le trou sans flou.
+     * Si le contour du trou n'est pas fait d'un petit nombre de grandes régions nettes (texture, dessin fin, trame, simple dégradé), le résultat est celui de [inpaintSmooth].
+     */
+    fun inpaintEdge(pixels: IntArray, w: Int, h: Int, mask: BooleanArray, valid: BooleanArray? = null, iters: Int = 24): IntArray {
+        val n = w * h
+        val ringW = 6; val bandW = 12
+        fun lum(c: Int) = (r(c) * 77 + g(c) * 150 + b(c) * 29) shr 8
+        // distance (4 voisins) au trou, jusqu'à la largeur de la bande de couleurs
+        val dm = IntArray(n) { if (mask[it]) 0 else -1 }
+        val queue = IntArray(n); var head = 0; var tail = 0
+        for (i in 0 until n) if (mask[i]) queue[tail++] = i
+        if (tail == 0) return pixels.copyOf()
+        while (head < tail) {
+            val i = queue[head++]; val d = dm[i]; if (d >= bandW) continue
+            val x = i % w; val y = i / w
+            if (x > 0 && dm[i - 1] < 0) { dm[i - 1] = d + 1; queue[tail++] = i - 1 }
+            if (x < w - 1 && dm[i + 1] < 0) { dm[i + 1] = d + 1; queue[tail++] = i + 1 }
+            if (y > 0 && dm[i - w] < 0) { dm[i - w] = d + 1; queue[tail++] = i - w }
+            if (y < h - 1 && dm[i + w] < 0) { dm[i + w] = d + 1; queue[tail++] = i + w }
+        }
+        fun fallback(why: String = ""): IntArray { if (why.isNotEmpty()) Erasure.trace?.invoke("remplissage lissé (pas de bord net : $why)"); return inpaintSmooth(pixels, w, h, mask, valid, iters) }
+        // anneau : pixels connus à 1..ringW px du trou ; seuil de séparation clair / sombre (Otsu)
+        val hist = IntArray(256); var ringN = 0
+        for (i in 0 until n) { val d = dm[i]; if (d in 1..ringW && (valid == null || valid[i])) { hist[lum(pixels[i])]++; ringN++ } }
+        if (ringN < 60) return fallback()
+        var sumAll = 0L; for (v in 0..255) sumAll += v.toLong() * hist[v]
+        var cnt0 = 0L; var sum0 = 0L; var best = -1.0; var t = -1
+        for (v in 0..254) {
+            cnt0 += hist[v]; sum0 += v.toLong() * hist[v]
+            val cnt1 = ringN - cnt0
+            if (cnt0 == 0L) continue
+            if (cnt1 == 0L) break
+            val m0 = sum0.toDouble() / cnt0; val m1 = (sumAll - sum0).toDouble() / cnt1
+            val between = cnt0.toDouble() * cnt1 * (m0 - m1) * (m0 - m1)
+            if (between > best) { best = between; t = v }
+        }
+        if (t < 0) return fallback()
+        var n0 = 0; var n1 = 0; var s0 = 0L; var s1 = 0L
+        for (v in 0..255) { if (v <= t) { n0 += hist[v]; s0 += v.toLong() * hist[v] } else { n1 += hist[v]; s1 += v.toLong() * hist[v] } }
+        if (n0 == 0 || n1 == 0) return fallback()
+        val m0 = s0.toDouble() / n0; val m1 = s1.toDouble() / n1; val gap = m1 - m0
+        var var0 = 0.0; var var1 = 0.0
+        for (v in 0..255) { if (v <= t) var0 += hist[v] * (v - m0) * (v - m0) else var1 += hist[v] * (v - m1) * (v - m1) }
+        val sd0 = sqrt(var0 / n0); val sd1 = sqrt(var1 / n1)
+        val lo = m0 + 0.25 * gap; val hi = m1 - 0.25 * gap
+        var mid = 0; for (v in 0..255) if (v > lo && v < hi) mid += hist[v]
+        // deux grandes régions nettes : écart net, deux groupes serrés, peu de pixels intermédiaires
+        if (gap < 45 || min(n0, n1) < max(25, (0.08 * ringN).toInt()) || sd0 > 0.4 * gap || sd1 > 0.4 * gap || mid > 0.2 * ringN) return fallback("écart ${gap.toInt()}, parts $n0/$n1 sur $ringN, dispersion ${sd0.toInt()}/${sd1.toInt()}, intermédiaires $mid")
+        // cohérence : peu de composantes de taille notable (une trame de points ou un dessin fin en ont beaucoup, de petites)
+        val cls = ByteArray(n)   // 0 : hors anneau, 1 : sombre, 2 : clair
+        for (i in 0 until n) {
+            val d = dm[i]; if (d !in 1..ringW || (valid != null && !valid[i])) continue
+            val y = lum(pixels[i]).toDouble()
+            cls[i] = if (y <= lo) 1 else if (y >= hi) 2 else 0
+        }
+        val seen = BooleanArray(n); var comps = 0; var keptN = 0; var have1 = false; var have2 = false
+        val keep = BooleanArray(n)
+        for (s in 0 until n) {
+            if (cls[s].toInt() == 0 || seen[s]) continue
+            val c = cls[s]; var qh = 0; var qt = 0; queue[qt++] = s; seen[s] = true
+            while (qh < qt) {
+                val i = queue[qh++]; val x = i % w; val y = i / w
+                if (x > 0 && !seen[i - 1] && cls[i - 1] == c) { seen[i - 1] = true; queue[qt++] = i - 1 }
+                if (x < w - 1 && !seen[i + 1] && cls[i + 1] == c) { seen[i + 1] = true; queue[qt++] = i + 1 }
+                if (y > 0 && !seen[i - w] && cls[i - w] == c) { seen[i - w] = true; queue[qt++] = i - w }
+                if (y < h - 1 && !seen[i + w] && cls[i + w] == c) { seen[i + w] = true; queue[qt++] = i + w }
+            }
+            if (qt >= 14) { comps++; keptN += qt; if (c.toInt() == 1) have1 = true else have2 = true; for (k in 0 until qt) keep[queue[k]] = true }
+        }
+        var classified = 0; for (i in 0 until n) if (cls[i].toInt() != 0) classified++
+        // les pixels de l'anneau appartiennent en grande majorité à ces grandes régions (pas à des points et des traits épars)
+        if (!have1 || !have2 || comps > 6 || keptN < 0.7 * classified) return fallback("$comps régions notables, ${keptN * 100 / max(1, classified)} % des pixels")
+        // carte clair / sombre des voisins (seules les grandes composantes votent), prolongée en lissant ; couleurs de chaque côté prolongées séparément
+        val ind = IntArray(n); val v0 = BooleanArray(n); val v1 = BooleanArray(n)
+        for (i in 0 until n) {
+            val d = dm[i]; if (d < 1 || (valid != null && !valid[i])) continue
+            val y = lum(pixels[i]).toDouble()
+            if (keep[i]) ind[i] = if (cls[i].toInt() == 2) -1 else (0xFF shl 24)
+            if (y <= lo) v0[i] = true else if (y >= hi) v1[i] = true
+        }
+        val field = inpaintSmooth(ind, w, h, mask, keep, iters)
+        // le bord vu dans l'anneau (pixels dont le voisinage 5×5 contient les deux côtés) doit être un trait droit, et sa prolongation dans le trou doit rester sur ce trait : un seul côté
+        // qui touche le trou, un contour courbe, des traits épars donneraient une « bosse » ou des cellules (la frontière de l'interpolation n'est alors plus le prolongement du bord)
+        var ifN = 0; var sx = 0.0; var sy = 0.0; var sxx = 0.0; var syy = 0.0; var sxy = 0.0
+        for (i in 0 until n) {
+            val d = dm[i]; if (d < 1 || d > ringW) continue
+            val x = i % w; val y = i / w
+            var c1 = 0; var c2 = 0
+            for (dy in -2..2) { val yy = y + dy; if (yy < 0 || yy >= h) continue
+                for (dx in -2..2) { val xx = x + dx; if (xx < 0 || xx >= w) continue
+                    val j = yy * w + xx; if (!keep[j]) continue
+                    if (cls[j].toInt() == 1) c1++ else c2++ } }
+            if (c1 >= 2 && c2 >= 2) { ifN++; sx += x; sy += y; sxx += x.toDouble() * x; syy += y.toDouble() * y; sxy += x.toDouble() * y }
+        }
+        if (ifN < 20) return fallback("bord à peine visible autour du trou ($ifN px)")
+        val mx = sx / ifN; val my = sy / ifN
+        val cxx = sxx / ifN - mx * mx; val cyy = syy / ifN - my * my; val cxy = sxy / ifN - mx * my
+        val half = (cxx + cyy) / 2; val rad = sqrt(max(0.0, half * half - (cxx * cyy - cxy * cxy)))
+        val sdAlong = sqrt(max(0.0, half + rad)); val sdAcross = sqrt(max(0.0, half - rad))
+        if (sdAlong < 4.0 || sdAcross > max(2.5, 0.15 * sdAlong)) return fallback("le bord vu autour du trou n'est pas un trait droit (longueur ${sdAlong.toInt()}, épaisseur ${sdAcross.toInt()})")
+        val theta = 0.5 * kotlin.math.atan2(2 * cxy, cxx - cyy)
+        val nx = -kotlin.math.sin(theta); val ny = kotlin.math.cos(theta)
+        var hx0 = w; var hx1 = -1; var hy0 = h; var hy1 = -1
+        for (i in 0 until n) if (mask[i]) { val x = i % w; val y = i / w; if (x < hx0) hx0 = x; if (x > hx1) hx1 = x; if (y < hy0) hy0 = y; if (y > hy1) hy1 = y }
+        val ext = max(hx1 - hx0 + 1, hy1 - hy0 + 1).toDouble()
+        // le bord doit au moins toucher le trou : si le trou est tout entier d'un seul côté, prolonger l'autre couleur y ferait une bosse, le remplissage lisse est meilleur
+        var holeN = 0; var posN = 0; var negN = 0
+        for (i in 0 until n) if (mask[i]) { holeN++; val sd = (i % w - mx) * nx + (i / w - my) * ny; if (sd > 1.5) posN++ else if (sd < -1.5) negN++ }
+        if (min(posN, negN) < 0.02 * holeN) return fallback("le bord ne touche pas le trou (${posN * 100 / max(1, holeN)} % / ${negN * 100 / max(1, holeN)} % de chaque côté)")
+        val alpha = FloatArray(n)
+        var midN = 0; var devSum = 0.0; var devMax = 0.0
+        for (i in 0 until n) if (mask[i]) {
+            val a = ((r(field[i]) - 127.5f) / 30f + 0.5f).coerceIn(0f, 1f); alpha[i] = a
+            if (a > 0.25f && a < 0.75f) {
+                val dev = kotlin.math.abs((i % w - mx) * nx + (i / w - my) * ny)
+                midN++; devSum += dev; if (dev > devMax) devMax = dev
+            }
+        }
+        if (midN > 0 && (devSum / midN > max(4.0, 0.15 * ext) || devMax > max(10.0, 0.3 * ext))) return fallback("la frontière dans le trou s'écarte du bord (moyenne ${(devSum / midN).toInt()} px, maximum ${devMax.toInt()} px, trou $ext px)")
+        val f0 = inpaintSmooth(pixels, w, h, mask, v0, iters)
+        val f1 = inpaintSmooth(pixels, w, h, mask, v1, iters)
+        val out = pixels.copyOf()
+        for (i in 0 until n) if (mask[i]) {
+            val a = alpha[i]
+            val c0 = f0[i]; val c1 = f1[i]
+            out[i] = pack((r(c0) + (r(c1) - r(c0)) * a).toInt(), (g(c0) + (g(c1) - g(c0)) * a).toInt(), (b(c0) + (b(c1) - b(c0)) * a).toInt())
+        }
+        Erasure.trace?.invoke("remplissage à bord net : sombre ${m0.toInt()} / clair ${m1.toInt()} (écart ${gap.toInt()}, anneau $ringN px, $comps régions, bord $ifN px longueur ${sdAlong.toInt()} épaisseur ${sdAcross.toInt()}, trou ${posN * 100 / max(1, holeN)} % / ${negN * 100 / max(1, holeN)} %, frontière $midN px écart ${if (midN > 0) (devSum / midN).toInt() else 0})")
+        return out
+    }
+
+    /**
      * Structure du fond autour du texte : part des pixels de référence (marge de la zone hors texte, et bande de 10 px autour de la zone) qui portent un bord franc
      * (gradient de luminance > 60, puis > 30). Un dégradé, un ombrage, un fond flou ou bruité ont une part quasi nulle ; un dessin (contours, cheveux, motifs) en a une nette.
      * [text] : le texte lu (boîtes des lignes un peu élargies), dont les propres bords ne comptent pas. [limit] : restreint les pixels de référence (intérieur d'une bulle).
      */
-    fun structure(pixels: IntArray, w: Int, h: Int, zone: BooleanArray, text: BooleanArray, limit: BooleanArray? = null): FloatArray {
+    fun structure(pixels: IntArray, w: Int, h: Int, zone: BooleanArray, text: BooleanArray, limit: BooleanArray? = null, surface: IntArray? = null): FloatArray {
         val n = w * h
         // boîte de la zone élargie de 11 px : la bande de référence n'en sort pas, inutile de parcourir toute la région
         var bx0 = w; var bx1 = -1; var by0 = h; var by1 = -1
@@ -1048,14 +1273,14 @@ object TextErase {
             }
         }
         var tot = 0; var e60 = 0; var e30 = 0
-        var refN = 0; val refColsArr = IntArray(n)
+        var refN = 0; val refColsArr = IntArray(n); val refIdxArr = IntArray(n)
         // dans une bulle, la frange de 3 px au bord de l'intérieur est écartée : son voisin est le contour, dont le bord n'est pas une structure du fond
         val lim = if (limit != null) erode(limit, w, h, 3) else null
         for (y in ry0..ry1) for (x in rx0..rx1) {
             val i = y * w + x
             val inRef = (zone[i] && !text[i]) || (!zone[i] && dm[i] in 1..10)
             if (!inRef || (lim != null && !lim[i])) continue
-            refColsArr[refN++] = pixels[i]
+            refIdxArr[refN] = i; refColsArr[refN++] = pixels[i]
             // gradient de Sobel ; un voisin appartenant au texte fausserait le bord : on l'ignore
             if (text[i - 1] || text[i + 1] || text[i - w] || text[i + w]) continue
             val gx = -lum[i - w - 1] + lum[i - w + 1] - 2 * lum[i - 1] + 2 * lum[i + 1] - lum[i + w - 1] + lum[i + w + 1]
@@ -1068,7 +1293,13 @@ object TextErase {
         fun med(sh: Int): Int { val a = IntArray(refN) { (refColsArr[it] shr sh) and 0xFF }; a.sort(); return a[a.size / 2] }
         val mr = med(16); val mg = med(8); val mb = med(0)
         var far = 0
-        for (k in 0 until refN) { val c = refColsArr[k]; if (maxOf(abs(((c shr 16) and 0xFF) - mr), abs(((c shr 8) and 0xFF) - mg), abs((c and 0xFF) - mb)) > 50) far++ }
+        // avec une surface lisse (dégradé ajusté), l'écart se mesure à la surface au même endroit, pas à la couleur médiane : un dégradé n'est pas de la « masse »
+        for (k in 0 until refN) {
+            val c = refColsArr[k]
+            val sf = if (surface != null) surface[refIdxArr[k]] else -1
+            val rr = if (surface != null) r(sf) else mr; val rg = if (surface != null) g(sf) else mg; val rb = if (surface != null) b(sf) else mb
+            if (maxOf(abs(((c shr 16) and 0xFF) - rr), abs(((c shr 8) and 0xFF) - rg), abs((c and 0xFF) - rb)) > 50) far++
+        }
         return floatArrayOf(e60.toFloat() / tot, e30.toFloat() / tot, far.toFloat() / refN)
     }
 
