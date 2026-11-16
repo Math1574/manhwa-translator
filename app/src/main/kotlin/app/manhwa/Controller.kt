@@ -574,11 +574,16 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                 nearBottom = false
                 barsHidden = false; pageProgress = 0; showReaderBar(false); resumeOffer = 0; peekTarget = null; undoBanner = null
                 pageError = null
+                if (testing) android.util.Log.i("MT", "page : début $url (translateOn=$translateOn active=$active total=$total)")
                 resetSession()
                 view.evaluateJavascript(PageScript.INJECT, null)
             }
 
-            override fun onPageFinished(view: WebView, url: String) {
+            override fun onPageFinished(view: WebView, reported: String) {
+                // Quand une page est demandée pendant que l'accueil vide (goHome) se charge encore, WebView annonce parfois la fin de CETTE page sous l'adresse « about:blank » :
+                // la traduction ne démarrait alors jamais (aucune image repérée, pas de reprise de lecture, pas d'historique). On prend dans ce cas l'adresse réellement affichée.
+                val url = realPageUrl(view, reported)
+                if (testing) android.util.Log.i("MT", "page : fin $reported (affichée : ${if (url != reported) url else "idem"}) (translateOn=$translateOn active=$active total=$total)")
                 loading = false
                 lastTitle = view.title ?: ""
                 if (url.startsWith("http")) graph.library.visit(url, view.title ?: "")
@@ -656,6 +661,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
      */
     private fun rendererGone(dead: WebView, crashed: Boolean) {
         rendererLost++
+        android.util.Log.i("MT", "page : processus d'affichage perdu (plantage=$crashed, pertes=$rendererLost)")
         try { graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "renderer").put("crashed", crashed).put("url", currentUrl).put("sys", diag())) } catch (_: Throwable) {}
         try { (dead.parent as? ViewGroup)?.removeView(dead) } catch (_: Throwable) {}
         try { dead.destroy() } catch (_: Throwable) {}
@@ -1166,6 +1172,16 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         peekEmpty = null; main.removeCallbacks(clearPeekEmpty)
         openEdit(EditTarget(sp.imageId, NEW_BLOCK_ID, "", "", sp.x, sp.y))      // page plus en mémoire : retraitée d'abord, l'éditeur s'ouvre ensuite
     }
+    /**
+     * Adresse de la page dont WebView annonce la fin. Si elle est annoncée sous une adresse qui n'est pas celle d'un site (« about:blank ») alors que la page affichée est bien celle qu'on suit
+     * (celle de [currentUrl], posée au début du chargement), c'est cette page-là qui vient de finir. Après un retour à l'accueil, [currentUrl] est vide : rien n'est rattaché à une ancienne page.
+     */
+    private fun realPageUrl(view: WebView, reported: String): String {
+        if (reported.startsWith("http") || currentUrl.isEmpty()) return reported
+        val shown = try { view.url } catch (_: Throwable) { null }
+        return if (shown != null && shown == currentUrl) shown else reported
+    }
+
     /** Revient à l'accueil : la page affichée est vidée (l'accueil lui-même est dessiné par l'application, voir [HomeScreen]) et plus aucune page n'est lue. */
     fun goHome() {
         webView?.loadDataWithBaseURL(null, "<html><body style='background:#0E0F1A'></body></html>", "text/html", "utf-8", null)
@@ -1200,6 +1216,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     fun start(force: Boolean) {
         val wv = webView ?: return
         if (currentUrl.isEmpty()) return
+        if (testing) android.util.Log.i("MT", "départ : force=$force url=$currentUrl total=$total")
         if (force) { stopWork(); resetCounters() }
         active = true
         warmUp()
