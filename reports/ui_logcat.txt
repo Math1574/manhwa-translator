@@ -1,0 +1,30 @@
+I/AndroidRuntime(20062): Leaving lock profiling enabled
+D/AndroidRuntime(20062): Calling main entry com.android.commands.uiautomator.Launcher
+D/AndroidRuntime(20062): Shutting down VM
+D/AndroidRuntime(20111): >>>>>> START com.android.internal.os.RuntimeInit uid 2000 <<<<<<
+I/AndroidRuntime(20111): Using default boot image
+I/AndroidRuntime(20111): Leaving lock profiling enabled
+D/AndroidRuntime(20111): Calling main entry com.android.commands.uiautomator.Launcher
+D/AndroidRuntime(20111): Shutting down VM
+D/AndroidRuntime(20142): >>>>>> START com.android.internal.os.RuntimeInit uid 2000 <<<<<<
+I/AndroidRuntime(20142): Using default boot image
+I/AndroidRuntime(20142): Leaving lock profiling enabled
+D/AndroidRuntime(20142): Calling main entry com.android.commands.uiautomator.Launcher
+D/AndroidRuntime(20142): Shutting down VM
+D/AndroidRuntime(20229): >>>>>> START com.android.internal.os.RuntimeInit uid 2000 <<<<<<
+I/AndroidRuntime(20229): Using default boot image
+I/AndroidRuntime(20229): Leaving lock profiling enabled
+D/AndroidRuntime(20229): Calling main entry com.android.commands.uiautomator.Launcher
+D/AndroidRuntime(20229): Shutting down VM
+D/AndroidRuntime(20503): >>>>>> START com.android.internal.os.RuntimeInit uid 2000 <<<<<<
+I/AndroidRuntime(20503): Using default boot image
+I/AndroidRuntime(20503): Leaving lock profiling enabled
+D/AndroidRuntime(20503): Calling main entry com.android.commands.uiautomator.Launcher
+D/AndroidRuntime(20503): Shutting down VM
+I/ActivityManager(  549): Process com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0 (pid 14901) has died: fg  BTOP
+I/ActivityManager(  549): Process com.google.android.gms (pid 9842) has died: cch+5 CEM 
+D/AndroidRuntime(20598): >>>>>> START com.android.internal.os.RuntimeInit uid 2000 <<<<<<
+I/AndroidRuntime(20598): Using default boot image
+I/AndroidRuntime(20598): Leaving lock profiling enabled
+D/AndroidRuntime(20598): Calling main entry com.android.commands.uiautomator.Launcher
+D/AndroidRuntime(20598): Shutting down VM
