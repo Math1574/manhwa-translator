@@ -1,0 +1,119 @@
+Performing Streamed Install
+Success
+Physical size: 1080x2400
+[e2e 16:22:56] === prep (index.html, MLKIT, EN→FR)
+[e2e 16:24:59] terminé : prep (122 s)
+[e2e 16:24:59] aucune image traitée : nouvel essai de prep
+[e2e 16:24:59] === prep (index.html, MLKIT, EN→FR)
+[e2e 16:25:55] terminé : prep (55 s)
+[e2e 16:25:55] === pc_en_mlkit (pc_en.html, MLKIT, EN→FR)
+[e2e 16:27:06] terminé : pc_en_mlkit (71 s)
+[e2e 16:27:06] === synth_en_caps_mlkit (synth_en_caps.html, MLKIT, EN→FR)
+[e2e 16:28:01] terminé : synth_en_caps_mlkit (55 s)
+[e2e 16:28:01] === synth_en_mixed_mlkit (synth_en_mixed.html, MLKIT, EN→FR)
+[e2e 16:28:57] terminé : synth_en_mixed_mlkit (55 s)
+[e2e 16:28:57] === synth_en_variety_combined (synth_en_variety.html, MLKIT, EN→FR)
+[e2e 16:29:53] terminé : synth_en_variety_combined (55 s)
+[e2e 16:29:53] === adblock_mlkit (adtest.html, MLKIT, EN→FR)
+[e2e 16:30:48] terminé : adblock_mlkit (55 s)
+[e2e 16:30:48] === synth_layouts_combined (synth_layouts.html, MLKIT, EN→FR)
+[e2e 16:32:26] terminé : synth_layouts_combined (97 s)
+[e2e 16:32:26] === synth_atypical_combined (synth_atypical.html, MLKIT, EN→FR)
+[e2e 16:33:46] terminé : synth_atypical_combined (79 s)
+[e2e 16:33:46] === synth_en_fancy_mlkitonly (synth_en_fancy.html, MLKIT, EN→FR)
+[e2e 16:34:30] terminé : synth_en_fancy_mlkitonly (43 s)
+[e2e 16:34:30] === synth_en_fancy_combined (synth_en_fancy.html, MLKIT, EN→FR)
+[e2e 16:35:25] terminé : synth_en_fancy_combined (55 s)
+[e2e 16:35:25] === pc_en_ref_mlkit (pc_en_ref.html, MLKIT, EN→FR)
+[e2e 16:36:37] terminé : pc_en_ref_mlkit (71 s)
+[e2e 16:36:37] === seam_mlkit (seam_cut.html, MLKIT, EN→FR)
+[e2e 16:37:50] terminé : seam_mlkit (73 s)
+[e2e 16:37:50] === seam_off_mlkit (seam_cut.html, MLKIT, EN→FR)
+[e2e 16:39:03] terminé : seam_off_mlkit (73 s)
+[e2e 16:39:03] === pc_en_batch_mlkit (pc_en.html, MLKIT, EN→FR)
+[e2e 16:40:14] terminé : pc_en_batch_mlkit (70 s)
+[e2e 16:40:14] === pc_en_long_mlkit (pc_en_long.html, MLKIT, EN→FR)
+[e2e 16:44:46] terminé : pc_en_long_mlkit (271 s)
+[e2e 16:44:46] === pc_en_toggle_mlkit (pc_en_toggle.html, MLKIT, EN→FR)
+[e2e 16:47:28] terminé : pc_en_toggle_mlkit (162 s)
+[e2e 16:47:28] === pc_en_once_mlkit (pc_en_once.html, MLKIT, EN→FR)
+[e2e 16:48:45] terminé : pc_en_once_mlkit (77 s)
+[e2e 16:48:45] === pc_en_strict_mlkit (pc_en_strict.html, MLKIT, EN→FR)
+[e2e 16:49:56] terminé : pc_en_strict_mlkit (70 s)
+[e2e 16:49:56] === pc_en_lazy_mlkit (pc_en_lazy.html, MLKIT, EN→FR)
+[e2e 16:51:13] terminé : pc_en_lazy_mlkit (76 s)
+[e2e 16:51:13] === synth_ko_mlkit (synth_ko.html, MLKIT, KO→FR)
+[e2e 16:52:02] terminé : synth_ko_mlkit (49 s)
+[e2e 16:52:02] === synth_ja_vert_mlkit (synth_ja_vertical.html, MLKIT, JA→FR)
+[e2e 16:52:58] terminé : synth_ja_vert_mlkit (55 s)
+[e2e 16:52:58] === synth_zh_mlkit (synth_zh.html, MLKIT, ZH_HANS→FR)
+[e2e 16:53:47] terminé : synth_zh_mlkit (49 s)
+[e2e 16:53:47] === pc_ja_mlkit (pc_ja.html, MLKIT, JA→FR)
+[e2e 16:55:05] terminé : pc_ja_mlkit (77 s)
+[e2e 16:55:05] === bloqueur de publicités
+[e2e 16:55:43] bloqueur terminé (6229 octets de rapport)
+[e2e 16:55:43] === interface
+  [avant appui]   mCurrentFocus=Window{f712bbf u0 app.manhwa.translator/app.manhwa.MainActivity}
+  [avant appui]     topResumedActivity=ActivityRecord{d8eca39 u0 app.manhwa.translator/app.manhwa.MainActivity t33}
+  [avant appui]   ResumedActivity: ActivityRecord{d8eca39 u0 app.manhwa.translator/app.manhwa.MainActivity t33}
+  [après appui]   mCurrentFocus=Window{f712bbf u0 app.manhwa.translator/app.manhwa.MainActivity}
+  mCurrentFocus=Window{f712bbf u0 app.manhwa.translator/app.manhwa.MainActivity}
+        InsetsSource id=e76e0000 type=statusBars frame=[0,0][1080,128] visible=true flags= insetsRoundedCornerFrame=false
+        mSource=InsetsSource id=e76e0000 type=statusBars frame=[0,0][1080,128] visible=true flags= insetsRoundedCornerFrame=false
+[e2e 16:59:28] textes écartés : 2 cadre(s) proposé(s), listes connues pour 2 page(s) sur 2
+[e2e 17:01:12] === appuis longs réels
+[e2e 17:01:15] appuis longs : doigt posé en (722,1014) sur une traduction, en (54,569) sur une zone sans traduction
+[e2e 17:02:21] illustrations : 1 trouvée(s), 0 sans résultat («  »)
+[e2e 17:07:49] === éditeur
+[e2e 17:08:17] éditeur : bord gauche de la vue 154 → 192 (un doigt) → 232 (deux doigts), largeur 308 → 308, sens 1, fenêtre de 800 px
+[e2e 17:09:19] === chapitre trop court pour défiler
+[e2e 17:09:29] === changement de chapitre pendant une traduction
+[e2e 17:09:37] chapitre suivant pendant une traduction : retard du fil principal « 0 » ms, adresse « http://10.0.2.2:8000/comics/test-series-1a2b3c/chapter/2.html », page 9 (avant : 8)
+[e2e 17:09:42] === processus d'affichage de la page perdu
+[e2e 17:10:10] page perdue : processus 14854 → 14854, incidents comptés « 1 », page 10 (avant : 9), adresse « http://10.0.2.2:8000/comics/test-series-1a2b3c/chapter/2.html », avancement « 2/2 »
+  [journal système] 30 ligne(s) d'ANR ou de plantage
+[e2e 17:10:14] === illustrations : page construite par son script, annuaire, image de site seule
+{"t":1794848535176,"type":"cover","series":"Test Series","ok":true,"source":"site","why":"","page":"http:\/\/10.0.2.2:8000\/comics\/test-series-1a2b3c"}
+{"t":1794848553331,"type":"cover","series":"Zulu Quest","ok":false,"source":"","why":"site : page illisible ou trop lente ; annuaire : titre absent de l'annuaire","page":"https:\/\/seed.test\/comics\/zulu-quest-a1b2c3"}
+{"t":1794848553849,"type":"cover","series":"Mid Tale","ok":false,"source":"","why":"site : page illisible ou trop lente ; annuaire : titre absent de l'annuaire","page":"https:\/\/seed.test\/comics\/mid-tale-0a1b2c"}
+{"t":1794848554368,"type":"cover","series":"Alpha Saga","ok":false,"source":"","why":"site : page illisible ou trop lente ; annuaire : titre absent de l'annuaire","page":"https:\/\/seed.test\/comics\/alpha-saga-d4e5f6"}
+{"t":1794849039959,"type":"cover","series":"Spa Series","ok":true,"source":"site","why":"","page":"http:\/\/10.0.2.2:8000\/comics\/spa-series-7a7a7a"}
+{"t":1794849050716,"type":"cover","series":"Anilist Only","ok":true,"source":"annuaire","why":"site : aucune image retenue (partage 0, données 0, page 0)","page":""}
+{"t":1794849060971,"type":"cover","series":"Generic Only","ok":false,"source":"","why":"site : aucune image retenue (partage 1, données 0, page 0) ; annuaire : titre absent de l'annuaire","page":"http:\/\/10.0.2.2:8000\/comics\/generic-only-8c8c8c"}
+[e2e 17:11:39] illustrations : demandes à l'annuaire avant / après la recherche avec le réglage coupé : 5 / 5
+[e2e 17:11:40] envoi du modèle gemma-4-E2B-it.litertlm sur l'émulateur
+total 2527528
+drwx------ 3 u0_a192 u0_a192       4096 2026-11-16 17:11 .
+drwxrwx--x 7 u0_a192 u0_a192       4096 2026-11-16 17:11 ..
+-rw-rw-rw- 1 u0_a192 u0_a192 2588147712 2026-11-16 17:11 gemma-4-E2B-it.litertlm
+-rw-rw-rw- 1 u0_a192 u0_a192         64 2026-11-16 17:11 gemma-4-E2B-it.litertlm.ok
+drwx------ 2 u0_a192 u0_a192       4096 2026-11-16 16:22 ja
+[e2e 17:11:59] === banc d'essai de traduction : e2b (GEMMA_E2B, variantes v2,v3)
+[e2e 17:21:06] banc d'essai terminé : e2b (546 s)
+[e2e 17:21:06] === pc_en_gemma (pc_en.html, GEMMA_E2B, EN→FR)
+[e2e 17:22:41] terminé : pc_en_gemma (95 s)
+[e2e 17:22:41] === synth_en_caps_gemma (synth_en_caps.html, GEMMA_E2B, EN→FR)
+[e2e 17:24:01] terminé : synth_en_caps_gemma (80 s)
+[e2e 17:24:01] === synth_ko_gemma (synth_ko.html, GEMMA_E2B, KO→FR)
+[e2e 17:25:26] terminé : synth_ko_gemma (85 s)
+[e2e 17:25:26] === pc_ja_gemma (pc_ja.html, GEMMA_E2B, JA→FR)
+[e2e 17:26:55] terminé : pc_ja_gemma (88 s)
+[e2e 17:26:55] aucune image traitée : nouvel essai de pc_ja_gemma
+[e2e 17:26:55] === pc_ja_gemma (pc_ja.html, GEMMA_E2B, JA→FR)
+[e2e 17:28:24] terminé : pc_ja_gemma (88 s)
+[e2e 17:28:24] envoi du modèle gemma-4-E4B-it.litertlm sur l'émulateur
+total 6101304
+drwx------ 3 u0_a192 u0_a192       4096 2026-11-16 17:28 .
+drwxrwx--x 7 u0_a192 u0_a192       4096 2026-11-16 17:28 ..
+-rw-rw-rw- 1 u0_a192 u0_a192 2588147712 2026-11-16 17:11 gemma-4-E2B-it.litertlm
+-rw-rw-rw- 1 u0_a192 u0_a192         64 2026-11-16 17:11 gemma-4-E2B-it.litertlm.ok
+-rw-rw-rw- 1 u0_a192 u0_a192 3659530240 2026-11-16 17:28 gemma-4-E4B-it.litertlm
+-rw-rw-rw- 1 u0_a192 u0_a192         64 2026-11-16 17:28 gemma-4-E4B-it.litertlm.ok
+drwx------ 2 u0_a192 u0_a192       4096 2026-11-16 16:22 ja
+[e2e 17:28:57] === banc d'essai de traduction : e4b (GEMMA_E4B, variantes v2,v3)
+[e2e 17:53:44] banc d'essai terminé : e4b (1486 s)
+[e2e 17:53:44] === pc_en_gemma4b (pc_en.html, GEMMA_E4B, EN→FR)
+[e2e 17:56:26] terminé : pc_en_gemma4b (161 s)
+[e2e 17:56:27] === synth_en_caps_gemma4b (synth_en_caps.html, GEMMA_E4B, EN→FR)
+[e2e 17:58:17] terminé : synth_en_caps_gemma4b (110 s)
+[e2e 17:58:17] toutes les scènes sont terminées
