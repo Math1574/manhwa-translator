@@ -53,6 +53,14 @@ class GpuTester(ctx: Context, private val graph: AppGraph) {
                 sentinel.writeText(if (gpu.ok) "gpu-ok" else "gpu-failed")
                 val cpu = graph.gemma.benchmark(spec, false)
                 val faster = gpu.ok && cpu.ok && gpu.translateMs * 1.25 < cpu.translateMs
+                // mesure seulement : les chiffres du test rejoignent le journal (ils n'étaient affichés qu'à l'écran)
+                try {
+                    graph.journal.add(
+                        org.json.JSONObject().put("t", System.currentTimeMillis()).put("type", "gputest").put("model", spec.id)
+                            .put("cpuLabel", cpu.label).put("cpuOk", cpu.ok).put("cpuMs", cpu.translateMs).put("cpuShortMs", cpu.shortMs).put("cpuOut", cpu.outChars).put("cpuInitMs", cpu.initMs).put("cpuErr", cpu.error ?: "")
+                            .put("gpuLabel", gpu.label).put("gpuOk", gpu.ok).put("gpuMs", gpu.translateMs).put("gpuShortMs", gpu.shortMs).put("gpuOut", gpu.outChars).put("gpuInitMs", gpu.initMs).put("gpuErr", gpu.error ?: "").put("enabled", faster),
+                    )
+                } catch (_: Throwable) {}
                 graph.settingsStore.update { it.copy(useGpu = faster) }
                 text = fmt(cpu) + "\n" + fmt(gpu) + "\n" + if (faster) "Le GPU est nettement plus rapide : activé." else "Le GPU n'apporte pas de gain net ou a échoué : désactivé."
                 sentinel.writeText("ok|$text")

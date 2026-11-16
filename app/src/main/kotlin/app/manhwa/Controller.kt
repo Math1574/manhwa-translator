@@ -380,6 +380,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     private val runStage = ConcurrentHashMap<String, String>()
     private val stallReported = ConcurrentHashMap<String, Long>()
     private val batchInfo = ConcurrentHashMap<String, Pair<Int, Long>>()
+    /** Détail des appels au modèle du groupe de chaque page (mesure pour le journal). */
+    private val batchDetail = ConcurrentHashMap<String, String>()
     /** Notes de diagnostic et durées de lecture propres à chaque page (deux pages sont traitées en même temps : une variable commune mélangerait leurs notes). */
     private val pageNotes = ConcurrentHashMap<String, StringBuilder>()
     private val pageTiming = ConcurrentHashMap<String, String>()
@@ -1363,7 +1365,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         fun staleFix() = fix && fixRuns[c.id] != fixRun
         val pageUrl = currentUrl
         val pageSeries = BrowsingLibrary.seriesKey(pageUrl)
-        BatchContext.cancelled.set(cancelled); BatchContext.order.set(c.top); BatchContext.priority.set { c.priorityAt(viewportY, viewportH) }; BatchContext.lastBatch.remove()
+        BatchContext.cancelled.set(cancelled); BatchContext.order.set(c.top); BatchContext.priority.set { c.priorityAt(viewportY, viewportH) }; BatchContext.lastBatch.remove(); BatchContext.lastDetail.remove()
         runStage[c.id] = "téléchargement"
         val bytes = try { fetch(c, pageUrl) } catch (e: Exception) {
             val f = PageOutcome.Failed("image", e.message ?: "téléchargement impossible")
@@ -1477,6 +1479,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         var overlayForLog: JSONObject? = null
         var overlayUpForLog: JSONObject? = null
         BatchContext.lastBatch.get()?.let { batchInfo[c.id] = it }
+        BatchContext.lastDetail.get()?.let { batchDetail[c.id] = it }
         runStage[c.id] = "affichage"; finishing.add(c.id)
         if (out is PageOutcome.Done && !out.fromCache) journalPage(c, pageUrl, engineId, s.target.code, out, System.currentTimeMillis() - t0)
         if (!cancelled() && !staleFix()) {
@@ -1511,7 +1514,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         }
         if (testing) logForTest(c, out, debug, overlayForLog, System.currentTimeMillis() - t0, if (window != null) window.width to window.imageH else null, overlayUpForLog)
         // les informations propres à cette page ne servent plus
-        pageNotes.remove(c.id); pageTiming.remove(c.id); batchInfo.remove(c.id); fetchInfo.remove(c.id); stageInfo.remove(c.id)
+        pageNotes.remove(c.id); pageTiming.remove(c.id); batchInfo.remove(c.id); batchDetail.remove(c.id); fetchInfo.remove(c.id); stageInfo.remove(c.id)
         return out
     }
 
@@ -1550,7 +1553,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             JSONObject().put("t", System.currentTimeMillis()).put("type", "page").put("url", pageUrl).put("series", graph.gemma.seriesTitle ?: "")
                 .put("engine", engineId).put("img", c.id).put("w", out.result.imageWidth).put("h", out.result.imageHeight).put("ms", ms)
                 .put("fetch", fetchInfo[c.id]?.first ?: "").put("fetchMs", fetchInfo[c.id]?.second ?: 0L).put("fetchWhy", fetchInfo[c.id]?.third ?: "")
-                .put("ocrMs", stageInfo[c.id]?.get(0) ?: 0L).put("trMs", stageInfo[c.id]?.get(1) ?: 0L).put("ocrT", pageTiming[c.id] ?: "").put("batch", batchInfo[c.id]?.first ?: 0).put("trEngineMs", batchInfo[c.id]?.second ?: 0L).put("sys", diag())
+                .put("ocrMs", stageInfo[c.id]?.get(0) ?: 0L).put("trMs", stageInfo[c.id]?.get(1) ?: 0L).put("ocrT", pageTiming[c.id] ?: "").put("batch", batchInfo[c.id]?.first ?: 0).put("trEngineMs", batchInfo[c.id]?.second ?: 0L).put("engineDetail", batchDetail[c.id] ?: "").put("sys", diag())
                 .put("backend", graph.gemma.backendLabel).put("gpuSetting", graph.settingsStore.settings.useGpu)
                 .put("dbg", (pageNotes[c.id]?.toString() ?: "").takeLast(1500)).put("blocks", blocks),
         )
@@ -2239,7 +2242,43 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         JSONObject().put("java", (rt.totalMemory() - rt.freeMemory()) shr 20).put("javaMax", rt.maxMemory() shr 20)
             .put("native", android.os.Debug.getNativeHeapAllocatedSize() shr 20).put("avail", mi.availMem shr 20).put("low", mi.lowMemory)
             .put("thermal", if (android.os.Build.VERSION.SDK_INT >= 29) (pm?.currentThermalStatus ?: -1) else -1).put("hot", thermalHot)
+            .also { phoneState(it, pm) }
     } catch (_: Throwable) { JSONObject() }
+
+    /**
+     * Mesures de l'état du téléphone pour étudier la consommation et la chauffe (rien n'en dépend) : batterie (%, °C, branchée ou non), charge restante en µAh et courant instantané en µA
+     * (la différence de charge entre deux pages donne ce que la traduction a consommé), mode économie d'énergie, marge avant bridage thermique (1,0 = bridage imminent) et fréquences des processeurs
+     * (courante/plafond actuel/maximum d'usine en MHz : un plafond sous le maximum veut dire que le téléphone ralentit à cause de la chaleur). Chaque mesure est prise à part : une qui manque n'empêche pas les autres.
+     */
+    private fun phoneState(o: JSONObject, pm: android.os.PowerManager?) {
+        try {
+            val bi = ctx.registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
+            if (bi != null) {
+                val lvl = bi.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1); val scale = bi.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, 100)
+                if (lvl >= 0 && scale > 0) o.put("batt", lvl * 100 / scale)
+                val temp = bi.getIntExtra(android.os.BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE)
+                if (temp != Int.MIN_VALUE) o.put("battC", temp / 10.0)
+                o.put("plug", bi.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0))
+            }
+        } catch (_: Throwable) {}
+        try {
+            val bm = ctx.getSystemService(android.os.BatteryManager::class.java)
+            if (bm != null) {
+                val chg = bm.getLongProperty(android.os.BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER); if (chg != Long.MIN_VALUE) o.put("chgUah", chg)
+                val cur = bm.getLongProperty(android.os.BatteryManager.BATTERY_PROPERTY_CURRENT_NOW); if (cur != Long.MIN_VALUE) o.put("curUa", cur)
+            }
+        } catch (_: Throwable) {}
+        try { if (pm != null) o.put("saver", pm.isPowerSaveMode) } catch (_: Throwable) {}
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 30 && pm != null) { val h = pm.getThermalHeadroom(10); if (!h.isNaN() && !h.isInfinite()) o.put("headroom", Math.round(h * 100) / 100.0) }
+        } catch (_: Throwable) {}
+        try {
+            val dirs = java.io.File("/sys/devices/system/cpu/cpufreq").listFiles { f -> f.name.startsWith("policy") }?.sortedBy { it.name } ?: emptyList()
+            fun mhz(f: java.io.File, n: String): String = try { (java.io.File(f, n).readText().trim().toLong() / 1000).toString() } catch (_: Throwable) { "?" }
+            val freq = dirs.joinToString(";") { d -> d.name.removePrefix("policy") + ":" + mhz(d, "scaling_cur_freq") + "/" + mhz(d, "scaling_max_freq") + "/" + mhz(d, "cpuinfo_max_freq") }
+            if (freq.isNotEmpty()) o.put("mhz", freq)
+        } catch (_: Throwable) {}
+    }
 
     // ---------- préchargement des modèles ----------
     private val warming = java.util.concurrent.atomic.AtomicBoolean(false)

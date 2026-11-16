@@ -133,6 +133,16 @@ class GemmaTranslator(
 
     override fun usesGlossaryPrompt(): Boolean = true
 
+    /**
+     * Mesure seulement, sans effet sur la traduction : appels au modèle faits par ce fil pour sa dernière traduction, un par entrée « type:durée ms/c création de la conversation ms/i caractères envoyés/o caractères reçus »
+     * (types : ask = le groupe, miss = une ligne refaite seule, fix = une ligne corrigée après contrôle, refine = relecture ; load = chargement du moteur s'il a dépassé 0,3 s).
+     */
+    private val callLog = ThreadLocal<ArrayList<String>>()
+    private fun note(kind: String, startMs: Long, createMs: Long, inChars: Int, outChars: Int) {
+        try { callLog.get()?.add(kind + ":" + (SystemClock.uptimeMillis() - startMs) + "/c" + createMs + "/i" + inChars + "/o" + outChars) } catch (_: Throwable) {}
+    }
+    override fun lastCallDetail(): String? = try { callLog.get()?.joinToString(";") } catch (_: Throwable) { null }
+
     override fun translate(texts: List<String>, source: String, target: String): List<String> =
         translateWithGlossary(texts, source, target, emptyList())
 
@@ -142,12 +152,16 @@ class GemmaTranslator(
         val spec = LlmModels.specFor(s.engine) ?: throw IllegalStateException("Aucun modèle Gemma sélectionné")
         if (!models.isReady(spec)) throw IllegalStateException("Modèle Gemma absent : téléchargez-le dans l'onglet Modèles")
         main.removeCallbacks(releaseTask)
+        callLog.set(ArrayList())
         val epoch = synchronized(ctxLock) { ctxEpoch }
         try {
+            val tLoad = SystemClock.uptimeMillis()
             val eng = ensureEngine(spec, s.useGpu, vision = visionReady && s.autoReread)
+            val loadMs = SystemClock.uptimeMillis() - tLoad
+            if (loadMs > 300L) try { callLog.get()?.add("load:$loadMs") } catch (_: Throwable) {}
             var out = ask(eng, texts, source, target, glossary)
             // lignes manquantes dans la réponse : une seconde tentative, ligne par ligne
-            for (i in out.indices) if (out[i] == null) out[i] = ask(eng, listOf(texts[i]), source, target, glossary).firstOrNull()
+            for (i in out.indices) if (out[i] == null) out[i] = ask(eng, listOf(texts[i]), source, target, glossary, kind = "miss").firstOrNull()
             var final = out.mapIndexed { i, t -> t ?: throw IllegalStateException("Réponse du modèle incomplète (ligne ${i + 1})") }
             if (refine || s.refinePass) final = refineDraft(eng, texts, final, glossary)
             final = checkAndFix(eng, texts, final, target, source, glossary)
@@ -171,17 +185,24 @@ class GemmaTranslator(
 
     /** Seconde passe : un « éditeur » corrige les contresens et le style littéral du brouillon. En cas de réponse invalide, le brouillon est conservé. */
     private fun refineDraft(eng: Engine, texts: List<String>, draft: List<String>, glossary: List<GlossaryEntry>): List<String> {
+        val t0 = SystemClock.uptimeMillis(); var createMs = 0L; var inLen = 0; var outLen = -1
         return try {
+            val system = LlmPrompt.refineSystem()
+            inLen = system.length
             val config = ConversationConfig(
-                systemInstruction = Contents.of(LlmPrompt.refineSystem()),
+                systemInstruction = Contents.of(system),
                 samplerConfig = SamplerConfig(topK = 20, topP = 0.9, temperature = 0.15),
                 maxOutputToken = LlmPrompt.maxOutputTokens(texts),
             )
-            val reply = eng.createConversation(config).use { conv -> withWatchdog(conv) { textOf(conv.sendMessage(LlmPrompt.refineUser(texts, draft, recentDialogue(), glossary, seriesTitle))) } }
+            val reply = eng.createConversation(config).use { conv ->
+                createMs = SystemClock.uptimeMillis() - t0
+                withWatchdog(conv) { val u = LlmPrompt.refineUser(texts, draft, recentDialogue(), glossary, seriesTitle); inLen += u.length; textOf(conv.sendMessage(u)) }
+            }
+            outLen = reply.length
             LlmPrompt.parse(reply, texts.size).mapIndexed { i, t -> t ?: draft[i] }
         } catch (e: Throwable) {
             draft
-        }
+        } finally { note("refine", t0, createMs, inLen, outLen) }
     }
 
     /**
@@ -209,27 +230,41 @@ class GemmaTranslator(
     }
 
     private fun askFix(eng: Engine, text: String, previous: String, problems: List<String>, source: String, target: String, glossary: List<GlossaryEntry>, names: List<String>): String? {
-        val config = ConversationConfig(
-            systemInstruction = Contents.of(LlmPrompt.system(source, target, promptVariant)),
-            samplerConfig = SamplerConfig(topK = 20, topP = 0.9, temperature = 0.1),
-            maxOutputToken = LlmPrompt.maxOutputTokens(listOf(text)),
-        )
-        val reply = eng.createConversation(config).use { conv ->
-            withWatchdog(conv) { textOf(conv.sendMessage(LlmPrompt.fixUser(text, previous, problems, recentDialogue(), glossary, names))) }
-        }
-        return LlmPrompt.parse(reply, 1).firstOrNull()
+        val t0 = SystemClock.uptimeMillis(); var createMs = 0L; var outLen = -1
+        val system = LlmPrompt.system(source, target, promptVariant)
+        var inLen = system.length
+        try {
+            val config = ConversationConfig(
+                systemInstruction = Contents.of(system),
+                samplerConfig = SamplerConfig(topK = 20, topP = 0.9, temperature = 0.1),
+                maxOutputToken = LlmPrompt.maxOutputTokens(listOf(text)),
+            )
+            val reply = eng.createConversation(config).use { conv ->
+                createMs = SystemClock.uptimeMillis() - t0
+                withWatchdog(conv) { val u = LlmPrompt.fixUser(text, previous, problems, recentDialogue(), glossary, names); inLen += u.length; textOf(conv.sendMessage(u)) }
+            }
+            outLen = reply.length
+            return LlmPrompt.parse(reply, 1).firstOrNull()
+        } finally { note("fix", t0, createMs, inLen, outLen) }
     }
 
-    private fun ask(eng: Engine, texts: List<String>, source: String, target: String, glossary: List<GlossaryEntry>, series: String? = seriesTitle): MutableList<String?> {
-        val config = ConversationConfig(
-            systemInstruction = Contents.of(LlmPrompt.system(source, target, promptVariant)),
-            samplerConfig = SamplerConfig(topK = 20, topP = 0.9, temperature = 0.15),
-            maxOutputToken = LlmPrompt.maxOutputTokens(texts),
-        )
-        val reply = eng.createConversation(config).use { conv ->
-            withWatchdog(conv) { textOf(conv.sendMessage(LlmPrompt.user(texts, recentDialogue(), glossary, series, keptNames()))) }
-        }
-        return LlmPrompt.parse(reply, texts.size).toMutableList()
+    private fun ask(eng: Engine, texts: List<String>, source: String, target: String, glossary: List<GlossaryEntry>, series: String? = seriesTitle, kind: String = "ask"): MutableList<String?> {
+        val t0 = SystemClock.uptimeMillis(); var createMs = 0L; var outLen = -1
+        val system = LlmPrompt.system(source, target, promptVariant)
+        var inLen = system.length
+        try {
+            val config = ConversationConfig(
+                systemInstruction = Contents.of(system),
+                samplerConfig = SamplerConfig(topK = 20, topP = 0.9, temperature = 0.15),
+                maxOutputToken = LlmPrompt.maxOutputTokens(texts),
+            )
+            val reply = eng.createConversation(config).use { conv ->
+                createMs = SystemClock.uptimeMillis() - t0
+                withWatchdog(conv) { val u = LlmPrompt.user(texts, recentDialogue(), glossary, series, keptNames()); inLen += u.length; textOf(conv.sendMessage(u)) }
+            }
+            outLen = reply.length
+            return LlmPrompt.parse(reply, texts.size).toMutableList()
+        } finally { note(kind, t0, createMs, inLen, outLen) }
     }
 
     /** Interrompt une génération qui dure trop longtemps (sécurité) : la réponse partielle reste exploitable ligne par ligne. */
@@ -379,7 +414,8 @@ class GemmaTranslator(
         }
     }
 
-    class BenchResult(val label: String, val ok: Boolean, val initMs: Long, val translateMs: Long, val error: String?)
+    /** [shortMs] et [outChars] : mesure seulement (durée d'un second appel très court, qui sépare la relecture des consignes du temps de génération ; taille de la réponse du premier). */
+    class BenchResult(val label: String, val ok: Boolean, val initMs: Long, val translateMs: Long, val error: String?, val shortMs: Long = -1L, val outChars: Int = 0)
 
     /** Mesure de vitesse : charge le modèle avec le backend demandé, traduit six répliques types et rapporte les temps. */
     @Synchronized fun benchmark(spec: ModelSpec, gpu: Boolean): BenchResult {
@@ -406,7 +442,19 @@ class GemmaTranslator(
             val reply = eng.createConversation(config).use { conv -> textOf(conv.sendMessage(LlmPrompt.user(lines, emptyList(), emptyList()))) }
             val ms = System.currentTimeMillis() - t1
             val parsed = LlmPrompt.parse(reply, lines.size)
-            BenchResult(label, parsed.count { !it.isNullOrBlank() } == lines.size, initMs, ms, null)
+            // mesure seulement : un second appel très court (même consigne, une réplique) ; sa durée est surtout la relecture des consignes, la différence avec le premier est la génération
+            var shortMs = -1L
+            try {
+                val config2 = ConversationConfig(
+                    systemInstruction = Contents.of(LlmPrompt.system("en", "fr", promptVariant)),
+                    samplerConfig = SamplerConfig(topK = 20, topP = 0.9, temperature = 0.1),
+                    maxOutputToken = LlmPrompt.maxOutputTokens(listOf("Run!")),
+                )
+                val t2 = System.currentTimeMillis()
+                eng.createConversation(config2).use { conv -> textOf(conv.sendMessage(LlmPrompt.user(listOf("Run!"), emptyList(), emptyList()))) }
+                shortMs = System.currentTimeMillis() - t2
+            } catch (_: Throwable) {}
+            BenchResult(label, parsed.count { !it.isNullOrBlank() } == lines.size, initMs, ms, null, shortMs, reply.length)
         } catch (t: Throwable) {
             BenchResult(label, false, initMs, 0, t.message ?: t.javaClass.simpleName)
         } finally { try { eng.close() } catch (_: Throwable) {} }

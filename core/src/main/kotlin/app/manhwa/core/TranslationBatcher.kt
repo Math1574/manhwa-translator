@@ -13,11 +13,13 @@ object BatchContext {
     val priority = ThreadLocal<() -> Int>()
     /** Dernière traduction faite par ce fil : (pages dans le groupe, durée du moteur en ms). */
     val lastBatch = ThreadLocal<Pair<Int, Long>>()
+    /** Détail des appels au modèle du dernier groupe de ce fil (voir [TranslationEngine.lastCallDetail]) : sert au journal, rien d'autre. */
+    val lastDetail = ThreadLocal<String?>()
 }
 
 /**
  * Regroupe les demandes de traduction de plusieurs pages en un seul appel au moteur.
- * Chaque appel au moteur de langage coûte un surcoût fixe (consigne, contexte du chapitre : ~1,3 s) quelle que soit la quantité de texte : pendant qu'une traduction
+ * Chaque appel au moteur de langage coûte un surcoût fixe (consigne, contexte du chapitre : mesuré de 13 à 25 s sur un téléphone récent) quelle que soit la quantité de texte : pendant qu'une traduction
  * est en cours, les pages suivantes s'accumulent, et sont traduites ensemble au tour suivant. Aucun délai artificiel : si le moteur est libre, une page seule part tout de suite.
  * Un groupe ne mélange que des demandes de mêmes langues et de même glossaire, et reste borné (pages, lignes, caractères).
  * Si un groupe échoue, chaque page est retentée seule : l'échec d'une page ne fait pas perdre les autres.
@@ -44,6 +46,7 @@ class TranslationBatcher(
         @Volatile var error: Throwable? = null
         @Volatile var pages = 1
         @Volatile var engineMs = 0L
+        @Volatile var detail: String? = null
     }
 
     private val lock = Object()
@@ -78,6 +81,7 @@ class TranslationBatcher(
         }
         r.error?.let { throw it }
         BatchContext.lastBatch.set(r.pages to r.engineMs)
+        BatchContext.lastDetail.set(r.detail)
         return r.result ?: throw IllegalStateException("traduction : aucun résultat")
     }
 
@@ -135,6 +139,9 @@ class TranslationBatcher(
         }
     }
 
+    /** Détail des appels au modèle du dernier appel fait par ce fil (mesure pour le journal ; ne peut jamais faire échouer une traduction). */
+    private fun detailOf(): String? = try { engine.lastCallDetail() } catch (_: Throwable) { null }
+
     private fun run(batch: List<Req>) {
         try {
             val first = batch[0]
@@ -147,10 +154,11 @@ class TranslationBatcher(
                 if (out.size == all.size) combined = out else failure = IllegalStateException("réponse de ${out.size} lignes pour ${all.size}")
             } catch (e: Throwable) { failure = e }
             engineCalls++
+            val groupDetail = detailOf()
             if (combined != null) {
                 val ms = System.currentTimeMillis() - t0
                 var at = 0
-                for (r in batch) { r.result = combined.subList(at, at + r.texts.size).toList(); at += r.texts.size; r.pages = batch.size; r.engineMs = ms }
+                for (r in batch) { r.result = combined.subList(at, at + r.texts.size).toList(); at += r.texts.size; r.pages = batch.size; r.engineMs = ms; r.detail = groupDetail }
                 lastBatchPages = batch.size
             } else if (batch.size == 1) {
                 batch[0].error = failure ?: IllegalStateException("traduction impossible")
@@ -160,6 +168,8 @@ class TranslationBatcher(
                     val t1 = System.currentTimeMillis()
                     try {
                         r.result = engine.translateWithGlossary(r.texts, r.source, r.target, r.glossary); r.pages = 1; r.engineMs = System.currentTimeMillis() - t1
+                        // mesure seulement : le journal garde aussi l'appel de groupe qui a échoué (sa durée est perdue pour la page, qui n'a compté que sa nouvelle tentative)
+                        r.detail = "retente(" + (failure?.let { it.javaClass.simpleName + ": " + (it.message ?: "").take(60) } ?: "?") + ")[" + (groupDetail ?: "") + "] " + (detailOf() ?: "")
                     } catch (e: Throwable) { r.error = e }
                     engineCalls++
                 }
