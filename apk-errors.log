@@ -4,14 +4,14 @@ w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/ko
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/StyleMatcher.kt:167:47 Unnecessary non-null assertion (!!) on a non-null receiver of type 'LineInk'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/StyleMatcher.kt:209:55 Unnecessary non-null assertion (!!) on a non-null receiver of type 'StyleMatcher.Memory.Exemplar'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/StyleMatcher.kt:258:56 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Group'.
-w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/TranslationBatcher.kt:52:24 This class is not recommended for use in Kotlin. Use 'kotlin.Any' instead.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/TranslationBatcher.kt:49:24 This class is not recommended for use in Kotlin. Use 'kotlin.Any' instead.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/BlockReading.kt:51:94 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/ComicDetector.kt:43:94 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
-w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:1395:92 Unnecessary safe call on a non-null receiver of type 'String'.
-w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:1493:84 Unnecessary non-null assertion (!!) on a non-null receiver of type 'DebugInfo'.
-w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:1781:109 Unnecessary non-null assertion (!!) on a non-null receiver of type 'TranslationController.EditSession'.
-w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:1940:60 'static fun newInstance(p0: ByteArray, p1: Int, p2: Int, p3: Boolean): BitmapRegionDecoder' is deprecated. Deprecated in Java.
-w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:1940:101 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:1393:92 Unnecessary safe call on a non-null receiver of type 'String'.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:1490:84 Unnecessary non-null assertion (!!) on a non-null receiver of type 'DebugInfo'.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:1778:109 Unnecessary non-null assertion (!!) on a non-null receiver of type 'TranslationController.EditSession'.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:1937:60 'static fun newInstance(p0: ByteArray, p1: Int, p2: Int, p3: Boolean): BitmapRegionDecoder' is deprecated. Deprecated in Java.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:1937:101 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/CorrectionsScreen.kt:102:87 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Engines.kt:59:13 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/LibraryScreens.kt:336:39 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
@@ -23,10 +23,10 @@ w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kot
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/SettingsScreens.kt:255:27 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/SettingsScreens.kt:386:35 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/SettingsScreens.kt:406:31 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
-BUILD SUCCESSFUL in 1m 51s
-BUILD SUCCESSFUL in 14s
-total 160492
-drwxr-xr-x 2 runner runner      4096 Nov 16 11:58 .
-drwxr-xr-x 3 runner runner      4096 Nov 16 11:58 ..
--rw-r--r-- 1 runner runner 164329287 Nov 16 11:58 app-debug.apk
--rw-r--r-- 1 runner runner       405 Nov 16 11:58 output-metadata.json
+BUILD SUCCESSFUL in 1m 28s
+BUILD SUCCESSFUL in 11s
+total 160476
+drwxr-xr-x 2 runner runner      4096 Nov 16 12:02 .
+drwxr-xr-x 3 runner runner      4096 Nov 16 12:02 ..
+-rw-r--r-- 1 runner runner 164312903 Nov 16 12:02 app-debug.apk
+-rw-r--r-- 1 runner runner       405 Nov 16 12:02 output-metadata.json
