@@ -388,7 +388,9 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     private val jobCand = ConcurrentHashMap<String, Candidate>()
     /** Passages dans l'ordre de lecture : la lecture du texte et l'affichage se font une page à la fois, la plus proche du lecteur d'abord (un simple verrou laissait passer n'importe laquelle). */
     private val ocrTurns = OrderedTurn(holdMaxMs = 2000L).also { it.holdBack = { p, ignore -> earlierPageBeforeReading(p, ignore) } }
-    private val renderTurns = OrderedTurn()
+    private val renderTurns = OrderedTurn(holdMaxMs = 1000L).also { it.holdBack = { p, ignore -> earlierPageBeforeDisplay(p, ignore) } }
+    /** Pages dont la traduction est arrivée du moteur (ou qui n'en avaient pas besoin) et qui n'ont pas encore passé la porte d'affichage : elles finissent leur travail, la porte les attend un instant. */
+    private val finishing = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     /** Pages dont le traitement est terminé (réussi, sans texte ou en échec) : les autres, si le travail est interrompu, sont à redemander à la page. */
     private val finishedIds = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     private val failEntries = java.util.concurrent.atomic.AtomicInteger(0)
@@ -417,7 +419,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             synchronized(backlog) { if (backlog.none { it.id == id }) backlog.add(c) }
         }
         override fun onFinished(id: String, outcome: PageOutcome) {
-            runStart.remove(id); runStage.remove(id); jobCand.remove(id)
+            runStart.remove(id); runStage.remove(id); jobCand.remove(id); finishing.remove(id)
             finishedIds.add(id)
             // un échec n'apparaissait nulle part dans le journal : on le note (étape et message), avec l'état de la mémoire, pour comprendre un arrêt
             if (outcome is PageOutcome.Failed && failEntries.incrementAndGet() <= 60) {
@@ -440,7 +442,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             }
             pump()
         }
-        override fun onCancelled(id: String) { runStart.remove(id); runStage.remove(id); jobCand.remove(id); main.post { pump() } }
+        override fun onCancelled(id: String) { runStart.remove(id); runStage.remove(id); jobCand.remove(id); finishing.remove(id); main.post { pump() } }
     }, workers = 4)
 
     // ---------- plein écran et lecture ----------
@@ -1243,6 +1245,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
     private fun stopWork() {
         queue.cancelAll()
+        ocrTurns.forgetGiveUps(); renderTurns.forgetGiveUps()      // les identifiants des images repartent de zéro à la prochaine page : un ancien abandon d'attente ne vaut plus
         afterWork.clear()      // les gestes en attente d'un retraitement n'ont plus d'objet : la page est quittée ou le travail arrêté
         val lost: List<String>
         synchronized(backlog) {
@@ -1274,8 +1277,10 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     }
 
     /**
-     * Page plus proche du lecteur que [priority] encore en téléchargement ou en assemblage (et dont l'attente n'a pas été abandonnée, [ignore]) : la lecture du texte (une page à la fois,
-     * 5 à 10 s) l'attend un instant (2 s au plus) au lieu de partir avec une page plus loin, dont le téléchargement a simplement fini quelques centaines de millisecondes plus tôt.
+     * Page plus proche du lecteur que [priority] encore en téléchargement ou en assemblage, ou arrivée à la porte de la lecture sans y être encore inscrite (et dont l'attente n'a pas été abandonnée,
+     * [ignore]) : la lecture du texte (une page à la fois, 5 à 10 s) l'attend un instant (2 s au plus) au lieu de partir avec une page plus loin, dont le téléchargement a simplement fini quelques
+     * centaines de millisecondes plus tôt. Plusieurs pages arrivent souvent au même instant (elles attendaient toutes la même initialisation) : sans ce dernier cas, celle qui prenait le verrou
+     * la première passait devant, même si la première page du chapitre était juste derrière.
      */
     private fun earlierPageBeforeReading(priority: Int, ignore: Set<String>): String? {
         var found: String? = null
@@ -1286,12 +1291,27 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             if (seen != null) seen.append(' ').append(id).append('=').append(stage ?: "?").append('/').append(c?.priorityAt(viewportY, viewportH) ?: -1)
             if (found != null || id in ignore) continue
             if (stage == null || c == null) continue
-            if (stage != "téléchargement" && !stage.startsWith("assemblage")) continue
+            // « attente de la lecture du texte » compte aussi : une page plus proche, déjà annoncée à la porte mais pas encore inscrite (elle attend le verrou que l'appelant tient), serait sinon doublée
+            if (stage != "téléchargement" && !stage.startsWith("assemblage") && stage != "attente de la lecture du texte") continue
             if (c.priorityAt(viewportY, viewportH) < priority) found = id
         }
         // tests automatiques : ce que la porte de lecture a vu (pour comprendre un ordre inattendu)
         if (seen != null) android.util.Log.i("MT", "ordre : lecture (priorité $priority) " + (if (found != null) "attend $found" else "passe") + " ; en route :" + seen)
         return found
+    }
+
+    /**
+     * Page plus proche du lecteur dont la traduction vient d'arriver et qui n'a pas encore passé la porte d'affichage (elle finit son travail, ou attend le verrou à l'entrée) : l'affichage
+     * (une page à la fois, 1 à 5 s) l'attend un instant (1 s au plus). Les pages d'un même groupe de traduction finissent en même temps : sans cela, c'est celle qui arrivait la première
+     * à la porte qui s'affichait la première, pas celle que le lecteur attend.
+     */
+    private fun earlierPageBeforeDisplay(priority: Int, ignore: Set<String>): String? {
+        for (id in queue.runningIds()) {
+            if (id in ignore || id !in finishing) continue
+            val c = jobCand[id] ?: continue
+            if (c.priorityAt(viewportY, viewportH) < priority) return id
+        }
+        return null
     }
 
     private fun onCandidates(raw: String?) {
@@ -1413,7 +1433,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                 }
             }
         }
-        val timedTr = TimedTranslator(translator, { stages[1] += it }) { runStage[c.id] = "traduction" }
+        val timedTr = TimedTranslator(translator, { stages[1] += it }, enter = { runStage[c.id] = "traduction"; finishing.remove(c.id) }, leave = { finishing.add(c.id) })
         val pipeline = PagePipeline(
             graph.cache, timedOcr, timedTr, engineId,
             glossary = { graph.glossary.current(pageSeries) },
@@ -1457,11 +1477,12 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         var overlayForLog: JSONObject? = null
         var overlayUpForLog: JSONObject? = null
         BatchContext.lastBatch.get()?.let { batchInfo[c.id] = it }
-        runStage[c.id] = "affichage"
+        runStage[c.id] = "affichage"; finishing.add(c.id)
         if (out is PageOutcome.Done && !out.fromCache) journalPage(c, pageUrl, engineId, s.target.code, out, System.currentTimeMillis() - t0)
         if (!cancelled() && !staleFix()) {
             val tRender = SystemClock.uptimeMillis()
-            val json = renderTurns.run({ c.priorityAt(viewportY, viewportH) }) { synchronized(renderLock) {
+            if (testing) android.util.Log.i("MT", "ordre : ${c.id} arrive à l'affichage (priorité ${c.priorityAt(viewportY, viewportH)})")
+            val json = renderTurns.run({ c.priorityAt(viewportY, viewportH) }) { finishing.remove(c.id); if (testing) android.util.Log.i("MT", "ordre : ${c.id} s'affiche (attente ${SystemClock.uptimeMillis() - tRender} ms)"); synchronized(renderLock) {
                 when {
                     out is PageOutcome.Done -> PageRenderer.render(fonts, workBytes, applied?.page ?: out.result, s, debug, graph.fontMemory, pageSeries, applied?.render ?: emptyMap())
                     // page sans texte détecté mais avec des textes ajoutés à la main
@@ -2157,8 +2178,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     }
 
     /** Enveloppe qui mesure le temps passé dans le moteur de traduction (somme des appels de la page). */
-    private class TimedTranslator(private val inner: TranslationEngine, private val add: (Long) -> Unit, private val enter: () -> Unit = {}) : TranslationEngine {
-        private inline fun <T> timed(f: () -> T): T { enter(); val t = SystemClock.uptimeMillis(); try { return f() } finally { add(SystemClock.uptimeMillis() - t) } }
+    private class TimedTranslator(private val inner: TranslationEngine, private val add: (Long) -> Unit, private val enter: () -> Unit = {}, private val leave: () -> Unit = {}) : TranslationEngine {
+        private inline fun <T> timed(f: () -> T): T { enter(); val t = SystemClock.uptimeMillis(); try { return f().also { leave() } } finally { add(SystemClock.uptimeMillis() - t) } }
         override fun translate(texts: List<String>, source: String, target: String): List<String> = timed { inner.translate(texts, source, target) }
         override fun usesGlossaryPrompt(): Boolean = inner.usesGlossaryPrompt()
         override fun translateWithGlossary(texts: List<String>, source: String, target: String, glossary: List<GlossaryEntry>): List<String> = timed { inner.translateWithGlossary(texts, source, target, glossary) }

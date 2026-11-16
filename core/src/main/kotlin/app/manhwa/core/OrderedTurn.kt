@@ -73,4 +73,7 @@ class OrderedTurn(private val recheckMs: Long = 250L, private val holdMaxMs: Lon
 
     /** Nombre de fils qui attendent leur tour (diagnostic et tests). */
     fun waitingCount(): Int = synchronized(lock) { waiters.size }
+
+    /** Oublie les attentes abandonnées : à chaque nouvelle page du navigateur les identifiants repartent de zéro, un ancien abandon ne doit pas valoir pour une autre page. */
+    fun forgetGiveUps() { synchronized(lock) { gaveUp.clear() } }
 }
