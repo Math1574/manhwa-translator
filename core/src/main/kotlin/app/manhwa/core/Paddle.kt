@@ -155,9 +155,12 @@ object Ctc {
         return Pair(sb.toString(), if (n == 0) 0f else (sum / n).toFloat())
     }
 
-    /** Taille d'entrée de la reconnaissance : hauteur fixe, largeur proportionnelle (bornée). */
-    fun inputSize(w: Int, h: Int, imgH: Int, maxW: Int = 1600): Pair<Int, Int> {
-        val ww = ceil(imgH * w.toDouble() / max(1, h)).toInt().coerceIn(8, maxW)
+    /**
+     * Taille d'entrée de la reconnaissance : hauteur fixe, largeur proportionnelle (bornée).
+     * [stretch] > 1 : image élargie (relecture d'une ligne dont des lettres doubles ont été avalées, « Well » lu « Wel »).
+     */
+    fun inputSize(w: Int, h: Int, imgH: Int, maxW: Int = 1600, stretch: Float = 1f): Pair<Int, Int> {
+        val ww = ceil(imgH * w.toDouble() * stretch / max(1, h)).toInt().coerceIn(8, maxW)
         return Pair(imgH, ww)
     }
 }
@@ -193,7 +196,16 @@ object OcrMerge {
         return n
     }
 
-    fun merge(mlkit: List<OcrLine>, paddle: List<OcrLine>, script: String, lex: EnglishLexicon? = null): List<OcrLine> {
+    /**
+     * Lecture [win] retenue pour un texte vu par les deux moteurs, corrigée par la lecture [lose] de l'autre moteur là où le dictionnaire lui donne raison
+     * (un mot inconnu chez l'un, un vrai mot chez l'autre). Sans preuve par le dictionnaire, [win] reste telle quelle.
+     */
+    internal fun crossCheck(win: OcrLine, lose: OcrLine, lex: EnglishLexicon, names: Set<String>): OcrLine {
+        val r = try { OcrFusion.fuse(win.text, lose.text, lex, names) } catch (e: Throwable) { return win }
+        return if (r.replaced == 0) win else win.copy(text = r.text)
+    }
+
+    fun merge(mlkit: List<OcrLine>, paddle: List<OcrLine>, script: String, lex: EnglishLexicon? = null, names: Set<String> = emptySet()): List<OcrLine> {
         val all = ArrayList<Pair<OcrLine, Boolean>>() // (ligne, vient de Paddle)
         mlkit.forEach { all.add(it to false) }
         paddle.forEach { all.add(it to true) }
@@ -215,12 +227,15 @@ object OcrMerge {
                     fun score(ls: List<OcrLine>): Double {
                         val len = ls.sumOf { it.text.length }.coerceAtLeast(1)
                         // alphabet latin : la plausibilité des mots pèse sur la confiance du lecteur (un texte mal lu mais lu avec assurance perd)
-                        return ls.sumOf { l -> l.confidence.toDouble() * l.text.length * (if (lex != null && !cjk) 0.4 + 0.6 * plausibility(l.text, lex) else 1.0) } / len
+                        return ls.sumOf { l -> l.confidence.toDouble() * l.text.length * (if (lex != null && !cjk) 0.4 + 0.6 * plausibility(l.text, lex, names) else 1.0) } / len
                     }
                     // l'alphabet latin est mieux lu (espaces, ponctuation) par Paddle, le CJK par ML Kit
                     val sm = score(ml) + (if (cjk) 0.1 else 0.0)
                     val sp = score(pp) + (if (cjk) 0.0 else 0.1)
-                    result.addAll(if (sp > sm) pp else ml)
+                    val win = if (sp > sm) pp else ml
+                    val lose = if (sp > sm) ml else pp
+                    // un seul texte lu par chacun : l'autre moteur corrige les mots que le dictionnaire désavoue (alphabet latin seulement)
+                    if (lex != null && !cjk && win.size == 1 && lose.size == 1) result.add(crossCheck(win[0], lose[0], lex, names)) else result.addAll(win)
                 }
             }
         }

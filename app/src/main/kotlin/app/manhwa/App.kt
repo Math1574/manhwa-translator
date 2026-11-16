@@ -123,8 +123,9 @@ class AppGraph(ctx: Context) {
     /** Mise à jour intégrée de l'application (vérification des publications, nouveautés, téléchargement, installation). */
     val updater = UpdateManager(ctx)
     val paddleModels = PaddleModels(ctx, jaPack)
-    val paddle = PaddleOcr(paddleModels)
     val gemma = GemmaTranslator(ctx, llm) { settingsStore.settings }
+    /** Lecture PaddleOCR ; le dictionnaire et les noms du chapitre départagent les deux lecteurs anglais. */
+    val paddle = PaddleOcr(paddleModels, { Lexicon.get(ctx) }, { gemma.chapterNames() })
     /** Traductions de plusieurs pages regroupées en un seul appel au moteur (le surcoût fixe de chaque appel est partagé). */
     val gemmaBatch = TranslationBatcher(gemma)
     /** Police du texte traduit : famille choisie une fois par page, mémorisée par série pour rester la même d'une page à l'autre. */

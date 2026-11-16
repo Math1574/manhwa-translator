@@ -104,4 +104,53 @@ fun ocrQualityTests() {
         val line = { t: String, c: Float -> OcrLine(t, RectF(100f, 100f, 400f, 140f), c) }
         T.eq("WE MUST GO NOW", OcrMerge.merge(listOf(line("WE MUST 5X9Q GO NOW", 0.97f)), listOf(line("WE MUST GO NOW", 0.90f)), "en", realLexicon).single().text)
     }
+
+    // ----- croisement de deux lectures d'une même ligne (lecteurs v3 / v5, ou ML Kit / Paddle) -----
+    fun fuse(base: String, alt: String, names: Set<String> = emptySet()): String = OcrFusion.fuse(base, alt, realLexicon, names).text
+    T.test("croisement : un mot inconnu d'une lecture est repris à l'autre quand c'est un vrai mot (lettre fausse, mot collé, chiffre pour lettre)") {
+        T.eq("NO CHOICE BUT TO", fuse("NO CHUICE BUT TO", "NO CHOICE 5UT TO"))           // chaque lecteur a raison sur un mot
+        T.eq("THIS IS ALL FOR", fuse("THISISALLFOR", "THIS IS ALL FOR"))                   // mots collés
+        T.eq("HE SHOULD BE ON", fuse("HE SHOULD E ON", "HE SHOUD BE ON"))                  // un mot perdu, un autre mal écrit
+        T.eq("TOTAL ATTRIBUTES ARE SO", fuse("TOTAL ATTRIBLITES ARE SO", "TOTAL ATTRIBUTES ARE SO"))
+        T.eq("IMPLEMENTED FLAWLESSLY", fuse("IMPLEMENTEDFLAWLESSLY", "IMPLEMENTED FLAWLESSLY"))
+        T.eq("20 POINTS, HOW COME MY", fuse("2O POINTS, HOW COME MY", "20 POINTS, HOW COME MY"))
+        T.eq("I M THE DEMON WHO CAME BECAUSE I", fuse("I M THE DEMON WHO CAMEBECAUSE I", "I M THE DEMON WHO CAME BECAUSE I"))
+        T.eq("STAGE, THIS IS NOT", fuse("STAGE,THIS IS NOT", "STAGE, THIS IS NOT"))     // ponctuation collée
+        T.eq("TALENT", fuse("ALENT.", "TALENT"))
+    }
+    T.test("croisement : sans preuve par le dictionnaire la lecture de base reste telle quelle") {
+        for ((b, a) in listOf("SHUT UP." to "SHUT UP,", "Him." to "HIM", "KILL HIM?" to "KILL HIM", "WELL..." to "WE...", "BOULDER" to "BOLDER", "NO IDEA." to "NO IDEA")) T.eq(b, fuse(b, a), "$b / $a")
+        // deux lectures fausses : l'égalité garde la base
+        T.eq("YOUR CRITCAHI AMAGEIS", fuse("YOUR CRITCAHI AMAGEIS", "YOUR CRITICAHAE I"))
+        // un nom du chapitre inconnu du dictionnaire n'est jamais remplacé, ni son possessif
+        T.eq("KAZAN'S RING", fuse("KAZAN'S RING", "KAZAM'S RING", setOf("kazan")))
+        T.eq(0.0, OcrFusion.problems("KAZAN'S RING", realLexicon, setOf("kazan")))
+        T.ok(OcrFusion.problems("KAZAN'S RING", realLexicon) >= 1.0, "sans la liste des noms, « KAZAN'S » est inconnu")
+    }
+    T.test("croisement : jamais un texte beaucoup plus court ou plus long que le morceau remplacé") {
+        T.eq("OF [ARRIVE SAFELY AT SHENGYAO", fuse("OF [ARRIVE SAFELY AT SHENGYAO", "OF [ARRIVE FY"))
+        T.eq("A RESTRICTION ON YOUR", fuse("A.RESNRICTIONON'YOUR", "A RESTRICTION ON YOUR"))
+        T.eq("WE MUST GO", fuse("WE MUST GO", ""))
+        T.eq("", fuse("", "WE MUST GO"))
+    }
+    T.test("croisement : ML Kit et Paddle sur un même texte : le moteur retenu est corrigé par l'autre, pas l'inverse quand tout va bien") {
+        val ml = { t: String, c: Float -> OcrLine(t, RectF(100f, 100f, 500f, 140f), c) }
+        val pp = { t: String, c: Float -> OcrLine(t, RectF(102f, 101f, 498f, 141f), c) }
+        T.eq("THE DEMON WHO CAME BECAUSE I", OcrMerge.merge(listOf(ml("THE DEMON WHO CAME BECAUSE I", 0.80f)), listOf(pp("THE DEMON WHO CAMEBECAUSE I", 0.95f)), "en", realLexicon).single().text)
+        T.eq("TOTAL ATTRIBUTES ARE SO", OcrMerge.merge(listOf(ml("TOTAL ATTRIBUTES ARE SO", 0.70f)), listOf(pp("TOTAL ATTRIBLITES ARE SO", 0.95f)), "en", realLexicon).single().text)
+        T.eq("WE MUST GO NOW", OcrMerge.merge(listOf(ml("WE MUST GO NOW", 0.99f)), listOf(pp("WE MUST GO NOW", 0.99f)), "en", realLexicon).single().text)
+        // alphabet non latin : pas de croisement
+        T.eq("제발 도와줘", OcrMerge.merge(listOf(ml("제발 도와줘", 0.9f)), listOf(pp("제발 도와줘요", 0.5f)), "ko", realLexicon).single().text)
+    }
+    T.test("relecture : seules les lignes à mot inconnu valent une seconde lecture ; largeur d'entrée élargie") {
+        T.ok(OcrFusion.worthRetry("WEL...", realLexicon), "mot inconnu")
+        T.ok(OcrFusion.worthRetry("THISISALLFOR", realLexicon), "mots collés")
+        T.ok(!OcrFusion.worthRetry("WE MUST GO NOW", realLexicon), "texte sans défaut")
+        T.ok(!OcrFusion.worthRetry("XA", realLexicon), "icône : trop peu de lettres")
+        T.ok(!OcrFusion.worthRetry("manganato.gg/m...", realLexicon), "adresse")
+        T.ok(!OcrFusion.worthRetry("KAZAN'S RING", realLexicon, setOf("kazan")), "nom du chapitre")
+        T.eq(240, Ctc.inputSize(200, 40, 48).second)
+        T.eq(312, Ctc.inputSize(200, 40, 48, stretch = 1.3f).second)
+        T.eq(1600, Ctc.inputSize(2000, 40, 48, stretch = 1.3f).second)
+    }
 }
