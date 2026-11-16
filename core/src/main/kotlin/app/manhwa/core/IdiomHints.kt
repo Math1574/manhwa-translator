@@ -173,6 +173,7 @@ object IdiomHints {
 # ===== autres verbes à particule =====
 ~pull off | réussir, réaliser
 ~pass away | décéder, mourir
+~give birth to | mettre au monde, donner le jour à (« en le mettant au monde », « en lui donnant le jour » ; jamais « en le donnant naissance ») | \b(le|la|les) donn\w+ naissance
 ~show off | frimer, se vanter
 ~stand by | rester à disposition, soutenir
 ~fall for | tomber amoureux de ; se laisser berner par

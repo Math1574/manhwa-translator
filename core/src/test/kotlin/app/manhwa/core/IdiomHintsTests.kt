@@ -35,6 +35,8 @@ fun idiomHintsTests() {
         T.ok(frenchOf("You've let me down.").contains("décevoir") && frenchOf("Don't let them down.").contains("décevoir"), "let me down")
         T.ok(frenchOf("Don't you dare lay a finger on her!").contains("toucher"), "lay a finger on")
         T.ok(IdiomHints.calques("Don't you dare lay a finger on her!", "N'ose pas poser un doigt sur elle !").isNotEmpty(), "calque : poser un doigt")
+        T.ok(frenchOf("His mother died giving birth to him.").contains("mettre au monde") && IdiomHints.calques("His mother died giving birth to him.", "Sa mère est morte en le donnant naissance.").isNotEmpty()
+            && IdiomHints.calques("His mother died giving birth to him.", "Sa mère est morte en lui donnant le jour.").isEmpty(), "give birth to")
         T.ok(frenchOf("No matter what he says, I won't listen.").contains("peu importe ce que") && IdiomHints.calques("No matter what I try.", "Peu importe quoi j'essaie.").isNotEmpty(), "no matter what")
     }
     T.test("expressions : titres d'arts martiaux, l'expression la plus longue l'emporte") {
