@@ -9,10 +9,12 @@ import app.manhwa.core.AppSettings
 import app.manhwa.core.ConfirmationRequired
 import app.manhwa.core.GlossaryEntry
 import app.manhwa.core.GpuGuard
+import app.manhwa.core.IdiomHints
 import app.manhwa.core.InsufficientSpace
 import app.manhwa.core.ChapterMemory
 import app.manhwa.core.LlmModels
 import app.manhwa.core.TranslationChecks
+import app.manhwa.core.TranslationPost
 import app.manhwa.core.LlmPrompt
 import app.manhwa.core.ModelSpec
 import app.manhwa.core.ModelStatus
@@ -167,6 +169,7 @@ class GemmaTranslator(
             var final = out.mapIndexed { i, t -> t ?: throw IllegalStateException("Réponse du modèle incomplète (ligne ${i + 1})") }
             if (refine || s.refinePass) final = refineDraft(eng, texts, final, glossary)
             final = checkAndFix(eng, texts, final, target, source, glossary)
+            if (target == "fr" && promptVariant >= 4) final = final.mapIndexed { i, t -> TranslationPost.stutter(texts[i], t) }   // « B-BUT » → « M-MAIS » (lettre répétée fausse ou perdue)
             // la page a changé pendant la traduction (le contexte a été oublié) : ce dialogue n'appartient plus au chapitre en cours
             synchronized(ctxLock) { if (epoch == ctxEpoch) texts.indices.forEach { remember(texts[it], final[it]); memory.observe(texts[it], final[it]) } }
             return final
@@ -243,7 +246,8 @@ class GemmaTranslator(
             )
             val reply = eng.createConversation(config).use { conv ->
                 createMs = SystemClock.uptimeMillis() - t0
-                withWatchdog(conv) { val u = LlmPrompt.fixUser(text, previous, problems, recentDialogue(), glossary, names); inLen += u.length; textOf(conv.sendMessage(u)) }
+                val hints = if (promptVariant >= 4 && target == "fr") IdiomHints.find(listOf(text)) else emptyList()
+                withWatchdog(conv) { val u = LlmPrompt.fixUser(text, previous, problems, recentDialogue(), glossary, names, hints); inLen += u.length; textOf(conv.sendMessage(u)) }
             }
             outLen = reply.length
             return LlmPrompt.parse(reply, 1).firstOrNull()
@@ -262,7 +266,8 @@ class GemmaTranslator(
             )
             val reply = eng.createConversation(config).use { conv ->
                 createMs = SystemClock.uptimeMillis() - t0
-                withWatchdog(conv) { val u = LlmPrompt.user(texts, recentDialogue(), glossary, series, keptNames()); inLen += u.length; textOf(conv.sendMessage(u)) }
+                val hints = if (promptVariant >= 4 && target == "fr") IdiomHints.find(texts) else emptyList()
+                withWatchdog(conv) { val u = LlmPrompt.user(texts, recentDialogue(), glossary, series, keptNames(), hints); inLen += u.length; textOf(conv.sendMessage(u)) }
             }
             outLen = reply.length
             return LlmPrompt.parse(reply, texts.size).toMutableList()
@@ -538,6 +543,7 @@ class GemmaTranslator(
         const val IDLE_RELEASE_MS = 10 * 60 * 1000L
         /** Une génération normale dure moins de 20 s : au-delà d'une minute, elle est interrompue (la réponse partielle reste exploitable ligne par ligne). */
         const val GENERATION_TIMEOUT_MS = 60 * 1000L
-        fun engineId(spec: ModelSpec) = "${spec.id}-ctx1"
+        /** La version du prompt (4 et suivantes) fait partie de l'identifiant : un prompt nouveau retraduit les pages déjà en cache. */
+        fun engineId(spec: ModelSpec) = "${spec.id}-ctx1" + (if (LlmPrompt.CURRENT >= 4) "-p${LlmPrompt.CURRENT}" else "")
     }
 }

@@ -85,6 +85,89 @@
    "WELL, THAT'S ONE WAY TO LOOK AT IT.",
    "HUH? WHAT DO YOU MEAN?",
    "LET'S GO. WE DON'T HAVE MUCH TIME."
+  ],
+  [
+   "WE CAN KILL TWO BIRDS WITH ONE STONE IF WE MOVE TONIGHT.",
+   "DON'T BEAT AROUND THE BUSH. WHAT DO YOU WANT?",
+   "THE LAST STRAW WAS WHEN HE SOLD OUR HOME.",
+   "SPILL THE BEANS ALREADY! WHO SENT YOU?",
+   "IT'S NOT LIKE HIM TO RUN AWAY WITH HIS TAIL BETWEEN HIS LEGS."
+  ],
+  [
+   "THE THIEVES GOT AWAY THROUGH THE BACK GATE!",
+   "I WON'T LET YOU GET AWAY WITH THIS!",
+   "HE FINALLY CAME UP WITH A PLAN.",
+   "STOP LASHING OUT AT ME JUST BECAUSE YOU'RE SCARED.",
+   "I'LL TAKE DOWN ANYONE WHO STANDS IN MY WAY."
+  ],
+  [
+   "THE ELDERS TURNED THE WHOLE VILLAGE AGAINST HER.",
+   "I NEED TO GET THE PRINCE ON MY SIDE BEFORE THE BANQUET.",
+   "THIS CURSE WON'T GO AWAY, NO MATTER WHAT I TRY.",
+   "DON'T YOU DARE HAND HIM OVER TO THE ENVOY.",
+   "HE LOST HIS TEMPER AND RAN HIS MOUTH IN FRONT OF THE GENERAL."
+  ],
+  [
+   "I REALIZED HOW FOOLISH I HAD BEEN.",
+   "THIS ENEMY IS DEFINITELY STRONGER THAN WE THOUGHT.",
+   "NOT A CHANCE! I'M NOT GOING BACK THERE!",
+   "ACTUALLY, I WAS HOPING YOU WOULD SAY THAT.",
+   "STOP PRETENDING YOU DON'T KNOW ME."
+  ],
+  [
+   "ELDEST YOUNG MASTER, THE ELDERS ARE WAITING FOR YOU.",
+   "S-SENIOR BROTHER! PLEASE WAIT FOR ME!",
+   "THE ALLIANCE LEADER WILL ARRIVE AT DAWN.",
+   "THIS JUNIOR BEGS FOR YOUR GUIDANCE, SENIOR.",
+   "THE SECT MASTER HAS CALLED A MEETING OF ALL DISCIPLES."
+  ],
+  [
+   "B-BUT I DIDN'T DO ANYTHING!",
+   "W-WAIT! DON'T GO IN THERE!",
+   "TH-THE DEMON IS COMING!",
+   "H-HOW IS THIS POSSIBLE...?!",
+   "AAAARGH! DAMN IT, MY LEG!"
+  ],
+  [
+   "YOY... YOU'RE ALL UNGRATEFUL FOOLS!",
+   "WHEN THE HELL DIO YOU LEARN THAT?!",
+   "SET IT ON ARE AND BURN EVERYTHING.",
+   "THE KING'S ARMY IS HEADING FOR THE NORTH CATE.",
+   "WHAT AREYOU DOING HERE?"
+  ],
+  [
+   "YOU'RE FREAKING OUT OVER NOTHING.",
+   "DON'T GET ME WRONG, I'M NOT MAD AT YOU.",
+   "IT'S NOT LIKE I WAS WAITING FOR YOU OR ANYTHING!",
+   "HOLD ON. SOMETHING ISN'T RIGHT HERE.",
+   "I'D BETTER NOT SEE YOU NEAR HER AGAIN."
+  ],
+  [
+   "AFTER THE WAR ENDED, THE SURVIVORS SCATTERED ACROSS THE CONTINENT.",
+   "NO ONE KNEW THAT THE BOY WHO LEFT THAT NIGHT WOULD ONE DAY RETURN AS A TYRANT.",
+   "THE MORE I LEARN ABOUT THIS WORLD, THE LESS I UNDERSTAND.",
+   "IF I HAD KNOWN, I WOULD HAVE STAYED BY YOUR SIDE."
+  ],
+  [
+   "HE'S ON THE FENCE ABOUT JOINING US.",
+   "DON'T GET YOUR HOPES UP.",
+   "I'M NOT BUYING IT.",
+   "YOU'VE GOT SOME NERVE COMING HERE!",
+   "SHE HAS A BONE TO PICK WITH YOU."
+  ],
+  [
+   "IT SLIPPED MY MIND.",
+   "I CAN'T WRAP MY HEAD AROUND THIS.",
+   "HE'S HITTING THE ROOF.",
+   "HE PULLED A FAST ONE ON ME.",
+   "YOU'RE OUT OF YOUR MIND."
+  ],
+  [
+   "THE WHOLE SECT IS GOING DOWN THE DRAIN.",
+   "WE'LL CROSS THAT BRIDGE WHEN WE GET TO IT.",
+   "LET'S GET DOWN TO BUSINESS.",
+   "HE'S BEEN LYING THROUGH HIS TEETH THE WHOLE TIME.",
+   "THE ELDERS ARE AT EACH OTHER'S THROATS AGAIN."
   ]
  ],
  "refs": [
@@ -173,6 +256,539 @@
    "Eh bien, c'est une façon de voir les choses.",
    "Hein ? Qu'est-ce que tu veux dire ?",
    "Allons-y. Nous n'avons pas beaucoup de temps."
+  ],
+  [
+   "On peut faire d'une pierre deux coups si on agit cette nuit.",
+   "Cesse de tourner autour du pot. Qu'est-ce que tu veux ?",
+   "La goutte d'eau qui a fait déborder le vase, c'est quand il a vendu notre maison.",
+   "Allez, déballe tout ! Qui t'envoie ?",
+   "Ça ne lui ressemble pas de fuir la queue entre les jambes."
+  ],
+  [
+   "Les voleurs se sont échappés par la porte de derrière !",
+   "Je ne te laisserai pas t'en tirer comme ça !",
+   "Il a fini par trouver un plan.",
+   "Arrête de t'en prendre à moi simplement parce que tu as peur.",
+   "J'abattrai quiconque se mettra en travers de mon chemin."
+  ],
+  [
+   "Les anciens ont dressé tout le village contre elle.",
+   "Je dois rallier le prince à ma cause avant le banquet.",
+   "Cette malédiction ne disparaît pas, quoi que j'essaie.",
+   "Ne t'avise pas de le livrer à l'émissaire.",
+   "Il a perdu son sang-froid et l'a ouverte devant le général."
+  ],
+  [
+   "Je me suis rendu compte de ma bêtise.",
+   "Cet ennemi est vraiment plus fort que prévu.",
+   "Pas question ! Je n'y retourne pas !",
+   "En fait, j'espérais que tu dirais ça.",
+   "Arrête de faire semblant de ne pas me connaître."
+  ],
+  [
+   "Jeune maître aîné, les anciens vous attendent.",
+   "G-Grand frère d'armes ! Attends-moi, je t'en prie !",
+   "Le chef de l'Alliance arrivera à l'aube.",
+   "Ce cadet implore vos conseils, vénérable aîné.",
+   "Le maître de secte a convoqué tous les disciples."
+  ],
+  [
+   "M-Mais je n'ai rien fait !",
+   "A-Attends ! N'entre pas là-dedans !",
+   "L-Le démon arrive !",
+   "C-Comment est-ce possible... ?!",
+   "AAAARGH ! Merde, ma jambe !"
+  ],
+  [
+   "Vous... vous n'êtes que des ingrats !",
+   "Où diable as-tu appris ça ?!",
+   "Mettez-y le feu et brûlez tout.",
+   "L'armée du roi se dirige vers la porte nord.",
+   "Qu'est-ce que tu fais ici ?"
+  ],
+  [
+   "Tu paniques pour rien.",
+   "Ne te méprends pas, je ne suis pas en colère contre toi.",
+   "Ce n'est pas comme si je t'attendais ou quoi que ce soit !",
+   "Attends. Il y a quelque chose qui cloche ici.",
+   "Que je ne te revoie plus rôder autour d'elle."
+  ],
+  [
+   "Après la fin de la guerre, les survivants se sont dispersés à travers le continent.",
+   "Personne ne savait que le garçon parti cette nuit-là reviendrait un jour en tyran.",
+   "Plus j'apprends de choses sur ce monde, moins je le comprends.",
+   "Si j'avais su, je serais resté à tes côtés."
+  ],
+  [
+   "Il hésite encore à nous rejoindre.",
+   "Ne te fais pas trop d'illusions.",
+   "Je n'y crois pas.",
+   "Tu as du culot de venir ici !",
+   "Elle a un compte à régler avec toi."
+  ],
+  [
+   "Ça m'est sorti de la tête.",
+   "Je n'arrive pas à comprendre ça.",
+   "Il pique une crise.",
+   "Il m'a roulé dans la farine.",
+   "Tu as perdu la tête."
+  ],
+  [
+   "Toute la secte part à vau-l'eau.",
+   "On verra ça le moment venu.",
+   "Passons aux choses sérieuses.",
+   "Il a menti effrontément depuis le début.",
+   "Les anciens se sautent de nouveau à la gorge."
   ]
- ]
+ ],
+ "checks": [
+  [
+   {},
+   {},
+   {},
+   {}
+  ],
+  [
+   {},
+   {},
+   {},
+   {}
+  ],
+  [
+   {},
+   {},
+   {},
+   {}
+  ],
+  [
+   {},
+   {},
+   {},
+   {}
+  ],
+  [
+   {},
+   {},
+   {},
+   {}
+  ],
+  [
+   {},
+   {},
+   {},
+   {},
+   {}
+  ],
+  [
+   {},
+   {},
+   {},
+   {},
+   {}
+  ],
+  [
+   {},
+   {},
+   {},
+   {},
+   {}
+  ],
+  [
+   {},
+   {},
+   {},
+   {},
+   {}
+  ],
+  [
+   {},
+   {},
+   {},
+   {},
+   {}
+  ],
+  [
+   {},
+   {},
+   {},
+   {},
+   {}
+  ],
+  [
+   {},
+   {},
+   {},
+   {},
+   {}
+  ],
+  [
+   {},
+   {},
+   {},
+   {},
+   {}
+  ],
+  [
+   {
+    "kind": "idiom",
+    "ok": "pierre deux coups",
+    "bad": "oiseau",
+    "table": true
+   },
+   {
+    "kind": "idiom",
+    "ok": "autour du pot",
+    "bad": "buisson",
+    "table": true
+   },
+   {
+    "kind": "idiom",
+    "ok": "goutte|déborder|comble|limite",
+    "bad": "paille",
+    "table": true
+   },
+   {
+    "kind": "idiom",
+    "ok": "déball|crach|mèche|avou|parle|\\bdis\\b|\\bdis-|vide ton sac|videz|lâche|lâchez",
+    "bad": "haricot|renvers",
+    "table": true
+   },
+   {
+    "kind": "idiom",
+    "ok": "queue entre les jambes|honte|penaud|déconfit|piteu|tête basse|oreilles basses",
+    "table": false
+   }
+  ],
+  [
+   {
+    "kind": "idiom",
+    "ok": "échapp|enfui|\\bfui|filé|sauvé|évad",
+    "bad": "levé|obtenu",
+    "table": true
+   },
+   {
+    "kind": "idiom",
+    "ok": "t.en tir|t.en sort|impuni|pas t.en|vous en tir|vous en sort|n.y échappera",
+    "bad": "partir avec|obtenir|s.éloigner avec",
+    "table": true
+   },
+   {
+    "kind": "idiom",
+    "ok": "trouv|imagin|élabor|conçu|conçoit|concoct|idée|mont[ée]|mis au point|échafaud|dégot|inventé|ficel",
+    "bad": "(monté|venu|arrivé) avec",
+    "table": true
+   },
+   {
+    "kind": "idiom",
+    "ok": "en prend|en prendre à|défoul|passe tes nerfs|passer tes nerfs|t.emport|crie dessus|crier sur|agress|me tomber dessus|tombe dessus|m.attaqu",
+    "bad": "fouett|cingl",
+    "table": true
+   },
+   {
+    "kind": "idiom",
+    "ok": "abat|vainc|terrass|élimin|écras|renvers|anéanti|démoli|à terre|massacr|neutralis",
+    "bad": "\\bprendrai\\b|\\bprends\\b|\\bprend\\b",
+    "table": true
+   }
+  ],
+  [
+   {
+    "kind": "idiom",
+    "ok": "contre elle|contre lui",
+    "bad": "transform|\\btourn\\w+ (tout )?(le|la|les) (village|monde)",
+    "table": true
+   },
+   {
+    "kind": "idiom",
+    "ok": "rallier|de mon côté|à ma cause|gagner|convaincre|soutien|allié",
+    "bad": "obtenir le prince|avoir le prince|sur mon côté|à mon côté",
+    "table": true
+   },
+   {
+    "kind": "idiom",
+    "ok": "quoi que|peu importe ce|malgré|tout ce que|même si|importe ce que|importe comment|ce que je",
+    "bad": "peu importe quoi",
+    "table": true
+   },
+   {
+    "kind": "idiom",
+    "ok": "livr|remett|céd",
+    "bad": "\\brendre à|\\bmains?\\b|passer la main",
+    "table": true
+   },
+   {
+    "kind": "idiom",
+    "ok": "l.a ouverte|gueule|jacass|trop parlé|n.importe quoi|bavard|baratin|dit des|parlé|insulté|injuri|crié|propos|ouvert",
+    "bad": "couru|dirigé|\\bcourir\\b",
+    "table": true
+   }
+  ],
+  [
+   {
+    "kind": "falsefriend",
+    "ok": "rendu compte|pris conscience|compris",
+    "bad": "réalis",
+    "table": true
+   },
+   {
+    "kind": "falsefriend",
+    "ok": "forcément|sans aucun doute|certainement|assurément|à coup sûr|clairement|indéniablement|vraiment|nettement|bien plus fort",
+    "bad": "définitiv",
+    "table": true
+   },
+   {
+    "kind": "falsefriend",
+    "ok": "pas question|jamais|hors de question|certainement pas|sûrement pas|en rêve|aucune chance",
+    "bad": "pas une chance",
+    "table": true
+   },
+   {
+    "kind": "falsefriend",
+    "ok": "en fait|à vrai dire|justement|honnêtement|en réalité|d.ailleurs",
+    "bad": "actuellement",
+    "table": true
+   },
+   {
+    "kind": "falsefriend",
+    "ok": "semblant|feind|feins|feign|comme si",
+    "bad": "prétend",
+    "table": true
+   }
+  ],
+  [
+   {
+    "kind": "title",
+    "ok": "jeune maître aîné|fils aîné|aîné",
+    "bad": "plus jeune maître|plus âgé des jeunes|le plus âgé|plus vieux maître",
+    "table": true
+   },
+   {
+    "kind": "title",
+    "ok": "frère|aîné|grand",
+    "bad": "senior",
+    "table": true
+   },
+   {
+    "kind": "title",
+    "ok": "chef de l.alliance|dirigeant de l.alliance|leader de l.alliance|meneur de l.alliance|chef d.alliance|maître de l.alliance|dirigeant d.alliance",
+    "bad": "alliance leader|chef alliance|alliance chef",
+    "table": true
+   },
+   {
+    "kind": "title",
+    "ok": "cadet|vénérable|aîné|jeune|disciple|humble",
+    "bad": "senior|junior",
+    "table": true
+   },
+   {
+    "kind": "title",
+    "ok": "maître de (la )?secte|chef de (la )?secte",
+    "bad": "sect master|maître secte|secte maître",
+    "table": true
+   }
+  ],
+  [
+   {
+    "kind": "stutter",
+    "ok": "^\\W*m-m"
+   },
+   {
+    "kind": "stutter",
+    "ok": "^\\W*a-a"
+   },
+   {
+    "kind": "stutter",
+    "ok": "^\\W*l-l"
+   },
+   {
+    "kind": "stutter",
+    "ok": "^\\W*c-c"
+   },
+   {
+    "kind": "natural",
+    "ok": "a{3,}rgh",
+    "bad": "souffl|soupir"
+   }
+  ],
+  [
+   {
+    "kind": "noise",
+    "ok": "ingrat|idiot|imbécile|sots|fou",
+    "bad": "\\byoy\\b"
+   },
+   {
+    "kind": "noise",
+    "ok": "appris",
+    "bad": "\\bdio\\b"
+   },
+   {
+    "kind": "noise",
+    "ok": "feu|incendi|enflamm|flamm",
+    "bad": "\\bare\\b|\\baire\\b"
+   },
+   {
+    "kind": "noise",
+    "ok": "porte",
+    "bad": "\\bcate\\b|\\bcat\\b"
+   },
+   {
+    "kind": "noise",
+    "ok": "fais ici|fais là|fait ici|faites ici|venu faire|viens faire|veux ici|fais donc|fabriques",
+    "bad": "areyou"
+   }
+  ],
+  [
+   {
+    "kind": "natural",
+    "ok": "panique|affol|énerv|inquiètes|flippes|excit|tout un|pour rien|angoiss|stress|crises|flip",
+    "bad": "freak|monstre"
+   },
+   {
+    "kind": "natural",
+    "ok": "méprend|travers|prends pas mal|prenez pas mal|comprends.moi bien|comprenez.moi bien|trompe pas|compren\\w+ pas mal|pas contre toi|pas en colère|pas fâché",
+    "bad": "obtien|rends.moi"
+   },
+   {
+    "kind": "natural",
+    "ok": "pas comme si|pas que je|n.est pas que",
+    "bad": "\\bcomme je\\b"
+   },
+   {
+    "kind": "natural",
+    "ok": "attends|minute|un instant|une seconde|doucement|stop|attendez|patiente|attention",
+    "bad": "tiens bon|tenir|tiens.toi|tenez|\\bgarde\\b"
+   },
+   {
+    "kind": "natural",
+    "ok": "revoie|revois|reviens|ne veux plus te voir|ne veux pas te revoir|interdis|t.approche|plus jamais|plus te voir|plus te trouver|plus revoir|approch",
+    "bad": "ferais mieux|fais attention|mieux que je ne|mieux vaut ne pas"
+   }
+  ],
+  [
+   {
+    "kind": "narration",
+    "ok": "dispers|éparpill|répandu|dissémin|réparti"
+   },
+   {
+    "kind": "narration",
+    "ok": [
+     "tyran",
+     "reviendr|retourner|reviend|revenir"
+    ]
+   },
+   {
+    "kind": "narration",
+    "ok": [
+     "^\\W*plus",
+     "moins"
+    ],
+    "bad": "le moins je|le moins que"
+   },
+   {
+    "kind": "narration",
+    "ok": [
+     "si j.avais su|si j.avais connu",
+     "rest|côtés|côté"
+    ],
+    "bad": "aurais été resté|aurais resté"
+   }
+  ],
+  [
+   {
+    "kind": "idiom",
+    "ok": "hésit|indécis|pas décidé|pas sûr|pas encore décidé|balance|incertain|tergivers|pas certain",
+    "bad": "clôture|barrière|haie|\\bmur\\b",
+    "table": false
+   },
+   {
+    "kind": "idiom",
+    "ok": "illusion|t.emball|rêve pas|y compte|trop d.espoir|n.espère pas trop|espoirs? trop",
+    "bad": "\\blève\\b|\\blevez\\b|\\bhaut|\\bmonte",
+    "table": false
+   },
+   {
+    "kind": "idiom",
+    "ok": "crois|gobe|marche pas|marche plus|avale pas|convaincu|convainc|dupe|panneau|vous crois",
+    "bad": "achète|acheter|\\bachet",
+    "table": false
+   },
+   {
+    "kind": "idiom",
+    "ok": "air|culot|toupet|aplomb|audace|osé|oses|outrecuidance|front|sacré",
+    "bad": "nerf|nerveux",
+    "table": false
+   },
+   {
+    "kind": "idiom",
+    "ok": "compte à régler|reproche|à te dire|à redire|grief|affaire à|différend|à régler|chose à te|à vous dire|contentieux",
+    "bad": "\\bos\\b|choisir|cueillir",
+    "table": false
+   }
+  ],
+  [
+   {
+    "kind": "idiom",
+    "ok": "sorti de la tête|oublié|échappé|sorti de l.esprit|m.a échappé|ne m.est pas revenu|sorti de mon esprit",
+    "bad": "gliss",
+    "table": false
+   },
+   {
+    "kind": "idiom",
+    "ok": "arrive pas|compris|comprends pas|saisis pas|retrouve pas|concevoir|capte pas|cerner|comprendre|assimiler|digérer|piger|m.y faire|mesure pas",
+    "bad": "envelopp|enrouler|autour de ma tête|autour de mon|emball",
+    "table": false
+   },
+   {
+    "kind": "idiom",
+    "ok": "crise|furieux|fureur|colère|hors de lui|sort de ses gonds|explos|plafond|rage|rogne|bondit|bout|fulmine|emporte|grands chevaux|se fâche|bouillonne",
+    "bad": "frappe.*toit|\\btoit\\b",
+    "table": false
+   },
+   {
+    "kind": "idiom",
+    "ok": "roul|\\beu\\b|\\bm.a eu|berné|piégé|arnaqu|joué un tour|duper|dupé|embrouill|bluff|tour de|entourloup|filouté|trompé|doublé|coup fourré|joué",
+    "bad": "rapide|vite",
+    "table": false
+   },
+   {
+    "kind": "idiom",
+    "ok": "perdu la tête|fou|folle|dingue|cinglé|ça va pas|timbré|barjo|malade|déraisonnable|tombé sur la tête|tête|raison|\\bsens\\b|déraill|toqué|perdu l.esprit",
+    "bad": "hors de ton esprit|hors de votre esprit|en dehors de ton esprit|hors de ta tête|hors de votre tête|hors de ton|dehors de",
+    "table": false
+   }
+  ],
+  [
+   {
+    "kind": "idiom",
+    "ok": "vau.l.eau|dérive|ruine|déclin|effondre|coule|perdue|fichu|vrille|à sa perte|chute|disparaît|dépérit|foutue|anéanti|détruite|décadence|sombre",
+    "bad": "évier|égout|canalisation|tuyau|siphon|drain|descend",
+    "table": false
+   },
+   {
+    "kind": "idiom",
+    "ok": "on verra|moment venu|en temps voulu|plus tard|le moment|nous verrons|quand ça arrivera|quand on y sera|d.abord|temps venu|y arrive",
+    "bad": "travers|franchi|pont",
+    "table": false
+   },
+   {
+    "kind": "idiom",
+    "ok": "sérieu|vif|essentiel|travail|commen|passons|au but|concret|aux choses|affaire|entrons",
+    "bad": "descend",
+    "table": false
+   },
+   {
+    "kind": "idiom",
+    "ok": "effront|comme il respire|arracheur|éhonté|sans vergogne|mensonge|\\bment |mentait|menti|mentir|menteur|raconte des",
+    "bad": "travers (ses|les|des) dents|à travers|entre ses dents|par les dents",
+    "table": false
+   },
+   {
+    "kind": "idiom",
+    "ok": "gorge|dispute|querell|se battent|s.entre|conflit|s.affront|s.étripent|chamaill|déchir|s.en prennent",
+    "bad": "\\bsont à la gorge|aux gorges",
+    "table": false
+   }
+  ]
+ ],
+ "new_from": 13
 }

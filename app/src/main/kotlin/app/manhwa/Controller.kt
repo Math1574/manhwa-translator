@@ -724,7 +724,9 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
     /** Texte à écarter d'une page (filigrane, débris de lecture, texte qui revient de page en page) : mêmes règles pour la lecture complète et pour la relecture des textes écartés. */
     private fun junkRule(c: Candidate, s: AppSettings, lexicon: EnglishLexicon): (String, Float, Boolean) -> Boolean = { t, rel, anchored ->
-        s.source.code != "ja" && s.source.code != "ko" && s.source.code != "zh" && (JunkFilter.isWatermark(t) || ((rel < 1.6f || !anchored) && JunkFilter.isDebris(t, lexicon)) || repeatedAcrossPages(t, keysById[c.id]?.imageHash ?: c.id))
+        s.source.code != "ja" && s.source.code != "ko" && s.source.code != "zh" && (JunkFilter.isWatermark(t) || ((rel < 1.6f || !anchored) && JunkFilter.isDebris(t, lexicon)) ||
+            // un seul petit mot inconnu (« IE », « TE », « SA ») : reste de décor lu comme du texte, laissé de côté quelle que soit sa taille ; les noms du chapitre et les cris sont épargnés
+            (try { JunkFilter.isTinyDebris(t, lexicon, graph.gemma.chapterNames()) } catch (_: Throwable) { false }) || repeatedAcrossPages(t, keysById[c.id]?.imageHash ?: c.id))
     }
 
     // ---------- textes écartés : les voir et les traduire d'un appui ----------
@@ -1426,10 +1428,10 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val enhanced = s.enhancedOcr && graph.paddleModels.available
         val ocrEngine = CombinedOcr(s.source, MlKitOcr(s.source), if (enhanced) graph.paddle else null, Lexicon.get(ctx), parallel = !thermalHot)
         val rereadOn = spec != null && s.source.code == "en" && graph.blockReader.available
-        // « pp2 » : lecture des lignes inclinées sur recadrage redressé ; « rr » : relecture des textes douteux par Gemma (résultats différents, cache à part)
+        // « pp3 » : lecture des lignes inclinées sur recadrage redressé + réparation du texte lu de la version 3 (« ... » mal lus, apostrophes perdues, parasites) ; « rr » : relecture des textes douteux par Gemma (résultats différents, cache à part)
         // onomatopées laissées telles quelles (anglais) : clé de cache distincte, pour ne pas reprendre d'anciens résultats où elles étaient traduites
         val skipSfx = !s.translateSfx && s.source.code != "ja" && s.source.code != "ko" && s.source.code != "zh"
-        val engineId = (if (spec == null) MlKitTranslation.ID else GemmaTranslator.engineId(spec)) + (if (enhanced) "+pp2" else "") + (if (rereadOn) "+rr1" else "") + (if (skipSfx) "+sfx0" else "") + seamTag
+        val engineId = (if (spec == null) MlKitTranslation.ID else GemmaTranslator.engineId(spec)) + (if (enhanced) "+pp3" else "") + (if (rereadOn) "+rr1" else "") + (if (skipSfx) "+sfx0" else "") + seamTag
         var debug: DebugInfo? = null
         val lexicon = Lexicon.get(ctx)
         candidatesById[c.id] = c

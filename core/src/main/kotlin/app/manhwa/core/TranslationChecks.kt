@@ -32,6 +32,8 @@ object TranslationChecks {
             if (eng.size >= 2 && eng.size.toFloat() / toks.size.coerceAtLeast(1) >= 0.2f) out.add(Problem("non-traduit", "mots anglais : " + eng.distinct().take(6).joinToString(", ")))
             if (sLetters >= 3 && normalize(src) == normalize(t) && toks.size >= 2 && toks.any { it.lowercase() in englishOnly || it.length > 3 }) out.add(Problem("non-traduit", "identique à l'original"))
         }
+        // rendu mot à mot d'une expression toute faite (« tuer deux oiseaux », « faire du sens », « écume » pour « scum ») : la ligne est refaite avec l'équivalent
+        if (target == "fr") for (h in IdiomHints.calques(src, t).take(2)) out.add(Problem("calque", "« ${h.matched} » est traduit mot à mot ; dire : ${h.french}"))
         // chiffres : ceux de l'original doivent se retrouver
         val digits = Regex("(?<![A-Za-z0-9])\\d+(?![A-Za-z0-9])").findAll(src).map { it.value }.toList()   // nombres isolés ; « INJURIE3 » est une erreur de lecture
         if (digits.any { it !in t }) out.add(Problem("chiffres", "chiffre(s) perdu(s) : " + digits.filter { it !in t }.joinToString(", ")))

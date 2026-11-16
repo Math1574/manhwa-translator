@@ -166,9 +166,31 @@ object Ctc {
 object OcrMerge {
     /** Part des mots d'une lecture (après réparation) qui sont de vrais mots anglais : départage deux lectures d'un même texte (un lecteur peut être très sûr de lui et se tromper). */
     fun plausibility(text: String, lex: EnglishLexicon, names: Set<String> = emptySet()): Float {
-        val words = Regex("[A-Za-z]+(?:'[A-Za-z]+)?").findAll(OcrRepair.repair(text, lex, names)).map { it.value }.filter { it.length >= 2 || it.equals("I", true) || it.equals("A", true) }.toList()
-        if (words.isEmpty()) return 0.5f
-        return words.count { lex.known(it.lowercase()) || it.lowercase() in names }.toFloat() / words.size
+        val repaired = OcrRepair.repair(text, lex, names)
+        val words = Regex("[A-Za-z]+(?:'[A-Za-z]+)?").findAll(repaired).map { it.value }.filter { it.length >= 2 || it.equals("I", true) || it.equals("A", true) }.toList()
+        val junk = junkTokens(repaired)
+        if (words.isEmpty()) return if (junk > 0) 0.2f else 0.5f
+        // les jetons parasites (« 2L », « 910 », « R. ») comptent comme des mots faux : une lecture qui en contient perd contre une lecture propre du même texte
+        return words.count { lex.known(it.lowercase()) || it.lowercase() in names }.toFloat() / (words.size + junk)
+    }
+
+    /**
+     * Jetons qui ne ressemblent à rien dans un dialogue : chiffres mêlés aux lettres (« 2L », « 5O-ICI »), « | », lettre seule autre que « A » et « I » (« R. »).
+     * Un nombre seul n'en est pas un (« 36 »), ni un ordinal (« 2ND »).
+     */
+    internal fun junkTokens(text: String): Int {
+        var n = 0
+        for (raw in text.split(Regex("\\s+"))) {
+            val t = raw.trim('.', ',', '!', '?', '…', '"', '\'', '’', '“', '”', '(', ')', ':', ';')
+            if (t.isEmpty()) continue
+            val letters = t.count { it.isLetter() }; val digits = t.count { it.isDigit() }
+            when {
+                t == "|" -> n++
+                letters >= 1 && digits >= 1 && t.length <= 8 && !OcrRepair.isLegitMixed(t) -> n++
+                t.length == 1 && letters == 1 && t[0].uppercaseChar() != 'A' && t[0].uppercaseChar() != 'I' -> n++
+            }
+        }
+        return n
     }
 
     fun merge(mlkit: List<OcrLine>, paddle: List<OcrLine>, script: String, lex: EnglishLexicon? = null): List<OcrLine> {
