@@ -15,7 +15,7 @@
 
 ## Mise à jour de novembre 2026
 - Lecture : PP-OCRv5 (anglais en concurrent de l'ancien lecteur, coréen, japonais horizontal), détection PP-OCRv4 conservée.
-- Traduction : Gemma 4 (E2B/E4B) avec décodage spéculatif et test CPU/GPU ; Hy-MT2 évalué et écarté (moins bon que Gemma sur le corpus maison).
+- Traduction : Gemma 4 (E2B/E4B) avec décodage spéculatif adaptatif (moteur LiteRT-LM 0.19 : n'est utilisé que tant qu'il est mesuré plus rapide) et test CPU/GPU ; Hy-MT2 évalué et écarté (moins bon que Gemma sur le corpus maison).
 - Navigateur : blocage des publicités (liste AdAway, CC BY 3.0), bibliothèque (favoris, historique, reprise de lecture par œuvre).
 - Écarté après mesure : MI-GAN (gain négligeable), détection PP-OCRv5 mobile (moins bon rappel).
 - Reste à faire : japonais vertical (manga-ocr), détecteur de bulles, onglets multiples, gestion des chapitres, NPU.

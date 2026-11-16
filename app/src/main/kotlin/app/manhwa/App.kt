@@ -140,6 +140,14 @@ class AppGraph(ctx: Context) {
         }
     }
     val gpuTest = GpuTester(ctx, this)
+    init {
+        // le premier usage du GPU avec cette version a fait planter l'application : on coupe l'accélération (sinon elle replanterait à chaque traduction), on le dit et on le note au journal
+        gemma.gpuTripped?.let { why ->
+            settingsStore.update { it.copy(useGpu = false) }
+            gpuTest.notice("Le GPU a fait planter l'application juste après la mise à jour : il est désactivé. Vous pouvez le réactiver dans Performance ; « Tester CPU / GPU » le réactive seulement s'il est plus rapide.")
+            try { journal.add(org.json.JSONObject().put("t", System.currentTimeMillis()).put("type", "gpuguard").put("why", why).put("build", BuildConfig.BUILD_NUMBER)) } catch (_: Throwable) {}
+        }
+    }
     val blockReader = GemmaBlockReader(gemma) { settingsStore.settings }
     val visionTest = VisionTester(ctx, gemma)
     /** Noms propres probables repérés pendant la lecture (propositions du glossaire) ; remis à zéro quand l'application redémarre. */
