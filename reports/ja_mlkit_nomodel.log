@@ -1,0 +1,28 @@
+11-16 18:23:03.534  7679  7679 I MT      : page : début about:blank (translateOn=true active=false total=0)
+11-16 18:23:04.173  7679  7713 I MTTEST  : compteurs total/traitées/échecs/chargement 0/0/0/true à 2 s
+11-16 18:23:04.319  7679  7679 I MT      : page : début http://10.0.2.2:8000/pc_ja.html (translateOn=true active=false total=0)
+11-16 18:23:04.742  7679  7800 I native  : I0000 00:00:1794853384.742535    7800 tflite_lstm_client_base.cc:371] Resizing interpreter pool to 4
+11-16 18:23:04.744  7679  7800 I tflite  : Initialized TensorFlow Lite runtime.
+11-16 18:23:04.791  7679  7811 I native  : I0000 00:00:1794853384.791284    7811 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/conv_model.fb
+11-16 18:23:04.803  7679  7811 I native  : I0000 00:00:1794853384.803828    7811 tflite_model_pooled_runner.cc:636] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/lstm_model.fb
+11-16 18:23:04.808  7679  7811 I native  : I0000 00:00:1794853384.808800    7811 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 4
+11-16 18:23:04.820  7679  7801 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+11-16 18:23:04.825  7679  7812 I native  : I0000 00:00:1794853384.824399    7812 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Jpan_ctc/optical/conv_model.fb
+11-16 18:23:04.863  7679  7801 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 18:23:04.880  7679  7813 I native  : I0000 00:00:1794853384.880768    7813 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Hani_ctc/optical/conv_model.fb
+11-16 18:23:04.899  7679  7813 I native  : I0000 00:00:1794853384.899787    7813 tflite_model_pooled_runner.cc:636] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Hani_ctc/optical/lstm_model.fb
+11-16 18:23:04.902  7679  7801 I native  : I0000 00:00:1794853384.900715    7801 tflite_detector_client_with_shape_cache.cc:105] Caching size: 10
+11-16 18:23:04.909  7679  7801 I native  : I0000 00:00:1794853384.909303    7801 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_splitting_custom_ops/model.tflite
+11-16 18:23:04.915  7679  7812 I native  : I0000 00:00:1794853384.915971    7812 tflite_model_pooled_runner.cc:636] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Jpan_ctc/optical/lstm_model.fb
+11-16 18:23:04.926  7679  7801 I native  : I0000 00:00:1794853384.926820    7801 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-16 18:23:04.927  7679  7801 I native  : I0000 00:00:1794853384.927280    7801 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_clustering_custom_ops/model.tflite
+11-16 18:23:04.930  7679  7801 I native  : I0000 00:00:1794853384.927855    7801 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-16 18:23:04.931  7679  7813 I native  : I0000 00:00:1794853384.931829    7813 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 4
+11-16 18:23:04.947  7679  7812 I native  : I0000 00:00:1794853384.947627    7812 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 4
+11-16 18:23:05.002  7679  7800 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 18:23:05.394  7679  7800 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 18:23:05.438  7679  7800 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 18:23:05.454  7679  7800 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 18:23:07.039  7679  7679 I MT      : page : fin about:blank (translateOn=true active=false total=0)
+11-16 18:23:08.174  7679  7713 I MTTEST  : compteurs total/traitées/échecs/chargement 0/0/0/false à 6 s
+11-16 18:24:08.186  7679  7713 I MTTEST  : REPORT_READY report.json

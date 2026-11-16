@@ -1,0 +1,80 @@
+11-16 18:16:48.288  5103  5163 I MTTEST  : compteurs total/traitées/échecs/chargement 0/0/0/false à 2 s
+11-16 18:16:48.595  5103  5103 I MT      : page : début about:blank (translateOn=true active=false total=0)
+11-16 18:16:49.484  5103  5103 I MT      : page : début http://10.0.2.2:8000/pc_ja.html (translateOn=true active=false total=0)
+11-16 18:16:50.291  5103  5163 I MTTEST  : compteurs total/traitées/échecs/chargement 0/0/0/true à 4 s
+11-16 18:16:50.295  5103  5306 I native  : I0000 00:00:1794853010.295310    5306 tflite_lstm_client_base.cc:371] Resizing interpreter pool to 4
+11-16 18:16:50.309  5103  5307 I tflite  : Initialized TensorFlow Lite runtime.
+11-16 18:16:50.402  5103  5321 I native  : I0000 00:00:1794853010.402675    5321 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/conv_model.fb
+11-16 18:16:50.403  5103  5321 I native  : I0000 00:00:1794853010.403160    5321 tflite_model_pooled_runner.cc:636] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/lstm_model.fb
+11-16 18:16:50.406  5103  5321 I native  : I0000 00:00:1794853010.406922    5321 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 4
+11-16 18:16:50.411  5103  5322 I native  : I0000 00:00:1794853010.411390    5322 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Hani_ctc/optical/conv_model.fb
+11-16 18:16:50.411  5103  5322 I native  : I0000 00:00:1794853010.411974    5322 tflite_model_pooled_runner.cc:636] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Hani_ctc/optical/lstm_model.fb
+11-16 18:16:50.423  5103  5322 I native  : I0000 00:00:1794853010.423639    5322 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 4
+11-16 18:16:50.423  5103  5321 I native  : I0000 00:00:1794853010.423925    5321 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Jpan_ctc/optical/conv_model.fb
+11-16 18:16:50.426  5103  5307 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+11-16 18:16:50.427  5103  5321 I native  : I0000 00:00:1794853010.427652    5321 tflite_model_pooled_runner.cc:636] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Jpan_ctc/optical/lstm_model.fb
+11-16 18:16:50.445  5103  5321 I native  : I0000 00:00:1794853010.445715    5321 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 4
+11-16 18:16:50.485  5103  5307 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 18:16:50.539  5103  5307 I native  : I0000 00:00:1794853010.538964    5307 tflite_detector_client_with_shape_cache.cc:105] Caching size: 10
+11-16 18:16:50.543  5103  5307 I native  : I0000 00:00:1794853010.543151    5307 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_splitting_custom_ops/model.tflite
+11-16 18:16:50.546  5103  5307 I native  : I0000 00:00:1794853010.546073    5307 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-16 18:16:50.546  5103  5307 I native  : I0000 00:00:1794853010.546396    5307 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_clustering_custom_ops/model.tflite
+11-16 18:16:50.546  5103  5307 I native  : I0000 00:00:1794853010.546686    5307 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-16 18:16:50.654  5103  5306 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 18:16:50.867  5103  5306 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 18:16:51.036  5103  5306 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 18:16:51.231  5103  5306 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 18:16:53.483  5103  5287 E nhwa.translator: No implementation found for void com.google.ai.edge.litertlm.NativeLibraryLoader.nativeCheckLoaded() (tried Java_com_google_ai_edge_litertlm_NativeLibraryLoader_nativeCheckLoaded and Java_com_google_ai_edge_litertlm_NativeLibraryLoader_nativeCheckLoaded__) - is the library loaded, e.g. System.loadLibrary?
+11-16 18:16:53.612  5103  5408 W native  : W0000 00:00:1794853013.612794    5408 litert_lm_loader.cc:391] Section not found: SP_Tokenizer
+11-16 18:16:53.618  5103  5287 I litert  : [environment.cc:36] Creating LiteRT environment with options
+11-16 18:16:53.621  5103  5287 W litert  : [npu_registry.cc:34] NPU accelerator could not be loaded and registered: kLiteRtStatusErrorNotFound.
+11-16 18:16:53.633  5103  5287 I litert  : [accelerator_registry.cc:54] RegisterAccelerator: ptr=0x7c836c57ecc0, name=LiteRT GPU
+11-16 18:16:53.633  5103  5287 I litert  : [gpu_registry.cc:113] Statically linked GPU accelerator registered.
+11-16 18:16:53.633  5103  5287 I litert  : [accelerator_registry.cc:54] RegisterAccelerator: ptr=0x7c836c532580, name=CpuAccelerator
+11-16 18:16:53.633  5103  5287 I litert  : [cpu_registry.cc:75] XNNPACK CPU accelerator registered.
+11-16 18:16:53.988  5103  5103 I MT      : page : fin about:blank (translateOn=true active=false total=0)
+11-16 18:16:54.328  5103  5163 I MTTEST  : compteurs total/traitées/échecs/chargement 0/0/0/false à 8 s
+11-16 18:16:54.679  5103  5287 I litert  : [environment.cc:36] Creating LiteRT environment with options
+11-16 18:16:54.680  5103  5287 W litert  : [npu_registry.cc:34] NPU accelerator could not be loaded and registered: kLiteRtStatusErrorNotFound.
+11-16 18:16:54.680  5103  5287 I litert  : [accelerator_registry.cc:54] RegisterAccelerator: ptr=0x7c836c5357d0, name=LiteRT GPU
+11-16 18:16:54.680  5103  5287 I litert  : [gpu_registry.cc:113] Statically linked GPU accelerator registered.
+11-16 18:16:54.680  5103  5287 I litert  : [accelerator_registry.cc:54] RegisterAccelerator: ptr=0x7c836c534e30, name=CpuAccelerator
+11-16 18:16:54.680  5103  5287 I litert  : [cpu_registry.cc:75] XNNPACK CPU accelerator registered.
+11-16 18:16:54.680  5103  5287 W native  : W0000 00:00:1794853014.680094    5287 litert_lm_loader.cc:391] Section not found: ExecutorMetadataProto
+11-16 18:16:54.686  5103  5287 W native  : W0000 00:00:1794853014.686548    5287 litert_lm_loader.cc:391] Section not found: ExecutorMetadataProto
+11-16 18:16:54.692  5103  5287 I litert  : [magic_number_utils.cc:101] Loaded: num_subgraphs=976, num_signatures=4
+11-16 18:16:54.693  5103  5287 I litert  : [magic_number_utils.cc:109]   signature=decode, subgraph_index=0, num_tensors=2703, num_inputs=35, num_outputs=32, num_ops=2068
+11-16 18:16:54.693  5103  5287 I litert  : [magic_number_utils.cc:109]   signature=prefill_1024, subgraph_index=1, num_tensors=1454, num_inputs=35, num_outputs=30, num_ops=1107
+11-16 18:16:54.693  5103  5287 I litert  : [magic_number_utils.cc:109]   signature=prefill_128, subgraph_index=2, num_tensors=1454, num_inputs=35, num_outputs=30, num_ops=1107
+11-16 18:16:54.693  5103  5287 I litert  : [magic_number_utils.cc:109]   signature=verify, subgraph_index=3, num_tensors=2887, num_inputs=35, num_outputs=32, num_ops=2243
+11-16 18:16:54.693  5103  5287 I litert  : [magic_number_utils.cc:113] Magic number configs: num_configs=1
+11-16 18:16:54.693  5103  5287 I litert  : [magic_number_utils.cc:120]   config[0]: magic_number=32003, target_number=4096, signature_prefix=null
+11-16 18:16:54.717  5103  5287 I litert  : [magic_number_utils.cc:536] 439 tensors of signature decode have been updated for magic number  32003 to target number 4096
+11-16 18:16:54.718  5103  5287 I litert  : [magic_number_utils.cc:536] 271 tensors of signature prefill_1024 have been updated for magic number  32003 to target number 4096
+11-16 18:16:54.747  5103  5287 I litert  : [magic_number_utils.cc:536] 270 tensors of signature prefill_128 have been updated for magic number  32003 to target number 4096
+11-16 18:16:54.750  5103  5287 I litert  : [magic_number_utils.cc:536] 444 tensors of signature verify have been updated for magic number  32003 to target number 4096
+11-16 18:16:54.750  5103  5287 I litert  : [compiled_model.cc:829] Flatbuffer model initialized directly from incoming litert model.
+11-16 18:16:54.775  5103  5287 I tflite  : Initialized TensorFlow Lite runtime.
+11-16 18:16:54.980  5103  5287 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+11-16 18:16:54.990  5103  5287 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794853001_2588147712.xnnpack_cache'.
+11-16 18:16:54.990  5103  5287 I tflite  : XNNPack weight cache build for '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794853001_2588147712.xnnpack_cache' started.
+11-16 18:16:55.012  5103  5287 I tflite  : Replacing 1650 out of 2068 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 574 partitions for subgraph 0 (decode).
+11-16 18:16:55.116  5103  5287 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794853001_2588147712.xnnpack_cache'.
+11-16 18:16:55.122  5103  5287 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794853001_2588147712.xnnpack_cache'.
+11-16 18:16:55.126  5103  5287 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794853001_2588147712.xnnpack_cache'.
+11-16 18:16:55.175  5103  5287 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794853001_2588147712.xnnpack_cache'.
+11-16 18:16:55.179  5103  5287 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794853001_2588147712.xnnpack_cache'.
+11-16 18:16:55.184  5103  5287 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794853001_2588147712.xnnpack_cache'.
+11-16 18:16:55.190  5103  5287 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794853001_2588147712.xnnpack_cache'.
+11-16 18:16:55.274  5103  5287 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794853001_2588147712.xnnpack_cache'.
+11-16 18:16:55.281  5103  5287 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794853001_2588147712.xnnpack_cache'.
+11-16 18:16:55.312  5103  5287 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794853001_2588147712.xnnpack_cache'.
+11-16 18:16:55.330  5103  5287 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794853001_2588147712.xnnpack_cache'.
+11-16 18:16:55.428  5103  5287 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794853001_2588147712.xnnpack_cache'.
+11-16 18:16:55.434  5103  5287 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794853001_2588147712.xnnpack_cache'.
+11-16 18:16:55.454  5103  5287 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794853001_2588147712.xnnpack_cache'.
+11-16 18:16:55.465  5103  5287 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794853001_2588147712.xnnpack_cache'.
+11-16 18:16:55.538  5103  5287 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794853001_2588147712.xnnpack_cache'.
+11-16 18:16:55.543  5103  5287 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794853001_2588147712.xnnpack_cache'.
+11-16 18:16:55.561  5103  5287 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794853001_2588147712.xnnpack_cache'.
+11-16 18:16:55.569  5103  5287 I tflite  : XNNPack weight cache: written to '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794853001_2588147712.xnnpack_cache'.
