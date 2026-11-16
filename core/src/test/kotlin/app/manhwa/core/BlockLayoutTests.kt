@@ -116,6 +116,61 @@ fun blockLayoutTests() {
         BlockLayout.resolveCollisions(preps, laids, { true }, fake(false))
         T.ok(laids[0] === first[0] && laids[1] === first[1], "épinglés : inchangés")
     }
+    // ----- textes de bulle empilés (titre et paragraphe d'un même cadre) -----
+    fun prepIn(id: Int, box: RectF, cont: RectF): BlockPrep =
+        BlockPrep(TranslatedBlock(id, box, "SRC", "TR", false, box.height, listOf(box)), null, FontStyle.SPEECH, "TR", container = cont)
+    T.test("textes empilés: le recouvrement se mesure ligne par ligne, rapporté à la plus petite ligne") {
+        val a = ShapeFit(60f, 60f, listOf(PlacedLine("l1", 200f, 0f, 300f), PlacedLine("l2", 200f, 60f, 300f)), true)
+        val sep = ShapeFit(60f, 60f, listOf(PlacedLine("m1", 200f, 120f, 300f)), true)
+        val touch = ShapeFit(60f, 60f, listOf(PlacedLine("m1", 200f, 90f, 300f)), true)          // 30 px de la 2e ligne de a : moitié de la ligne
+        val inside = ShapeFit(60f, 60f, listOf(PlacedLine("m1", 200f, 60f, 300f)), true)         // exactement sur la 2e ligne
+        fun r(f: ShapeFit) = BlockLayout.Result(f, false, true, 60f, 1f)
+        T.eq(0f, BlockLayout.textOverlap(r(a), r(sep)), "lignes bout à bout : aucun recouvrement")
+        T.eq(0.5f, BlockLayout.textOverlap(r(a), r(touch)), "moitié d'une ligne")
+        T.eq(1f, BlockLayout.textOverlap(r(a), r(inside)), "ligne sur ligne")
+        // un coin du rectangle englobant qui ne porte aucun texte ne compte pas : ligne étroite en haut, large en bas
+        val narrowTop = ShapeFit(60f, 60f, listOf(PlacedLine("étroit", 200f, 0f, 60f), PlacedLine("large", 200f, 60f, 300f)), true)
+        val besideNarrow = ShapeFit(60f, 60f, listOf(PlacedLine("voisin", 340f, 0f, 100f)), true)     // à droite de la ligne étroite, au-dessus de la large : dans le rectangle englobant, hors de toute ligne
+        T.eq(0f, BlockLayout.textOverlap(r(narrowTop), r(besideNarrow)), "le vide à côté de la ligne étroite n'est pas du texte")
+    }
+    T.test("textes empilés: deux textes de bulle qui se recouvrent rétrécissent en place jusqu'à se séparer") {
+        val cont = RectF(0f, 0f, 700f, 700f)
+        val a = RectF(100f, 100f, 400f, 160f); val b = RectF(100f, 200f, 400f, 260f)
+        val preps = listOf(prepIn(0, a, cont), prepIn(1, b, cont))
+        val laids = ArrayList<BlockLayout.Result?>(preps.map { fake(false)(it, 1f) })
+        T.ok(BlockLayout.textOverlap(laids[0]!!, laids[1]!!) >= BlockLayout.STACK_TRIGGER, "départ : texte sur texte (${BlockLayout.textOverlap(laids[0]!!, laids[1]!!)})")
+        val centers = laids.map { it!!.placed(0f).centerY }
+        BlockLayout.separateStacked(preps, laids, { false }, fake(false))
+        T.ok(BlockLayout.textOverlap(laids[0]!!, laids[1]!!) <= BlockLayout.STACK_TARGET, "séparés : ${BlockLayout.textOverlap(laids[0]!!, laids[1]!!)}")
+        for (i in 0..1) {
+            T.ok(laids[i]!!.fit.size >= 60f * 0.8f - 0.01f && laids[i]!!.fit.size < 60f, "bloc $i réduit, pas de plus de 20 % : ${laids[i]!!.fit.size}")
+            T.ok(abs(centers[i] - laids[i]!!.placed(0f).centerY) < 0.01f, "bloc $i resté à sa place : ${centers[i]} / ${laids[i]!!.placed(0f).centerY}")
+        }
+        T.eq(laids[0]!!.fit.size, laids[1]!!.fit.size, "réduction partagée plutôt qu'un seul texte écrasé")
+    }
+    T.test("textes empilés: rien ne change hors bulle, pour un bloc épinglé, ou quand aucune réduction ne suffit") {
+        val cont = RectF(0f, 0f, 700f, 700f)
+        val a = RectF(100f, 100f, 400f, 160f); val b = RectF(100f, 200f, 400f, 260f)
+        // hors bulle : traité par les collisions, pas ici
+        val free = listOf(prep(0, a), prep(1, b))
+        val lf = ArrayList<BlockLayout.Result?>(free.map { fake(false)(it, 1f) }); val f0 = lf.map { it }
+        BlockLayout.separateStacked(free, lf, { false }, fake(false))
+        T.ok(lf[0] === f0[0] && lf[1] === f0[1], "texte libre : inchangé")
+        // épinglé
+        val inB = listOf(prepIn(0, a, cont), prepIn(1, b, cont))
+        val lp = ArrayList<BlockLayout.Result?>(inB.map { fake(false)(it, 1f) }); val p0 = lp.map { it }
+        BlockLayout.separateStacked(inB, lp, { it.block.id == 1 }, fake(false))
+        T.ok(lp[0] === p0[0] && lp[1] === p0[1], "un bloc épinglé : la paire est laissée telle quelle")
+        // la mise en page ignore l'échelle : aucune réduction ne sépare
+        val lr = ArrayList<BlockLayout.Result?>(inB.map { fake(false)(it, 1f) }); val r0 = lr.map { it }
+        BlockLayout.separateStacked(inB, lr, { false }) { pr, _ -> fake(false)(pr, 1f) }
+        T.ok(lr[0] === r0[0] && lr[1] === r0[1], "aucune réduction ne convient : inchangé")
+        // déjà séparés
+        val far = listOf(prepIn(0, a, cont), prepIn(1, RectF(100f, 400f, 400f, 460f), cont))
+        val ls = ArrayList<BlockLayout.Result?>(far.map { fake(false)(it, 1f) }); val s0 = ls.map { it }
+        BlockLayout.separateStacked(far, ls, { false }, fake(false))
+        T.ok(ls[0] === s0[0] && ls[1] === s0[1], "textes déjà séparés : inchangés")
+    }
     // ----- texte penché : hauteur de ligne -----
     T.test("texte penché: une épaisseur mesurée dans l'axe du texte n'est pas corrigée une seconde fois (« Unbelievable. » rendu à moins de la moitié)") {
         val box = RectF(179f, 6255f, 411f, 6324f)                       // 232 × 69 : boîte gonflée par la rotation

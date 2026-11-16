@@ -656,6 +656,50 @@ object TextErase {
     }
 
     /**
+     * Lettrage coloré (ni très clair ni très foncé) cerné d'un contour sombre, posé sur une lueur claire à hachures : l'extrême de luminosité retenu par [extremeTextColor] est alors la lueur
+     * elle-même (blanche), pas les lettres. Toute la lueur passait pour du texte : effacée en bloc, puis remplacée par un brouillard gris rosé sans hachures, avec des bords crénelés.
+     *
+     * Une couleur de texte est bien plus fréquente dans les boîtes de lecture ([inBoxes]) qu'autour d'elles ([outside] : le voisinage immédiat des boîtes, sans les boîtes des textes voisins).
+     * Quand la couleur retenue ([picked]) est au contraire deux fois plus rare dans les boîtes que dehors, c'est le fond ; on cherche alors, parmi les couleurs les plus fréquentes des
+     * boîtes, une couleur franche (saturée, ni claire ni sombre) qui y est au moins 5 fois plus fréquente que dehors et y couvre au moins 18 % des pixels : c'est le remplissage des lettres.
+     * Rend null (rien à corriger) dans tous les autres cas : un texte blanc sur fond sombre ou noir sur fond clair a sa couleur bien plus présente dans les boîtes.
+     */
+    fun enrichedFill(pixels: IntArray, w: Int, h: Int, inBoxes: BooleanArray, outside: BooleanArray, picked: Int): Int? {
+        val n = w * h
+        if (pixels.size != n) return null
+        var nIn = 0; var nOut = 0
+        for (i in 0 until n) { if (inBoxes[i]) nIn++ else if (outside[i]) nOut++ }
+        if (nIn < 400 || nOut < 400) return null
+        // parts de [c] (à [tol] près) dans les boîtes et hors des boîtes
+        fun shares(c: Int, tol: Int): FloatArray {
+            var a = 0; var o = 0
+            for (i in 0 until n) { if (dist(pixels[i], c) > tol) continue; if (inBoxes[i]) a++ else if (outside[i]) o++ }
+            return floatArrayOf(a.toFloat() / nIn, o.toFloat() / nOut)
+        }
+        val sp = shares(picked, 70)
+        if (sp[0] >= 0.5f * sp[1]) return null
+        val hist = IntArray(4096)
+        for (i in 0 until n) if (inBoxes[i]) { val c = pixels[i]; hist[((r(c) shr 4) shl 8) or ((g(c) shr 4) shl 4) or (b(c) shr 4)]++ }
+        val order = hist.indices.sortedByDescending { hist[it] }.take(12)
+        for (k in order) {
+            if (hist[k] < 0.05f * nIn) break
+            val cen = pack(((k shr 8) and 15) * 16 + 8, ((k shr 4) and 15) * 16 + 8, (k and 15) * 16 + 8)
+            val mx = max(r(cen), max(g(cen), b(cen))); val mn = min(r(cen), min(g(cen), b(cen)))
+            val sat = (mx - mn).toFloat() / max(1, mx); val lu = lum(cen)
+            if (sat < 0.35f || lu < 0.25f || lu > 0.85f) continue
+            val sc = shares(cen, 45)
+            if (sc[0] < 0.18f || sc[0] < 5f * (sc[1] + 0.01f)) continue
+            var cnt = 0; var sr = 0L; var sg = 0L; var sb = 0L
+            for (i in 0 until n) if (inBoxes[i] && dist(pixels[i], cen) <= 45) { cnt++; sr += r(pixels[i]); sg += g(pixels[i]); sb += b(pixels[i]) }
+            if (cnt == 0) continue
+            val mean = pack((sr / cnt).toInt(), (sg / cnt).toInt(), (sb / cnt).toInt())
+            if (dist(mean, picked) <= 100) continue
+            return mean
+        }
+        return null
+    }
+
+    /**
      * Retire de [src] les composantes qui ressemblent à des hachures : très fines (épaisseur moyenne sous [maxThickness] px, mesurée par 2 × aire / périmètre) et sans aucun pixel dans
      * [near] (le voisinage des lignes lues par l'OCR). Les pointes d'un contour « étoile » et les traits de vitesse passent dans les coins de la zone de texte détectée, plus large que
      * les lettres : chacune est une petite composante isolée qui passait pour une lettre, était effacée, et laissait une tache aux quatre coins de la zone. Une lettre est plus épaisse

@@ -19,8 +19,24 @@ object TextNormalizer {
         val letters = t.count { it.isLetter() }
         val nonSpace = t.count { !it.isWhitespace() }
         if (letters < 2) return true
-        if (letters.toFloat() / nonSpace < 0.5f) return true
+        // un mot court entouré de ponctuation (« HUH...? », « B-BUT...! », « ...Ah! », « We... ») est une vraie réplique, pas un débris : seul un texte qui mêle chiffres et signes passe pour du bruit
+        if (!isSpeechLike(t) && letters.toFloat() / nonSpace < 0.5f) return true
         return t.none { it in vowels }
+    }
+
+    /** Un jeton de réplique : mots (apostrophes, traits d'union internes, bégaiement « B-BUT ») entre ponctuation de dialogue (points de suspension, ! ? , ; : ~ guillemets). */
+    private val speechTokenRe = Regex("^[\"\u201C\u00AB'\u2018\u00BF\u00A1.\u2026~]*(\\p{L}[\\p{L}'\u2019]*(?:-\\p{L}[\\p{L}'\u2019]*)*)-?[.\u2026!?,;:~\"\u201D\u00BB'\u2019)]*$")
+
+    /** Texte fait uniquement de jetons de réplique, dont au moins un a deux lettres ou plus (pas de chiffres, pas de signes isolés : ce sont les débris d'OCR). */
+    internal fun isSpeechLike(t: String): Boolean {
+        val toks = t.split(Regex("\\s+")).filter { it.isNotEmpty() }
+        if (toks.isEmpty()) return false
+        var longest = 0
+        for (tok in toks) {
+            val m = speechTokenRe.matchEntire(tok) ?: return false
+            longest = maxOf(longest, m.groupValues[1].count { it.isLetter() })
+        }
+        return longest >= 2
     }
 
     /** Texte en majuscules (cris, lettrage de bulle) : au moins 4 lettres dont plus de 80 % en capitales. */
