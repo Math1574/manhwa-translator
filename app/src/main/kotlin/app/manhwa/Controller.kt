@@ -407,7 +407,10 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     @Volatile var testBatch = false
 
     private val queue = PageQueue(maxPending = 4, listener = object : QueueListener {
-        override fun onStarted(id: String) { runStart[id] = SystemClock.uptimeMillis(); runStage[id] = "téléchargement" }
+        override fun onStarted(id: String) {
+            runStart[id] = SystemClock.uptimeMillis(); runStage[id] = "téléchargement"
+            if (testing) android.util.Log.i("MT", "ordre : $id démarre")
+        }
         // une page en attente a cédé sa place à une page plus proche du lecteur : elle retourne dans la liste d'attente, rien n'est perdu
         override fun onDisplaced(id: String) {
             val c = jobCand.remove(id) ?: return
@@ -1275,14 +1278,20 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
      * 5 à 10 s) l'attend un instant (2 s au plus) au lieu de partir avec une page plus loin, dont le téléchargement a simplement fini quelques centaines de millisecondes plus tôt.
      */
     private fun earlierPageBeforeReading(priority: Int, ignore: Set<String>): String? {
+        var found: String? = null
+        val seen: StringBuilder? = if (testing) StringBuilder() else null
         for (id in queue.runningIds()) {
-            if (id in ignore) continue
-            val stage = runStage[id] ?: continue
+            val stage = runStage[id]
+            val c = jobCand[id]
+            if (seen != null) seen.append(' ').append(id).append('=').append(stage ?: "?").append('/').append(c?.priorityAt(viewportY, viewportH) ?: -1)
+            if (found != null || id in ignore) continue
+            if (stage == null || c == null) continue
             if (stage != "téléchargement" && !stage.startsWith("assemblage")) continue
-            val c = jobCand[id] ?: continue
-            if (c.priorityAt(viewportY, viewportH) < priority) return id
+            if (c.priorityAt(viewportY, viewportH) < priority) found = id
         }
-        return null
+        // tests automatiques : ce que la porte de lecture a vu (pour comprendre un ordre inattendu)
+        if (seen != null) android.util.Log.i("MT", "ordre : lecture (priorité $priority) " + (if (found != null) "attend $found" else "passe") + " ; en route :" + seen)
+        return found
     }
 
     private fun onCandidates(raw: String?) {
@@ -1305,6 +1314,11 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             backlog.sortBy { it.priorityAt(viewportY, viewportH) }
         }
         total += added
+        if (testing && arr.length() > 0) {
+            val lots = StringBuilder()
+            for (i in 0 until arr.length()) { val o = arr.getJSONObject(i); lots.append(' ').append(o.optString("id")).append("(n=").append(o.optInt("n", -1)).append(",haut=").append(o.optDouble("top", 0.0).toInt()).append(')') }
+            android.util.Log.i("MT", "ordre : repérage$lots ; vue ${viewportY.toInt()}/${viewportH.toInt()} ; ajoutées $added")
+        }
         pump()
     }
 
@@ -1387,10 +1401,13 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         // une seule lecture du texte à la fois (elle occupe déjà tous les cœurs) ; pendant ce temps l'autre page peut attendre sa traduction ou s'afficher
         val timedOcr = OcrEngine { b ->
             runStage[c.id] = "attente de la lecture du texte"
+            val tGate = SystemClock.uptimeMillis()
+            if (testing) android.util.Log.i("MT", "ordre : ${c.id} arrive à la lecture du texte (priorité ${c.priorityAt(viewportY, viewportH)})")
             // les pages qui attendent leur tour passent dans l'ordre de lecture (la plus proche du lecteur d'abord), pas dans un ordre quelconque
             ocrTurns.run({ c.priorityAt(viewportY, viewportH) }) {
                 synchronized(ocrLock) {
                     runStage[c.id] = "lecture du texte"
+                    if (testing) android.util.Log.i("MT", "ordre : ${c.id} lit le texte (attente ${SystemClock.uptimeMillis() - tGate} ms)")
                     val t = SystemClock.uptimeMillis()
                     try { ocrEngine.recognize(b).also { pageNotes[c.id] = StringBuilder(OcrDebug.note); pageTiming[c.id] = OcrDebug.timing } } finally { stages[0] += SystemClock.uptimeMillis() - t }
                 }
