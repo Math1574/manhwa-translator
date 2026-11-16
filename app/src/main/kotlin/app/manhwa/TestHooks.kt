@@ -277,7 +277,7 @@ object TestHooks {
                     }
                     val sig = "${c.total}/${c.done}/${c.failed}/${c.loading}"
                     val now = System.currentTimeMillis()
-                    if (sig != lastSig) { lastSig = sig; stableSince = now }
+                    if (sig != lastSig) { lastSig = sig; stableSince = now; Log.i(TAG, "compteurs total/traitées/échecs/chargement $sig à ${(now - tLoad) / 1000} s") }
                     val finished = !c.loading && c.total > 0 && c.done + c.failed >= c.total && now - stableSince > 8000
                     val nothing = !c.loading && c.total == 0 && now - stableSince > 60_000
                     if (finished || nothing) break

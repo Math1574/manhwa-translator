@@ -574,11 +574,13 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                 nearBottom = false
                 barsHidden = false; pageProgress = 0; showReaderBar(false); resumeOffer = 0; peekTarget = null; undoBanner = null
                 pageError = null
+                if (testing) android.util.Log.i("MT", "page : début $url (translateOn=$translateOn active=$active total=$total)")
                 resetSession()
                 view.evaluateJavascript(PageScript.INJECT, null)
             }
 
             override fun onPageFinished(view: WebView, url: String) {
+                if (testing) android.util.Log.i("MT", "page : fin $url (translateOn=$translateOn active=$active total=$total)")
                 loading = false
                 lastTitle = view.title ?: ""
                 if (url.startsWith("http")) graph.library.visit(url, view.title ?: "")
@@ -656,6 +658,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
      */
     private fun rendererGone(dead: WebView, crashed: Boolean) {
         rendererLost++
+        android.util.Log.i("MT", "page : processus d'affichage perdu (plantage=$crashed, pertes=$rendererLost)")
         try { graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "renderer").put("crashed", crashed).put("url", currentUrl).put("sys", diag())) } catch (_: Throwable) {}
         try { (dead.parent as? ViewGroup)?.removeView(dead) } catch (_: Throwable) {}
         try { dead.destroy() } catch (_: Throwable) {}
@@ -1200,6 +1203,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     fun start(force: Boolean) {
         val wv = webView ?: return
         if (currentUrl.isEmpty()) return
+        if (testing) android.util.Log.i("MT", "départ : force=$force url=$currentUrl total=$total")
         if (force) { stopWork(); resetCounters() }
         active = true
         warmUp()
@@ -1258,6 +1262,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         // puis un retour sur « Traduit », elles n'étaient jamais redemandées (la barre de progression restait bloquée sous la moitié). On les fait oublier à la page :
         // elles seront redonnées au prochain départ, et retirées du total en attendant.
         if (lost.isNotEmpty()) {
+            if (testing) android.util.Log.i("MT", "arrêt du travail : ${lost.size} image(s) perdue(s), total ${total} -> ${(total - lost.size).coerceAtLeast(done + failed)}")
             total = (total - lost.size).coerceAtLeast(done + failed)
             webView?.evaluateJavascript("window.__mt&&window.__mt.forget(${JSONArray(lost)})", null)
         }
@@ -1317,6 +1322,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     }
 
     private fun onCandidates(raw: String?) {
+        if (testing) android.util.Log.i("MT", "collecte : réponse ${raw?.length ?: -1} car. ${raw?.take(60)}")
         if (raw.isNullOrBlank() || raw == "null") return
         val arr = try { JSONArray(raw) } catch (e: Exception) { lastError = "page : réponse du script illisible"; return }
         var added = 0
