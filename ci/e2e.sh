@@ -753,6 +753,8 @@ appcmd "coversonline on"
 
 fi # fin des scénarios web (absents de la suite lab)
 
+# diagnostic : journal complet de chaque scène Gemma (la scène japonaise n'a repéré aucune image dans la suite complète du build « vitesse »)
+DIAG=1
 # --- suite complète / lab : Gemma 4 E2B ---
 if [ "$SUITE" != quick ] && [ -f /tmp/gemma/gemma-4-E2B-it.litertlm ]; then
   push_model /tmp/gemma/gemma-4-E2B-it.litertlm gemma-4-E2B-it.litertlm 181938105e0eefd105961417e8da75903eacda102c4fce9ce90f50b97139a63c
