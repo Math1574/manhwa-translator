@@ -1,0 +1,50 @@
+[site] "GET /index.html HTTP/1.1" 200 -
+[site] "GET /pc_ja.html HTTP/1.1" 200 -
+[site] "GET /pc/ja/E01P04.jpg HTTP/1.1" 200 -
+[site] "GET /pc/ja/E01P03.jpg HTTP/1.1" 200 -
+[site] "GET /pc/ja/E01P01.jpg HTTP/1.1" 200 -
+[site] "GET /pc/ja/E01P02.jpg HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -
+[site] "GET /pc_en.html HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P03.jpg HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P02.jpg HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P04.jpg HTTP/1.1" 200 -
+[site] "GET /pc/en/E01P01.jpg HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -
+[site] "GET /pc_ja.html HTTP/1.1" 200 -
+[site] "GET /pc/ja/E01P01.jpg HTTP/1.1" 200 -
+[site] "GET /pc/ja/E01P04.jpg HTTP/1.1" 200 -
+[site] "GET /pc/ja/E01P02.jpg HTTP/1.1" 200 -
+[site] "GET /pc/ja/E01P03.jpg HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -
+[site] "GET /pc_ja.html HTTP/1.1" 200 -
+[site] "GET /pc/ja/E01P01.jpg HTTP/1.1" 200 -
+[site] "GET /pc/ja/E01P04.jpg HTTP/1.1" 200 -
+[site] "GET /pc/ja/E01P02.jpg HTTP/1.1" 200 -
+[site] "GET /pc/ja/E01P03.jpg HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -
+[site] "GET /pc_ja.html HTTP/1.1" 200 -
+[site] "GET /pc/ja/E01P01.jpg HTTP/1.1" 200 -
+[site] "GET /pc/ja/E01P03.jpg HTTP/1.1" 200 -
+[site] "GET /pc/ja/E01P02.jpg HTTP/1.1" 200 -
+[site] "GET /pc/ja/E01P04.jpg HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -
+[site] "GET /pc_ja.html HTTP/1.1" 200 -
+[site] "GET /pc/ja/E01P03.jpg HTTP/1.1" 200 -
+[site] "GET /pc/ja/E01P01.jpg HTTP/1.1" 200 -
+[site] "GET /pc/ja/E01P02.jpg HTTP/1.1" 200 -
+[site] "GET /pc/ja/E01P04.jpg HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -
+[site] "GET /pc_ja.html HTTP/1.1" 200 -
+[site] "GET /pc/ja/E01P04.jpg HTTP/1.1" 200 -
+[site] "GET /pc/ja/E01P01.jpg HTTP/1.1" 200 -
+[site] "GET /pc/ja/E01P02.jpg HTTP/1.1" 200 -
+[site] "GET /pc/ja/E01P03.jpg HTTP/1.1" 200 -
+[site] code 404, message File not found
+[site] "GET /favicon.ico HTTP/1.1" 404 -

@@ -1,0 +1,780 @@
+--------- beginning of system
+11-16 18:50:39.433   913   954 V WindowManagerShell: Track 0 became idle
+11-16 18:50:39.433   913   954 V WindowManagerShell: All active transition animations finished
+11-16 18:50:39.439   545   567 W ActivityManager: setHasOverlayUi called on unknown pid: 8346
+--------- beginning of main
+11-16 18:50:39.443  1673  1673 I GoogleInputMethodService: GoogleInputMethodService.onFinishInput():3227 
+11-16 18:50:39.450  1673  1673 I GoogleInputMethodService: GoogleInputMethodService.updateDeviceLockedStatus():2087 repeatCheckTimes = 0, unlocked = true
+11-16 18:50:39.450  1673  1673 I GoogleInputMethodService: GoogleInputMethodService.onStartInput():1877 onStartInput(EditorInfo{inputType=0x0(NULL) imeOptions=0x0 privateImeOptions=null actionName=UNSPECIFIED actionLabel=null actionId=0 initialSelStart=-1 initialSelEnd=-1 initialCapsMode=0x0 hintText=null label=null packageName=com.google.android.apps.nexuslauncher fieldId=0 fieldName=null extras=null}, false)
+11-16 18:50:39.450  1673  1673 I GoogleInputMethodService: GoogleInputMethodService.shouldHideHeaderOnInitialState():4008 ShouldHideHeaderOnInitialState = false
+11-16 18:50:39.451  1673  1673 I GoogleInputMethodService: GoogleInputMethodService.updateDeviceLockedStatus():2087 repeatCheckTimes = 2, unlocked = true
+11-16 18:50:39.462  3931  3931 D SearchTargetUtil:  query= size=15
+11-16 18:50:39.463  3931  3931 D SearchTargetUtil: layoutType=short_icon_row resultType=131072 packageName=com.google.android.googlequicksearchbox extras=Bundle{suggestion_type=33,suggest_truncate_start=false,is_answer=false,is_entity=false,is_personal=false,suggest_raw_text=american kennel club popular dog breeds,group_id=web345374,response_id=94502dac-7603-4630-80b0-c04778b71a19,support_query_builder=false,} searchAction=american kennel club popular dog breeds searchActionExtras=Bundle{learn_more_url=https://support.google.com/websearch/answer/106230?hl=106230,suggestion_action_text=Report this,should_start_for_result=true,allow_pinning=true,skip_logging_in_target_handler=false,suggestion_action_rpc=2,}ParentID: null targetID: 122da084-46a9-49d8-a882-bfa7f4a98170
+11-16 18:50:39.463  3931  3931 D SearchTargetUtil: layoutType=short_icon_row resultType=131072 packageName=com.google.android.googlequicksearchbox extras=Bundle{suggestion_type=33,suggest_truncate_start=false,is_answer=false,is_entity=false,is_personal=false,suggest_raw_text=merab dvalishvili usman nurmagomedov,group_id=web345374,response_id=94502dac-7603-4630-80b0-c04778b71a19,support_query_builder=false,} searchAction=merab dvalishvili usman nurmagomedov searchActionExtras=Bundle{learn_more_url=https://support.google.com/websearch/answer/106230?hl=106230,suggestion_action_text=Report this,should_start_for_result=true,allow_pinning=true,skip_logging_in_target_handler=false,suggestion_action_rpc=2,}ParentID: null targetID: 88a0a3bd-1cd9-48e8-8e97-1f447d8a2f95
+11-16 18:50:39.463  3931  3931 D SearchTargetUtil: layoutType=short_icon_row resultType=131072 packageName=com.google.android.googlequicksearchbox extras=Bundle{suggestion_type=33,suggest_truncate_start=false,is_answer=false,is_entity=false,is_personal=false,suggest_raw_text=landman filming tcu football game,group_id=web345374,response_id=94502dac-7603-4630-80b0-c04778b71a19,support_query_builder=false,} searchAction=landman filming tcu football game searchActionExtras=Bundle{learn_more_url=https://support.google.com/websearch/answer/106230?hl=106230,suggestion_action_text=Report this,should_start_for_result=true,allow_pinning=true,skip_logging_in_target_handler=false,suggestion_action_rpc=2,}ParentID: null targetID: 02618126-4dc8-4bfd-acd0-4d260f38213a
+11-16 18:50:39.463  3931  3931 D SearchTargetUtil: layoutType=short_icon_row resultType=131072 packageName=com.google.android.googlequicksearchbox extras=Bundle{suggestion_type=33,suggest_truncate_start=false,is_answer=false,is_entity=false,is_personal=false,suggest_raw_text=thresher shark encounter maldives video,group_id=web345374,response_id=94502dac-7603-4630-80b0-c04778b71a19,support_query_builder=false,} searchAction=thresher shark encounter maldives video searchActionExtras=Bundle{learn_more_url=https://support.google.com/websearch/answer/106230?hl=106230,suggestion_action_text=Report this,should_start_for_result=true,allow_pinning=true,skip_logging_in_target_handler=false,suggestion_action_rpc=2,}ParentID: null targetID: 58fcf149-fdf9-43dc-97e3-8771a46b8d39
+11-16 18:50:39.463  3931  3931 D SearchTargetUtil: layoutType=short_icon_row resultType=131072 packageName=com.google.android.googlequicksearchbox extras=Bundle{suggestion_type=33,suggest_truncate_start=false,is_answer=false,is_entity=false,is_personal=false,suggest_raw_text=needoh advent calendar,group_id=web345374,response_id=94502dac-7603-4630-80b0-c04778b71a19,support_query_builder=false,} searchAction=needoh advent calendar searchActionExtras=Bundle{learn_more_url=https://support.google.com/websearch/answer/106230?hl=106230,suggestion_action_text=Report this,should_start_for_result=true,allow_pinning=true,skip_logging_in_target_handler=false,suggestion_action_rpc=2,}ParentID: null targetID: d3320421-f93f-4a9a-a6b4-51360321dfc0
+11-16 18:50:39.463  3931  3931 D SearchTargetUtil: layoutType=short_icon_row resultType=131072 packageName=com.google.android.googlequicksearchbox extras=Bundle{suggestion_type=33,suggest_truncate_start=false,is_answer=false,is_entity=false,is_personal=false,suggest_raw_text=samsung galaxy s27 ultra,group_id=web345374,response_id=94502dac-7603-4630-80b0-c04778b71a19,support_query_builder=false,} searchAction=samsung galaxy s27 ultra searchActionExtras=Bundle{learn_more_url=https://support.google.com/websearch/answer/106230?hl=106230,suggestion_action_text=Report this,should_start_for_result=true,allow_pinning=true,skip_logging_in_target_handler=false,suggestion_action_rpc=2,}ParentID: null targetID: 5ba740d7-19c2-4c12-9422-5fe0e84b8009
+11-16 18:50:39.463  3931  3931 D SearchTargetUtil: layoutType=short_icon_row resultType=131072 packageName=com.google.android.googlequicksearchbox extras=Bundle{suggestion_type=33,suggest_truncate_start=false,is_answer=false,is_entity=false,is_personal=false,suggest_raw_text=measles elimination status,group_id=web345374,response_id=94502dac-7603-4630-80b0-c04778b71a19,support_query_builder=false,} searchAction=measles elimination status searchActionExtras=Bundle{learn_more_url=https://support.google.com/websearch/answer/106230?hl=106230,suggestion_action_text=Report this,should_start_for_result=true,allow_pinning=true,skip_logging_in_target_handler=false,suggestion_action_rpc=2,}ParentID: null targetID: 46cc5c9c-8723-4323-8005-4cbb498db383
+11-16 18:50:39.464  3931  3931 D SearchTargetUtil: layoutType=short_icon_row resultType=131072 packageName=com.google.android.googlequicksearchbox extras=Bundle{suggestion_type=33,suggest_truncate_start=false,is_answer=false,is_entity=false,is_personal=false,suggest_raw_text=brittney ruocco dog adoption story,group_id=web345374,response_id=94502dac-7603-4630-80b0-c04778b71a19,support_query_builder=false,} searchAction=brittney ruocco dog adoption story searchActionExtras=Bundle{learn_more_url=https://support.google.com/websearch/answer/106230?hl=106230,suggestion_action_text=Report this,should_start_for_result=true,allow_pinning=true,skip_logging_in_target_handler=false,suggestion_action_rpc=2,}ParentID: null targetID: 41f6dd78-f7a1-462d-9205-2ca85dec2e4d
+11-16 18:50:39.464  3931  3931 D SearchTargetUtil: layoutType=short_icon_row resultType=131072 packageName=com.google.android.googlequicksearchbox extras=Bundle{suggestion_type=33,suggest_truncate_start=false,is_answer=false,is_entity=false,is_personal=false,suggest_raw_text=gypsy rose blanchard ken urker,group_id=web345374,response_id=94502dac-7603-4630-80b0-c04778b71a19,support_query_builder=false,} searchAction=gypsy rose blanchard ken urker searchActionExtras=Bundle{learn_more_url=https://support.google.com/websearch/answer/106230?hl=106230,suggestion_action_text=Report this,should_start_for_result=true,allow_pinning=true,skip_logging_in_target_handler=false,suggestion_action_rpc=2,}ParentID: null targetID: f7efffe4-7ec1-40bf-94c2-c0b5deedde27
+11-16 18:50:39.464  3931  3931 D SearchTargetUtil: layoutType=extra_tall_icon_row resultType=131072 packageName=com.google.android.googlequicksearchbox extras=Bundle{bitmap_url=data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBwgHBgkIBwgKCgkLDRYPDQwMDRsUFRAWIB0iIiAdHx8kKDQsJCYxJx8fLT0tMTU3Ojo6Iys/RD84QzQ5OjcBCgoKDQwNGg8PGjclHyU3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3N//AABEIAFcAfAMBIgACEQEDEQH/xAAbAAADAAMBAQAAAAAAAAAAAAADBAUAAgYBB//EADgQAAEDAwMCBAQEBQQDAQAAAAECAwQFESEAEjETQQYiUWEUcYGRFTIzsSNSc6HwQlPB4WLR8XL/xAAYAQADAQEAAAAAAAAAAAAAAAABAgMABP/EACYRAAICAwEAAQQBBQAAAAAAAAECABEDEiExQRMiUWGRMoGhweH/2gAMAwEAAhEDEQA/APo8haGg86sKISo4Tyc6kQvEUCVUFQgl1LiVlsqKbpCgbbSexuP8vq2pIWp1KgCCogg99SqZBpgddVDaIUlVllRvuyTf73OsSb9mENOmiGshUV5YuLKBACsf4PrrJNSiRKV+JSStDG0HAuc8D660qSKdMkttSlkuIUNgsdu7Nr+vfvbGt5FNbciMRXG2X2W07VfEZHbzW7n6j56bcEGviKqkOLNj+3+JlIqMSrREvxlKST+ZpZAWg+hGh1Crw4LiULDq1FwNq2Jwkn/L40SBT2YZb+Cbjoj7t/8ACuB+Uji5BvccW476cQpCW1JShpW43UrePNc98fy4+ukLEDnZUhdjBTHmojXUWlavQJz2J/YaQotdg1hRTHDgNtySoHaoex1QfhMyYvwzibMm42IOLHt8rG2lKZHpqHFfA7hsWokZAUruRf8AN8xoFqqz7Fr8RKreJYdKmKYkRpSkJtufSnyA+lza/wBL8Edjp56qQ232WUr3rdR1AbmwTg3NgT3HAPI40n4iokqrNutsOsbFC6UrScL7ZF7cnNr5tjN3GaOhpmKW3XmH2Y4YLiCDvSAAQoEEKBt6enoLN2jJrYc35MiVOLL+JQ0bvR770BXoOx+o5A5+eiQJjM0uJSkoUg5G8G/P/rU6nS4yq1KjLjznnnSpLkuQi6XLcjiwGCB2xbTShFhVBtKnm0FbhUhAj3INuNwwB31sofGRfBGTJiZSQYv4i8SU+glLTyXpEpSdwYYTuITe11H/AEjm1+bHXtK8RU+p0+TKaS+25FbLj0d1G1xIAvweRggHjGvPEdDjzz8auQqM403YuNthRUL3z69+LcnOh0ukU+mUmQuRJJbmNBtx98JQuyvKBf3JwM5PfWs3+o9Lr+5vDq8lyZFZlw2m0SVlsKaeKtqghSu6RcWQrj7a6WmK3NO/+LpH7a4Xw8+zPrqEP1EqkRCpbbKohaU6NpRu3dRYUkAkWFjcdrEa7ml/pO5v/GVoKbW4XChvtiFS2mJLCnOmCSNwF7Z9NS6FGDj6ZbbzqQhGxbLjQBUf5r3PP21SrDrbFOnOut9RCEqJQL3V7C2b/LUrwxOYkMustsBkbN52qKlf2HuePtprYHnkArX9zJtMjfiCWnJSUfEOE7N56ir7jb1HJtkDtqvU465MbY2pCV7gobxjXFQ/ElKa8Rpb/B5rLjrgDKluuBxZNwCWVWABufvf5dhPWy0lZMVp3AWsKIST2vkZNh+2ojErKwI9lCHwsrH/AFN4EXoRltKWkldydnbGpMmltyHJO+pObG3UhSOlbpqO0gAixPI9eSDjGm2ZdPQ06/Jjxo7KEoKVlSSFAklPyN03t8tTlVSjqkOufibiC4vcoANkXFufKTYYsT9ONEKEXVZPJ9R3D6kgnsszWkOxF0xMhTbzzSglabgi98gjQqHSlUtt/qvJdceXvUpIUB9iTrZiXTaqouR3kOLYydpG4DnSv480EBZiVNQyNvQF+OCOfb/4dXRXfg8kshTGRtwwtUpjEyUmQ3MDDqRtWg2W25/+kE8i3Ise2jU2mohul1t/cCmxCE2B9L5N7XPvpDxRWU0ZuItpEdXXcu5vaKj0xyRYjOdGrPiGHSHmmXGXXeogLBa22AvYckempmgbMuA5UV8zWIwv8TRJ2UzqO5UttC96knuL4vYH7aSrTkA1ezlWhsKG3eh0+ZNjfHY8nB4vo9Cn0+pTVqjNSELZTu85SU5J9L91nWOeHqW5McfS9JR1V9RbabgEn6X1spTMBvOV8Go1jddqEOHAQh51SS8AWFoRv8ySCDyBzY5NtaSfw+uUJt+StciG2rqL2p2B4ouOD23C4seQM6NUo8WQ6wlxte+P5mVtu7VpvcYB5Fh+2i01uJFglhptDUVoH8ywoW5JJ+d76xBPk6BQAuJxINKg+ISGo6zUX463A+vO1oLHkHplQ7Z7nV+lfpPW/wB5Wud8PVE1FSJC4kdhbiFEbU+bYD5c85Gba6OlfpO/1laylapfjn8QEMD2KSmw61IQWUv3Js0q1lnsM+9tT6O3tceeMSPHThKChratXJP0Fh/3g6enrebjyVRkb3rkIT7k21z1FqFSdqhacW+62DZzehNki5AOACD8sazOAQDGVSVJEemz+nVh50hlsoQu6E3ByTyLkW9OLHVZ9xTZTZsr5vYX/wA/61KqEiphxfwa2tlyADFUvbYK7hQvew+V++jwJUwCaucttxtnKNjJbVYAk4JN+1vrosbFDkQEX5HGnHFkBbG1Pck/8anU1+QusTkPlwx03LIUMDNlfPPHt99TKafEbPiF741TbjLiygt/EIKUgHylKb3B+nf7WKzUnYVEXUIrKXFhKVhLhsAk2uSfYZ+mmxXRX242bH9wo/xIUmuVMVVgtto+FS4d4S+yAtHHdRPv21ardVXDhNvRlN2cFwtYuO1gMgXN/XSPhmtTqrJdalQoaUN4Upp3zN4uApBzm/t30u14ladqMsPSg002+YzEFTAPWsL9QrxtubgDOMnOA7DU0RAVYxyoVNIoqJzkNMl9xOxADZKM9zzj99bvvRFUuFOfpbMlTgQ3/EaSktpyf9XAGe/f30h46r0+gojORGW1tuIWNy2d4Q4LWubiwIKvtq8tbEumMSJ0byq6bnSdAO1Rta+bckd7DntpCp9hGRK1I6ICiux3VOKjUkwxaxdDbaUr9gUm6vna2huVh918txIjpQl/Z1QNwVtPmFrY4IzbsdBkVxTVWgstPsutSnOn0NtnLHAWnPAtm/uRqdVfEMei1OoJap7PUZShe9cooTdRyVCxCAckEXufnpA2ygiTc9NS7Wql+FlhxMbql1ewlJ81ucC2flcaxtxFToKn3Y8cCQ0VLbWOog/O48wx6aHX578WmNSYrLQfcUEpVIsA1cXN/fFvnrShT5EqjuuSUxkuIJG5kgoI9SL49xq30203EmMo+rpEfBU9VTTIfXDaZ6aumra0lKkrAFxjPFuR+2utpX6T39ZX/GotOln8RdiKW0vyle5O0G9//HkWODybas0r9J7+srUggQUJYknpi0la225C207lpJIAF7n5aVpYZKFuohoYdV5lFLQQVjsffA17W5pptKqU5JZ3Rm1ujrqIQbZsSM54x3tqV4drgqFQbipTAbC4YkbWpHUWr8nmTY22eYixyLfXU2DfUBB5CP6ZrB8RSJFXTFW2jpqcUkAA7hza/bFv7ad8QVRyEG2moweDn6pcVtQEZvn19MfbnU6F4jluz4bD0NgIfkrYLiCf9Kb3H/PzGhueIWpPiNMWXRHgiKtXSeWvcsebZ1A0Bfbe9lX4CjwDqrY3ThMCZUc2BGK9WHoECIIsJr+OSoB1Vgmy09sG53Xv250Wp1tiJ4fjPLZZ3Sm0hEd1V07SM7vUAf3IGnKk3CqTyYE6MXUBYIVkWUBfn07c540d9cQKHUiKcO0C4jFVh2HH9tAcaz5K
+11-16 18:50:39.464  3931  3931 D SearchTargetUtil: layoutType=short_icon_row resultType=131072 packageName=com.google.android.googlequicksearchbox extras=Bundle{suggestion_type=33,suggest_truncate_start=false,is_answer=false,is_entity=false,is_personal=false,suggest_raw_text=el niño weather,group_id=web345374,response_id=94502dac-7603-4630-80b0-c04778b71a19,support_query_builder=false,} searchAction=el niño weather searchActionExtras=Bundle{learn_more_url=https://support.google.com/websearch/answer/106230?hl=106230,suggestion_action_text=Report this,should_start_for_result=true,allow_pinning=true,skip_logging_in_target_handler=false,suggestion_action_rpc=2,}ParentID: null targetID: c9575ebe-96c9-4005-ad6b-0b6379d12134
+11-16 18:50:39.464  3931  3931 D SearchTargetUtil: layoutType=short_icon_row resultType=131072 packageName=com.google.android.googlequicksearchbox extras=Bundle{suggestion_type=33,suggest_truncate_start=false,is_answer=false,is_entity=false,is_personal=false,suggest_raw_text=micron stock price,group_id=web345374,response_id=94502dac-7603-4630-80b0-c04778b71a19,support_query_builder=false,} searchAction=micron stock price searchActionExtras=Bundle{learn_more_url=https://support.google.com/websearch/answer/106230?hl=106230,suggestion_action_text=Report this,should_start_for_result=true,allow_pinning=true,skip_logging_in_target_handler=false,suggestion_action_rpc=2,}ParentID: null targetID: f0e97042-fe5d-405d-8a8f-b0156cff51ed
+11-16 18:50:39.467   545  2683 D CompatibilityChangeReporter: Compat change id reported: 161252188; UID 10192; state: DISABLED
+11-16 18:50:39.467   545  2683 W ActivityTaskManager: callingPackage for (uid=2000, pid=8661) has no WPC
+11-16 18:50:39.468   545  2683 D CompatibilityChangeReporter: Compat change id reported: 265464455; UID 10192; state: DISABLED
+11-16 18:50:39.469   545  2683 D CompatibilityChangeReporter: Compat change id reported: 265452344; UID 10192; state: DISABLED
+11-16 18:50:39.469   545  2683 D CompatibilityChangeReporter: Compat change id reported: 266124927; UID 10192; state: DISABLED
+11-16 18:50:39.469   545  2683 D CompatibilityChangeReporter: Compat change id reported: 265451093; UID 10192; state: DISABLED
+11-16 18:50:39.469   545  2683 D CompatibilityChangeReporter: Compat change id reported: 265456536; UID 10192; state: DISABLED
+11-16 18:50:39.469   545  2683 D CompatibilityChangeReporter: Compat change id reported: 255940284; UID 10192; state: DISABLED
+11-16 18:50:39.470   545  2683 D CompatibilityChangeReporter: Compat change id reported: 236283604; UID 10192; state: DISABLED
+11-16 18:50:39.470   545  2683 D CompatibilityChangeReporter: Compat change id reported: 263959004; UID 10192; state: DISABLED
+11-16 18:50:39.471   545  2683 D CompatibilityChangeReporter: Compat change id reported: 264304459; UID 10192; state: DISABLED
+11-16 18:50:39.471   545  2683 D CompatibilityChangeReporter: Compat change id reported: 264301586; UID 10192; state: DISABLED
+11-16 18:50:39.471   545  2683 D CompatibilityChangeReporter: Compat change id reported: 254631730; UID 10192; state: DISABLED
+11-16 18:50:39.471   545  2683 D CompatibilityChangeReporter: Compat change id reported: 273509367; UID 10192; state: DISABLED
+11-16 18:50:39.474   545  2683 D CompatibilityChangeReporter: Compat change id reported: 263259275; UID 10192; state: DISABLED
+11-16 18:50:39.475   545  2683 D CompatibilityChangeReporter: Compat change id reported: 174042980; UID 10192; state: DISABLED
+11-16 18:50:39.476   545  2683 D CompatibilityChangeReporter: Compat change id reported: 174042936; UID 10192; state: DISABLED
+11-16 18:50:39.476   545  2683 D CompatibilityChangeReporter: Compat change id reported: 181136395; UID 10192; state: DISABLED
+11-16 18:50:39.479  3931  3931 D SearchTargetUtil: layoutType=extra_tall_icon_row resultType=131072 packageName=com.google.android.googlequicksearchbox extras=Bundle{bitmap_url=data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBwgHBgkIBwgKCgkLDRYPDQwMDRsUFRAWIB0iIiAdHx8kKDQsJCYxJx8fLT0tMTU3Ojo6Iys/RD84QzQ5OjcBCgoKDQwNGg8PGjclHyU3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3N//AABEIAHwAfAMBIgACEQEDEQH/xAAcAAACAgMBAQAAAAAAAAAAAAADBQIEAQYHAAj/xAA5EAACAQMCAwUFBgUFAQAAAAABAgMABBEFIRIxQQYTUWFxFCJCgZEHIzKhscFSYnLR8CQzU8LxFf/EABkBAAMBAQEAAAAAAAAAAAAAAAACAwEEBf/EACIRAQEAAgEEAgMBAAAAAAAAAAABAhEDEiExQRMyQlFhBP/aAAwDAQACEQMRAD8A1hRRVFYUUQCnIyoqaivKKmBQHgKmBXgKlkKNzgUB4CpYqKMznEYHqaY2lmGHFK36Ck+SelJx2qPATyBrBQ45U6FjC3+2+D4n/BQ5lW3H34AHLjxsfXwrPkNeGkxWokVfngUANGRg+BzVQiqS7Ss0CRUGFGYVAihgDCh4o7CoYoDCiiKKwooqigPAVNRXgtTAoDGABk0rnujJPwxqTvgDGc/KmN23DDg/EcVY7P6bHM5llG3QdTUuS+leKe0LOzkJU5Jz+tbBZWjyLg5H0qxBBGiqFUAYFNrCMKMDrUtO+YyRG1sUjjC8HPnmsyWKEMjKCp5g00jj5bVmSPPKnY0TVtJktOKa1GYubR+HpSoqSAehroN3FlSDWvahZxQwStwYQ+8MdPGtxuqhzYbm2uEVAijMKgRV3GAwoZFHYVAisCK0RagtEWgCKKmBURRFFawv1c8KwgAksxA9cVsegWxgsBMxy77D0pO8Aub6FTyjHESRtv8A+Vs1lGPYI1DEBT45zUM/NdPF6HtmDyAAHfG3hTWA8BOxx40stUxd4HM9aYPeWlqQJ5EjP8xAzUvbs6jiL8K4qbb4OKp2V5DMp7qRHH8pqwZVGxp9p3yr3SjBxSPVIuOCSPxBxTSTVLHvu6N1EZP4Awz9KrXnCzq0ZG9Z7GXhpDjBNDIq5fRd3Ow4Sqk5XPhVVq6o8+9gWFQIorChmgBrRVoS0RawCrR4UaWRY0GWYhQPEmgLVi1maCeKZPxRuGHyNAGuWOn3jQz28fcnCCZc8fGBnB8jTiwuIbq3AjwOE8QPjkUbU4Y9S0W+kiIRpGyjkbp7qnPqP1FazpjtawqVcPG3Ucs5rktst29Pox7WNut7VixkUnHgRkdf71WbStSbUI8yWr2Tf76vFlz7wOx9NvnTfSZkaBScZApngFcoooxvfbLGrPoUFnMlxY/cOCdoxgHw25c8ZFPLyFLq1jTJVTzx12qGpMkbgMxLHA4VGcUYhhagEHC7/Km9t1uba9H2fnS+Dw3BitPigVAMnBHMeZB3zyHnTD2WWCJg8neBRtIcZ/Km8Mscir7wbfhI6g+dDvmUQuAOmKy0tjU+0doLYwsCTxFuZ9D+5pGwrY+2Ega7gjXkiE49Tj9q10104fVw8v3oTChkb0VqgaZNVU0VarqaMprDUdaItBWiKaGNj7P3IdPZnYqykMPBlz+E/M/maWS2jLFfQKAHikYqo9c1URmUhkYqw5EHBFB0nUZFuZxdyF5HJLu3Nv8ANq5+XHV27eDk3Omto0O9E1pEwIz8Q8KdPfsw7uHJPVh8IrV9EjVw8kR2H4x5itquNOhubEBJZYGI/HERkHHmDU8YvaQ6nb6vBLJc6VHFdROAWhkcqwI6g71Z0vV9S1O17k6dJaupAcz7AenjUE0fWY5Aqa2TGOncqrHfx3qy2mamwIbWJlHQqF/ZRTwb2zfCWxb2yJmdkH36j418QPEUa4vVltxJnCnfJo2n2C28Sm4uJrqUZzLKRk+WBgUm150iQxx+6GOAorNbpcstY9y3WblbzUZZUJKZwh8hS81MmoGuuPNt3dhsKGaI1DPOhhehoymqyGjIaUyyhogoCGjKa1gymlC3Ec97PcRp/p7eUQyODzbG59BkCsa7q62EDRwniunGFA+DzNY+zVIrz23TpD7z/ejPXof+v1rfj65o3Hn05bPOz10NO1l7WSQ93KPdOdmBrfbaaKKNI2cAHAXJrnmsaBd2fBnISM/czdB/KT08qZWIuNT0RjJde9EfeHxxMOtctwyxuq7euWdm9e5seLNEdVxgnOPCuf2uo69YShD3Vyh5OGxmmp1HWXXeC3gB2yXLn6AVptn99dx28JBbBIOK028ma4mZyduQoWsXPs9vPf30krpBw94QM44mCjbwz+lU7XVLG8UG3uo2J+Enhb6Heq4YX7OXmz/GLBqBohqBxVHOE1DojUM0AnVqMjVVDhRliAPEmqF5rCxkx2uHbq55D08aSS09O5LmK3TjmkVF8zzpPf8AaF2BjsgUHLvDzPoOlJpZJJ5C8rFmPUmhsuBVscCWip78fExJLEkk8zvVvQ9Qk0bV7a+jye6cFlHxryYfMZqnAQY8Z5c/KpsMb1b+kfSVq9td20cicMsEyBlPMMpH9qT3/ZV7Sc6h2eVeIjE1mzYWUfynofDp6Um+x/VxqOjS6ZM2ZrE5jz1iY7fQ5HoRXRbbKsVPKjOTKKYZWd40B4kJbgRkI2kgkXheM+lUr/UFsLB5pN+7OMZ3J6ADqTTTtr260i3kewt4I764T3XkYYSL+k8yfMbevKueTNNbmDUIpC9xE6yKzsZFVwRjAbY/TwxzqM/zW3fp0fLbPDoOpaBMn2eaqt3EDfz2zXEka78DKOJUH9PCB5nJ61woNwHI3U13DTe1faC3sYpO0+kK1rNEG9qteYDDbiTfofEelcu7XaRDpmsN7IVfT7sd/auh93hPNR6H8sV0XCzHbmy35qha6ldW4Hs9zIo/h4sj6HanFp2mcYW7hDj+KPY/StcVODOOVe4t6ncZSN9tr62vFzbzKx6ryYfKiE1z3jwQRsR1q5FrV/EgRbhiB/EAx+ppLh+jbLXlkmbikdmPmakoqC1IVsAq15vOsId6yw2pmIcGSGB4T0IooYtnPOhwfEvRTtRAN6IGwfZ/rB0TtZZXBJ7mVu4lHir7fkeE/KvoJ7d7kETthf8AjQ7H18fSvlo7tg9dq+nOz93Ledn9LvJyDNPaRSOR1LICa3bY1/7RdAi1LRDcIoW4s/fQrtleRH7/ACrlcDRvbPbz54OAls7bDmNz4Z6dT4V33U4kmsp0kGVaNgR8q4fp9tBJdzpJDG6yI5biUb7cvzP1q/F3Vx8O28BC8HAhQDAGNsVzj7X9Ch/+Nb6pZW6RNay4mEa4BV8DJA65C71vnZeaW57PadLO5kla3XidubEDGT57VPXrSG+0a+tbheKKWB1YfKpb9EsfNaguNsZx9aE4ZDhgQfMViFi0QJ8K82/PwrE0SaHROlQPOlM//9k=,suggestion_type=33,suggest_truncate_start=false,is_answer=false,is_entity=true,is_personal=false,suggest_raw_text=lord morrow dup,group_id=web345374,response_id=94502dac-7603-4630-80b0-c04778b71a19,support_query_builder=false,} searchAction=lord morrow dup searchActionExtras=Bundle{learn_more_url=https://support.google.com/websearch/answer/106230?hl=106230,suggestion_action_text=Report this,should_start_for_result=true,allo
+11-16 18:50:39.479   545  2683 D CompatibilityChangeReporter: Compat change id reported: 194480991; UID 10192; state: ENABLED
+11-16 18:50:39.480  3931  3931 D SearchTargetUtil: layoutType=short_icon_row resultType=131072 packageName=com.google.android.googlequicksearchbox extras=Bundle{suggestion_type=33,suggest_truncate_start=false,is_answer=false,is_entity=false,is_personal=false,suggest_raw_text=rtx 5080 gaming pc sale,group_id=web345374,response_id=94502dac-7603-4630-80b0-c04778b71a19,support_query_builder=false,} searchAction=rtx 5080 gaming pc sale searchActionExtras=Bundle{learn_more_url=https://support.google.com/websearch/answer/106230?hl=106230,suggestion_action_text=Report this,should_start_for_result=true,allow_pinning=true,skip_logging_in_target_handler=false,suggestion_action_rpc=2,}ParentID: null targetID: 6abee804-1514-4e70-8f19-0a7fa299b03e
+11-16 18:50:39.484  3931  3931 D SearchTargetUtil: layoutType=extra_tall_icon_row resultType=131072 packageName=com.google.android.googlequicksearchbox extras=Bundle{bitmap_url=data:image/png;base64,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,suggestion_type=33,suggest_truncate_start=false,is_answer=false,is_entity=true,is_personal=false,suggest_raw_text=byu cougars football,group_id=web345374,response_id=94502dac-7603-4630-80b0-c04778b71a19,support_query_builder=false,} searchAction=BYU Cougars football searchActionExtras=Bundle{learn_more_url=https://support.google.com/websearch/answer/106230?hl=106230,suggestion_action_text=Report this,should_start_for_result=true,allow_pinning=true,skip_logging_in_target_handler=false,suggestion_action_rpc=2,}ParentID: null targetID: 6758e09f-1ae5-41af-9a9e-4a2ad74c27b9
+11-16 18:50:39.492   545  2683 D CompatibilityChangeReporter: Compat change id reported: 184838306; UID 10192; state: DISABLED
+11-16 18:50:39.493   545  2683 D CompatibilityChangeReporter: Compat change id reported: 185004937; UID 10192; state: DISABLED
+11-16 18:50:39.508   545  2683 V SplashScreenExceptionList: SplashScreen checking exception for package app.manhwa.translator (target sdk:35) -> false
+11-16 18:50:39.508   545  2683 D CompatibilityChangeReporter: Compat change id reported: 205907456; UID 10192; state: ENABLED
+11-16 18:50:39.513   913   954 V WindowManagerShell: Transition requested: android.os.BinderProxy@9500d9b TransitionRequestInfo { type = OPEN, triggerTask = TaskInfo{userId=0 taskId=14 displayId=0 isRunning=true baseIntent=Intent { flg=0x10000000 cmp=app.manhwa.translator/app.manhwa.MainActivity } baseActivity=ComponentInfo{app.manhwa.translator/app.manhwa.MainActivity} topActivity=ComponentInfo{app.manhwa.translator/app.manhwa.MainActivity} origActivity=null realActivity=ComponentInfo{app.manhwa.translator/app.manhwa.MainActivity} numActivities=1 lastActiveTime=573597 supportsMultiWindow=true resizeMode=1 isResizeable=true minWidth=-1 minHeight=-1 defaultMinSize=220 token=WCT{android.window.IWindowContainerToken$Stub$Proxy@c1d3538} topActivityType=1 pictureInPictureParams=null shouldDockBigOverlays=false launchIntoPipHostTaskId=-1 lastParentTaskIdBeforePip=-1 displayCutoutSafeInsets=Rect(0, 128 - 0, 0) topActivityInfo=ActivityInfo{ff6e911 app.manhwa.MainActivity} launchCookies=[] positionInParent=Point(0, 0) parentTaskId=-1 isFocused=false isVisible=false isVisibleRequested=false isSleeping=false topActivityInSizeCompat=false topActivityEligibleForLetterboxEducation= false topActivityLetterboxed= false isFromDoubleTap= false topActivityLetterboxVerticalPosition= -1 topActivityLetterboxHorizontalPosition= -1 topActivityLetterboxWidth=-1 topActivityLetterboxHeight=-1 locusId=null displayAreaFeatureId=1 cameraCompatControlState=hidden}, remoteTransition = null, displayChange = null }
+11-16 18:50:39.515   545  2683 I ActivityTaskManager: START u0 {flg=0x10000000 cmp=app.manhwa.translator/app.manhwa.MainActivity (has extras)} with LAUNCH_MULTIPLE from uid 2000 (BAL_ALLOW_PERMISSION) result code=0
+11-16 18:50:39.516   545   567 D CompatibilityChangeReporter: Compat change id reported: 135634846; UID 10192; state: DISABLED
+11-16 18:50:39.516   545   579 D CompatibilityChangeReporter: Compat change id reported: 143937733; UID 10192; state: ENABLED
+11-16 18:50:39.517   424   424 E BpTransactionCompletedListener: Failed to transact (-32)
+11-16 18:50:39.518   545   828 D CompatibilityChangeReporter: Compat change id reported: 168419799; UID 10192; state: DISABLED
+11-16 18:50:39.518   545   828 D CompatibilityChangeReporter: Compat change id reported: 273564678; UID 10192; state: DISABLED
+11-16 18:50:39.530   359   359 D Zygote  : Forked child process 8664
+11-16 18:50:39.530   545   579 I ActivityManager: Start proc 8664:app.manhwa.translator/u0a192 for next-top-activity {app.manhwa.translator/app.manhwa.MainActivity}
+11-16 18:50:39.539   913   981 D SplashScreenView: Build android.window.SplashScreenView{bbde802 V.E...... ......ID 0,0-0,0}
+11-16 18:50:39.539   913   981 D SplashScreenView: Icon: view: android.widget.ImageView{189513 V.ED..... ......I. 0,0-0,0 #10204f0 android:id/splashscreen_icon_view} drawable: com.android.wm.shell.startingsurface.SplashscreenIconDrawableFactory$ImmobileIconDrawable@7957350 size: 420
+11-16 18:50:39.539   913   981 D SplashScreenView: Branding: view: android.view.View{3a4a949 G.ED..... ......I. 0,0-0,0 #10204ef android:id/splashscreen_branding_view} drawable: null size w: 0 h: 0
+11-16 18:50:39.544   545  2683 D CoreBackPreview: Window{9f9292e u0 Splash Screen app.manhwa.translator}: Setting back callback OnBackInvokedCallbackInfo{mCallback=android.window.IOnBackInvokedCallback$Stub$Proxy@9e20d65, mPriority=0, mIsAnimationCallback=false}
+11-16 18:50:39.588  8664  8664 I nhwa.translator: Late-enabling -Xcheck:jni
+11-16 18:50:39.619  8664  8664 I nhwa.translator: Using CollectorTypeCC GC.
+11-16 18:50:39.624  8664  8664 W nhwa.translator: Unexpected CPU variant for x86: x86_64.
+11-16 18:50:39.624  8664  8664 W nhwa.translator: Known variants: atom, sandybridge, silvermont, goldmont, goldmont-plus, tremont, kabylake, default
+11-16 18:50:39.641   424   424 I BpBinder: onLastStrongRef automatically unlinking death recipients: 
+11-16 18:50:39.694  1874  2323 W LocationOracle: No location returned by GMS core getLastLocation()
+11-16 18:50:39.699  1874  2648 I NetworkRecognitionRnr: Using pair HTTP connection
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: Exception in upload method
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: com.google.android.apps.gsa.shared.r.d: Error code: 262182
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.android.apps.gsa.shared.ab.bk.d(PG:5)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.android.libraries.gsa.c.a.ar.d(PG:1)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.android.libraries.gsa.c.a.bo.b(PG:5)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.android.libraries.gsa.c.a.e.a(PG:2)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.android.libraries.gsa.c.a.a.run(PG:2)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.bf.execute(PG:1)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.i(PG:1)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.l(PG:12)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.cancel(PG:8)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.m(PG:2)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.j.a(PG:1)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.l(PG:3)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.cancel(PG:8)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.m(PG:2)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.j.a(PG:1)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.l(PG:3)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.cancel(PG:8)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.m(PG:2)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.j.a(PG:1)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.l(PG:3)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.cancel(PG:8)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.m(PG:2)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.j.a(PG:1)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.l(PG:3)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.cancel(PG:8)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.m(PG:2)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.c.a(PG:1)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.l(PG:3)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.cancel(PG:8)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.bu.cancel(PG:1)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.cancel(PG:17)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.android.apps.gsa.staticplugins.bk.b.h.run(PG:2)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.bf.execute(PG:1)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.i(PG:1)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.l(PG:12)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.cancel(PG:8)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.m(PG:2)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.j.a(PG:1)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.l(PG:3)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.cancel(PG:8)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.android.apps.gsa.shared.util.c.aj.a(PG:2)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.l(PG:3)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.cancel(PG:8)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.m(PG:2)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.c.a(PG:1)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.l(PG:3)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.cancel(PG:8)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.android.apps.gsa.s3.o.c(PG:2)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.android.apps.gsa.s3.r.a(PG:1)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.android.apps.gsa.staticplugins.dc.a.c.e(PG:2)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.android.apps.gsa.staticplugins.dc.a.c.c(PG:3)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.android.apps.gsa.staticplugins.dc.a.e.a(PG:5)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.android.apps.gsa.s3.n.hh(PG:1)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.cd.g.a.f.e(PG:2)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.android.apps.gsa.speech.k.a.g.d(PG:22)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.android.apps.gsa.speech.k.a.g.ks(PG:6)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.android.apps.gsa.s3.o.e(PG:14)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.android.apps.gsa.s3.p.run(PG:1)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:487)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at java.util.concurrent.FutureTask.run(FutureTask.java:264)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.android.apps.gsa.shared.util.c.a.e.run(PG:2)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.android.apps.gsa.shared.util.c.a.bi.run(PG:1)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.android.apps.gsa.shared.util.c.a.bi.run(PG:1)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:644)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at java.lang.Thread.run(Thread.java:1012)
+11-16 18:50:39.701  1874  2455 E cr_CronetUrlRequestContext: 	at com.google.android.apps.gsa.shared.util.c.a.l.run(PG:5)
+11-16 18:50:39.710  1874  1874 E A       : onError
+11-16 18:50:39.710  1874  1874 E A       : com.google.android.apps.gsa.shared.speech.a.m: errorCode: 65561, engine: 2
+11-16 18:50:39.710  1874  1874 E A       : 	at com.google.android.apps.gsa.staticplugins.dc.a.e.a(PG:3)
+11-16 18:50:39.710  1874  1874 E A       : 	at com.google.android.apps.gsa.s3.n.hh(PG:1)
+11-16 18:50:39.710  1874  1874 E A       : 	at com.google.cd.g.a.f.e(PG:2)
+11-16 18:50:39.710  1874  1874 E A       : 	at com.google.android.apps.gsa.speech.k.a.g.d(PG:22)
+11-16 18:50:39.710  1874  1874 E A       : 	at com.google.android.apps.gsa.speech.k.a.g.ks(PG:6)
+11-16 18:50:39.710  1874  1874 E A       : 	at com.google.android.apps.gsa.s3.o.e(PG:14)
+11-16 18:50:39.710  1874  1874 E A       : 	at com.google.android.apps.gsa.s3.p.run(PG:1)
+11-16 18:50:39.710  1874  1874 E A       : 	at java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:487)
+11-16 18:50:39.710  1874  1874 E A       : 	at java.util.concurrent.FutureTask.run(FutureTask.java:264)
+11-16 18:50:39.710  1874  1874 E A       : 	at com.google.android.apps.gsa.shared.util.c.a.e.run(PG:2)
+11-16 18:50:39.710  1874  1874 E A       : 	at com.google.android.apps.gsa.shared.util.c.a.bi.run(PG:1)
+11-16 18:50:39.710  1874  1874 E A       : 	at com.google.android.apps.gsa.shared.util.c.a.bi.run(PG:1)
+11-16 18:50:39.710  1874  1874 E A       : 	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+11-16 18:50:39.710  1874  1874 E A       : 	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:644)
+11-16 18:50:39.710  1874  1874 E A       : 	at java.lang.Thread.run(Thread.java:1012)
+11-16 18:50:39.710  1874  1874 E A       : 	at com.google.android.apps.gsa.shared.util.c.a.l.run(PG:5)
+11-16 18:50:39.710  1874  1874 E A       : Caused by: com.google.android.apps.gsa.shared.speech.a.o: errorCode: 65586, engine: 2
+11-16 18:50:39.710  1874  1874 E A       : 	... 15 more
+11-16 18:50:39.710  1874  1874 E A       : Caused by: com.google.android.apps.gsa.shared.speech.a.k: errorCode: 401, engine: 2
+11-16 18:50:39.710  1874  1874 E A       : 	at com.google.android.apps.gsa.assistant.shared.n.h.a(PG:5)
+11-16 18:50:39.710  1874  1874 E A       : 	at com.google.android.apps.gsa.s3.producers.j.hE(PG:2)
+11-16 18:50:39.710  1874  1874 E A       : 	at com.google.android.apps.gsa.speech.k.a.g.d(PG:16)
+11-16 18:50:39.710  1874  1874 E A       : 	... 12 more
+11-16 18:50:39.726  1874  2301 W CronetNetworkRqstWrppr: Upload request without a content type.
+11-16 18:50:39.731  1874  8672 I A       : [Upload] Connected
+11-16 18:50:39.793   435   454 I adbd    : jdwp connection from 8664
+11-16 18:50:39.797   545   556 I system_server: NativeAlloc concurrent copying GC freed 570114(19MB) AllocSpace objects, 73(1456KB) LOS objects, 48% free, 25MB/49MB, paused 63us,61us total 439.681ms
+11-16 18:50:39.825  1782  1782 I GsaVoiceInteractionSrv: Handling ACTION_STOP_HOTWORD
+11-16 18:50:39.829  1782  2410 E HwDetectorWithState: a: 3
+11-16 18:50:39.829   545   633 D CompatibilityChangeReporter: Compat change id reported: 265195908; UID 10192; state: ENABLED
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: Exception in upload method
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: com.google.android.apps.gsa.shared.r.d: Error code: 262182
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.android.apps.gsa.shared.ab.bk.d(PG:5)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.android.libraries.gsa.c.a.ar.d(PG:1)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.android.libraries.gsa.c.a.bo.b(PG:5)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.android.libraries.gsa.c.a.e.a(PG:2)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.android.libraries.gsa.c.a.a.run(PG:2)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.bf.execute(PG:1)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.i(PG:1)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.l(PG:12)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.cancel(PG:8)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.m(PG:2)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.j.a(PG:1)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.l(PG:3)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.cancel(PG:8)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.m(PG:2)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.j.a(PG:1)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.l(PG:3)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.cancel(PG:8)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.m(PG:2)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.j.a(PG:1)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.l(PG:3)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.cancel(PG:8)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.m(PG:2)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.j.a(PG:1)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.l(PG:3)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.cancel(PG:8)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.m(PG:2)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.c.a(PG:1)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.l(PG:3)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.cancel(PG:8)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.bu.cancel(PG:1)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.cancel(PG:17)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.android.apps.gsa.staticplugins.bk.b.h.run(PG:2)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.bf.execute(PG:1)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.i(PG:1)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.l(PG:12)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.cancel(PG:8)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.m(PG:2)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.j.a(PG:1)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.l(PG:3)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.cancel(PG:8)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.android.apps.gsa.shared.util.c.aj.a(PG:2)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.l(PG:3)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.cancel(PG:8)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.m(PG:2)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.c.a(PG:1)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.l(PG:3)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.common.util.concurrent.d.cancel(PG:8)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.android.apps.gsa.s3.r.c(PG:1)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.android.apps.gsa.s3.n.e(PG:1)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.android.apps.gsa.s3.n.hh(PG:2)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.cd.g.a.f.e(PG:2)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.android.apps.gsa.speech.k.a.g.d(PG:22)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.android.apps.gsa.speech.k.a.g.ks(PG:6)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.android.apps.gsa.s3.o.e(PG:14)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.android.apps.gsa.s3.p.run(PG:1)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:487)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at java.util.concurrent.FutureTask.run(FutureTask.java:264)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.android.apps.gsa.shared.util.c.a.e.run(PG:2)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.android.apps.gsa.shared.util.c.a.bi.run(PG:1)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.android.apps.gsa.shared.util.c.a.bi.run(PG:1)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:644)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at java.lang.Thread.run(Thread.java:1012)
+11-16 18:50:39.830  1874  2528 E cr_CronetUrlRequestContext: 	at com.google.android.apps.gsa.shared.util.c.a.l.run(PG:5)
+11-16 18:50:39.833   545   557 W JavaBinder: BinderProxy is being destroyed but the application did not call unlinkToDeath to unlink all of its death recipients beforehand.  Releasing leaked death recipient: com.android.server.wm.ActivityRecord$$ExternalSyntheticLambda0
+11-16 18:50:39.833   545   557 I BpBinder: onLastStrongRef automatically unlinking death recipients: 
+11-16 18:50:39.836  1874  1874 W A       : Failed to sync device settings.
+11-16 18:50:39.836  1874  1874 I A       : Retrying to sync device settings.
+11-16 18:50:39.839   913   954 V WindowManagerShell: onTransitionReady android.os.BinderProxy@9500d9b: {id=21 t=OPEN f=0x0 trk=0 r=[0@Point(0, 0)] c=[{WCT{android.window.IWindowContainerToken$Stub$Proxy@cec8d26} m=OPEN f=NONE leash=Surface(name=Task=14)/@0x88b938b sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0},{WCT{android.window.IWindowContainerToken$Stub$Proxy@51ddd67} m=TO_BACK f=SHOW_WALLPAPER leash=Surface(name=Task=1)/@0x2e45c68 sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0}]}
+11-16 18:50:39.839   913   954 V WindowManagerShell: Playing animation for (#21)android.os.BinderProxy@9500d9b@0
+11-16 18:50:39.839   913   954 V WindowManagerShell:  try handler com.android.wm.shell.transition.DefaultMixedHandler@2ab5a17
+11-16 18:50:39.839   913   954 V WindowManagerShell:  try handler com.android.wm.shell.keyguard.KeyguardTransitionHandler@d328e04
+11-16 18:50:39.839   913   954 V WindowManagerShell:  try handler com.android.wm.shell.activityembedding.ActivityEmbeddingController@e3dfed
+11-16 18:50:39.839   913   954 V WindowManagerShell:  try handler com.android.wm.shell.recents.RecentsTransitionHandler@d8ebe22
+11-16 18:50:39.839   913   954 V ShellRecents: RecentsTransitionHandler.startAnimation: no controller found
+11-16 18:50:39.839   913   954 V WindowManagerShell:  try handler com.android.wm.shell.pip.PipTransition@40180b3
+11-16 18:50:39.839   913   954 V WindowManagerShell:  try handler com.android.wm.shell.splitscreen.StageCoordinator@74c8670
+11-16 18:50:39.839   913   954 V WindowManagerShell:  try handler com.android.wm.shell.transition.RemoteTransitionHandler@72b8de9
+11-16 18:50:39.839   913   954 V WindowManagerShell: Transition doesn't have explicit remote, search filters for match for {id=21 t=OPEN f=0x0 trk=0 r=[0@Point(0, 0)] c=[{WCT{android.window.IWindowContainerToken$Stub$Proxy@cec8d26} m=OPEN f=NONE leash=Surface(name=Task=14)/@0x88b938b sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0},{WCT{android.window.IWindowContainerToken$Stub$Proxy@51ddd67} m=TO_BACK f=SHOW_WALLPAPER leash=Surface(name=Task=1)/@0x2e45c68 sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0}]}
+11-16 18:50:39.840   913   954 V WindowManagerShell:  Checking filter Pair{{types=[] flags=0x0] notFlags=0x0 checks=[{atype=dream independent=true modes=[OPEN,TO_FRONT] flags=NONE mustBeTask=false order=ANY topActivity=null},{atype=home independent=true modes=[CLOSE,TO_BACK] flags=NONE mustBeTask=false order=ANY topActivity=null}]} RemoteTransition { remoteTransition = android.window.IRemoteTransition$Stub$Proxy@b09fd32, appThread = android.app.IApplicationThread$Stub$Proxy@5123a83, debugName = LauncherToDream }}
+11-16 18:50:39.840   913   954 V WindowManagerShell:  Checking filter Pair{{types=[] flags=0x0] notFlags=0x100 checks=[{atype=home independent=true modes=[OPEN,TO_FRONT] flags=NONE mustBeTask=false order=TOP topActivity=ComponentInfo{com.google.android.apps.nexuslauncher/com.google.android.apps.nexuslauncher.NexusLauncherActivity}},{atype=standard independent=true modes=[CLOSE,TO_BACK] flags=NONE mustBeTask=false order=ANY topActivity=null}]} RemoteTransition { remoteTransition = android.window.IRemoteTransition$Stub$Proxy@ae90400, appThread = android.app.IApplicationThread$Stub$Proxy@c6ee439, debugName = QuickstepLaunchHome }}
+11-16 18:50:39.840   913   954 V WindowManagerShell:  Delegate animation for #21 to null
+11-16 18:50:39.840   913   954 V WindowManagerShell:  try handler com.android.wm.shell.transition.DefaultTransitionHandler@57def7a
+11-16 18:50:39.840   913   954 V WindowManagerShell: start default transition animation, info = {id=21 t=OPEN f=0x0 trk=0 r=[0@Point(0, 0)] c=[{WCT{android.window.IWindowContainerToken$Stub$Proxy@cec8d26} m=OPEN f=NONE leash=Surface(name=Task=14)/@0x88b938b sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0},{WCT{android.window.IWindowContainerToken$Stub$Proxy@51ddd67} m=TO_BACK f=SHOW_WALLPAPER leash=Surface(name=Task=1)/@0x2e45c68 sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0}]}
+11-16 18:50:39.840   913   954 V WindowManagerShell: loadAnimation: anim=android.view.animation.AnimationSet@d79dbbd animAttr=0x13 type=OPEN isEntrance=false
+11-16 18:50:39.840   913   954 V WindowManagerShell: loadAnimation: anim=android.view.animation.AnimationSet@bed76b9 animAttr=0x12 type=OPEN isEntrance=true
+11-16 18:50:39.841   913   954 V WindowManagerShell:  animated by com.android.wm.shell.transition.DefaultTransitionHandler@57def7a
+11-16 18:50:39.843   545   564 V WindowManager: Sent Transition #21 createdAt=11-16 18:50:39.480 via request=TransitionRequestInfo { type = OPEN, triggerTask = TaskInfo{userId=0 taskId=14 displayId=0 isRunning=true baseIntent=Intent { flg=0x10000000 cmp=app.manhwa.translator/app.manhwa.MainActivity } baseActivity=ComponentInfo{app.manhwa.translator/app.manhwa.MainActivity} topActivity=ComponentInfo{app.manhwa.translator/app.manhwa.MainActivity} origActivity=null realActivity=ComponentInfo{app.manhwa.translator/app.manhwa.MainActivity} numActivities=1 lastActiveTime=573597 supportsMultiWindow=true resizeMode=1 isResizeable=true minWidth=-1 minHeight=-1 defaultMinSize=220 token=WCT{RemoteToken{fd13006 Task{a19e0e2 #14 type=standard A=10192:app.manhwa.translator}}} topActivityType=1 pictureInPictureParams=null shouldDockBigOverlays=false launchIntoPipHostTaskId=-1 lastParentTaskIdBeforePip=-1 displayCutoutSafeInsets=Rect(0, 128 - 0, 0) topActivityInfo=ActivityInfo{35776c7 app.manhwa.MainActivity} launchCookies=[] positionInParent=Point(0, 0) parentTaskId=-1 isFocused=false isVisible=false isVisibleRequested=false isSleeping=false topActivityInSizeCompat=false topActivityEligibleForLetterboxEducation= false topActivityLetterboxed= false isFromDoubleTap= false topActivityLetterboxVerticalPosition= -1 topActivityLetterboxHorizontalPosition= -1 topActivityLetterboxWidth=-1 topActivityLetterboxHeight=-1 locusId=null displayAreaFeatureId=1 cameraCompatControlState=hidden}, remoteTransition = null, displayChange = null }
+11-16 18:50:39.843   545   564 V WindowManager:     startWCT=WindowContainerTransaction { changes = {} hops = [] errorCallbackToken=null taskFragmentOrganizer=null }
+11-16 18:50:39.843   545   564 V WindowManager:     info={id=21 t=OPEN f=0x0 trk=0 r=[0@Point(0, 0)] c=[{WCT{RemoteToken{fd13006 Task{a19e0e2 #14 type=standard A=10192:app.manhwa.translator}}} m=OPEN f=NONE leash=Surface(name=Task=14)/@0xffecc48 sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0},{WCT{RemoteToken{129fd16 Task{16c2099 #1 type=home}}} m=TO_BACK f=SHOW_WALLPAPER leash=Surface(name=Task=1)/@0x593891d sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0}]}
+11-16 18:50:39.855   913   954 V WindowManagerShell: Transition animation finished (aborted=false), notifying core (#21)android.os.BinderProxy@9500d9b@0
+11-16 18:50:39.891   545   828 W JobScheduler: Job didn't exist in JobStore: d97564b #u0a132/-353 com.google.android.googlequicksearchbox/com.google.android.apps.gsa.tasks.BackgroundTasksJobService
+11-16 18:50:39.909  8664  8664 D CompatibilityChangeReporter: Compat change id reported: 171979766; UID 10192; state: ENABLED
+11-16 18:50:39.911  8664  8664 D CompatibilityChangeReporter: Compat change id reported: 242716250; UID 10192; state: ENABLED
+11-16 18:50:39.931  1874  2652 W A       : [Download] response code: 400
+11-16 18:50:39.935   545   564 V WindowManager: Finish Transition #21: created at 11-16 18:50:39.480 collect-started=0.285ms request-sent=32.286ms started=37.073ms ready=349.84ms sent=357.442ms finished=454.392ms
+11-16 18:50:39.936   913   954 V WindowManagerShell: Track 0 became idle
+11-16 18:50:39.936   913   954 V WindowManagerShell: All active transition animations finished
+11-16 18:50:39.936   913   954 W Looper  : Slow dispatch took 81ms wmshell.main h=android.os.Handler c=com.android.wm.shell.transition.DefaultTransitionHandler$$ExternalSyntheticLambda0@5da43f1 m=0
+11-16 18:50:39.937   913   954 W Looper  : Slow delivery took 79ms wmshell.main h=android.os.Handler c=android.window.TaskOrganizer$1$$ExternalSyntheticLambda3@c088bd6 m=0
+11-16 18:50:39.937   913   954 W Looper  : Drained
+11-16 18:50:39.972   545  1258 D CompatibilityChangeReporter: Compat change id reported: 170503758; UID 10192; state: ENABLED
+11-16 18:50:39.978   913  1001 D EGL_emulation: app_time_stats: avg=13353.45ms min=18.59ms max=39864.13ms count=3
+11-16 18:50:39.999  8664  8664 W ziparchive: Unable to open '/data/app/~~g68mRVe9g4LdxMOxW89yOA==/app.manhwa.translator--L8QltjLasJbhSCc3FlODg==/base.dm': No such file or directory
+11-16 18:50:40.000  8664  8664 W ziparchive: Unable to open '/data/app/~~g68mRVe9g4LdxMOxW89yOA==/app.manhwa.translator--L8QltjLasJbhSCc3FlODg==/base.dm': No such file or directory
+11-16 18:50:40.036   913   913 D StatusBarIconController: ignoring old pipeline callbacks, because the new mobile icons are enabled
+11-16 18:50:40.123   913  1001 D EGL_emulation: app_time_stats: avg=39936.15ms min=39936.15ms max=39936.15ms count=1
+11-16 18:50:40.312  8664  8664 D nativeloader: Configuring clns-6 for other apk /data/app/~~g68mRVe9g4LdxMOxW89yOA==/app.manhwa.translator--L8QltjLasJbhSCc3FlODg==/base.apk. target_sdk_version=35, uses_libraries=, library_path=/data/app/~~g68mRVe9g4LdxMOxW89yOA==/app.manhwa.translator--L8QltjLasJbhSCc3FlODg==/lib/x86_64:/data/app/~~g68mRVe9g4LdxMOxW89yOA==/app.manhwa.translator--L8QltjLasJbhSCc3FlODg==/base.apk!/lib/x86_64, permitted_path=/data:/mnt/expand:/data/user/0/app.manhwa.translator
+11-16 18:50:40.319  8664  8664 V GraphicsEnvironment: Currently set values for:
+11-16 18:50:40.319  8664  8664 V GraphicsEnvironment:   angle_gl_driver_selection_pkgs=[]
+11-16 18:50:40.319  8664  8664 V GraphicsEnvironment:   angle_gl_driver_selection_values=[]
+11-16 18:50:40.319  8664  8664 V GraphicsEnvironment: ANGLE GameManagerService for app.manhwa.translator: false
+11-16 18:50:40.320  8664  8664 V GraphicsEnvironment: app.manhwa.translator is not listed in per-application setting
+11-16 18:50:40.320  8664  8664 V GraphicsEnvironment: Neither updatable production driver nor prerelease driver is supported.
+11-16 18:50:40.360  8664  8664 W nhwa.translator: Method boolean androidx.compose.runtime.snapshots.SnapshotStateList.conditionalUpdate(boolean, kotlin.jvm.functions.Function1) failed lock verification and will run slower.
+11-16 18:50:40.360  8664  8664 W nhwa.translator: Common causes for lock verification issues are non-optimized dex code
+11-16 18:50:40.360  8664  8664 W nhwa.translator: and incorrect proguard optimizations.
+11-16 18:50:40.360  8664  8664 W nhwa.translator: Method boolean androidx.compose.runtime.snapshots.SnapshotStateList.conditionalUpdate$default(androidx.compose.runtime.snapshots.SnapshotStateList, boolean, kotlin.jvm.functions.Function1, int, java.lang.Object) failed lock verification and will run slower.
+11-16 18:50:40.360  8664  8664 W nhwa.translator: Method java.lang.Object androidx.compose.runtime.snapshots.SnapshotStateList.mutate(kotlin.jvm.functions.Function1) failed lock verification and will run slower.
+11-16 18:50:40.360  8664  8664 W nhwa.translator: Method void androidx.compose.runtime.snapshots.SnapshotStateList.update(boolean, kotlin.jvm.functions.Function1) failed lock verification and will run slower.
+11-16 18:50:40.361  8664  8664 W nhwa.translator: Method void androidx.compose.runtime.snapshots.SnapshotStateList.update$default(androidx.compose.runtime.snapshots.SnapshotStateList, boolean, kotlin.jvm.functions.Function1, int, java.lang.Object) failed lock verification and will run slower.
+11-16 18:50:40.363  8664  8664 W nhwa.translator: Method java.lang.Object androidx.compose.runtime.snapshots.SnapshotStateMap.mutate(kotlin.jvm.functions.Function1) failed lock verification and will run slower.
+11-16 18:50:40.363  8664  8664 W nhwa.translator: Method void androidx.compose.runtime.snapshots.SnapshotStateMap.update(kotlin.jvm.functions.Function1) failed lock verification and will run slower.
+11-16 18:50:40.363  8664  8664 W nhwa.translator: Method boolean androidx.compose.runtime.snapshots.SnapshotStateMap.removeIf$runtime_release(kotlin.jvm.functions.Function1) failed lock verification and will run slower.
+11-16 18:50:40.421   545  1258 I ActivityManager: Flag disabled. Ignoring finishAttachApplication from uid: 10192. pid: 8664
+11-16 18:50:40.427  8664  8700 D libEGL  : loaded /vendor/lib64/egl/libEGL_emulation.so
+11-16 18:50:40.428  8664  8700 D libEGL  : loaded /vendor/lib64/egl/libGLESv1_CM_emulation.so
+11-16 18:50:40.429  8664  8700 D libEGL  : loaded /vendor/lib64/egl/libGLESv2_emulation.so
+11-16 18:50:40.480  8664  8664 D CompatibilityChangeReporter: Compat change id reported: 237531167; UID 10192; state: DISABLED
+11-16 18:50:40.482  8664  8664 W OpenGLRenderer: Unknown dataspace 0
+11-16 18:50:40.662   545  2256 D CoreBackPreview: Window{f637842 u0 app.manhwa.translator/app.manhwa.MainActivity}: Setting back callback OnBackInvokedCallbackInfo{mCallback=android.window.IOnBackInvokedCallback$Stub$Proxy@67582bc, mPriority=0, mIsAnimationCallback=false}
+11-16 18:50:40.771  8664  8664 I WebViewFactory: Loading com.google.android.webview version 113.0.5672.136 (code 567263637)
+11-16 18:50:40.773  8664  8664 W ziparchive: Unable to open '/data/app/~~0g2h62ySovokOgKSqvDb2Q==/com.google.android.trichromelibrary_567263637-Bqb6zl1marDs-A6igm22ug==/TrichromeLibrary.dm': No such file or directory
+11-16 18:50:40.773  8664  8664 W ziparchive: Unable to open '/data/app/~~0g2h62ySovokOgKSqvDb2Q==/com.google.android.trichromelibrary_567263637-Bqb6zl1marDs-A6igm22ug==/TrichromeLibrary.dm': No such file or directory
+11-16 18:50:40.773  8664  8664 W nhwa.translator: Entry not found
+11-16 18:50:40.774  8664  8664 D nativeloader: Configuring clns-7 for other apk /data/app/~~0g2h62ySovokOgKSqvDb2Q==/com.google.android.trichromelibrary_567263637-Bqb6zl1marDs-A6igm22ug==/TrichromeLibrary.apk. target_sdk_version=34, uses_libraries=ALL, library_path=/data/app/~~n3MmmBG2kEeKOQDMbFLThQ==/com.google.android.webview-pIa3M963X-p1A0sRsH35Ow==/lib/x86_64:/data/app/~~n3MmmBG2kEeKOQDMbFLThQ==/com.google.android.webview-pIa3M963X-p1A0sRsH35Ow==/WebViewGoogle.apk!/lib/x86_64:/data/app/~~0g2h62ySovokOgKSqvDb2Q==/com.google.android.trichromelibrary_567263637-Bqb6zl1marDs-A6igm22ug==/TrichromeLibrary.apk!/lib/x86_64, permitted_path=/data:/mnt/expand
+11-16 18:50:40.777  8664  8664 D nativeloader: Configuring clns-8 for other apk /data/app/~~n3MmmBG2kEeKOQDMbFLThQ==/com.google.android.webview-pIa3M963X-p1A0sRsH35Ow==/WebViewGoogle.apk. target_sdk_version=34, uses_libraries=, library_path=/data/app/~~n3MmmBG2kEeKOQDMbFLThQ==/com.google.android.webview-pIa3M963X-p1A0sRsH35Ow==/lib/x86_64:/data/app/~~n3MmmBG2kEeKOQDMbFLThQ==/com.google.android.webview-pIa3M963X-p1A0sRsH35Ow==/WebViewGoogle.apk!/lib/x86_64:/data/app/~~0g2h62ySovokOgKSqvDb2Q==/com.google.android.trichromelibrary_567263637-Bqb6zl1marDs-A6igm22ug==/TrichromeLibrary.apk!/lib/x86_64, permitted_path=/data:/mnt/expand
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{9c4f410 com.android.cts.priv.ctsshim/10183} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{cfffe91 com.google.android.youtube/10139} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{f98fb09 com.android.internal.display.cutout.emulation.corner/10024} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{295d10e com.android.internal.display.cutout.emulation.double/10048} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{fcf8ac1 com.google.android.googlequicksearchbox/10132} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{e50772f com.google.android.onetimeinitializer/10125} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{9ed413c com.google.android.ext.shared/10101} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{44d3ec5 com.android.internal.systemui.navbar.gestural_wide_back/10004} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{f61f01a com.android.virtualmachine.res/10185} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{1f7574b com.google.android.federatedcompute/10182} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{1eb3528 com.android.managedprovisioning.auto_generated_rro_product__/10027} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{480241 com.android.carrierconfig.auto_generated_rro_vendor__/10080} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{e9ef3e6 com.android.systemui.emulation.pixel_3_xl/10031} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{1e21d27 com.android.systemui.emulation.pixel_4_xl/10059} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{5527bd4 com.android.systemui.emulation.pixel_fold/10010} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{fd1817d com.android.simappdialog.auto_generated_rro_product__/10028} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{5566872 com.android.htmlviewer/10116} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{3c964c3 com.google.android.health.connect.backuprestore/10191} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{b458140 com.android.systemui.auto_generated_rro_product__/10036} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{30d615c com.google.android.apps.messaging/10131} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{179b879 com.google.android.soundpicker/10137} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{d9e99be com.google.android.marvin.talkbackoverlay/10081} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{6538a1f com.google.android.configupdater/10129} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{8a1716c com.android.internal.emulation.pixel_3a_xl/10046} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{2d46335 com.android.internal.emulation.pixel_6_pro/10016} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{aa693ca com.android.internal.emulation.pixel_7_pro/10006} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{230a93b com.android.internal.emulation.pixel_8_pro/10060} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{ea3858 com.android.internal.emulation.pixel_3a/10053} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{cf4fdb1 com.android.internal.emulation.pixel_4a/10009} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{1822296 com.android.internal.emulation.pixel_6a/10022} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{f69e17 com.android.internal.emulation.pixel_7a/10030} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{9f68204 com.google.android.overlay.googlewebview/10049} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{caac3ed com.google.android.hotspot2.osulogin/10188} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{2b5d222 com.android.simappdialog/10111} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{5bd04b3 com.android.internal.display.cutout.emulation.hole/10071} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{e5bba70 com.android.internal.display.cutout.emulation.tall/10068} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{27cb1e9 com.android.internal.systemui.navbar.threebutton/10065} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{82ee6e com.android.camera2/10147} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{379390f com.android.systemui.auto_generated_rro_vendor__/10075} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{a9a0d9c com.google.android.deskclock/10153} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{66583a5 com.android.internal.systemui.navbar.twobutton/10017} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{984ac65 com.google.android.as/10126} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{3218c65 com.google.android.gm/10144} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{df3837a com.android.internal.systemui.navbar.gestural_extra_wide_back/10043} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{d1a572b com.android.systemui.emulation.pixel_3/10023} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{1086788 com.android.systemui.emulation.pixel_4/10034} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{b4fb521 com.android.systemui.emulation.pixel_5/10073} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{2a65d46 com.android.systemui.emulation.pixel_6/10074} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{b653b07 com.android.systemui.emulation.pixel_7/10072} BLOCKED
+11-16 18:50:40.777   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{807434 com.android.systemui.emulation.pixel_8/10069} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{e51825d com.android.nfc.auto_generated_rro_product__/10032} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{f5b07d2 com.android.printspooler/10104} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{49080a3 com.android.emergency.auto_generated_rro_product__/10038} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{9ca9fa0 com.google.android.connectivity.resources.goldfish.overlay/10077} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{da8e759 com.android.dreams.basic/10102} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{f3dcf1e com.google.android.networkstack.tethering.emulator/10021} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{1a083ff com.android.providers.settings.auto_generated_rro_product__/10001} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{fca15cc com.google.android.as.oss/10122} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{377a015 com.android.traceur.auto_generated_rro_product__/10007} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{1f3bf2a com.google.android.devicelockcontroller/10175} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{d83611b com.google.android.dialer/10130} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{e68c2b8 com.android.internal.emulation.pixel_3/10045} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{3f2891 com.android.internal.emulation.pixel_4/10061} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{a66a3f6 com.android.internal.emulation.pixel_5/10013} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{9ecf3f7 com.android.internal.emulation.pixel_6/10037} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{4435264 com.android.internal.emulation.pixel_7/10067} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{11cbccd com.android.internal.emulation.pixel_8/10041} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{e510982 com.google.android.captiveportallogin/10113} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{5f2d893 com.android.musicfx/10089} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{b1530d0 com.google.android.apps.docs/10154} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{226eda7 com.google.android.apps.maps/10152} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{dc558c9 com.google.android.modulemetadata/10146} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{28a3bce com.google.android.markup/10135} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{2686aef com.android.providers.settings.auto_generated_rro_vendor__/10079} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{ae489fc com.google.android.rkpdapp/10170} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{73cfae5 com.google.android.contacts/10155} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{1246da com.android.server.telecom.auto_generated_rro_product__/10029} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{ffac70b com.google.android.overlay.googleconfig/10055} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{3ee49e8 com.android.chrome/10149} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{86a5801 com.android.bips.auto_generated_rro_product__/10035} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{dddf6a6 com.google.android.apps.customization.pixel/10145} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{30cc8e7 com.google.android.tag/10083} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{b521c94 com.google.android.overlay.permissioncontroller/10002} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{523733d com.google.android.partnersetup/10124} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{b62d732 com.google.android.apps.wallpaper.nexus/10141} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{9530c83 com.google.android.apps.nexuslauncher/10169} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{67e6e00 com.google.android.nearby.halfsheet/10180} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{d590639 com.android.theme.font.notoserifsource/10070} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{7e3347e com.google.android.safetycenter.resources/10173} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{d2feddf com.android.internal.display.cutout.emulation.waterfall/10044} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{15c6a2c com.android.internal.systemui.navbar.transparent/10033} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{6baccf5 com.google.android.connectivity.resources/10179} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{27a1a8a com.android.providers.contacts.auto_generated_rro_product__/10020} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{2cf88fb com.google.android.feedback/10166} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{b3bfd18 com.google.android.printservice.recommendation/10110} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{8384371 com.google.android.apps.photos/10143} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{5815dfd com.google.android.calendar/10142} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{ee75556 com.google.android.documentsui/10098} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{b03b9d7 com.android.systemui.emulation.pixel_3a_xl/10018} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{67fd2c4 com.android.systemui.emulation.pixel_6_pro/10062} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{e3ca5ad com.android.systemui.emulation.pixel_7_pro/10054} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{b1b70e2 com.android.systemui.emulation.pixel_8_pro/10011} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{7e01c73 com.google.mainline.telemetry/10151} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{7095730 com.android.carrierconfig.auto_generated_rro_product__/10064} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{6aaefa9 com.android.providers.partnerbookmarks/10100} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{183b92e com.android.wallpaper.livepicker/10088} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{f160ccf com.android.providers.telephony.auto_generated_rro_product__/10063} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{b64b65c com.android.phone.auto_generated_rro_vendor__/10078} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{99dd65 com.google.mainline.adservices/10136} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{4163a3a com.android.imsserviceentitlement/10117} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{610a6eb com.google.android.healthconnect.controller/10190} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{cb4dc48 com.android.internal.emulation.pixel_2_xl/10014} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{bcfeae1 com.android.internal.emulation.pixel_3_xl/10056} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{c1dc006 com.android.internal.emulation.pixel_4_xl/10047} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{3d0c6c7 com.android.internal.emulation.pixel_fold/10003} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{15f74f4 com.android.bookmarkprovider/10114} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{3ff541d com.google.android.overlay.pixelconfigcommon/10015} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{ac5d692 com.android.systemui.accessibility.accessibilitymenu.auto_generated_rro_product__/10050} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{4890863 com.android.systemui.emulation.pixel_3a/10012} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{e78ec60 com.android.systemui.emulation.pixel_4a/10000} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{3c21519 com.android.systemui.emulation.pixel_6a/10039} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{666c9de com.android.systemui.emulation.pixel_7a/10019} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{6b5ca0 com.google.android.settings.intelligence/10118} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{d6d32b4 com.google.android.projection.gearhead/10123} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{af9c7bf com.google.android.uwb.resources/10176} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{8299edd com.android.cts.ctsshim/10184} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{3f06e8c com.google.android.wifi.resources/10187} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{b55e9d5 com.google.android.wifi.dialog/10189} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{91a5ea com.google.android.apps.wallpaper/10162} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{b8d20db com.google.android.odad/10121} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{f7be778 com.android.settings.auto_generated_rro_product__/10025} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{7184e51 com.android.internal.systemui.navbar.gestural/10051} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{dc36b6 com.google.android.apps.youtube.music/10156} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{d32efb7 com.android.bluetoothmidiservice/10106} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{2440324 com.android.storagemanager.auto_generated_rro_product__/10026} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{1c27e8d com.google.android.cellbroadcastreceiver/10171} BLOCKED
+11-16 18:50:40.778   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{6d0842 com.android.phone.auto_generated_rro_product__/10058} BLOCKED
+11-16 18:50:40.779   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{bfcd053 android.auto_generated_rro_product__/10066} BLOCKED
+11-16 18:50:40.779   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{5502d90 com.android.internal.systemui.navbar.gestural_narrow_back/10052} BLOCKED
+11-16 18:50:40.779   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{e657689 com.google.android.inputmethod.latin/10140} BLOCKED
+11-16 18:50:40.779   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{247668e android.auto_generated_rro_vendor__/10076} BLOCKED
+11-16 18:50:40.779   545  1258 I AppsFilter: interaction: PackageSetting{dabcd9a app.manhwa.translator/10192} -> PackageSetting{97a1eaf com.google.android.apps.restore/10119} BLOCKED
+11-16 18:50:40.807  8664  8664 W nhwa.translator: Accessing hidden method Landroid/os/Trace;->isTagEnabled(J)Z (unsupported, reflection, allowed)
+11-16 18:50:40.807  8664  8664 W nhwa.translator: Accessing hidden method Landroid/os/Trace;->traceBegin(JLjava/lang/String;)V (unsupported, reflection, allowed)
+11-16 18:50:40.807  8664  8664 W nhwa.translator: Accessing hidden method Landroid/os/Trace;->traceEnd(J)V (unsupported, reflection, allowed)
+11-16 18:50:40.807  8664  8664 W nhwa.translator: Accessing hidden method Landroid/os/Trace;->asyncTraceBegin(JLjava/lang/String;I)V (unsupported, reflection, allowed)
+11-16 18:50:40.807  8664  8664 W nhwa.translator: Accessing hidden method Landroid/os/Trace;->asyncTraceEnd(JLjava/lang/String;I)V (unsupported, reflection, allowed)
+11-16 18:50:40.810  8664  8664 I cr_WVCFactoryProvider: Loaded version=113.0.5672.136 minSdkVersion=29 isBundle=false multiprocess=true packageId=2
+11-16 18:50:40.817  8664  8706 I cr_VariationsUtils: Failed reading seed file "/data/user/0/app.manhwa.translator/app_webview/variations_seed_new"
+11-16 18:50:40.819  8664  8664 I cr_LibraryLoader: Successfully loaded native library
+11-16 18:50:40.820  8664  8664 I cr_CachingUmaRecorder: Flushed 8 samples from 8 histograms.
+11-16 18:50:40.824  8664  8664 I cr_VariationsUtils: Loaded seed with age 529s
+11-16 18:50:40.834   545  2256 D CompatibilityChangeReporter: Compat change id reported: 135634846; UID 99006; state: DISABLED
+11-16 18:50:40.835   545   579 D CompatibilityChangeReporter: Compat change id reported: 143937733; UID 10192; state: ENABLED
+11-16 18:50:40.840  8664  8664 D CompatibilityChangeReporter: Compat change id reported: 183155436; UID 10192; state: ENABLED
+11-16 18:50:40.841  1093  1093 D Zygote  : Forked child process 8710
+11-16 18:50:40.845  8710  8710 I ocessService0:0: Using CollectorTypeCC GC.
+11-16 18:50:40.846  8710  8710 W ocessService0:0: Unexpected CPU variant for x86: x86_64.
+11-16 18:50:40.846  8710  8710 W ocessService0:0: Known variants: atom, sandybridge, silvermont, goldmont, goldmont-plus, tremont, kabylake, default
+11-16 18:50:40.849  8710  8710 E ocessService0:0: Not starting debugger since process cannot load the jdwp agent.
+11-16 18:50:40.859   545   579 I ActivityManager: Start proc 8710:com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0/u0i6 for  {app.manhwa.translator/org.chromium.content.app.SandboxedProcessService0:0}
+11-16 18:50:40.870  8710  8710 D CompatibilityChangeReporter: Compat change id reported: 171979766; UID 99006; state: ENABLED
+11-16 18:50:40.870  8710  8710 D CompatibilityChangeReporter: Compat change id reported: 242716250; UID 99006; state: ENABLED
+11-16 18:50:40.870  8664  8664 D AutofillManager: Fill dialog is enabled:false, hints=[password, passwordAuto, creditCardNumber, creditCardSecurityCode, creditCardExpirationDate]
+11-16 18:50:40.876  8710  8710 I LoadedApk: No resource references to update in package com.google.android.trichromelibrary
+11-16 18:50:40.877  8710  8710 I cr_WebViewApkApp: Launched version=113.0.5672.136 minSdkVersion=29 isBundle=false processName=com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0
+11-16 18:50:40.878   545  2256 I ActivityManager: Flag disabled. Ignoring finishAttachApplication from uid: 99006. pid: 8710
+11-16 18:50:40.878  8710  8710 W SystemServiceRegistry: No service published for: virtualdevice
+11-16 18:50:40.879  8710  8710 I cr_ChildProcessService: Creating new ChildProcessService pid=8710
+11-16 18:50:40.953   545  1258 D ActivityManager: sync unfroze 3341 com.google.android.webview:webview_service for 6
+11-16 18:50:40.957  8664  8664 D CompatibilityChangeReporter: Compat change id reported: 214741472; UID 10192; state: ENABLED
+11-16 18:50:40.963  8664  8664 D CompatibilityChangeReporter: Compat change id reported: 171228096; UID 10192; state: ENABLED
+11-16 18:50:40.968   545  2256 D ConnectivityService: requestNetwork for uid/pid:10192/8664 activeRequest: null callbackRequest: 172 [NetworkRequest [ REQUEST id=173, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED Uid: 10192 RequestorUid: 10192 RequestorPkg: app.manhwa.translator UnderlyingNetworks: Null] ]] callback flags: 0 order: 2147483647
+11-16 18:50:40.970   545   841 D ConnectivityService: NetReassign [173 : null → 101] [c 0] [a 1] [i 0]
+11-16 18:50:40.971   545   841 D ConnectivityService: NetReassign [no changes] [c 0] [a 0] [i 1]
+11-16 18:50:40.971   545   834 D WifiNetworkFactory: got request NetworkRequest [ REQUEST id=173, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED Uid: 10192 RequestorUid: 10192 RequestorPkg: app.manhwa.translator UnderlyingNetworks: Null] ]
+11-16 18:50:40.971   545   834 D UntrustedWifiNetworkFactory: got request NetworkRequest [ REQUEST id=173, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED Uid: 10192 RequestorUid: 10192 RequestorPkg: app.manhwa.translator UnderlyingNetworks: Null] ]
+11-16 18:50:40.971   545   834 D OemPaidWifiNetworkFactory: got request NetworkRequest [ REQUEST id=173, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED Uid: 10192 RequestorUid: 10192 RequestorPkg: app.manhwa.translator UnderlyingNetworks: Null] ]
+11-16 18:50:40.971   545   834 D MultiInternetWifiNetworkFactory: got request NetworkRequest [ REQUEST id=173, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED Uid: 10192 RequestorUid: 10192 RequestorPkg: app.manhwa.translator UnderlyingNetworks: Null] ]
+11-16 18:50:40.987   913   913 D StatusBarIconController: ignoring old pipeline callbacks, because the new mobile icons are enabled
+11-16 18:50:40.998  8664  8731 W cr_media: BLUETOOTH_CONNECT permission is missing.
+11-16 18:50:40.999  8710  8734 I cr_LibraryLoader: Successfully loaded native library
+11-16 18:50:40.999  8710  8734 I cr_CachingUmaRecorder: Flushed 2 samples from 2 histograms.
+11-16 18:50:41.005  8664  8731 W cr_media: registerBluetoothIntentsIfNeeded: Requires BLUETOOTH permission
+11-16 18:50:41.006  8710  8734 W SystemServiceRegistry: No service published for: uimode
+11-16 18:50:41.011  8664  8664 D CompatibilityChangeReporter: Compat change id reported: 193247900; UID 10192; state: ENABLED
+11-16 18:50:41.036  5533  5559 I FontLog : Received query name=Google Sans&weight=700&besteffort=false, URI content://com.google.android.gms.fonts [CONTEXT service_id=132 ]
+11-16 18:50:41.036  5533  5559 I FontLog : Query [name=Google Sans&weight=700&besteffort=false] resolved to {Google Sans, wdth 100.0, wght 700, ital 0.0, bestEffort false} [CONTEXT service_id=132 ]
+11-16 18:50:41.037  5533  5559 I FontLog : Fetch {Google Sans, wdth 100.0, wght 700, ital 0.0, bestEffort false} end status Status{statusCode=SUCCESS, resolution=null} [CONTEXT service_id=132 ]
+11-16 18:50:41.045  5533  5559 I FontLog : Pulling font file for id = 31, cache size = 10 [CONTEXT service_id=132 ]
+11-16 18:50:41.048  5533  5559 I FontLog : Received query name=Noto Color Emoji Compat&weight=400&besteffort=false, URI content://com.google.android.gms.fonts [CONTEXT service_id=132 ]
+11-16 18:50:41.048  5533  5559 I FontLog : Query [name=Noto Color Emoji Compat&weight=400&besteffort=false] resolved to {Noto Color Emoji Compat, wdth 100.0, wght 400, ital 0.0, bestEffort false} [CONTEXT service_id=132 ]
+11-16 18:50:41.049  5533  5559 I FontLog : Fetch {Noto Color Emoji Compat, wdth 100.0, wght 400, ital 0.0, bestEffort false} end status Status{statusCode=SUCCESS, resolution=null} [CONTEXT service_id=132 ]
+11-16 18:50:41.050  5533  5559 I FontLog : Pulling font file for id = 32, cache size = 9 [CONTEXT service_id=132 ]
+11-16 18:50:41.052  5533  5559 I FontLog : Received query name=Google Sans&weight=400&besteffort=false, URI content://com.google.android.gms.fonts [CONTEXT service_id=132 ]
+11-16 18:50:41.052  5533  5559 I FontLog : Query [name=Google Sans&weight=400&besteffort=false] resolved to {Google Sans, wdth 100.0, wght 400, ital 0.0, bestEffort false} [CONTEXT service_id=132 ]
+11-16 18:50:41.053  5533  5559 I FontLog : Font PFD returned from cache for {Google Sans, wdth 100.0, wght 400, ital 0.0, bestEffort false} [CONTEXT service_id=132 ]
+11-16 18:50:41.053  5533  5559 I FontLog : Fetch {Google Sans, wdth 100.0, wght 400, ital 0.0, bestEffort false} end status Status{statusCode=SUCCESS, resolution=null} [CONTEXT service_id=132 ]
+11-16 18:50:41.054  5533  5559 I FontLog : Pulling font file for id = 33, cache size = 10 [CONTEXT service_id=132 ]
+11-16 18:50:41.056  5533  5559 I FontLog : Received query name=Google Sans&weight=500&besteffort=false, URI content://com.google.android.gms.fonts [CONTEXT service_id=132 ]
+11-16 18:50:41.057  5533  5559 I FontLog : Query [name=Google Sans&weight=500&besteffort=false] resolved to {Google Sans, wdth 100.0, wght 500, ital 0.0, bestEffort false} [CONTEXT service_id=132 ]
+11-16 18:50:41.057  5533  5559 I FontLog : Font PFD returned from cache for {Google Sans, wdth 100.0, wght 500, ital 0.0, bestEffort false} [CONTEXT service_id=132 ]
+11-16 18:50:41.057  5533  5559 I FontLog : Fetch {Google Sans, wdth 100.0, wght 500, ital 0.0, bestEffort false} end status Status{statusCode=SUCCESS, resolution=null} [CONTEXT service_id=132 ]
+11-16 18:50:41.060  5533  5559 I FontLog : Pulling font file for id = 34, cache size = 11 [CONTEXT service_id=132 ]
+11-16 18:50:41.074  5533  6906 I SQLiteConnectionPool: The connection pool for /data/user/0/com.google.android.gms/databases/metadata.db has been closed but there are still 1 connections in use.  They will be closed as they are released back to the pool.
+11-16 18:50:41.075  5533  7505 W FontLog : Error updating last accessed time for {Google Sans, wdth 100.0, wght 500, ital 0.0, bestEffort false}. [CONTEXT service_id=132 ]
+11-16 18:50:41.075  5533  7505 W FontLog : java.lang.IllegalStateException: Cannot perform this operation because the connection pool has been closed.
+11-16 18:50:41.075  5533  7505 W FontLog : 	at android.database.sqlite.SQLiteConnectionPool.throwIfClosedLocked(SQLiteConnectionPool.java:1096)
+11-16 18:50:41.075  5533  7505 W FontLog : 	at android.database.sqlite.SQLiteConnectionPool.waitForConnection(SQLiteConnectionPool.java:787)
+11-16 18:50:41.075  5533  7505 W FontLog : 	at android.database.sqlite.SQLiteConnectionPool.acquireConnection(SQLiteConnectionPool.java:392)
+11-16 18:50:41.075  5533  7505 W FontLog : 	at android.database.sqlite.SQLiteSession.acquireConnection(SQLiteSession.java:896)
+11-16 18:50:41.075  5533  7505 W FontLog : 	at android.database.sqlite.SQLiteSession.executeForChangedRowCount(SQLiteSession.java:754)
+11-16 18:50:41.075  5533  7505 W FontLog : 	at android.database.sqlite.SQLiteStatement.executeUpdateDelete(SQLiteStatement.java:67)
+11-16 18:50:41.075  5533  7505 W FontLog : 	at android.database.sqlite.SQLiteDatabase.executeSql(SQLiteDatabase.java:2089)
+11-16 18:50:41.075  5533  7505 W FontLog : 	at android.database.sqlite.SQLiteDatabase.execSQL(SQLiteDatabase.java:2066)
+11-16 18:50:41.075  5533  7505 W FontLog : 	at anyn.run(:com.google.android.gms@231818047@23.18.18 (190800-535401451):6)
+11-16 18:50:41.075  5533  7505 W FontLog : 	at aced.c(:com.google.android.gms@231818047@23.18.18 (190800-535401451):6)
+11-16 18:50:41.075  5533  7505 W FontLog : 	at aced.run(:com.google.android.gms@231818047@23.18.18 (190800-535401451):7)
+11-16 18:50:41.075  5533  7505 W FontLog : 	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+11-16 18:50:41.075  5533  7505 W FontLog : 	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:644)
+11-16 18:50:41.075  5533  7505 W FontLog : 	at acjn.run(:com.google.android.gms@231818047@23.18.18 (190800-535401451):0)
+11-16 18:50:41.075  5533  7505 W FontLog : 	at java.lang.Thread.run(Thread.java:1012)
+11-16 18:50:41.130  8664  8698 W OpenGLRenderer: Failed to initialize 101010-2 format, error = EGL_SUCCESS
+11-16 18:50:41.158   155   155 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+--------- beginning of kernel
+11-16 18:50:41.353     0     0 I servicemanager: Could not find android.hardware.graphics.allocator.IAllocator/default in the VINTF manifest.
+11-16 18:50:41.158  8664  8698 I Gralloc4: mapper 4.x is not supported
+11-16 18:50:42.142  8664  8761 E SurfaceSyncGroup: Failed to receive transaction ready in 1000ms. Marking SurfaceSyncGroup(wmsSync-VRI[MainActivity]#0) as ready
+11-16 18:50:42.143  8664  8761 E SurfaceSyncGroup: Failed to receive transaction ready in 1000ms. Marking SurfaceSyncGroup(VRI[MainActivity]#1) as ready
+11-16 18:50:42.158   545   564 W ziparchive: Unable to open '/data/app/~~g68mRVe9g4LdxMOxW89yOA==/app.manhwa.translator--L8QltjLasJbhSCc3FlODg==/base.dm': No such file or directory
+11-16 18:50:42.163   545   564 I ActivityTaskManager: Displayed app.manhwa.translator/app.manhwa.MainActivity for user 0: +2s689ms
+11-16 18:50:42.286   913   980 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=falsecallback=android.view.ViewRootImpl$$ExternalSyntheticLambda17@26824e
+11-16 18:50:42.288   545  1258 W InputManager-JNI: Input channel object '9f9292e Splash Screen app.manhwa.translator (client)' was disposed without first being removed with the input manager!
+11-16 18:50:42.330   545  2256 W WindowManager: Failed looking up window session=Session{5a75a26 913:u0a10165} callers=com.android.server.wm.WindowManagerService.windowForClientLocked:6034 com.android.server.wm.Session.setOnBackInvokedCallbackInfo:944 android.view.IWindowSession$Stub.onTransact:1145 
+11-16 18:50:42.330   545  2256 I WindowManager: setOnBackInvokedCallback(): No window state for package:com.android.systemui
+11-16 18:50:42.369  3931  4023 I ImeTracker: com.google.android.apps.nexuslauncher:f7f08637: onRequestHide at ORIGIN_CLIENT_HIDE_SOFT_INPUT reason HIDE_SOFT_INPUT
+11-16 18:50:42.371   545  2256 I ImeTracker: com.google.android.apps.nexuslauncher:f7f08637: onCancelled at PHASE_SERVER_SHOULD_HIDE
+11-16 18:50:42.379   913  1001 D EGL_emulation: app_time_stats: avg=1181.45ms min=57.06ms max=2305.84ms count=2
+11-16 18:50:42.381  3931  4117 D OneSearchSuggestProvider: Shut down the binder channel
+11-16 18:50:42.382  3931  4326 I IPCThreadState: oneway function results for code 2 on binder at 0x7065435202d0 will be dropped but finished with status UNKNOWN_TRANSACTION
+11-16 18:50:42.613  8664  8766 I OpenGLRenderer: Davey! duration=2234ms; Flags=1, FrameTimelineVsyncId=28061, IntendedVsync=574438857008, Vsync=574555523670, InputEventId=0, HandleInputStart=574571516162, AnimationStart=574571520238, PerformTraversalsStart=574571901723, DrawStart=575280925983, FrameDeadline=574455523674, FrameInterval=574571353551, FrameStartTime=16666666, SyncQueued=575317892980, SyncStart=575318167901, IssueDrawCommandsStart=575320583260, SwapBuffers=576502988531, FrameCompleted=576673894090, DequeueBufferDuration=5328, QueueBufferDuration=180507, GpuCompleted=576673894090, SwapBuffersCompleted=576661736969, DisplayPresentTime=0, CommandSubmissionCompleted=576502988531, 
+11-16 18:50:42.621  8664  8664 I Choreographer: Skipped 125 frames!  The application may be doing too much work on its main thread.
+11-16 18:50:42.677  5533  5559 I FontLog : Received query Noto Color Emoji Compat, URI content://com.google.android.gms.fonts [CONTEXT service_id=132 ]
+11-16 18:50:42.677  5533  5559 I FontLog : Query [emojicompat-emoji-font] resolved to {Noto Color Emoji Compat, wdth 100.0, wght 400, ital 0.0, bestEffort false} [CONTEXT service_id=132 ]
+11-16 18:50:42.680  5533  5559 I FontLog : Fetch {Noto Color Emoji Compat, wdth 100.0, wght 400, ital 0.0, bestEffort false} end status Status{statusCode=SUCCESS, resolution=null} [CONTEXT service_id=132 ]
+11-16 18:50:42.696   545  2683 D CompatibilityChangeReporter: Compat change id reported: 214016041; UID 10192; state: ENABLED
+11-16 18:50:42.696   545  2683 I ImeTracker: app.manhwa.translator:1ee855b3: onRequestHide at ORIGIN_SERVER_HIDE_INPUT reason HIDE_UNSPECIFIED_WINDOW
+11-16 18:50:42.696   545  2683 I ImeTracker: app.manhwa.translator:1ee855b3: onCancelled at PHASE_SERVER_SHOULD_HIDE
+11-16 18:50:42.700  5533  5559 I FontLog : Pulling font file for id = 35, cache size = 11 [CONTEXT service_id=132 ]
+11-16 18:50:42.702  1673  1673 I GoogleInputMethodService: GoogleInputMethodService.onFinishInput():3227 
+11-16 18:50:42.703  8664  8664 I MT      : page : début about:blank (translateOn=true active=false total=0)
+11-16 18:50:42.707  1673  1673 I GoogleInputMethodService: GoogleInputMethodService.updateDeviceLockedStatus():2087 repeatCheckTimes = 0, unlocked = true
+11-16 18:50:42.707  1673  1673 I GoogleInputMethodService: GoogleInputMethodService.onStartInput():1877 onStartInput(EditorInfo{inputType=0x0(NULL) imeOptions=0x0 privateImeOptions=null actionName=UNSPECIFIED actionLabel=null actionId=0 initialSelStart=-1 initialSelEnd=-1 initialCapsMode=0x0 hintText=null label=null packageName=app.manhwa.translator fieldId=0 fieldName=null extras=null}, false)
+11-16 18:50:42.707  1673  1673 I GoogleInputMethodService: GoogleInputMethodService.shouldHideHeaderOnInitialState():4008 ShouldHideHeaderOnInitialState = false
+11-16 18:50:42.710  1673  1673 I GoogleInputMethodService: GoogleInputMethodService.updateDeviceLockedStatus():2087 repeatCheckTimes = 2, unlocked = true
+11-16 18:50:42.722  5533  5559 I FontLog : Pulling font file for id = 35, cache size = 11 [CONTEXT service_id=132 ]
+11-16 18:50:42.751   913  1001 D EGL_emulation: app_time_stats: avg=2628.61ms min=2628.61ms max=2628.61ms count=1
+11-16 18:50:42.752  8664  8680 I OpenGLRenderer: Davey! duration=2204ms; Flags=0, FrameTimelineVsyncId=28091, IntendedVsync=574622190334, Vsync=576705523584, InputEventId=0, HandleInputStart=576707665417, AnimationStart=576707668292, PerformTraversalsStart=576713893966, DrawStart=576715096475, FrameDeadline=576705523584, FrameInterval=576705959142, FrameStartTime=16666666, SyncQueued=576716564458, SyncStart=576716663810, IssueDrawCommandsStart=576716858969, SwapBuffers=576752061824, FrameCompleted=576826837602, DequeueBufferDuration=2805, QueueBufferDuration=167358, GpuCompleted=576826837602, SwapBuffersCompleted=576799899183, DisplayPresentTime=20401094656000, CommandSubmissionCompleted=576752061824, 
+11-16 18:50:43.025   913   913 D StatusBarIconController: ignoring old pipeline callbacks, because the new mobile icons are enabled
+11-16 18:50:43.031  8664  8664 I MT      : page : début http://10.0.2.2:8000/pc_ja.html (translateOn=true active=false total=0)
+11-16 18:50:43.086  8664  8664 W WindowOnBackDispatcher: OnBackInvokedCallback is not enabled for the application.
+11-16 18:50:43.086  8664  8664 W WindowOnBackDispatcher: Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+11-16 18:50:43.199  8664  8777 D TransportRuntime.JobInfoScheduler: Scheduling upload for context TransportContext(cct, DEFAULT, MSRodHRwczovL2ZpcmViYXNlbG9nZ2luZy5nb29nbGVhcGlzLmNvbS92MGNjL2xvZy9iYXRjaD9mb3JtYXQ9anNvbl9wcm90bzNc) with jobId=-1989138999 in 457032ms(Backend next call timestamp 1794855500230). Attempt 1
+11-16 18:50:43.200  8664  8777 D CompatibilityChangeReporter: Compat change id reported: 194532703; UID 10192; state: ENABLED
+11-16 18:50:43.200  8664  8777 D CompatibilityChangeReporter: Compat change id reported: 253665015; UID 10192; state: ENABLED
+11-16 18:50:43.202   545  2683 D CompatibilityChangeReporter: Compat change id reported: 271850009; UID 10192; state: ENABLED
+11-16 18:50:43.202   545  2683 D CompatibilityChangeReporter: Compat change id reported: 253665015; UID 10192; state: ENABLED
+11-16 18:50:43.202   545  2683 D CompatibilityChangeReporter: Compat change id reported: 194532703; UID 10192; state: ENABLED
+11-16 18:50:43.205  8664  8777 D TransportRuntime.JobInfoScheduler: Scheduling upload for context TransportContext(cct, VERY_LOW, MSRodHRwczovL2ZpcmViYXNlbG9nZ2luZy5nb29nbGVhcGlzLmNvbS92MGNjL2xvZy9iYXRjaD9mb3JtYXQ9anNvbl9wcm90bzNc) with jobId=-1984158262 in 86400000ms(Backend next call timestamp 0). Attempt 1
+11-16 18:50:43.227  8664  8779 D DecoupledTextDelegate: Start loading thick OCR module.
+11-16 18:50:43.228  8664  8779 I DynamiteModule: Considering local module com.google.mlkit.dynamite.text.japanese:10000 and remote module com.google.mlkit.dynamite.text.japanese:0
+11-16 18:50:43.228  8664  8779 I DynamiteModule: Selected local version of com.google.mlkit.dynamite.text.japanese
+11-16 18:50:43.435   545  3650 E TaskPersister: File error accessing recents directory (directory doesn't exist?).
+11-16 18:50:43.444  8664  8781 I Manager : DeviceManager::DeviceManager
+11-16 18:50:43.444  8664  8781 W ServerFlag: Failed to parse result of GetServerConfigurableFlag, errno=34
+11-16 18:50:43.444  8664  8781 I Manager : findAvailableDevices
+11-16 18:50:43.447  8664  8781 I Manager : Found interface nnapi-sample_all (version = JUST_AN_EXAMPLE)
+11-16 18:50:43.447  8664  8781 I Manager : Found interface nnapi-sample_quant (version = JUST_AN_EXAMPLE)
+11-16 18:50:43.447  8664  8781 I Manager : Found interface nnapi-sample_sl_shim (version = JUST_AN_EXAMPLE)
+11-16 18:50:43.460  8664  8701 I MTTEST  : compteurs total/traitées/échecs/chargement 0/0/0/true à 2 s
+11-16 18:50:43.586  8664  8777 D TransportRuntime.SQLiteEventStore: Storing event with priority=VERY_LOW, name=FIREBASE_ML_SDK for destination cct
+11-16 18:50:43.598  8664  8777 D TransportRuntime.JobInfoScheduler: Upload for context TransportContext(cct, VERY_LOW, MSRodHRwczovL2ZpcmViYXNlbG9nZ2luZy5nb29nbGVhcGlzLmNvbS92MGNjL2xvZy9iYXRjaD9mb3JtYXQ9anNvbl9wcm90bzNc) is already scheduled. Returning...
+11-16 18:50:43.663  8664  8777 D TransportRuntime.SQLiteEventStore: Storing event with priority=DEFAULT, name=FIREBASE_ML_SDK for destination cct
+11-16 18:50:43.669  8664  8777 D TransportRuntime.JobInfoScheduler: Upload for context TransportContext(cct, DEFAULT, MSRodHRwczovL2ZpcmViYXNlbG9nZ2luZy5nb29nbGVhcGlzLmNvbS92MGNjL2xvZy9iYXRjaD9mb3JtYXQ9anNvbl9wcm90bzNc) is already scheduled. Returning...
+11-16 18:50:43.686  8664  8777 D TransportRuntime.SQLiteEventStore: Storing event with priority=VERY_LOW, name=FIREBASE_ML_SDK for destination cct
+11-16 18:50:43.691  8664  8777 D TransportRuntime.JobInfoScheduler: Upload for context TransportContext(cct, VERY_LOW, MSRodHRwczovL2ZpcmViYXNlbG9nZ2luZy5nb29nbGVhcGlzLmNvbS92MGNjL2xvZy9iYXRjaD9mb3JtYXQ9anNvbl9wcm90bzNc) is already scheduled. Returning...
+11-16 18:50:43.700  8664  8781 D PipelineManager: Start process bitmap
+11-16 18:50:43.755  8664  8698 D EGL_emulation: app_time_stats: avg=194.62ms min=67.80ms max=396.16ms count=6
+11-16 18:50:44.025   913   913 D StatusBarIconController: ignoring old pipeline callbacks, because the new mobile icons are enabled
+11-16 18:50:44.152   913   913 D StatusBarIconController: ignoring old pipeline callbacks, because the new mobile icons are enabled
+11-16 18:50:44.465  8664  8781 D PipelineManager: OCR process succeeded via visionkit pipeline.
+11-16 18:50:44.473  8664  8777 D TransportRuntime.SQLiteEventStore: Storing event with priority=VERY_LOW, name=FIREBASE_ML_SDK for destination cct
+11-16 18:50:44.477  8664  8777 D TransportRuntime.JobInfoScheduler: Upload for context TransportContext(cct, VERY_LOW, MSRodHRwczovL2ZpcmViYXNlbG9nZ2luZy5nb29nbGVhcGlzLmNvbS92MGNjL2xvZy9iYXRjaD9mb3JtYXQ9anNvbl9wcm90bzNc) is already scheduled. Returning...
+11-16 18:50:44.482  8664  8777 D TransportRuntime.SQLiteEventStore: Storing event with priority=VERY_LOW, name=FIREBASE_ML_SDK for destination cct
+11-16 18:50:44.487  8664  8777 D TransportRuntime.JobInfoScheduler: Upload for context TransportContext(cct, VERY_LOW, MSRodHRwczovL2ZpcmViYXNlbG9nZ2luZy5nb29nbGVhcGlzLmNvbS92MGNjL2xvZy9iYXRjaD9mb3JtYXQ9anNvbl9wcm90bzNc) is already scheduled. Returning...
+11-16 18:50:44.620  8664  8675 I nhwa.translator: Background concurrent copying GC freed 1023453(33MB) AllocSpace objects, 25(628KB) LOS objects, 48% free, 25MB/49MB, paused 63us,53us total 151.750ms
+11-16 18:50:44.826  8664  8775 W onnxruntime:  [W:onnxruntime:, graph.cc:4285 CleanUnusedInitializersAndNodeArgs] Removing initializer 'p2o.pd_op.full_int_array.53.0'. It is not used by any node and should be removed from the model.
+11-16 18:50:44.826  8664  8775 W onnxruntime:  [W:onnxruntime:, graph.cc:4285 CleanUnusedInitializersAndNodeArgs] Removing initializer 'p2o.pd_op.full.13.0'. It is not used by any node and should be removed from the model.
+11-16 18:50:44.826  8664  8775 W onnxruntime:  [W:onnxruntime:, graph.cc:4285 CleanUnusedInitializersAndNodeArgs] Removing initializer 'p2o.pd_op.full.7.0'. It is not used by any node and should be removed from the model.
+11-16 18:50:44.826  8664  8775 W onnxruntime:  [W:onnxruntime:, graph.cc:4285 CleanUnusedInitializersAndNodeArgs] Removing initializer 'p2o.pd_op.full_int_array.51.0'. It is not used by any node and should be removed from the model.
+11-16 18:50:44.826  8664  8775 W onnxruntime:  [W:onnxruntime:, graph.cc:4285 CleanUnusedInitializersAndNodeArgs] Removing initializer 'p2o.pd_op.full_int_array.47.0'. It is not used by any node and should be removed from the model.
+11-16 18:50:44.826  8664  8775 W onnxruntime:  [W:onnxruntime:, graph.cc:4285 CleanUnusedInitializersAndNodeArgs] Removing initializer 'p2o.pd_op.full.1.0'. It is not used by any node and should be removed from the model.
+11-16 18:50:44.826  8664  8775 W onnxruntime:  [W:onnxruntime:, graph.cc:4285 CleanUnusedInitializersAndNodeArgs] Removing initializer 'p2o.pd_op.full_int_array.42.0'. It is not used by any node and should be removed from the model.
+11-16 18:50:44.826  8664  8775 W onnxruntime:  [W:onnxruntime:, graph.cc:4285 CleanUnusedInitializersAndNodeArgs] Removing initializer 'p2o.pd_op.full_int_array.41.0'. It is not used by any node and should be removed from the model.
+11-16 18:50:44.826  8664  8775 W onnxruntime:  [W:onnxruntime:, graph.cc:4285 CleanUnusedInitializersAndNodeArgs] Removing initializer 'p2o.pd_op.full_int_array.40.0'. It is not used by any node and should be removed from the model.
+11-16 18:50:44.826  8664  8775 W onnxruntime:  [W:onnxruntime:, graph.cc:4285 CleanUnusedInitializersAndNodeArgs] Removing initializer 'p2o.pd_op.full_int_array.39.0'. It is not used by any node and should be removed from the model.
+11-16 18:50:44.826  8664  8775 W onnxruntime:  [W:onnxruntime:, graph.cc:4285 CleanUnusedInitializersAndNodeArgs] Removing initializer 'p2o.pd_op.full_int_array.38.0'. It is not used by any node and should be removed from the model.
+11-16 18:50:44.826  8664  8775 W onnxruntime:  [W:onnxruntime:, graph.cc:4285 CleanUnusedInitializersAndNodeArgs] Removing initializer 'p2o.pd_op.full_int_array.35.0'. It is not used by any node and should be removed from the model.
+11-16 18:50:44.826  8664  8775 W onnxruntime:  [W:onnxruntime:, graph.cc:4285 CleanUnusedInitializersAndNodeArgs] Removing initializer 'p2o.pd_op.full_int_array.34.0'. It is not used by any node and should be removed from the model.
+11-16 18:50:44.826  8664  8775 W onnxruntime:  [W:onnxruntime:, graph.cc:4285 CleanUnusedInitializersAndNodeArgs] Removing initializer 'p2o.pd_op.full_int_array.26.0'. It is not used by any node and should be removed from the model.
+11-16 18:50:44.826  8664  8775 W onnxruntime:  [W:onnxruntime:, graph.cc:4285 CleanUnusedInitializersAndNodeArgs] Removing initializer 'p2o.pd_op.full.8.0'. It is not used by any node and should be removed from the model.
+11-16 18:50:44.826  8664  8775 W onnxruntime:  [W:onnxruntime:, graph.cc:4285 CleanUnusedInitializersAndNodeArgs] Removing initializer 'p2o.pd_op.full_int_array.21.0'. It is not used by any node and should be removed from the model.
+11-16 18:50:44.826  8664  8775 W onnxruntime:  [W:onnxruntime:, graph.cc:4285 CleanUnusedInitializersAndNodeArgs] Removing initializer 'p2o.pd_op.full_int_array.48.0'. It is not used by any node and should be removed from the model.
+11-16 18:50:44.826  8664  8775 W onnxruntime:  [W:onnxruntime:, graph.cc:4285 CleanUnusedInitializersAndNodeArgs] Removing initializer 'p2o.pd_op.full_int_array.49.0'. It is not used by any node and should be removed from the model.
+11-16 18:50:44.826  8664  8775 W onnxruntime:  [W:onnxruntime:, graph.cc:4285 CleanUnusedInitializersAndNodeArgs] Removing initializer 'p2o.pd_op.full.3.0'. It is not used by any node and should be removed from the model.
+11-16 18:50:44.826  8664  8775 W onnxruntime:  [W:onnxruntime:, graph.cc:4285 CleanUnusedInitializersAndNodeArgs] Removing initializer 'p2o.pd_op.full_int_array.43.0'. It is not used by any node and should be removed from the model.
+11-16 18:50:44.826  8664  8775 W onnxruntime:  [W:onnxruntime:, graph.cc:4285 CleanUnusedInitializersAndNodeArgs] Removing initializer 'p2o.pd_op.full.4.0'. It is not used by any node and should be removed from the model.
+11-16 18:50:44.826  8664  8775 W onnxruntime:  [W:onnxruntime:, graph.cc:4285 CleanUnusedInitializersAndNodeArgs] Removing initializer 'p2o.pd_op.full.6.0'. It is not used by any node and should be removed from the model.
+11-16 18:50:44.826  8664  8775 W onnxruntime:  [W:onnxruntime:, graph.cc:4285 CleanUnusedInitializersAndNodeArgs] Removing initializer 'p2o.pd_op.full_int_array.36.0'. It is not used by any node and should be removed from the model.
+11-16 18:50:44.826  8664  8775 W onnxruntime:  [W:onnxruntime:, graph.cc:4285 CleanUnusedInitializersAndNodeArgs] Removing initializer 'p2o.pd_op.full_int_array.50.0'. It is not used by any node and should be removed from the model.
+11-16 18:50:44.826  8664  8775 W onnxruntime:  [W:onnxruntime:, graph.cc:4285 CleanUnusedInitializersAndNodeArgs] Removing initializer 'p2o.pd_op.full.9.0'. It is not used by any node and should be removed from the model.
+11-16 18:50:44.826  8664  8775 W onnxruntime:  [W:onnxruntime:, graph.cc:4285 CleanUnusedInitializersAndNodeArgs] Removing initializer 'p2o.pd_op.full_int_array.46.0'. It is not used by any node and should be removed from the model.
+11-16 18:50:44.826  8664  8775 W onnxruntime:  [W:onnxruntime:, graph.cc:4285 CleanUnusedInitializersAndNodeArgs] Removing initializer 'p2o.pd_op.full.2.0'. It is not used by any node and should be removed from the model.
+11-16 18:50:45.027   913   913 D StatusBarIconController: ignoring old pipeline callbacks, because the new mobile icons are enabled
+11-16 18:50:45.030  1140  1140 D TelephonyManager: requestModemActivityInfo: Sending result to app: ModemActivityInfo{ mTimestamp=579115 mSleepTimeMs=0 mIdleTimeMs=579073 mActivityStatsTechSpecificInfo=[{mRat=UNKNOWN,mFrequencyRange=UNKNOWN,mTxTimeMs[]=[0, 0, 0, 0, 0],mRxTimeMs=0}]}
+11-16 18:50:45.032  8664  8664 I MT      : page : fin about:blank (affichée : http://10.0.2.2:8000/pc_ja.html) (translateOn=true active=false total=0)
+11-16 18:50:45.034  8664  8664 I MT      : départ : force=false url=http://10.0.2.2:8000/pc_ja.html total=0
+11-16 18:50:45.128  8664  8698 D EGL_emulation: app_time_stats: avg=342.55ms min=68.37ms max=1133.75ms count=4
+11-16 18:50:45.227  8664  8664 I MT      : ordre : repérage i1(n=0,haut=75) i2(n=1,haut=645) i3(n=2,haut=1215) ; vue 0/700 ; ajoutées 3
+11-16 18:50:45.231  8664  8691 I MT      : ordre : i1 démarre
+11-16 18:50:45.235  8664  8693 I MT      : ordre : i2 démarre
+11-16 18:50:45.236  8664  8692 I MT      : ordre : i3 démarre
+11-16 18:50:45.461  8664  8701 I MTTEST  : compteurs total/traitées/échecs/chargement 3/0/0/false à 4 s
+11-16 18:50:45.573  8664  8664 I MT      : départ : force=false url=http://10.0.2.2:8000/pc_ja.html total=3
+11-16 18:50:45.730  8664  8675 I nhwa.translator: Background young concurrent copying GC freed 40910(1267KB) AllocSpace objects, 24(12MB) LOS objects, 9% free, 45MB/50MB, paused 1.248ms,54us total 164.588ms
+11-16 18:50:45.774  8664  8822 D ProfileInstaller: Installing profile for app.manhwa.translator
+11-16 18:50:46.050   358   358 I netd    : tetherGetStats() -> {[]} <0.38ms>
+11-16 18:50:46.056   358   358 I netd    : bandwidthRemoveInterfaceQuota(eth0) <0.43ms>
+11-16 18:50:46.056   358   358 I netd    : bandwidthSetInterfaceQuota(eth0, 9223372036854775807) <0.45ms>
+11-16 18:50:46.058   358   358 I netd    : bandwidthSetGlobalAlert(2097152) <0.11ms>
+11-16 18:50:46.624  8664  8691 I MT      : ordre : i1 arrive à la lecture du texte (priorité 50000)
+11-16 18:50:46.624  8664  8691 I MT      : ordre : lecture (priorité 50000) passe ; en route : i1=attente de la lecture du texte/50000 i2=assemblage avec l'image du dessus/50001 i3=assemblage avec l'image du dessus/200002
+11-16 18:50:46.624  8664  8691 I MT      : ordre : i1 lit le texte (attente 1 ms)
+11-16 18:50:46.636  8664  8692 I MT      : ordre : i3 arrive à la lecture du texte (priorité 200002)
+11-16 18:50:46.669  8664  8826 D PipelineManager: Start process bitmap
+11-16 18:50:46.905  8664  8675 I nhwa.translator: Background young concurrent copying GC freed 40828(2542KB) AllocSpace objects, 3(4124KB) LOS objects, 0% free, 104MB/104MB, paused 90us,59us total 252.518ms
+11-16 18:50:47.028   913   913 D StatusBarIconController: ignoring old pipeline callbacks, because the new mobile icons are enabled
+11-16 18:50:47.054  8664  8693 I MT      : ordre : i2 arrive à la lecture du texte (priorité 50001)
+11-16 18:50:47.203  8664  8675 I nhwa.translator: Background concurrent copying GC freed 1968(1911KB) AllocSpace objects, 5(16MB) LOS objects, 21% free, 89MB/113MB, paused 89us,33us total 297.705ms
+11-16 18:50:48.654  5074  5102 W TimedProcessReaper: Memory state is: 125
+11-16 18:50:48.655   545  1258 D OomAdjuster: Not killing cached processes
+11-16 18:50:50.201  8664  8826 D PipelineManager: OCR process succeeded via visionkit pipeline.
+11-16 18:50:52.825   545   641 D ActivityManager: freezing 3341 com.google.android.webview:webview_service
+11-16 18:50:54.149   913   913 D StatusBarIconController: ignoring old pipeline callbacks, because the new mobile icons are enabled
+11-16 18:50:54.747   545  1258 D CompatibilityChangeReporter: Compat change id reported: 261072174; UID 10192; state: ENABLED
+11-16 18:50:54.747   545  1258 D OomAdjuster: Not killing cached processes
+11-16 18:50:55.484  8664  8693 I MT      : ordre : lecture (priorité 50001) passe ; en route : i1=lecture du texte/50000 i2=attente de la lecture du texte/50001 i3=attente de la lecture du texte/200002
+11-16 18:50:55.484  8664  8693 I MT      : ordre : i2 lit le texte (attente 8431 ms)
+11-16 18:50:55.488  8664  8691 I MT      : écarté « G » (bruit, hors zone)
+11-16 18:50:55.511  8664  8686 W LibraryVersion: Failed to get app version for libraryName: shared-installation-id
+11-16 18:50:55.512  8664  8686 W LibraryVersion: Failed to get app version for libraryName: shared-remote-config
+11-16 18:50:55.561  8664  8848 D PipelineManager: Start process bitmap
+11-16 18:50:55.570  8664  8777 D TransportRuntime.SQLiteEventStore: Storing event with priority=VERY_LOW, name=FIREBASE_ML_SDK for destination cct
+11-16 18:50:55.587  8664  8777 D TransportRuntime.JobInfoScheduler: Upload for context TransportContext(cct, VERY_LOW, MSRodHRwczovL2ZpcmViYXNlbG9nZ2luZy5nb29nbGVhcGlzLmNvbS92MGNjL2xvZy9iYXRjaD9mb3JtYXQ9anNvbl9wcm90bzNc) is already scheduled. Returning...
+11-16 18:50:55.596  8664  8691 I MT      : ordre : i1 arrive à l'affichage (priorité 50000)
+11-16 18:50:55.597  8664  8691 I MT      : ordre : i1 s'affiche (attente 0 ms)
+11-16 18:50:55.599  8664  8777 D TransportRuntime.SQLiteEventStore: Storing event with priority=VERY_LOW, name=FIREBASE_ML_SDK for destination cct
+11-16 18:50:55.600   545  2388 D CompatibilityChangeReporter: Compat change id reported: 161145287; UID 10192; state: ENABLED
+11-16 18:50:55.605  8664  8777 D TransportRuntime.JobInfoScheduler: Upload for context TransportContext(cct, VERY_LOW, MSRodHRwczovL2ZpcmViYXNlbG9nZ2luZy5nb29nbGVhcGlzLmNvbS92MGNjL2xvZy9iYXRjaD9mb3JtYXQ9anNvbl9wcm90bzNc) is already scheduled. Returning...
+11-16 18:50:55.610  8664  8777 D TransportRuntime.SQLiteEventStore: Storing event with priority=VERY_LOW, name=FIREBASE_ML_SDK for destination cct
+11-16 18:50:55.615  8664  8777 D TransportRuntime.JobInfoScheduler: Upload for context TransportContext(cct, VERY_LOW, MSRodHRwczovL2ZpcmViYXNlbG9nZ2luZy5nb29nbGVhcGlzLmNvbS92MGNjL2xvZy9iYXRjaD9mb3JtYXQ9anNvbl9wcm90bzNc) is already scheduled. Returning...
+11-16 18:50:55.629  8664  8777 D TransportRuntime.SQLiteEventStore: Storing event with priority=VERY_LOW, name=FIREBASE_ML_SDK for destination cct
+11-16 18:50:55.650  8664  8777 D TransportRuntime.JobInfoScheduler: Upload for context TransportContext(cct, VERY_LOW, MSRodHRwczovL2ZpcmViYXNlbG9nZ2luZy5nb29nbGVhcGlzLmNvbS92MGNjL2xvZy9iYXRjaD9mb3JtYXQ9anNvbl9wcm90bzNc) is already scheduled. Returning...
+11-16 18:50:55.662  8664  8777 D TransportRuntime.SQLiteEventStore: Storing event with priority=VERY_LOW, name=FIREBASE_ML_SDK for destination cct
+11-16 18:50:55.667  8664  8777 D TransportRuntime.JobInfoScheduler: Upload for context TransportContext(cct, VERY_LOW, MSRodHRwczovL2ZpcmViYXNlbG9nZ2luZy5nb29nbGVhcGlzLmNvbS92MGNjL2xvZy9iYXRjaD9mb3JtYXQ9anNvbl9wcm90bzNc) is already scheduled. Returning...
+11-16 18:50:55.760  8664  8698 D EGL_emulation: app_time_stats: avg=2657.82ms min=82.71ms max=9989.29ms count=4
+11-16 18:50:55.849  8664  8675 I nhwa.translator: Background young concurrent copying GC freed 22575(3346KB) AllocSpace objects, 51(9992KB) LOS objects, 0% free, 101MB/101MB, paused 102us,84us total 238.400ms
+11-16 18:50:55.861  8664  8777 D TransportRuntime.SQLiteEventStore: Storing event with priority=VERY_LOW, name=FIREBASE_ML_SDK for destination cct
+11-16 18:50:55.867  8664  8777 D TransportRuntime.JobInfoScheduler: Upload for context TransportContext(cct, VERY_LOW, MSRodHRwczovL2ZpcmViYXNlbG9nZ2luZy5nb29nbGVhcGlzLmNvbS92MGNjL2xvZy9iYXRjaD9mb3JtYXQ9anNvbl9wcm90bzNc) is already scheduled. Returning...
+11-16 18:50:56.335  8664  8675 I nhwa.translator: Background concurrent copying GC freed 3675(295KB) AllocSpace objects, 13(16MB) LOS objects, 21% free, 85MB/109MB, paused 10.040ms,34us total 474.014ms
+11-16 18:50:57.463  8664  8701 I MTTEST  : compteurs total/traitées/échecs/chargement 1/0/1/false à 16 s
+11-16 18:51:00.029   913  1001 D EGL_emulation: app_time_stats: avg=8812.57ms min=11.22ms max=17613.93ms count=2
+11-16 18:51:00.030  1763  2073 I AiAiEcho: Predicting[0]: 
+11-16 18:51:00.030  1763  2073 I AiAiEcho: EchoTargets: 
+11-16 18:51:00.030  1763  2073 I AiAiEcho: Filtered by AiAi flag check: 
+11-16 18:51:00.030  1763  2073 I AiAiEcho: Ranked targets strategy: SORT, count: 0, ranking metadata: 
+11-16 18:51:00.031  1763  2073 I AiAiEcho: #postPredictionTargets: Sending updates to UISurface lockscreen with targets# 0 (types=[])
+11-16 18:51:00.031  1763  2073 I AiAiEcho: Predicting[0]: 
+11-16 18:51:00.031  1763  2073 I AiAiEcho: EchoTargets: 
+11-16 18:51:00.031  1763  2073 I AiAiEcho: Filtered by AiAi flag check: 
+11-16 18:51:00.031  1763  2073 I AiAiEcho: Ranked targets strategy: SORT, count: 0, ranking metadata: 
+11-16 18:51:00.031  1763  2073 I AiAiEcho: #postPredictionTargets: Sending updates to UISurface lockscreen with targets# 0 (types=[])
+11-16 18:51:00.038   913   913 W PageIndicator: Total number of pages invalid: 0. Assuming 1 page.
+11-16 18:51:00.038   913   913 W PageIndicator: Total number of pages invalid: 0. Assuming 1 page.
+11-16 18:51:00.544   545  2388 D OomAdjuster: Not killing cached processes
+11-16 18:51:00.696  8664  8848 D PipelineManager: OCR process succeeded via visionkit pipeline.
+11-16 18:51:00.752  8664  8675 I nhwa.translator: NativeAlloc concurrent copying GC freed 1899(188KB) AllocSpace objects, 3(10MB) LOS objects, 21% free, 85MB/109MB, paused 24us,11us total 107.285ms
+11-16 18:51:01.542  1112  1430 D BtGatt.ScanManager: uid 10128 isForeground true scanMode -1
+11-16 18:51:01.542  1112  1430 D BtGatt.ScanManager: uid 10128 isForeground true scanMode -1
+11-16 18:51:04.149   913   913 D StatusBarIconController: ignoring old pipeline callbacks, because the new mobile icons are enabled
+11-16 18:51:05.470  8664  8701 I MTTEST  : REPORT_READY report.json
+11-16 18:51:07.146  8664  8693 I MT      : écarté « どはどは » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-16 18:51:07.147  8664  8693 I MT      : écarté « ん » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-16 18:51:07.172  8664  8777 D TransportRuntime.SQLiteEventStore: Storing event with priority=VERY_LOW, name=FIREBASE_ML_SDK for destination cct
+11-16 18:51:07.176  8664  8777 D TransportRuntime.JobInfoScheduler: Upload for context TransportContext(cct, VERY_LOW, MSRodHRwczovL2ZpcmViYXNlbG9nZ2luZy5nb29nbGVhcGlzLmNvbS92MGNjL2xvZy9iYXRjaD9mb3JtYXQ9anNvbl9wcm90bzNc) is already scheduled. Returning...
+11-16 18:51:07.192  8664  8777 D TransportRuntime.SQLiteEventStore: Storing event with priority=VERY_LOW, name=FIREBASE_ML_SDK for destination cct
+11-16 18:51:07.200  8664  8777 D TransportRuntime.JobInfoScheduler: Upload for context TransportContext(cct, VERY_LOW, MSRodHRwczovL2ZpcmViYXNlbG9nZ2luZy5nb29nbGVhcGlzLmNvbS92MGNjL2xvZy9iYXRjaD9mb3JtYXQ9anNvbl9wcm90bzNc) is already scheduled. Returning...
+11-16 18:51:07.230  8664  8777 D TransportRuntime.SQLiteEventStore: Storing event with priority=VERY_LOW, name=FIREBASE_ML_SDK for destination cct
+11-16 18:51:07.240  8664  8777 D TransportRuntime.JobInfoScheduler: Upload for context TransportContext(cct, VERY_LOW, MSRodHRwczovL2ZpcmViYXNlbG9nZ2luZy5nb29nbGVhcGlzLmNvbS92MGNjL2xvZy9iYXRjaD9mb3JtYXQ9anNvbl9wcm90bzNc) is already scheduled. Returning...
+11-16 18:51:07.244  8664  8779 D PipelineManager: Start process bitmap
+11-16 18:51:07.476  8664  8675 I nhwa.translator: Background concurrent copying GC freed 599(89KB) AllocSpace objects, 5(34MB) LOS objects, 22% free, 81MB/105MB, paused 123us,14us total 200.629ms
+11-16 18:51:09.877   545  2388 D ActivityManager: freezer override set to true
+11-16 18:51:09.878   545  2388 D ActivityManager: sync unfroze 1404 com.android.cellbroadcastreceiver for 19
+11-16 18:51:09.878   545  2388 D ActivityManager: sync unfroze 1239 com.android.bluetooth for 19
+11-16 18:51:09.878   545  2388 D ActivityManager: sync unfroze 1553 com.android.carrierconfig for 19
+11-16 18:51:09.878   545  2388 D ActivityManager: sync unfroze 1903 com.android.keychain for 19
+11-16 18:51:09.878   545  2388 D ActivityManager: sync unfroze 2484 com.android.localtransport for 19
+11-16 18:51:09.878   545  2388 D ActivityManager: sync unfroze 1849 com.google.android.googlesdksetup for 19
+11-16 18:51:09.878   545  2388 D ActivityManager: sync unfroze 2956 com.android.externalstorage for 19
+11-16 18:51:09.878   545  2388 D ActivityManager: sync unfroze 2019 com.android.printspooler for 19
+11-16 18:51:09.878   545  2388 D ActivityManager: sync unfroze 2037 com.android.carrierdefaultapp for 19
+11-16 18:51:09.878   545  2388 D ActivityManager: sync unfroze 3735 com.google.android.onetimeinitializer for 19
+11-16 18:51:09.878   545  2388 D ActivityManager: sync unfroze 3872 com.android.camera2 for 19
+11-16 18:51:09.878   545  2388 D ActivityManager: sync unfroze 3893 com.android.dynsystem for 19
+11-16 18:51:09.878   545  2388 D ActivityManager: sync unfroze 2585 com.android.imsserviceentitlement for 19
+11-16 18:51:09.878   545  2388 D ActivityManager: sync unfroze 3975 com.android.dynsystem:dynsystem for 19
+11-16 18:51:09.879   545  2388 D ActivityManager: sync unfroze 2853 com.android.providers.calendar for 19
+11-16 18:51:09.879   545  2388 D ActivityManager: sync unfroze 4643 com.android.emergency for 19
+11-16 18:51:09.879   545  2388 D ActivityManager: sync unfroze 3666 com.android.traceur for 19
+11-16 18:51:09.879   545  2388 D ActivityManager: sync unfroze 1349 com.google.android.cellbroadcastreceiver for 19
+11-16 18:51:09.879   545  2388 D ActivityManager: sync unfroze 4684 com.google.android.healthconnect.controller for 19
+11-16 18:51:09.879   545  2388 D ActivityManager: sync unfroze 5146 com.google.android.webview for 19
+11-16 18:51:09.879   545  2388 D ActivityManager: sync unfroze 1147 com.android.settings for 19
+11-16 18:51:09.879   545  2388 D ActivityManager: sync unfroze 2092 com.google.android.partnersetup for 19
+11-16 18:51:09.879   545  2388 D ActivityManager: sync unfroze 4140 com.google.android.configupdater for 19
+11-16 18:51:09.879   545  2388 D ActivityManager: sync unfroze 6091 com.google.android.webview:webview_apk for 19
+11-16 18:51:09.879   545  2388 D ActivityManager: sync unfroze 2930 com.android.chrome for 19
+11-16 18:51:09.879   545  2388 D ActivityManager: sync unfroze 2251 com.google.android.as.oss for 19
+11-16 18:51:09.879   545  2388 D ActivityManager: sync unfroze 2810 com.google.android.apps.wallpaper for 19
+11-16 18:51:09.879   545  2388 D ActivityManager: sync unfroze 2857 com.google.android.tts for 19
+11-16 18:51:09.880   545  2388 D ActivityManager: sync unfroze 1846 com.google.android.apps.youtube.music for 19
+11-16 18:51:09.880   545  2388 D ActivityManager: sync unfroze 2180 android.process.media for 19
+11-16 18:51:09.880   545  2388 D ActivityManager: sync unfroze 4708 com.google.android.marvin.talkback for 19
+11-16 18:51:09.880   545  2388 D ActivityManager: sync unfroze 2123 com.google.process.gapps for 19
+11-16 18:51:09.880   545  2388 D ActivityManager: sync unfroze 5194 com.google.android.settings.intelligence for 19
+11-16 18:51:09.883   545  2388 D ActivityManager: sync unfroze 3911 com.google.android.rkpdapp for 19
+11-16 18:51:09.883   545  2388 D ActivityManager: sync unfroze 4966 com.google.android.googlequicksearchbox for 19
+11-16 18:51:09.884   545  2388 D ActivityManager: sync unfroze 1765 com.google.process.gservices for 19
+11-16 18:51:09.885   545  2388 D ActivityManager: sync unfroze 4300 com.google.android.gm for 19
+11-16 18:51:09.885   545  2388 D ActivityManager: sync unfroze 1912 com.google.android.youtube for 19
+11-16 18:51:09.886   545  2388 D ActivityManager: sync unfroze 5759 com.google.android.gms.ui for 19
+11-16 18:51:09.886   545  2388 D ActivityManager: sync unfroze 3421 com.google.android.gms.unstable for 19
+11-16 18:51:09.886   545  2388 D ActivityManager: sync unfroze 4655 com.google.android.apps.messaging for 19
+11-16 18:51:09.887   545  2388 D ActivityManager: sync unfroze 2289 com.google.android.contacts for 19
+11-16 18:51:09.887   545  2388 D ActivityManager: sync unfroze 1603 android.process.acore for 19
+11-16 18:51:09.887   545  2388 D ActivityManager: sync unfroze 916 com.google.android.permissioncontroller for 19
+11-16 18:51:09.887   545  2388 D ActivityManager: sync unfroze 4258 com.google.android.projection.gearhead:shared for 19
+11-16 18:51:09.887   545  2388 D ActivityManager: sync unfroze 3360 com.google.android.documentsui for 19
+11-16 18:51:09.887   545  2388 D ActivityManager: sync unfroze 3341 com.google.android.webview:webview_service for 19
+11-16 18:51:09.899  4655  4722 W TimedProcessReaper: Memory state is: 400
+11-16 18:51:09.899  4655  4722 W TimedProcessReaper: Killing process to refresh configuration
+11-16 18:51:09.899  4655  4722 I Process : Sending signal. PID: 4655 SIG: 9
+11-16 18:51:09.960   545  2256 I ActivityManager: Process com.google.android.apps.messaging (pid 4655) has died: cch+5 CEM 
+11-16 18:51:09.960   545   580 I libprocessgroup: Successfully killed process cgroup uid 10131 pid 4655 in 0ms
+11-16 18:51:09.961   545   841 D ConnectivityService: releasing NetworkRequest [ REQUEST id=126, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED Uid: 10131 RequestorUid: 10131 RequestorPkg: com.google.android.apps.messaging UnderlyingNetworks: Null] ] (release request)
+11-16 18:51:09.961   545  2256 D OomAdjuster: Not killing cached processes
+11-16 18:51:09.961   545   841 D ConnectivityService: releasing NetworkRequest [ REQUEST id=138, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED Uid: 10131 RequestorUid: 10131 RequestorPkg: com.google.android.apps.messaging UnderlyingNetworks: Null] ] (release request)
+11-16 18:51:09.963   359   359 I Zygote  : Process 4655 exited due to signal 9 (Killed)
+11-16 18:51:10.058   913   913 D StatusBarIconController: ignoring old pipeline callbacks, because the new mobile icons are enabled
+11-16 18:51:10.175  8664  8679 I nhwa.translator: Explicit concurrent copying GC freed 20186(580KB) AllocSpace objects, 0(0B) LOS objects, 22% free, 81MB/105MB, paused 96us,28us total 242.812ms
+11-16 18:51:10.261   545  2388 D ActivityManager: freezer override set to false

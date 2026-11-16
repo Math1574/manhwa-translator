@@ -1,0 +1,80 @@
+11-16 18:44:47.451  6807  6807 I MT      : page : début about:blank (translateOn=true active=false total=0)
+11-16 18:44:47.547  6807  6807 I MT      : page : fin about:blank (affichée : idem) (translateOn=true active=false total=0)
+11-16 18:44:47.572  6807  6807 I MT      : page : début http://10.0.2.2:8000/pc_en.html (translateOn=true active=false total=0)
+11-16 18:44:48.096  6807  6932 I tflite  : Initialized TensorFlow Lite runtime.
+11-16 18:44:48.104  6807  6932 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+11-16 18:44:48.104  6807  6932 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 18:44:48.105  6807  6932 I native  : I0000 00:00:1794854688.105347    6932 tflite_detector_client_with_shape_cache.cc:105] Caching size: 10
+11-16 18:44:48.111  6807  6931 I native  : I0000 00:00:1794854688.111945    6931 tflite_lstm_client_base.cc:371] Resizing interpreter pool to 4
+11-16 18:44:48.114  6807  6931 I native  : I0000 00:00:1794854688.114117    6931 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_splitting_custom_ops/model.tflite
+11-16 18:44:48.114  6807  6931 I native  : I0000 00:00:1794854688.114625    6931 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-16 18:44:48.114  6807  6931 I native  : I0000 00:00:1794854688.114963    6931 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_clustering_custom_ops/model.tflite
+11-16 18:44:48.115  6807  6931 I native  : I0000 00:00:1794854688.115370    6931 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-16 18:44:48.117  6807  6942 I native  : I0000 00:00:1794854688.117367    6942 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/conv_model.fb
+11-16 18:44:48.123  6807  6942 I native  : I0000 00:00:1794854688.123145    6942 tflite_model_pooled_runner.cc:636] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/lstm_model.fb
+11-16 18:44:48.125  6807  6942 I native  : I0000 00:00:1794854688.125815    6942 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 4
+11-16 18:44:48.290  6807  6847 I MTTEST  : compteurs total/traitées/échecs/chargement 0/0/0/true à 2 s
+11-16 18:44:48.310  6807  6932 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 18:44:48.969  6807  6932 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 18:44:49.097  6807  6932 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 18:44:49.265  6807  6932 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 18:44:49.989  6807  6807 I MT      : page : fin http://10.0.2.2:8000/pc_en.html (affichée : idem) (translateOn=true active=false total=0)
+11-16 18:44:49.992  6807  6807 I MT      : départ : force=false url=http://10.0.2.2:8000/pc_en.html total=0
+11-16 18:44:50.028  6807  6807 I MT      : ordre : repérage i1(n=0,haut=75) i2(n=1,haut=645) i3(n=2,haut=1215) ; vue 0/700 ; ajoutées 3
+11-16 18:44:50.032  6807  6832 I MT      : ordre : i1 démarre
+11-16 18:44:50.037  6807  6833 I MT      : ordre : i2 démarre
+11-16 18:44:50.037  6807  6835 I MT      : ordre : i3 démarre
+11-16 18:44:50.291  6807  6847 I MTTEST  : compteurs total/traitées/échecs/chargement 3/0/0/false à 4 s
+11-16 18:44:50.472  6807  6925 E nhwa.translator: No implementation found for void com.google.ai.edge.litertlm.NativeLibraryLoader.nativeCheckLoaded() (tried Java_com_google_ai_edge_litertlm_NativeLibraryLoader_nativeCheckLoaded and Java_com_google_ai_edge_litertlm_NativeLibraryLoader_nativeCheckLoaded__) - is the library loaded, e.g. System.loadLibrary?
+11-16 18:44:50.482  6807  6970 W native  : W0000 00:00:1794854690.482388    6970 litert_lm_loader.cc:407] Section not found: SP_Tokenizer
+11-16 18:44:50.483  6807  6925 I litert  : [environment.cc:36] Creating LiteRT environment with options
+11-16 18:44:50.483  6807  6925 W litert  : [npu_registry.cc:34] NPU accelerator could not be loaded and registered: kLiteRtStatusErrorNotFound.
+11-16 18:44:50.483  6807  6925 I litert  : [accelerator_registry.cc:54] RegisterAccelerator: ptr=0x7066a3576d10, name=LiteRT GPU
+11-16 18:44:50.483  6807  6925 I litert  : [gpu_registry.cc:121] Statically linked GPU accelerator registered.
+11-16 18:44:50.483  6807  6925 I litert  : [accelerator_registry.cc:54] RegisterAccelerator: ptr=0x7066a35242f0, name=CpuAccelerator
+11-16 18:44:50.483  6807  6925 I litert  : [cpu_registry.cc:73] XNNPACK CPU accelerator registered.
+11-16 18:44:50.504  6807  6807 I MT      : départ : force=false url=http://10.0.2.2:8000/pc_en.html total=3
+11-16 18:44:50.686  6807  6925 I litert  : [environment.cc:36] Creating LiteRT environment with options
+11-16 18:44:50.686  6807  6925 W litert  : [npu_registry.cc:34] NPU accelerator could not be loaded and registered: kLiteRtStatusErrorNotFound.
+11-16 18:44:50.686  6807  6925 I litert  : [accelerator_registry.cc:54] RegisterAccelerator: ptr=0x7066a34e02e0, name=LiteRT GPU
+11-16 18:44:50.686  6807  6925 I litert  : [gpu_registry.cc:121] Statically linked GPU accelerator registered.
+11-16 18:44:50.686  6807  6925 I litert  : [accelerator_registry.cc:54] RegisterAccelerator: ptr=0x7066a34d73d0, name=CpuAccelerator
+11-16 18:44:50.686  6807  6925 I litert  : [cpu_registry.cc:73] XNNPACK CPU accelerator registered.
+11-16 18:44:50.687  6807  6925 W native  : W0000 00:00:1794854690.687018    6925 litert_lm_loader.cc:407] Section not found: ExecutorMetadataProto
+11-16 18:44:50.687  6807  6925 I litert  : [magic_number_utils.cc:101] Loaded: num_subgraphs=976, num_signatures=4
+11-16 18:44:50.687  6807  6925 I litert  : [magic_number_utils.cc:109]   signature=decode, subgraph_index=0, num_tensors=2703, num_inputs=35, num_outputs=32, num_ops=2068
+11-16 18:44:50.687  6807  6925 I litert  : [magic_number_utils.cc:109]   signature=prefill_1024, subgraph_index=1, num_tensors=1454, num_inputs=35, num_outputs=30, num_ops=1107
+11-16 18:44:50.687  6807  6925 I litert  : [magic_number_utils.cc:109]   signature=prefill_128, subgraph_index=2, num_tensors=1454, num_inputs=35, num_outputs=30, num_ops=1107
+11-16 18:44:50.687  6807  6925 I litert  : [magic_number_utils.cc:109]   signature=verify, subgraph_index=3, num_tensors=2887, num_inputs=35, num_outputs=32, num_ops=2243
+11-16 18:44:50.687  6807  6925 I litert  : [magic_number_utils.cc:113] Magic number configs: num_configs=1
+11-16 18:44:50.687  6807  6925 I litert  : [magic_number_utils.cc:120]   config[0]: magic_number=32003, target_number=4096, signature_prefix=null
+11-16 18:44:50.697  6807  6925 I litert  : [magic_number_utils.cc:536] 439 tensors of signature decode have been updated for magic number  32003 to target number 4096
+11-16 18:44:50.702  6807  6925 I litert  : [magic_number_utils.cc:536] 271 tensors of signature prefill_1024 have been updated for magic number  32003 to target number 4096
+11-16 18:44:50.705  6807  6925 I litert  : [magic_number_utils.cc:536] 270 tensors of signature prefill_128 have been updated for magic number  32003 to target number 4096
+11-16 18:44:50.712  6807  6925 I litert  : [magic_number_utils.cc:536] 444 tensors of signature verify have been updated for magic number  32003 to target number 4096
+11-16 18:44:50.712  6807  6925 I litert  : [compiled_model.cc:963] Flatbuffer model initialized directly from incoming litert model.
+11-16 18:44:50.713  6807  6925 I tflite  : Initialized TensorFlow Lite runtime.
+11-16 18:44:50.934  6807  6925 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+11-16 18:44:50.935  6807  6925 I tflite  : XNNPack weight cache loaded from '/data/user/0/app.manhwa.translator/cache/gemma-4-E2B-it.litertlm_1794854556_2588147712.xnnpack_cache'.
+11-16 18:44:50.943  6807  6925 I tflite  : Replacing 1650 out of 2068 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 574 partitions for subgraph 0 (decode).
+11-16 18:44:50.995  6807  6925 I tflite  : Replacing 895 out of 1107 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 269 partitions for subgraph 1 (prefill_1024).
+11-16 18:44:51.008  6807  6925 I tflite  : Replacing 895 out of 1107 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 269 partitions for subgraph 2 (prefill_128).
+11-16 18:44:51.026  6807  6925 I tflite  : Replacing 1821 out of 2243 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 644 partitions for subgraph 3 (verify).
+11-16 18:44:51.066  6807  6925 I tflite  : Replacing 8 out of 8 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 1 partitions for subgraph 4 (XlaCallModule_odml.rms_norm.impl_0).
+11-16 18:44:51.066  6807  6925 I tflite  : Replacing 8 out of 8 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 1 partitions for subgraph 5 (XlaCallModule_odml.rms_norm.impl_204_0).
+11-16 18:44:51.066  6807  6925 I tflite  : Replacing 8 out of 8 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 1 partitions for subgraph 6 (XlaCallModule_odml.rms_norm.impl_287_0).
+11-16 18:44:51.066  6807  6925 I tflite  : Replacing 8 out of 8 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 1 partitions for subgraph 7 (XlaCallModule_odml.rms_norm.impl_297_0).
+11-16 18:44:51.067  6807  6925 I tflite  : Replacing 8 out of 8 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 1 partitions for subgraph 8 (XlaCallModule_odml.rms_norm.impl_307_0).
+11-16 18:44:51.067  6807  6925 I tflite  : Replacing 3 out of 5 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 4 partitions for subgraph 9 (XlaCallModule_odml.cache_update.impl_0).
+11-16 18:44:51.067  6807  6925 I tflite  : Replacing 2 out of 13 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for subgraph 10 (XlaCallModule_odml.runtime_bmm.impl_0).
+11-16 18:44:51.067  6807  6925 I tflite  : Replacing 2 out of 10 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 2 partitions for subgraph 11 (XlaCallModule_odml.runtime_bmm.impl_411_0).
+11-16 18:44:51.067  6807  6925 I tflite  : Replacing 8 out of 8 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 1 partitions for subgraph 12 (XlaCallModule_odml.rms_norm.impl_463_0).
+11-16 18:44:51.067  6807  6925 I tflite  : Replacing 8 out of 8 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 1 partitions for subgraph 13 (XlaCallModule_odml.rms_norm.impl_466_0).
+11-16 18:44:51.067  6807  6925 I tflite  : Replacing 8 out of 8 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 1 partitions for subgraph 14 (XlaCallModule_odml.rms_norm.impl_527_0).
+11-16 18:44:51.068  6807  6925 I tflite  : Replacing 8 out of 8 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 1 partitions for subgraph 15 (XlaCallModule_odml.rms_norm.impl_574_0).
+11-16 18:44:51.068  6807  6925 I tflite  : Replacing 8 out of 8 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 1 partitions for subgraph 16 (XlaCallModule_odml.rms_norm.impl_578_0).
+11-16 18:44:51.068  6807  6925 I tflite  : Replacing 8 out of 8 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 1 partitions for subgraph 17 (XlaCallModule_odml.rms_norm.impl_598_0).
+11-16 18:44:51.068  6807  6925 I tflite  : Replacing 8 out of 8 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 1 partitions for subgraph 18 (XlaCallModule_odml.rms_norm.impl_600_0).
+11-16 18:44:51.068  6807  6925 I tflite  : Replacing 8 out of 8 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 1 partitions for subgraph 19 (XlaCallModule_odml.rms_norm.impl_602_0).
+11-16 18:44:51.068  6807  6925 I tflite  : Replacing 3 out of 5 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 4 partitions for subgraph 20 (XlaCallModule_odml.cache_update.impl_604_0).
+11-16 18:44:51.068  6807  6925 I tflite  : Replacing 2 out of 13 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for subgraph 21 (XlaCallModule_odml.runtime_bmm.impl_618_0).
