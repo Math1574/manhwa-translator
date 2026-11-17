@@ -13,6 +13,33 @@ object TranslationPost {
     /** « S-Rank », « X-Ray » : une lettre, un trait d'union et un mot qui n'a rien d'un bégaiement. */
     private val codeWords = Regex("(?i)^(rank|class|grade|level|type|ray|tier|series|shirt)$")
 
+    /** Une réplique qui n'est qu'un bégaiement (« Y-YOU… », « B-BUT! ») : ponctuation, une lettre, trait d'union, mot. */
+    private val loneStutter = Regex("^([^\\p{L}]*)(\\p{L})-\\s?(\\p{L}+)([^\\p{L}]*)$")
+    /** Mots que l'on bégaie le plus et leur équivalent français (la lettre répétée est la première du mot français). */
+    private val stutterWords = mapOf(
+        "you" to "toi", "but" to "mais", "what" to "quoi", "wait" to "attends", "why" to "pourquoi", "who" to "qui", "how" to "comment",
+        "no" to "non", "stop" to "arrête", "me" to "moi", "he" to "lui", "she" to "elle", "we" to "nous", "they" to "eux",
+        "help" to "à l'aide", "sorry" to "désolé", "okay" to "d'accord", "please" to "s'il te plaît", "yes" to "oui", "hey" to "hé", "hold" to "attends", "run" to "cours",
+    )
+
+    /**
+     * Filet de sécurité : le modèle recopie parfois « Y-YOU… » tel quel (un seul « mot » pour lui, qu'il juge intraduisible). Quand la traduction est identique
+     * à l'original et que celui-ci n'est qu'un bégaiement d'un mot courant, la réplique est écrite directement : « T-TOI… ». Tout autre cas est laissé tel quel.
+     */
+    fun rescueStutter(src: String, tr: String): String {
+        val m = loneStutter.matchEntire(src.trim()) ?: return tr
+        val key = m.groupValues[3]
+        val fr = stutterWords[key.lowercase()] ?: return tr
+        if (!m.groupValues[2].equals(key.take(1), ignoreCase = true)) return tr
+        fun norm(s: String) = s.lowercase().filter { it.isLetterOrDigit() }
+        if (norm(src) != norm(tr)) return tr
+        val upper = key.length >= 2 && key.all { it.isUpperCase() }
+        val word = if (upper) fr.uppercase() else if (key[0].isUpperCase()) fr.replaceFirstChar { it.uppercase() } else fr
+        val letter = word.first().toString()
+        val tail = m.groupValues[4]
+        return m.groupValues[1] + letter + "-" + word + (if (tail.isNotEmpty() && tail[0] in "!?:;") " $tail" else tail)       // espace avant « ! », « ? » à la française
+    }
+
     /**
      * Bégaiement : l'original « B-BUT » doit donner « M-MAIS », pas « P-MAIS » (le modèle recopie ou invente la lettre) ni « MAIS » (le bégaiement est perdu).
      * La lettre répétée est toujours la première du mot français qui suit. Sans bégaiement dans l'original, rien n'est changé.

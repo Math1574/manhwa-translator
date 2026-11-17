@@ -164,7 +164,7 @@ class PaddleOcr(
         val lex = if (lang == "en") try { lexicon() } catch (_: Throwable) { null } else null
         val chapterNames = if (lex != null) try { names() } catch (_: Throwable) { emptySet() } else emptySet()
         var retriesLeft = if (retry) MAX_RETRIES else 0
-        var fused = 0; var retried = 0; var narrowRead = 0
+        var fused = 0; var retried = 0; var narrowRead = 0; var edged = 0
         val tw = tile.width; val th = tile.height
         val (dw, dh) = DbPost.inputSize(tw, th)
         // 1) détection : carte de probabilité de texte
@@ -202,6 +202,7 @@ class PaddleOcr(
                 continue
             }
             // ligne inclinée : recadrage redressé selon le rectangle orienté (comme PaddleOCR), sinon boîte alignée sur les axes
+            val boxOriented = b.oriented
             val crop = (if (b.oriented) orientedCrop(tile, b, dw, dh) else null) ?: Bitmap.createBitmap(tile, x0, y0, cw, ch)
             val (text, conf) = try {
                 val a = readLine(env, rec, crop)
@@ -233,6 +234,24 @@ class PaddleOcr(
                         if (narrow > 1f) { narrowRead++; t = reread(t, narrow) }
                         if (app.manhwa.core.OcrFusion.worthRetry(t, lex, chapterNames)) t = reread(t, RETRY_STRETCH)
                     }
+                    // bord de ligne : la boîte du détecteur coupe parfois un « I » seul au début (« I SAID, » lu « SAID. ») ou la virgule finale (« OUT, » lu « OUT »).
+                    // Deux sources, dont on ne garde que ces additions (le corps de la ligne doit être resté le même) : l'autre lecteur, qui a parfois gardé la ponctuation que la base a perdue,
+                    // puis une relecture sur recadrage élargi par le lecteur qui a servi de base
+                    var edge: app.manhwa.core.OcrFusion.Edges? = null
+                    if (other != null && other.second >= MIN_CONF) edge = app.manhwa.core.OcrFusion.edgeAdditions(base.first, other.first, lex, chapterNames)
+                    val sofar = if (edge != null) app.manhwa.core.OcrFusion.applyEdges(base.first, base.first, edge) else base.first
+                    if (!boxOriented && app.manhwa.core.OcrFusion.worthEdgeRead(sofar, lex, chapterNames)) {
+                        val pad = Math.round(EDGE_PAD * ch).coerceIn(6, 160)
+                        val ex0 = max(0, x0 - pad); val ex1 = min(tw, x1 + pad)
+                        if (ex1 - ex0 > cw) {
+                            val wide = Bitmap.createBitmap(tile, ex0, y0, ex1 - ex0, ch)
+                            try {
+                                val w = readLine(env, if (baseIsAlt) alt!! else rec, wide)
+                                if (w.second >= MIN_CONF) edge = app.manhwa.core.OcrFusion.mergeEdges(edge, app.manhwa.core.OcrFusion.edgeAdditions(base.first, w.first, lex, chapterNames))
+                            } finally { wide.recycle() }
+                        }
+                    }
+                    if (edge != null) { val n = app.manhwa.core.OcrFusion.applyEdges(t, base.first, edge); if (n != t.trim()) { t = n; edged++ } }
                 } catch (e: Throwable) { Log.w("MT", "croisement des lectures : $e"); t = base.first }
                 Pair(t, base.second)
             } finally { crop.recycle() }
@@ -247,7 +266,7 @@ class PaddleOcr(
                 ),
             )
         }
-        OcrDebug.note = (OcrDebug.note + " [y=$yOffset langue=$lang boîtes=${boxes.size} colonnes=$tall manga(dispo=$mangaAvail, lues=$mangaRead) $mangaErr${if (lex != null) " croisées=$fused relues=$retried dont_étroites=$narrowRead" else ""}]").takeLast(500)
+        OcrDebug.note = (OcrDebug.note + " [y=$yOffset langue=$lang boîtes=${boxes.size} colonnes=$tall manga(dispo=$mangaAvail, lues=$mangaRead) $mangaErr${if (lex != null) " croisées=$fused relues=$retried dont_étroites=$narrowRead bords=$edged" else ""}]").takeLast(500)
         return lines
     }
 
@@ -328,6 +347,8 @@ class PaddleOcr(
         /** Relecture élargie : au plus ce nombre de lignes par tuile, largeur ×1,3 (mesuré : redonne « Well » à « Wel », sépare des mots collés). */
         const val MAX_RETRIES = 60
         const val RETRY_STRETCH = 1.3f
+        /** Marge ajoutée de chaque côté pour relire le bord d'une ligne, en fraction de la hauteur de la boîte. */
+        const val EDGE_PAD = 0.35f
     }
 }
 

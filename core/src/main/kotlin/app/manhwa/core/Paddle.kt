@@ -221,7 +221,13 @@ object OcrMerge {
      */
     internal fun crossCheck(win: OcrLine, lose: OcrLine, lex: EnglishLexicon, names: Set<String>): OcrLine {
         val r = try { OcrFusion.fuse(win.text, lose.text, lex, names) } catch (e: Throwable) { return win }
-        return if (r.replaced == 0) win else win.copy(text = r.text)
+        var out = if (r.replaced == 0) win else win.copy(text = r.text)
+        // ponctuation finale ou « I » de début que la boîte de l'un des moteurs a coupés (« OUT » / « OUT, »), si le corps du texte est le même
+        try {
+            val e = OcrFusion.edgeAdditions(win.text, lose.text, lex, names)
+            if (e != null) { val n = OcrFusion.applyEdges(out.text, win.text, e); if (n != out.text.trim()) out = out.copy(text = n) }
+        } catch (_: Throwable) { }
+        return out
     }
 
     fun merge(mlkit: List<OcrLine>, paddle: List<OcrLine>, script: String, lex: EnglishLexicon? = null, names: Set<String> = emptySet()): List<OcrLine> {

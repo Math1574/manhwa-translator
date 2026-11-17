@@ -169,7 +169,7 @@ class GemmaTranslator(
             var final = out.mapIndexed { i, t -> t ?: throw IllegalStateException("Réponse du modèle incomplète (ligne ${i + 1})") }
             if (refine || s.refinePass) final = refineDraft(eng, texts, final, glossary)
             final = checkAndFix(eng, texts, final, target, source, glossary)
-            if (target == "fr" && promptVariant >= 4) final = final.mapIndexed { i, t -> TranslationPost.stutter(texts[i], t) }   // « B-BUT » → « M-MAIS » (lettre répétée fausse ou perdue)
+            if (target == "fr" && promptVariant >= 4) final = final.mapIndexed { i, t -> TranslationPost.rescueStutter(texts[i], TranslationPost.stutter(texts[i], t)) }   // « B-BUT » → « M-MAIS » (lettre répétée fausse ou perdue) ; « Y-YOU… » recopié → « T-TOI… »
             // la page a changé pendant la traduction (le contexte a été oublié) : ce dialogue n'appartient plus au chapitre en cours
             synchronized(ctxLock) { if (epoch == ctxEpoch) texts.indices.forEach { remember(texts[it], final[it]); memory.observe(texts[it], final[it]) } }
             return final

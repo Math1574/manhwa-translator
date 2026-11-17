@@ -1378,7 +1378,8 @@ object TextErase {
         if (bandN < 60) return null
         // fond blanc : seules les références vraiment blanches comptent. Les bords roses du texte, l'ombre ou le dessin sombre qui déborde d'une étiquette (jusqu'à 70 niveaux du blanc)
         // salissaient le remplissage : une étiquette blanche était repeinte en gris moucheté
-        if (((bg shr 16) and 0xFF) >= 235 && ((bg shr 8) and 0xFF) >= 235 && (bg and 0xFF) >= 235) {
+        val whiteBg = ((bg shr 16) and 0xFF) >= 235 && ((bg shr 8) and 0xFF) >= 235 && (bg and 0xFF) >= 235
+        if (whiteBg) {
             var tight = 0; for (k in 0 until bandN) if (dist(pixels[bandArr[k]], bg) <= 24) tight++
             if (tight >= 80 && tight >= 0.5f * bandN) {
                 var kept = 0
@@ -1389,6 +1390,12 @@ object TextErase {
         fun medOf(a: IntArray, cnt: Int, sh: Int): Int { val t = IntArray(cnt) { (a[it] shr sh) and 0xFF }; t.sort(); return t[cnt / 2] }
         val cols = IntArray(bandN) { pixels[bandArr[it]] }
         val mr = medOf(cols, bandN, 16); val mg = medOf(cols, bandN, 8); val mb = medOf(cols, bandN, 0)
+        // fond blanc dont la bande voisine n'est pas blanche : c'est un bord (contour flou d'une bulle que l'effacement atteint, ombre), pas le fond. Remplir avec cette couleur
+        // repeignait une bulle blanche en gris (200) : seul l'aplat blanc est juste
+        if (whiteBg && maxOf(abs(mr - ((bg shr 16) and 0xFF)), abs(mg - ((bg shr 8) and 0xFF)), abs(mb - (bg and 0xFF))) > 24) {
+            Erasure.trace?.invoke("zoneFill : bande ni blanche ni du fond (médiane=${"%02X%02X%02X".format(mr, mg, mb)}) → aplat du fond")
+            return null
+        }
         val madR = IntArray(bandN) { abs(((cols[it] shr 16) and 0xFF) - mr) }; madR.sort()
         val madG = IntArray(bandN) { abs(((cols[it] shr 8) and 0xFF) - mg) }; madG.sort()
         val madB = IntArray(bandN) { abs((cols[it] and 0xFF) - mb) }; madB.sort()
@@ -1408,6 +1415,17 @@ object TextErase {
         if (flat) return null
         val smooth = inpaintSmooth(pixels, w, h, mask, valid)
         return addGrain(smooth, pixels, w, h, mask)
+    }
+
+    /**
+     * Le fond que le masque va recouvrir est-il uni ? Les pixels du masque qui ne sont ni des lettres ni leur frange (`ink`) sont presque tous de la couleur de fond (à 10 niveaux près) :
+     * le remplissage est alors cette couleur, exactement, quoi que borde le masque. Quand l'effacement atteint le contour d'une bulle (boîte de lecture bien plus haute que le gros
+     * lettrage), la bande voisine est le bord flou du contour, pas le fond : la reconstruction « qui suit le fond » repeignait l'intérieur de la bulle en gris (blanche) ou en plus clair (sombre).
+     */
+    fun uniformBackground(pixels: IntArray, w: Int, h: Int, mask: BooleanArray, ink: BooleanArray, bg: Int): Boolean {
+        var n = 0; var near = 0
+        for (i in 0 until w * h) if (mask[i] && !ink[i]) { n++; if (dist(pixels[i], bg) <= 10) near++ }
+        return n >= 400 && near >= 0.97f * n
     }
 
     /** Remplace les pixels masqués par une reconstruction lisse du fond (diffusion multi-échelle depuis les pixels voisins non masqués). */

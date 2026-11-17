@@ -173,6 +173,7 @@ object PageRenderer {
         val lineHs = blocks.map { BlockLayout.lineHeightOf(it) }.sorted()
         val medianLine = if (lineHs.isEmpty()) 0f else lineHs[lineHs.size / 2]
         val patches = JSONArray(); val report = JSONArray()
+        val lexicon = Lexicon.peek()
         try {
             val src = bmp?.let { BitmapSource(it) }
             // bulles annoncées par le détecteur et confirmées par un contour visible (le texte libre sur page blanche ou noire n'en a pas)
@@ -201,7 +202,7 @@ object PageRenderer {
                 val prep = BlockLayout.prepare(b, src, s, iw, ih, medianLine, settings.target.code, others, blocks, verified, isRect, edit)
                 val manual = edit?.manual == true            // zone dessinée par l'utilisateur : elle fait foi, aucune des précautions suivantes ne s'applique
                 // texte hors bulle, sans zone du détecteur, sur un dessin : trop risqué (faux texte dans le décor), l'image n'est pas touchée
-                if (!manual && RenderGate.tooUncertain(b.kind, b.zone != null, b.bubble != null, prep.plan?.mode == Erasure.Mode.ART, b.source)) { skipped++; continue }
+                if (!manual && RenderGate.tooUncertain(b.kind, b.zone != null, b.bubble != null, prep.plan?.mode == Erasure.Mode.ART, b.source) { w -> lexicon?.isCommon(w) == true }) { skipped++; continue }
                 // filet de sécurité, quelle que soit la méthode d'effacement : une zone effacée très supérieure au texte lu est du dessin qu'on abîmerait, on n'y touche pas
                 val pl = prep.plan
                 if (!manual && pl != null && pl.mode != Erasure.Mode.SMOOTH) {

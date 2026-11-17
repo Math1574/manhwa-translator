@@ -177,4 +177,56 @@ fun ocrQualityTests() {
         T.eq(84, Ctc.inputSize(166, 95, 48).second)
         T.ok(Ctc.inputSize(166, 95, 48, stretch = well).second in 118..122, "largeur élargie")
     }
+
+    T.test("bord de ligne : virgule finale et « I » de début retrouvés sur la lecture élargie, jamais une lettre parasite") {
+        fun edge(base: String, padded: String): String { val e = OcrFusion.edgeAdditions(base, padded, realLexicon) ?: return base; return OcrFusion.applyEdges(base, base, e) }
+        T.eq("CHURCH FINDS OUT,", edge("CHURCH FINDS OUT", "CHURCH FINDS OUT,"))          // « IF THE CHURCH FINDS OUT, » : virgule coupée par la boîte
+        T.eq("I SAID,", edge("SAID.", "I SAID,"))                                          // « I SAID, » : « I » coupé, virgule lue comme un point
+        T.eq("I SAID,", edge("SAID,", "I SAID,"))
+        T.eq("TALENT.", edge("ALENT.", "TALENT."))                                         // première lettre coupée : le mot inconnu devient un mot connu
+        T.eq("I WILL GO.", edge("WILL GO.", "I WILL GO."))
+        T.eq("NO IDEA..", edge("NO IDEA", "NO IDEA.."))
+        T.eq("DISCIPLE...!", edge("DISCIPLE..", "DISCIPLE...!"))
+        T.eq("MORE SUFFERING!", edge("MORE SUFFERING!", "MORE SUFFERING!"))
+        // lettres parasites, signes autres que la ponctuation de phrase, corps différent : rien n'est ajouté
+        T.eq("CONTINUE", edge("CONTINUE", "E CONTINUE"))
+        T.eq("THAT,", edge("THAT", "STHAT,"))                                             // le « S » parasite est refusé, la virgule gardée
+        T.eq("THAT.", edge("THAT", "G THAT."))
+        T.eq("OPEN.", edge("OPEN.", "I OPEN."))                                           // « I » seulement devant un mot qui suit d'ordinaire « I »
+        T.eq("KNELT", edge("KNELT", "T KNELT"))
+        T.eq("WE MUST GO", edge("WE MUST GO", "WE MUST GO}"))
+        T.eq("IF", edge("IF", "IF :"))
+        T.eq("TOTAL ATTRIBUTES ARE SO", edge("TOTAL ATTRIBUTES ARE SO", "TOTAL ATTRIBUITES ARE SO."))
+        T.eq("RE", edge("RE", "REE"))
+        T.eq("HE,", edge("HE,", "HE."))                                                   // une virgule déjà lue n'est jamais remplacée par un point
+        // appliquée à un texte déjà croisé : pas de doublon, la ponctuation finale doit être celle de la lecture de base
+        val e = OcrFusion.edgeAdditions("SAID.", "I SAID,", realLexicon)!!
+        T.eq("I SAID,", OcrFusion.applyEdges("I SAID.", "SAID.", e))
+        val e2 = OcrFusion.mergeEdges(OcrFusion.Edges("", "."), OcrFusion.Edges("I ", ","))!!
+        T.eq("I ", e2.prefix); T.eq(",", e2.suffix)
+        T.eq("..", OcrFusion.mergeEdges(OcrFusion.Edges("", "."), OcrFusion.Edges("", ".."))!!.suffix)
+    }
+    T.test("bord de ligne : seules les lignes où une lettre ou une virgule peut manquer sont relues") {
+        for (t in listOf("CHURCH FINDS OUT", "SAID.", "THEY'LL WIPE OUT EVERY", "ALENT.", "WILL YOU LISTEN.")) T.ok(OcrFusion.worthEdgeRead(t, realLexicon), "relue : $t")
+        for (t in listOf("OUR VILLAGE IS FINISHED!", "WHAT?!", "WELL...", "XA", "manganato.gg/m...", "A")) T.ok(!OcrFusion.worthEdgeRead(t, realLexicon), "pas relue : $t")
+    }
+    T.test("bord de ligne : ML Kit et Paddle, la ponctuation que l'un a perdue est reprise à l'autre") {
+        val ml = { t: String, c: Float -> OcrLine(t, RectF(100f, 100f, 500f, 140f), c) }
+        val pp = { t: String, c: Float -> OcrLine(t, RectF(102f, 101f, 498f, 141f), c) }
+        T.eq("CHURCH FINDS OUT,", OcrMerge.merge(listOf(ml("CHURCH FINDS OUT,", 0.80f)), listOf(pp("CHURCH FINDS OUT", 0.95f)), "en", realLexicon).single().text)
+        T.eq("I SAID,", OcrMerge.merge(listOf(ml("I SAID,", 0.80f)), listOf(pp("SAID.", 0.95f)), "en", realLexicon).single().text)
+        T.eq("WE MUST GO NOW", OcrMerge.merge(listOf(ml("WE MUST GO NOW", 0.99f)), listOf(pp("WE MUST GO NOW", 0.99f)), "en", realLexicon).single().text)
+    }
+    T.test("lecture : guillemet fermant et « ... » lus « 99 88 », crochet parasite en tête") {
+        val dq = "\""
+        T.eq("ALL I CAN DO IS FOLLOW WHAT'S DESCRIBED IN ${dq}HUMAN-DEMON CHRONICLES$dq...", fix("ALL I CAN DO IS FOLLOW WHAT'S DESCRIBED IN *HUMAN-DEMON CHRONICLES 99 88"))
+        T.eq("ALL I CAN DO IS FOLLOW WHAT'S DESCRIBED IN ${dq}HUMAN-DEMON CHRONICLES$dq...", fix("ALL I CAN DO IS FOLLOW WHAT'S DESCRIBED IN ${dq}HUMAN-DEMON CHRONICLES 99 8"))
+        T.eq("HE READ ${dq}THE BOOK OF LIES$dq", fix("HE READ ${dq}THE BOOK OF LIES 99"))                     // guillemet ouvrant présent : « 99 » seul est le guillemet fermant
+        // un nombre reste un nombre : sans guillemet ouvrant, après « LEVEL » ou « AGE », dans un texte presque sans mots, ou « 99 » au milieu
+        same("HE IS LEVEL 99", "HE IS AT AGE 99", "I AM 99", "SCORE 99 88", "IT IS 99 PERCENT SURE", "ROOM 88", "THERE ARE 99 88 OF THEM")
+        T.eq("DIE!!", fix("] DIE!!"))
+        T.eq("DIE!!", fix("]DIE!!"))
+        T.eq("WHO ARE YOU?", fix("WHO ARE YOU? ["))
+        same("[COMMANDER OF THE RANDEYA MERCENARY COMPANY", "(HE SAID IT)", "[SYSTEM] YOU HAVE LEVELED UP", "]")
+    }
 }
