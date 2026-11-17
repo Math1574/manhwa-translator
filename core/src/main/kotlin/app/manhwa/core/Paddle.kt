@@ -155,10 +155,32 @@ object Ctc {
         return Pair(sb.toString(), if (n == 0) 0f else (sum / n).toFloat())
     }
 
-    /** Taille d'entrée de la reconnaissance : hauteur fixe, largeur proportionnelle (bornée). */
-    fun inputSize(w: Int, h: Int, imgH: Int, maxW: Int = 1600): Pair<Int, Int> {
-        val ww = ceil(imgH * w.toDouble() / max(1, h)).toInt().coerceIn(8, maxW)
+    /**
+     * Taille d'entrée de la reconnaissance : hauteur fixe, largeur proportionnelle (bornée).
+     * [stretch] > 1 : image élargie (relecture d'une ligne dont des lettres doubles ont été avalées, « Well » lu « Wel »).
+     */
+    fun inputSize(w: Int, h: Int, imgH: Int, maxW: Int = 1600, stretch: Float = 1f): Pair<Int, Int> {
+        val ww = ceil(imgH * w.toDouble() * stretch / max(1, h)).toInt().coerceIn(8, maxW)
         return Pair(imgH, ww)
+    }
+
+    /** Densité d'une ligne : largeur / hauteur / nombre de caractères lus. Une ligne ordinaire : 0,45 à 0,65 ; une police condensée : 0,2 à 0,35. */
+    const val NARROW_BELOW = 0.36f
+    private const val NARROW_TARGET = 0.5f
+    private const val NARROW_MAX = 2.6f
+
+    /**
+     * Étirement conseillé pour relire une ligne aux lettres étroites (police condensée, mot court dans une grande boîte) ; 1 si la ligne est ordinaire.
+     * Le lecteur ramène toute ligne à 48 px de haut : des lettres deux fois trop étroites ne laissent plus assez de pas de lecture par lettre,
+     * les lettres doubles s'effondrent (« Well » lu « Wel », « DOING » lu « DONG ») et les mots se collent ou se déforment (« MEDIOCRE » lu « MEDOR »).
+     * La ligne est alors élargie pour retrouver une densité ordinaire (0,5), dans la limite de [NARROW_MAX].
+     * [chars] : nombre de caractères de la première lecture (moins de trois : trop peu pour juger).
+     */
+    fun narrowStretch(w: Int, h: Int, chars: Int): Float {
+        if (w <= 0 || h <= 0 || chars < 3) return 1f
+        val density = w.toFloat() / h / chars
+        if (density >= NARROW_BELOW) return 1f
+        return (NARROW_TARGET / density).coerceIn(1.3f, NARROW_MAX)
     }
 }
 
@@ -166,12 +188,43 @@ object Ctc {
 object OcrMerge {
     /** Part des mots d'une lecture (après réparation) qui sont de vrais mots anglais : départage deux lectures d'un même texte (un lecteur peut être très sûr de lui et se tromper). */
     fun plausibility(text: String, lex: EnglishLexicon, names: Set<String> = emptySet()): Float {
-        val words = Regex("[A-Za-z]+(?:'[A-Za-z]+)?").findAll(OcrRepair.repair(text, lex, names)).map { it.value }.filter { it.length >= 2 || it.equals("I", true) || it.equals("A", true) }.toList()
-        if (words.isEmpty()) return 0.5f
-        return words.count { lex.known(it.lowercase()) || it.lowercase() in names }.toFloat() / words.size
+        val repaired = OcrRepair.repair(text, lex, names)
+        val words = Regex("[A-Za-z]+(?:'[A-Za-z]+)?").findAll(repaired).map { it.value }.filter { it.length >= 2 || it.equals("I", true) || it.equals("A", true) }.toList()
+        val junk = junkTokens(repaired)
+        if (words.isEmpty()) return if (junk > 0) 0.2f else 0.5f
+        // les jetons parasites (« 2L », « 910 », « R. ») comptent comme des mots faux : une lecture qui en contient perd contre une lecture propre du même texte
+        return words.count { lex.known(it.lowercase()) || it.lowercase() in names }.toFloat() / (words.size + junk)
     }
 
-    fun merge(mlkit: List<OcrLine>, paddle: List<OcrLine>, script: String, lex: EnglishLexicon? = null): List<OcrLine> {
+    /**
+     * Jetons qui ne ressemblent à rien dans un dialogue : chiffres mêlés aux lettres (« 2L », « 5O-ICI »), « | », lettre seule autre que « A » et « I » (« R. »).
+     * Un nombre seul n'en est pas un (« 36 »), ni un ordinal (« 2ND »).
+     */
+    internal fun junkTokens(text: String): Int {
+        var n = 0
+        for (raw in text.split(Regex("\\s+"))) {
+            val t = raw.trim('.', ',', '!', '?', '…', '"', '\'', '’', '“', '”', '(', ')', ':', ';')
+            if (t.isEmpty()) continue
+            val letters = t.count { it.isLetter() }; val digits = t.count { it.isDigit() }
+            when {
+                t == "|" -> n++
+                letters >= 1 && digits >= 1 && t.length <= 8 && !OcrRepair.isLegitMixed(t) -> n++
+                t.length == 1 && letters == 1 && t[0].uppercaseChar() != 'A' && t[0].uppercaseChar() != 'I' -> n++
+            }
+        }
+        return n
+    }
+
+    /**
+     * Lecture [win] retenue pour un texte vu par les deux moteurs, corrigée par la lecture [lose] de l'autre moteur là où le dictionnaire lui donne raison
+     * (un mot inconnu chez l'un, un vrai mot chez l'autre). Sans preuve par le dictionnaire, [win] reste telle quelle.
+     */
+    internal fun crossCheck(win: OcrLine, lose: OcrLine, lex: EnglishLexicon, names: Set<String>): OcrLine {
+        val r = try { OcrFusion.fuse(win.text, lose.text, lex, names) } catch (e: Throwable) { return win }
+        return if (r.replaced == 0) win else win.copy(text = r.text)
+    }
+
+    fun merge(mlkit: List<OcrLine>, paddle: List<OcrLine>, script: String, lex: EnglishLexicon? = null, names: Set<String> = emptySet()): List<OcrLine> {
         val all = ArrayList<Pair<OcrLine, Boolean>>() // (ligne, vient de Paddle)
         mlkit.forEach { all.add(it to false) }
         paddle.forEach { all.add(it to true) }
@@ -193,12 +246,15 @@ object OcrMerge {
                     fun score(ls: List<OcrLine>): Double {
                         val len = ls.sumOf { it.text.length }.coerceAtLeast(1)
                         // alphabet latin : la plausibilité des mots pèse sur la confiance du lecteur (un texte mal lu mais lu avec assurance perd)
-                        return ls.sumOf { l -> l.confidence.toDouble() * l.text.length * (if (lex != null && !cjk) 0.4 + 0.6 * plausibility(l.text, lex) else 1.0) } / len
+                        return ls.sumOf { l -> l.confidence.toDouble() * l.text.length * (if (lex != null && !cjk) 0.4 + 0.6 * plausibility(l.text, lex, names) else 1.0) } / len
                     }
                     // l'alphabet latin est mieux lu (espaces, ponctuation) par Paddle, le CJK par ML Kit
                     val sm = score(ml) + (if (cjk) 0.1 else 0.0)
                     val sp = score(pp) + (if (cjk) 0.0 else 0.1)
-                    result.addAll(if (sp > sm) pp else ml)
+                    val win = if (sp > sm) pp else ml
+                    val lose = if (sp > sm) ml else pp
+                    // un seul texte lu par chacun : l'autre moteur corrige les mots que le dictionnaire désavoue (alphabet latin seulement)
+                    if (lex != null && !cjk && win.size == 1 && lose.size == 1) result.add(crossCheck(win[0], lose[0], lex, names)) else result.addAll(win)
                 }
             }
         }

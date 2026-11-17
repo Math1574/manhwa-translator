@@ -120,13 +120,20 @@ class PaddleModels(private val ctx: Context, private val jaPack: JapanesePack? =
  * Lecture de texte PaddleOCR : détection des lignes (robuste aux lettrages stylisés et au texte hors bulles),
  * puis lecture de chaque ligne. Les longues images sont découpées en tuiles.
  */
-class PaddleOcr(private val models: PaddleModels) {
+class PaddleOcr(
+    private val models: PaddleModels,
+    /** Dictionnaire anglais (croisement des deux lectures, relecture des lignes douteuses) ; null : on garde la lecture la plus sûre, comme avant. */
+    private val lexicon: () -> app.manhwa.core.EnglishLexicon? = { null },
+    /** Noms du chapitre (jamais « corrigés » par le dictionnaire). */
+    private val names: () -> Set<String> = { emptySet() },
+) {
 
     /** Zones détectées (bulles, texte dans une bulle, texte hors bulle) ; liste vide si le modèle n'est pas dans l'APK. */
     fun detectRegions(imageBytes: ByteArray, imageW: Int, imageH: Int): List<app.manhwa.core.Detection> =
         if (models.detector.available) models.detector.detect(imageBytes, imageW, imageH) else emptyList()
 
-    fun recognize(imageBytes: ByteArray, lang: String, imageW: Int, imageH: Int): List<OcrLine> {
+    /** [retry] : relire une seconde fois (image élargie) les lignes dont un mot reste inconnu ; faux quand le téléphone chauffe. */
+    fun recognize(imageBytes: ByteArray, lang: String, imageW: Int, imageH: Int, retry: Boolean = true): List<OcrLine> {
         @Suppress("DEPRECATION")
         val decoder = BitmapRegionDecoder.newInstance(imageBytes, 0, imageBytes.size, false) ?: return emptyList()
         val out = ArrayList<OcrLine>()
@@ -141,7 +148,7 @@ class PaddleOcr(private val models: PaddleModels) {
                     // zone de la tuile qui lui appartient : on écarte le recouvrement avec ses voisines pour ne pas détecter deux fois une même ligne
                     val keepTop = if (y == 0) -1f else y + TILE_OVERLAP / 2f
                     val keepBottom = if (end >= imageH) Float.MAX_VALUE else end - TILE_OVERLAP / 2f
-                    out.addAll(recognizeTile(tile, lang, sample, y).filter { val cy = (it.box.top + it.box.bottom) / 2f; cy >= keepTop && cy < keepBottom })
+                    out.addAll(recognizeTile(tile, lang, sample, y, retry).filter { val cy = (it.box.top + it.box.bottom) / 2f; cy >= keepTop && cy < keepBottom })
                 } finally { tile.recycle() }
                 if (end >= imageH) break
                 y = end - TILE_OVERLAP
@@ -152,8 +159,12 @@ class PaddleOcr(private val models: PaddleModels) {
         return out
     }
 
-    private fun recognizeTile(tile: Bitmap, lang: String, sample: Int, yOffset: Int): List<OcrLine> {
+    private fun recognizeTile(tile: Bitmap, lang: String, sample: Int, yOffset: Int, retry: Boolean): List<OcrLine> {
         val env = models.environment
+        val lex = if (lang == "en") try { lexicon() } catch (_: Throwable) { null } else null
+        val chapterNames = if (lex != null) try { names() } catch (_: Throwable) { emptySet() } else emptySet()
+        var retriesLeft = if (retry) MAX_RETRIES else 0
+        var fused = 0; var retried = 0; var narrowRead = 0
         val tw = tile.width; val th = tile.height
         val (dw, dh) = DbPost.inputSize(tw, th)
         // 1) détection : carte de probabilité de texte
@@ -194,8 +205,36 @@ class PaddleOcr(private val models: PaddleModels) {
             val crop = (if (b.oriented) orientedCrop(tile, b, dw, dh) else null) ?: Bitmap.createBitmap(tile, x0, y0, cw, ch)
             val (text, conf) = try {
                 val a = readLine(env, rec, crop)
-                // deux lecteurs anglais : on garde le plus confiant (égalité : le v5, plus récent)
-                if (alt != null) { val b = try { readLine(env, alt, crop) } catch (e: Throwable) { null }; if (b != null && b.second >= a.second) b else a } else a
+                val b = if (alt != null) try { readLine(env, alt, crop) } catch (e: Throwable) { null } else null
+                // deux lecteurs anglais : la lecture la plus sûre sert de base (égalité : le v5, plus récent)
+                val baseIsAlt = b != null && b.second >= a.second
+                val base = if (baseIsAlt) b!! else a
+                val other = if (b == null) null else if (baseIsAlt) a else b
+                var t = base.first
+                if (lex != null) try {
+                    // le dictionnaire départage mot à mot : un morceau n'est repris à l'autre lecture que si celle-ci est mieux écrite
+                    if (other != null && other.second >= MIN_CONF && other.first.isNotBlank()) {
+                        val r = app.manhwa.core.OcrFusion.fuse(t, other.first, lex, chapterNames); t = r.text; if (r.replaced > 0) fused++
+                    }
+                    // relecture élargie de la ligne par les deux lecteurs (lettres doubles avalées : « Wel » pour « Well », « DONG » pour « DOING », mots collés) :
+                    //  - lettres étroites (police condensée, mot court) : élargie jusqu'à retrouver une densité ordinaire, même si tous les mots sont valides ;
+                    //  - mot encore inconnu : élargie de 30 %.
+                    fun reread(cur: String, stretch: Float): String {
+                        var out = cur
+                        for (r in listOfNotNull(rec, alt)) {
+                            val s = try { readLine(env, r, crop, stretch) } catch (e: Throwable) { null } ?: continue
+                            if (s.second >= MIN_CONF && s.first.isNotBlank()) out = app.manhwa.core.OcrFusion.fuse(out, s.first, lex, chapterNames).text
+                        }
+                        return out
+                    }
+                    val narrow = Ctc.narrowStretch(crop.width, crop.height, base.first.trim().length)
+                    if (retriesLeft > 0 && base.second >= MIN_CONF && (narrow > 1f || app.manhwa.core.OcrFusion.worthRetry(t, lex, chapterNames))) {
+                        retriesLeft--; retried++
+                        if (narrow > 1f) { narrowRead++; t = reread(t, narrow) }
+                        if (app.manhwa.core.OcrFusion.worthRetry(t, lex, chapterNames)) t = reread(t, RETRY_STRETCH)
+                    }
+                } catch (e: Throwable) { Log.w("MT", "croisement des lectures : $e"); t = base.first }
+                Pair(t, base.second)
             } finally { crop.recycle() }
             val clean = text.trim()
             if (clean.isEmpty() || conf < MIN_CONF) continue
@@ -208,7 +247,7 @@ class PaddleOcr(private val models: PaddleModels) {
                 ),
             )
         }
-        OcrDebug.note = (OcrDebug.note + " [y=$yOffset langue=$lang boîtes=${boxes.size} colonnes=$tall manga(dispo=$mangaAvail, lues=$mangaRead) $mangaErr]").takeLast(500)
+        OcrDebug.note = (OcrDebug.note + " [y=$yOffset langue=$lang boîtes=${boxes.size} colonnes=$tall manga(dispo=$mangaAvail, lues=$mangaRead) $mangaErr${if (lex != null) " croisées=$fused relues=$retried dont_étroites=$narrowRead" else ""}]").takeLast(500)
         return lines
     }
 
@@ -254,8 +293,8 @@ class PaddleOcr(private val models: PaddleModels) {
         }
     }
 
-    private fun readLine(env: OrtEnvironment, rec: PaddleModels.Rec, crop: Bitmap): Pair<String, Float> {
-        val (rh, rw) = Ctc.inputSize(crop.width, crop.height, rec.imgH)
+    private fun readLine(env: OrtEnvironment, rec: PaddleModels.Rec, crop: Bitmap, stretch: Float = 1f): Pair<String, Float> {
+        val (rh, rw) = Ctc.inputSize(crop.width, crop.height, rec.imgH, stretch = stretch)
         val scaled = Bitmap.createScaledBitmap(crop, rw, rh, true)
         try {
             val px = IntArray(rw * rh); scaled.getPixels(px, 0, rw, 0, 0, rw, rh)
@@ -286,6 +325,9 @@ class PaddleOcr(private val models: PaddleModels) {
         const val TILE_H = 1280
         const val TILE_OVERLAP = 96
         const val MIN_CONF = 0.5f
+        /** Relecture élargie : au plus ce nombre de lignes par tuile, largeur ×1,3 (mesuré : redonne « Well » à « Wel », sépare des mots collés). */
+        const val MAX_RETRIES = 60
+        const val RETRY_STRETCH = 1.3f
     }
 }
 
@@ -300,6 +342,8 @@ class CombinedOcr(
     private val paddle: PaddleOcr?,
     private val lexicon: app.manhwa.core.EnglishLexicon? = null,
     private val parallel: Boolean = true,
+    /** Noms du chapitre : le dictionnaire ne les « corrige » jamais. */
+    private val names: () -> Set<String> = { emptySet() },
 ) : OcrEngine {
 
     override fun recognize(imageBytes: ByteArray): OcrResult {
@@ -323,7 +367,7 @@ class CombinedOcr(
         }
         fun ppTask(script: String) = Callable<List<OcrLine>> {
             val t = SystemClock.uptimeMillis()
-            try { paddle.recognize(imageBytes, script, bw, bh) } catch (e: Throwable) { Log.w("MT", "PaddleOCR a échoué : $e"); emptyList() } finally { ms[1] = SystemClock.uptimeMillis() - t }
+            try { paddle.recognize(imageBytes, script, bw, bh, retry = parallel) } catch (e: Throwable) { Log.w("MT", "PaddleOCR a échoué : $e"); emptyList() } finally { ms[1] = SystemClock.uptimeMillis() - t }
         }
         val fixed: String? = when (source) {
             SourceLang.JA -> "ja"; SourceLang.KO -> "ko"; SourceLang.ZH_HANS, SourceLang.ZH_HANT -> "zh"; SourceLang.EN -> "en"; SourceLang.AUTO -> null
@@ -346,7 +390,8 @@ class CombinedOcr(
         val w = ml?.imageWidth ?: bw; val h = ml?.imageHeight ?: bh
         OcrDebug.timing = "ML Kit ${ms[0]} ms · Paddle ${ms[1]} ms · détecteur ${ms[2]} ms · total ${SystemClock.uptimeMillis() - t0} ms (${if (parallel) "en parallèle" else "en séquence"})"
         OcrDebug.note = (OcrDebug.note + " [zones : bulles=${dets.count { it.cls == app.manhwa.core.RegionClass.BUBBLE }} texte_bulle=${dets.count { it.cls == app.manhwa.core.RegionClass.TEXT_BUBBLE }} texte_libre=${dets.count { it.cls == app.manhwa.core.RegionClass.TEXT_FREE }}]").takeLast(500)
-        return OcrResult(w, h, OcrMerge.merge(ml?.lines ?: emptyList(), pp, script, lexicon), dets)
+        val chapterNames = try { names() } catch (_: Throwable) { emptySet() }
+        return OcrResult(w, h, OcrMerge.merge(ml?.lines ?: emptyList(), pp, script, lexicon, chapterNames), dets)
     }
 
     private companion object {

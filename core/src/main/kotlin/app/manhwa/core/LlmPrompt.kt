@@ -10,10 +10,10 @@ object LlmPrompt {
     }
 
     /** Version courante du prompt (le banc d'essai de traduction compare plusieurs versions). */
-    const val CURRENT = 3
+    const val CURRENT = 4
 
     fun system(source: String, target: String, variant: Int = CURRENT): String =
-        if (variant == 1 || target != "fr") systemV1(source, target) else systemV2(source, extended = variant >= 3)
+        if (variant == 1 || target != "fr") systemV1(source, target) else if (variant >= 4) systemV4(source) else systemV2(source, extended = variant >= 3)
 
     private fun systemV1(source: String, target: String): String {
         val src = if (source == "auto") "the source language (Korean, Japanese, Chinese or English; detect it)" else languageName(source)
@@ -61,10 +61,43 @@ Additional rules:
 """.trimEnd() else "")
     }
 
+    /**
+     * Version 4 : contre la traduction mot à mot. La règle 1 donne des contre-exemples (anglicisme → français naturel), la règle 2 renvoie aux expressions que le message liste
+     * (voir [IdiomHints]), la règle 3 apprend à reconnaître une faute de lecture au lieu de la traduire, la règle 4 règle les bégaiements ; titres et rangs d'arts martiaux sont réunis.
+     */
+    private fun systemV4(source: String): String {
+        val src = if (source == "auto") "Korean, Japanese, Chinese or English (detect it)" else languageName(source)
+        return """
+You are a professional French translator of manhwa, manga, manhua and webtoons, working for a high-quality scanlation team. You translate the dialogue of one page (given in reading order) from $src into French, as it would appear in a professionally published edition.
+
+Rules:
+1. Translate the MEANING, never word for word. First understand what the character really means, then say it the way a native French speaker would in that situation: rebuild the sentence with French constructions (change the word order, use "on", pronouns and contractions, pick the right French verb instead of copying "verb + particle"). A line that sounds like English written with French words is wrong. Literal (wrong) -> natural (right):
+   "Not a chance!" -> "Pas question !" (not "Pas une chance !")
+   "I'll have my revenge." -> "Je me vengerai."
+   "That made me realize my mistake." -> "Ça m'a fait comprendre mon erreur."
+   "I won't let you get away with this!" -> "Je ne te laisserai pas t'en tirer comme ça !"
+   "He didn't lay a finger on me." -> "Il ne m'a même pas touché."
+   "Cover your ears, everyone!" -> "Bouchez-vous les oreilles, tout le monde !"
+2. Idioms, proverbs, phrasal verbs (get away, take down, turn against...), insults and exclamations always take their natural French equivalent, never a word-for-word rendering. When the message lists "Expressions" with their French meaning, use them.
+3. The lines come from OCR: they may contain recognition mistakes (a wrong letter, a missing word, two words glued together), be in capital letters, or be cut in the middle of a sentence. Use the surrounding lines, the previous dialogue and common sense to work out what was really said, and translate that. A strange short word or abbreviation that makes no sense (for example "YOY" instead of "YOU") is a recognition mistake, not an acronym: never expand it.
+4. A stutter ("B-But", "W-wait", "Th-the") keeps its stutter in French, repeating the first letter of the French word that follows: "M-Mais", "A-Attends", "L-Le".
+5. Register: choose "tu" or "vous" from the relationship between the speakers (family, friends and equals say "tu"; subordinates, strangers, elders and rivals in formal martial-arts settings often say "vous"), and stay consistent with the previous dialogue.
+6. Fantasy and martial-arts vocabulary: use the usual French terms and keep them consistent: Heavenly Demon -> Démon Céleste, meridians -> méridiens, inner energy / qi -> qi, sect -> secte, cultivation -> cultivation, martial arts -> arts martiaux, murim -> murim, sword -> épée, disciple -> disciple, master -> maître. Translate every title and rank, never leave it in English: elder -> ancien (or doyen), young master -> jeune maître, eldest young master -> jeune maître aîné, sect leader -> chef de secte, patriarch -> patriarche, grandmaster -> grand maître, senior / junior (martial brother or sister) -> aîné / cadet or grand frère / petit frère d'armes, Alliance -> Alliance, general -> général, majesty -> majesté. Keep character names exactly as in the glossary or the previous dialogue; never translate a name. Never leave other English words in the French text.
+7. Pick the meaning that fits the setting, not the commonest everyday one: storage / storehouse -> entrepôt or réserve; a drunk -> un ivrogne; nerve / guts -> culot; "to handle" -> s'occuper de; "to teach someone a lesson" -> donner une leçon à quelqu'un; "play dumb" -> faire l'innocent.
+8. Sound effects and interjections: give the natural French equivalent ("Ugh" -> "Argh", "Tsk" -> "Tss", "Haha" -> "Haha"), or keep the sound effect unchanged if there is no equivalent.
+9. Keep the speaker's tone (anger, irony, fear, politeness). Prefer the shortest natural wording and keep the length close to the original so the text fits the bubble; use contractions and everyday vocabulary in casual speech. Do not add or remove information.
+10. A sentence cut across two bubbles is translated as one coherent sentence, but keep one output line per input line.
+11. French typography: normal sentence case with correct accents, a space before ? ! : ; and « » for quotations. Do not write in capital letters even if the source is in capitals.
+12. Never add notes, explanations or quotation marks around lines.
+13. Answer with exactly one line per input line, in the format `N| translation`, using the same numbers, and nothing else.
+""".trim()
+    }
+
     /** Seconde passe optionnelle : relecture du brouillon (variante « r »). */
     /** Demande de correction d'une seule ligne dont la première traduction a échoué aux contrôles automatiques. */
-    fun fixUser(text: String, previous: String, problems: List<String>, history: List<Pair<String, String>>, glossary: List<GlossaryEntry>, names: List<String>): String = buildString {
+    fun fixUser(text: String, previous: String, problems: List<String>, history: List<Pair<String, String>>, glossary: List<GlossaryEntry>, names: List<String>, hints: List<IdiomHints.Hit> = emptyList()): String = buildString {
         if (names.isNotEmpty()) { appendLine("Names and terms to keep exactly as written: ${names.joinToString(", ")}"); appendLine() }
+        if (hints.isNotEmpty()) { appendLine("Expressions in this line to render by meaning, never word for word (conjugate the French to fit the sentence and keep its negation, tense and person):"); hints.forEach { appendLine("- \"${it.matched}\": ${it.french}") }; appendLine() }
         if (history.isNotEmpty()) { appendLine("Previous dialogue (context only):"); history.takeLast(6).forEach { (a, b) -> appendLine("- ${oneLine(a)} => ${oneLine(b)}") }; appendLine() }
         if (glossary.isNotEmpty()) { appendLine("Glossary (use exactly):"); glossary.forEach { appendLine("${it.source} = ${it.target}") }; appendLine() }
         appendLine("Your previous translation of the line below was rejected by an automatic check.")
@@ -91,7 +124,7 @@ You are a senior French editor of professionally published manhwa. You receive s
         texts.forEachIndexed { i, t -> appendLine("${i + 1}| source: ${oneLine(t)}") ; appendLine("${i + 1}| draft: ${oneLine(draft.getOrElse(i) { "" })}") }
     }.trim()
 
-    fun user(texts: List<String>, history: List<Pair<String, String>>, glossary: List<GlossaryEntry>, series: String? = null, names: List<String> = emptyList()): String = buildString {
+    fun user(texts: List<String>, history: List<Pair<String, String>>, glossary: List<GlossaryEntry>, series: String? = null, names: List<String> = emptyList(), hints: List<IdiomHints.Hit> = emptyList()): String = buildString {
         if (names.isNotEmpty()) { appendLine("Names and terms of this chapter to keep exactly as written (never translate them): ${names.joinToString(", ")}"); appendLine() }
         if (!series.isNullOrBlank()) { appendLine("Series: $series (background only: never put the series title or its words in a translation unless the source line itself contains them)"); appendLine() }
         if (history.isNotEmpty()) {
@@ -102,6 +135,11 @@ You are a senior French editor of professionally published manhwa. You receive s
         if (glossary.isNotEmpty()) {
             appendLine("Glossary (use exactly):")
             glossary.forEach { appendLine("${it.source} = ${it.target}") }
+            appendLine()
+        }
+        if (hints.isNotEmpty()) {
+            appendLine("Expressions in the lines below to render by meaning, never word for word (conjugate the French to fit the sentence and keep its negation, tense and person):")
+            hints.forEach { appendLine("- line ${it.line}, \"${it.matched}\": ${it.french}") }
             appendLine()
         }
         appendLine("Lines to translate:")
