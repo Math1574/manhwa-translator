@@ -153,4 +153,21 @@ fun ocrQualityTests() {
         T.eq(312, Ctc.inputSize(200, 40, 48, stretch = 1.3f).second)
         T.eq(1600, Ctc.inputSize(2000, 40, 48, stretch = 1.3f).second)
     }
+    T.test("lettres étroites : étirement de relecture adapté à la densité de la ligne") {
+        // « Well… » (boîte 166 × 95 px, « Wel.. » lu : 5 caractères) : lettres deux fois trop étroites pour le lecteur → élargie de ~43 %
+        val well = Ctc.narrowStretch(166, 95, 5)
+        T.ok(well in 1.40f..1.46f, "Well : $well")
+        // ligne ordinaire (0,5 de large par caractère) : pas de relecture imposée
+        T.eq(1f, Ctc.narrowStretch(240, 48, 10))
+        T.eq(1f, Ctc.narrowStretch(300, 40, 20))              // 0,375 : au-dessus du seuil
+        // trop peu de caractères pour juger (icône, « A »), boîte vide
+        T.eq(1f, Ctc.narrowStretch(100, 100, 2))
+        T.eq(1f, Ctc.narrowStretch(0, 0, 5))
+        // police très condensée : plafonnée à 2,6 ; ligne à peine sous le seuil : au moins 1,3
+        T.eq(2.6f, Ctc.narrowStretch(500, 100, 40))
+        T.ok(Ctc.narrowStretch(300, 40, 21) in 1.3f..1.45f, "juste sous le seuil")
+        // la largeur d'entrée du lecteur suit : 95 px de haut, 166 de large → 84 px à 48 de haut ; élargie → 120
+        T.eq(84, Ctc.inputSize(166, 95, 48).second)
+        T.ok(Ctc.inputSize(166, 95, 48, stretch = well).second in 118..122, "largeur élargie")
+    }
 }

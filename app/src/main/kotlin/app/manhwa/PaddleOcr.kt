@@ -164,7 +164,7 @@ class PaddleOcr(
         val lex = if (lang == "en") try { lexicon() } catch (_: Throwable) { null } else null
         val chapterNames = if (lex != null) try { names() } catch (_: Throwable) { emptySet() } else emptySet()
         var retriesLeft = if (retry) MAX_RETRIES else 0
-        var fused = 0; var retried = 0
+        var fused = 0; var retried = 0; var narrowRead = 0
         val tw = tile.width; val th = tile.height
         val (dw, dh) = DbPost.inputSize(tw, th)
         // 1) détection : carte de probabilité de texte
@@ -216,13 +216,22 @@ class PaddleOcr(
                     if (other != null && other.second >= MIN_CONF && other.first.isNotBlank()) {
                         val r = app.manhwa.core.OcrFusion.fuse(t, other.first, lex, chapterNames); t = r.text; if (r.replaced > 0) fused++
                     }
-                    // mot encore inconnu : relecture de la ligne élargie (lettres doubles avalées : « Wel », mots collés), par les deux lecteurs
-                    if (retriesLeft > 0 && base.second >= MIN_CONF && app.manhwa.core.OcrFusion.worthRetry(t, lex, chapterNames)) {
-                        retriesLeft--; retried++
+                    // relecture élargie de la ligne par les deux lecteurs (lettres doubles avalées : « Wel » pour « Well », « DONG » pour « DOING », mots collés) :
+                    //  - lettres étroites (police condensée, mot court) : élargie jusqu'à retrouver une densité ordinaire, même si tous les mots sont valides ;
+                    //  - mot encore inconnu : élargie de 30 %.
+                    fun reread(cur: String, stretch: Float): String {
+                        var out = cur
                         for (r in listOfNotNull(rec, alt)) {
-                            val s = try { readLine(env, r, crop, RETRY_STRETCH) } catch (e: Throwable) { null } ?: continue
-                            if (s.second >= MIN_CONF && s.first.isNotBlank()) t = app.manhwa.core.OcrFusion.fuse(t, s.first, lex, chapterNames).text
+                            val s = try { readLine(env, r, crop, stretch) } catch (e: Throwable) { null } ?: continue
+                            if (s.second >= MIN_CONF && s.first.isNotBlank()) out = app.manhwa.core.OcrFusion.fuse(out, s.first, lex, chapterNames).text
                         }
+                        return out
+                    }
+                    val narrow = Ctc.narrowStretch(crop.width, crop.height, base.first.trim().length)
+                    if (retriesLeft > 0 && base.second >= MIN_CONF && (narrow > 1f || app.manhwa.core.OcrFusion.worthRetry(t, lex, chapterNames))) {
+                        retriesLeft--; retried++
+                        if (narrow > 1f) { narrowRead++; t = reread(t, narrow) }
+                        if (app.manhwa.core.OcrFusion.worthRetry(t, lex, chapterNames)) t = reread(t, RETRY_STRETCH)
                     }
                 } catch (e: Throwable) { Log.w("MT", "croisement des lectures : $e"); t = base.first }
                 Pair(t, base.second)
@@ -238,7 +247,7 @@ class PaddleOcr(
                 ),
             )
         }
-        OcrDebug.note = (OcrDebug.note + " [y=$yOffset langue=$lang boîtes=${boxes.size} colonnes=$tall manga(dispo=$mangaAvail, lues=$mangaRead) $mangaErr${if (lex != null) " croisées=$fused relues=$retried" else ""}]").takeLast(500)
+        OcrDebug.note = (OcrDebug.note + " [y=$yOffset langue=$lang boîtes=${boxes.size} colonnes=$tall manga(dispo=$mangaAvail, lues=$mangaRead) $mangaErr${if (lex != null) " croisées=$fused relues=$retried dont_étroites=$narrowRead" else ""}]").takeLast(500)
         return lines
     }
 

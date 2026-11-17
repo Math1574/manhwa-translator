@@ -163,6 +163,25 @@ object Ctc {
         val ww = ceil(imgH * w.toDouble() * stretch / max(1, h)).toInt().coerceIn(8, maxW)
         return Pair(imgH, ww)
     }
+
+    /** Densité d'une ligne : largeur / hauteur / nombre de caractères lus. Une ligne ordinaire : 0,45 à 0,65 ; une police condensée : 0,2 à 0,35. */
+    const val NARROW_BELOW = 0.36f
+    private const val NARROW_TARGET = 0.5f
+    private const val NARROW_MAX = 2.6f
+
+    /**
+     * Étirement conseillé pour relire une ligne aux lettres étroites (police condensée, mot court dans une grande boîte) ; 1 si la ligne est ordinaire.
+     * Le lecteur ramène toute ligne à 48 px de haut : des lettres deux fois trop étroites ne laissent plus assez de pas de lecture par lettre,
+     * les lettres doubles s'effondrent (« Well » lu « Wel », « DOING » lu « DONG ») et les mots se collent ou se déforment (« MEDIOCRE » lu « MEDOR »).
+     * La ligne est alors élargie pour retrouver une densité ordinaire (0,5), dans la limite de [NARROW_MAX].
+     * [chars] : nombre de caractères de la première lecture (moins de trois : trop peu pour juger).
+     */
+    fun narrowStretch(w: Int, h: Int, chars: Int): Float {
+        if (w <= 0 || h <= 0 || chars < 3) return 1f
+        val density = w.toFloat() / h / chars
+        if (density >= NARROW_BELOW) return 1f
+        return (NARROW_TARGET / density).coerceIn(1.3f, NARROW_MAX)
+    }
 }
 
 /** Fusion des lectures de deux moteurs d'OCR (ML Kit et PaddleOCR) : on garde tout texte vu par l'un ou l'autre, la lecture la plus sûre l'emporte. */
