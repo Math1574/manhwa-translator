@@ -24,8 +24,8 @@ w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kot
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/SettingsScreens.kt:255:27 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/SettingsScreens.kt:386:35 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/SettingsScreens.kt:406:31 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
-BUILD SUCCESSFUL in 1m 25s
-BUILD SUCCESSFUL in 10s
+BUILD SUCCESSFUL in 1m 45s
+BUILD SUCCESSFUL in 14s
 total 161068
 drwxr-xr-x 2 runner runner      4096 Nov 17 12:19 .
 drwxr-xr-x 3 runner runner      4096 Nov 17 12:19 ..
