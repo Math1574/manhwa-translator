@@ -109,6 +109,8 @@ fun idiomHintsTests() {
         val h = IdiomHints.find(listOf("Hi.", "Those three are getting away!"))
         val u = LlmPrompt.user(listOf("Hi.", "Those three are getting away!"), emptyList(), emptyList(), null, emptyList(), h)
         T.ok(u.contains("Expressions in the lines below") && u.contains("- line 2, \"getting away\": s'enfuir"), "conseils dans le message : $u")
+        // le français de la table est à l'infinitif : le modèle doit le conjuguer et garder la négation (« DON'T PLAY DUMB » avait perdu son « ne… pas »)
+        T.ok(u.contains("keep its negation, tense and person"), "consigne de conjugaison et de négation")
         T.ok(!LlmPrompt.user(listOf("Hi."), emptyList(), emptyList()).contains("Expressions"), "pas de conseil, pas de section")
         T.ok(LlmPrompt.fixUser("Get away!", "Se lever !", listOf("calque: x"), emptyList(), emptyList(), emptyList(), IdiomHints.find(listOf("Get away!"))).contains("s'enfuir"), "conseils dans la correction")
     }

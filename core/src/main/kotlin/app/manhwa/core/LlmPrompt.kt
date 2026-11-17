@@ -97,7 +97,7 @@ Rules:
     /** Demande de correction d'une seule ligne dont la première traduction a échoué aux contrôles automatiques. */
     fun fixUser(text: String, previous: String, problems: List<String>, history: List<Pair<String, String>>, glossary: List<GlossaryEntry>, names: List<String>, hints: List<IdiomHints.Hit> = emptyList()): String = buildString {
         if (names.isNotEmpty()) { appendLine("Names and terms to keep exactly as written: ${names.joinToString(", ")}"); appendLine() }
-        if (hints.isNotEmpty()) { appendLine("Expressions in this line to render by meaning, never word for word:"); hints.forEach { appendLine("- \"${it.matched}\": ${it.french}") }; appendLine() }
+        if (hints.isNotEmpty()) { appendLine("Expressions in this line to render by meaning, never word for word (conjugate the French to fit the sentence and keep its negation, tense and person):"); hints.forEach { appendLine("- \"${it.matched}\": ${it.french}") }; appendLine() }
         if (history.isNotEmpty()) { appendLine("Previous dialogue (context only):"); history.takeLast(6).forEach { (a, b) -> appendLine("- ${oneLine(a)} => ${oneLine(b)}") }; appendLine() }
         if (glossary.isNotEmpty()) { appendLine("Glossary (use exactly):"); glossary.forEach { appendLine("${it.source} = ${it.target}") }; appendLine() }
         appendLine("Your previous translation of the line below was rejected by an automatic check.")
@@ -138,7 +138,7 @@ You are a senior French editor of professionally published manhwa. You receive s
             appendLine()
         }
         if (hints.isNotEmpty()) {
-            appendLine("Expressions in the lines below to render by meaning, never word for word:")
+            appendLine("Expressions in the lines below to render by meaning, never word for word (conjugate the French to fit the sentence and keep its negation, tense and person):")
             hints.forEach { appendLine("- line ${it.line}, \"${it.matched}\": ${it.french}") }
             appendLine()
         }

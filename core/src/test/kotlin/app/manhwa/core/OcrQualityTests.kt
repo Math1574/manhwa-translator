@@ -54,8 +54,15 @@ fun ocrQualityTests() {
             "RELICS. I.." to "RELICS...",
             ".ARE THEY HERE" to "... ARE THEY HERE",
             "POWER. R. ALLOWING IT" to "POWER. ALLOWING IT",
+            // lu comme des puces ou des zéros (captures : « •• HE WAS ULTIMATELY… », « HOW 000l IRRITATING »)
+            "•• HE WAS ULTIMATELY CAST OUT" to "... HE WAS ULTIMATELY CAST OUT",
+            "HOW 000l IRRITATING." to "HOW... IRRITATING.",
+            "WELL •• I THINK SO" to "WELL... I THINK SO",
+            "HOW 000 IRRITATING." to "HOW... IRRITATING.",
         )
         same("I KNOW. I...", "J. K. ROWLING")
+        // une puce seule (liste), les nombres et les codes ne sont jamais des points de suspension
+        same("• STRENGTH: 10", "1,000 GOLD COINS", "100000 GOLD COINS", "0.000 SECONDS LEFT", "SCORE: 000 POINTS", "ROOM 0001 IS OPEN")
     }
     T.test("lecture : ordinaux, « 3D », « 50K », « 5X » ne sont jamais pris pour des fautes (« 2ND » ne devient pas « ND »)") {
         same("2ND PLACE", "THE 4TH FLOOR IS CLOSED", "THE 1ST YOUNG MASTER", "THE 3RD PRINCE SAID", "3D MODELS ARE COOL", "A 50K REWARD AND 5X DAMAGE")

@@ -277,6 +277,7 @@ object OcrRepair {
 internal object OcrFragments {
     fun clean(text: String, lex: EnglishLexicon, protect: Set<String>): String {
         var s = text
+        s = dotGlyphs.replace(s, "...")
         s = junkOpening(s)
         s = ntBangI.replace(s) { m -> m.groupValues[1] + "'" + m.groupValues[2] }
         s = trailingDots.replace(s, "...")
@@ -289,6 +290,12 @@ internal object OcrFragments {
     }
 
     // ---------- points de suspension lus comme autre chose ----------
+
+    /**
+     * Points de suspension lus comme des puces (« •• HE WAS ») ou comme des zéros (« HOW 000L IRRITATING ») : ce n'est jamais du vrai texte ; ils redeviennent « ... », collés au mot qui précède.
+     * Restent intacts : une seule puce (liste de statistiques), « 1,000 », « 0.000 », « 0001 », « SCORE: 000 ».
+     */
+    private val dotGlyphs = Regex("(?:(?<=[A-Za-z]) )?(?<![A-Za-z0-9,.:/•·∙-])(?<![:=#]\\s)(?:[•·∙]{2,}|0{3,}[lI|]?)(?![A-Za-z0-9:/•·∙-])")
 
     /** Mots qui ouvrent une phrase : un nombre isolé devant l'un d'eux est un « ... » mal lu (« 910 HE WAS… »). */
     private val subjectStarts = setOf("HE", "SHE", "IT", "WE", "THEY", "YOU", "I", "THIS", "THAT", "THERE", "HERE", "WHAT", "WHO", "WHY", "HOW", "WHEN", "IF", "BUT", "SO", "THEN", "WELL", "HIS", "HER", "THEIR", "OUR", "MY", "YOUR", "THE", "NOW", "YES", "NOT")
