@@ -1,0 +1,24 @@
+11-16 23:58:25.772  6574  6574 I MT      : page : début http://10.0.2.2:8000/index.html (translateOn=true active=false total=0)
+11-16 23:58:25.910  6574  6574 I MT      : page : fin http://10.0.2.2:8000/index.html (affichée : idem) (translateOn=true active=false total=0)
+11-16 23:58:25.915  6574  6574 I MT      : départ : force=false url=http://10.0.2.2:8000/index.html total=0
+11-16 23:58:26.352  6574  6574 I MT      : départ : force=false url=http://10.0.2.2:8000/index.html total=0
+11-16 23:58:27.442  6574  6615 I MTTEST  : compteurs total/traitées/échecs/chargement 0/0/0/false à 2 s
+11-16 23:58:55.448  6574  6615 I MTTEST  : REPORT_READY report.json
+11-16 23:58:21.484  5721  6624 I ChimeraConfigurator: Detected pending changes for urgent request: [vision.ocr]. Pending module sets: container:2318189190800+mlkit.ocr.common,tflite_dynamite:2640104055100800+tflite_dynamite,vision_ocr:2316024025100000+vision.ocr
+11-16 23:58:26.208  6574  6733 I tflite  : Initialized TensorFlow Lite runtime.
+11-16 23:58:26.210  6574  6732 I native  : I0000 00:00:1794873506.210750    6732 tflite_lstm_client_base.cc:371] Resizing interpreter pool to 4
+11-16 23:58:26.282  6574  6733 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+11-16 23:58:26.314  6574  6733 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 23:58:26.318  6574  6733 I native  : I0000 00:00:1794873506.318933    6733 tflite_detector_client_with_shape_cache.cc:105] Caching size: 10
+11-16 23:58:26.345  6574  6733 I native  : I0000 00:00:1794873506.345482    6733 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_splitting_custom_ops/model.tflite
+11-16 23:58:26.346  6574  6733 I native  : I0000 00:00:1794873506.345763    6733 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-16 23:58:26.347  6574  6733 I native  : I0000 00:00:1794873506.347182    6733 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_clustering_custom_ops/model.tflite
+11-16 23:58:26.347  6574  6733 I native  : I0000 00:00:1794873506.347776    6733 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-16 23:58:26.348  6574  6743 I native  : I0000 00:00:1794873506.348623    6743 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/conv_model.fb
+11-16 23:58:26.349  6574  6743 I native  : I0000 00:00:1794873506.349416    6743 tflite_model_pooled_runner.cc:636] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/lstm_model.fb
+11-16 23:58:26.351  6574  6743 I native  : I0000 00:00:1794873506.351546    6743 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 4
+11-16 23:58:26.370  6574  6732 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 23:58:27.042  6574  6732 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 23:58:27.337  6574  6732 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 23:58:27.344  6574  6732 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-16 23:58:56.530  5721  6781 I ChimeraConfigurator: Detected pending changes for urgent request: [vision.ocr]. Pending module sets: container:2318189190800+mlkit.ocr.common,tflite_dynamite:2640104055100800+tflite_dynamite,vision_ocr:2316024025100000+vision.ocr
