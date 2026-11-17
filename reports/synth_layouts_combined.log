@@ -1,0 +1,96 @@
+11-17 01:41:20.121  8522  8522 I MT      : page : début http://10.0.2.2:8000/synth_layouts.html (translateOn=true active=false total=0)
+11-17 01:41:20.619  8522  8522 I MT      : page : fin http://10.0.2.2:8000/synth_layouts.html (affichée : idem) (translateOn=true active=false total=0)
+11-17 01:41:20.627  8522  8522 I MT      : départ : force=false url=http://10.0.2.2:8000/synth_layouts.html total=0
+11-17 01:41:20.779  8522  8522 I MT      : départ : force=false url=http://10.0.2.2:8000/synth_layouts.html total=0
+11-17 01:41:20.789  8522  8522 I MT      : ordre : repérage i1(n=0,haut=75) i2(n=1,haut=590) i3(n=2,haut=1106) i4(n=3,haut=1775) i5(n=4,haut=2445) i6(n=5,haut=3115) ; vue 0/700 ; ajoutées 6
+11-17 01:41:20.793  8522  8549 I MT      : ordre : i2 démarre
+11-17 01:41:20.794  8522  8548 I MT      : ordre : i3 démarre
+11-17 01:41:20.794  8522  8550 I MT      : ordre : i4 démarre
+11-17 01:41:20.799  8522  8547 I MT      : ordre : i1 démarre
+11-17 01:41:21.605  8522  8557 I MTTEST  : compteurs total/traitées/échecs/chargement 6/0/0/false à 2 s
+11-17 01:41:21.964  8522  8547 I MT      : ordre : i1 arrive à la lecture du texte (priorité 50000)
+11-17 01:41:21.964  8522  8547 I MT      : ordre : lecture (priorité 50000) passe ; en route : i1=attente de la lecture du texte/50000 i2=assemblage avec l'image du dessus/50001 i3=assemblage avec l'image du dessus/200002 i4=assemblage avec l'image du dessus/200003
+11-17 01:41:21.965  8522  8547 I MT      : ordre : i1 lit le texte (attente 1 ms)
+11-17 01:41:21.965  8522  8549 I MT      : ordre : i2 arrive à la lecture du texte (priorité 50001)
+11-17 01:41:21.968  8522  8548 I MT      : ordre : i3 arrive à la lecture du texte (priorité 200002)
+11-17 01:41:21.972  8522  8550 I MT      : ordre : i4 arrive à la lecture du texte (priorité 200003)
+11-17 01:41:27.723  8522  8549 I MT      : ordre : lecture (priorité 50001) passe ; en route : i1=lecture du texte/50000 i2=attente de la lecture du texte/50001 i3=attente de la lecture du texte/200002 i4=attente de la lecture du texte/200003
+11-17 01:41:27.723  8522  8549 I MT      : ordre : i2 lit le texte (attente 5758 ms)
+11-17 01:41:28.856  8522  8547 I MT      : ordre : i1 arrive à l'affichage (priorité 50000)
+11-17 01:41:28.856  8522  8547 I MT      : ordre : i1 s'affiche (attente 0 ms)
+11-17 01:41:35.605  8522  8547 I MT      : ordre : i5 démarre
+11-17 01:41:36.007  8522  8547 I MT      : ordre : i5 arrive à la lecture du texte (priorité 200004)
+11-17 01:41:36.293  8522  8522 I MT      : départ : force=false url=http://10.0.2.2:8000/synth_layouts.html total=6
+11-17 01:41:37.614  8522  8557 I MTTEST  : compteurs total/traitées/échecs/chargement 6/1/0/false à 18 s
+11-17 01:41:37.982  8522  8548 I MT      : ordre : lecture (priorité 200002) passe ; en route : i2=lecture du texte/50001 i3=attente de la lecture du texte/200002 i4=attente de la lecture du texte/200003 i5=attente de la lecture du texte/200004
+11-17 01:41:37.982  8522  8548 I MT      : ordre : i3 lit le texte (attente 16014 ms)
+11-17 01:41:37.994  8522  8549 I MT      : écarté « WHAT THEY DID » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-17 01:41:37.994  8522  8549 I MT      : écarté « THE GATE WILL OPEN AT SUNSET » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-17 01:41:37.994  8522  8549 I MT      : écarté « THE MASTER WILL NOT SEE ANYONE TODAY » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-17 01:41:37.994  8522  8549 I MT      : écarté « I NEVER THOUGHT I WOULD SEE YOU AGAIN » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-17 01:41:39.247  8522  8549 I MT      : ordre : i2 arrive à l'affichage (priorité 50001)
+11-17 01:41:39.247  8522  8549 I MT      : ordre : i2 s'affiche (attente 0 ms)
+11-17 01:41:42.327  8522  8549 I MT      : ordre : i6 démarre
+11-17 01:41:42.599  8522  8549 I MT      : ordre : i6 arrive à la lecture du texte (priorité 200005)
+11-17 01:41:42.849  8522  8522 I MT      : départ : force=false url=http://10.0.2.2:8000/synth_layouts.html total=6
+11-17 01:41:43.615  8522  8557 I MTTEST  : compteurs total/traitées/échecs/chargement 6/2/0/false à 24 s
+11-17 01:41:43.996  8522  8550 I MT      : ordre : lecture (priorité 200003) passe ; en route : i3=lecture du texte/200002 i4=attente de la lecture du texte/200003 i5=attente de la lecture du texte/200004 i6=attente de la lecture du texte/200005
+11-17 01:41:43.996  8522  8550 I MT      : ordre : i4 lit le texte (attente 22024 ms)
+11-17 01:41:44.005  8522  8548 I MT      : écarté « DON'T 'NDERESTIMATE THE OLD MAN » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-17 01:41:44.005  8522  8548 I MT      : écarté « SOMEONE IS WATCHING US FROM THE ROOF » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-17 01:41:44.005  8522  8548 I MT      : écarté « WE MUST LEAVE BEFORE DAWN » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-17 01:41:44.866  8522  8548 I MT      : ordre : i3 arrive à l'affichage (priorité 200002)
+11-17 01:41:44.870  8522  8548 I MT      : ordre : i3 s'affiche (attente 4 ms)
+11-17 01:41:48.850  8522  8522 I MT      : départ : force=false url=http://10.0.2.2:8000/synth_layouts.html total=6
+11-17 01:41:49.382  8522  8547 I MT      : ordre : lecture (priorité 200004) passe ; en route : i4=lecture du texte/200003 i5=attente de la lecture du texte/200004 i6=attente de la lecture du texte/200005
+11-17 01:41:49.382  8522  8547 I MT      : ordre : i5 lit le texte (attente 13375 ms)
+11-17 01:41:49.390  8522  8550 I MT      : écarté « I TOLD YOU TO STAY AWAY FROM HERE » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-17 01:41:49.390  8522  8550 I MT      : écarté « THE MASTER WILL NOT SEE ANYONE TODAY » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-17 01:41:49.616  8522  8557 I MTTEST  : compteurs total/traitées/échecs/chargement 6/3/0/false à 30 s
+11-17 01:41:50.292  8522  8550 I MT      : ordre : i4 arrive à l'affichage (priorité 200003)
+11-17 01:41:50.293  8522  8550 I MT      : ordre : i4 s'affiche (attente 1 ms)
+11-17 01:41:53.616  8522  8557 I MTTEST  : compteurs total/traitées/échecs/chargement 6/4/0/false à 34 s
+11-17 01:41:53.750  8522  8549 I MT      : ordre : lecture (priorité 200005) passe ; en route : i5=lecture du texte/200004 i6=attente de la lecture du texte/200005
+11-17 01:41:53.750  8522  8549 I MT      : ordre : i6 lit le texte (attente 11151 ms)
+11-17 01:41:53.767  8522  8547 I MT      : écarté « THEY WILL PAY FOR WHAT THEY DID » (débris, filigrane ou répété)
+11-17 01:41:53.795  8522  8522 I MT      : départ : force=false url=http://10.0.2.2:8000/synth_layouts.html total=6
+11-17 01:41:54.472  8522  8547 I MT      : ordre : i5 arrive à l'affichage (priorité 200004)
+11-17 01:41:54.472  8522  8547 I MT      : ordre : i5 s'affiche (attente 0 ms)
+11-17 01:41:58.751  8522  8549 I MT      : écarté « THEY WILL PAY FOR WHAT THEY DID » (débris, filigrane ou répété)
+11-17 01:41:58.751  8522  8549 I MT      : écarté « HOW DID YOU FIND THIS PLACE » (débris, filigrane ou répété)
+11-17 01:41:58.977  8522  8549 I MT      : ordre : i6 arrive à l'affichage (priorité 200005)
+11-17 01:41:59.910  8522  8549 I MT      : ordre : i6 s'affiche (attente 933 ms)
+11-17 01:42:00.422  8522  8522 I MT      : départ : force=false url=http://10.0.2.2:8000/synth_layouts.html total=6
+11-17 01:42:01.591  8522  8522 I MT      : départ : force=false url=http://10.0.2.2:8000/synth_layouts.html total=6
+11-17 01:42:01.617  8522  8557 I MTTEST  : compteurs total/traitées/échecs/chargement 6/6/0/false à 42 s
+11-17 01:42:09.666  8522  8557 I MTTEST  : REPORT_READY report.json
+11-17 01:41:20.378  8522  8638 I tflite  : Initialized TensorFlow Lite runtime.
+11-17 01:41:20.396  8522  8637 I native  : I0000 00:00:1794879680.396168    8637 tflite_lstm_client_base.cc:371] Resizing interpreter pool to 4
+11-17 01:41:20.397  8522  8648 I native  : I0000 00:00:1794879680.397970    8648 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/conv_model.fb
+11-17 01:41:20.398  8522  8648 I native  : I0000 00:00:1794879680.398425    8648 tflite_model_pooled_runner.cc:636] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/lstm_model.fb
+11-17 01:41:20.400  8522  8648 I native  : I0000 00:00:1794879680.400595    8648 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 4
+11-17 01:41:20.406  8522  8637 I native  : I0000 00:00:1794879680.406408    8637 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_splitting_custom_ops/model.tflite
+11-17 01:41:20.406  8522  8637 I native  : I0000 00:00:1794879680.406746    8637 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-17 01:41:20.407  8522  8637 I native  : I0000 00:00:1794879680.407070    8637 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_clustering_custom_ops/model.tflite
+11-17 01:41:20.407  8522  8637 I native  : I0000 00:00:1794879680.407362    8637 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-17 01:41:20.408  8522  8638 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+11-17 01:41:20.408  8522  8638 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-17 01:41:20.408  8522  8638 I native  : I0000 00:00:1794879680.408960    8638 tflite_detector_client_with_shape_cache.cc:105] Caching size: 10
+11-17 01:41:20.478  8522  8638 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-17 01:41:21.394  8522  8638 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-17 01:41:21.606  8522  8638 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-17 01:41:21.792  8522  8638 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-17 01:41:21.989  8522  8637 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-17 01:41:22.022  8522  8637 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-17 01:41:22.611  8522  8637 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-17 01:41:22.730  8522  8637 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-17 01:41:27.782  8522  8637 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-17 01:41:28.250  8522  8634 I tflite  : Initialized TensorFlow Lite runtime.
+11-17 01:41:28.250  8522  8634 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+11-17 01:41:28.282  8522  8637 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-17 01:41:28.942  8522  8637 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-17 01:41:29.074  8522  8637 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-17 01:41:29.590  8522  8637 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-17 01:41:38.051  8522  8638 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-17 01:41:38.686  8522  8638 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-17 01:41:39.362  8522  8638 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
