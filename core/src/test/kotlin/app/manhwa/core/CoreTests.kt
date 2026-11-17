@@ -1291,6 +1291,10 @@ fun safetyTests() {
         T.ok(!RenderGate.tooUncertain("FREE", false, false, true, "ONE MONTH LATER ON THE ROAD"), "vraie phrase sur dessin : rendue")
         T.ok(!RenderGate.tooUncertain("FREE", false, false, true, "Deal with it.") && !RenderGate.tooUncertain("FREE", false, false, true, "WHAT IS IT?"), "réplique courte de trois mots : rendue (« Deal with it. » restait en anglais)")
         T.ok(RenderGate.tooUncertain("FREE", false, false, true, "JANG NEUNG-AK") && RenderGate.tooUncertain("FREE", false, false, true, "IS IT") && RenderGate.tooUncertain("FREE", false, false, true, "ODE IN AT"), "noms, deux mots ou lettres trop rares : laissés tels quels")
+        val common = setOf("more", "suffering", "church", "finds", "ode", "in", "at", "is", "it")
+        T.ok(!RenderGate.tooUncertain("FREE", false, false, true, "MORE SUFFERING!") { it in common }, "deux mots courants du dictionnaire : rendu (« MORE SUFFERING! » restait en anglais)")
+        T.ok(RenderGate.tooUncertain("FREE", false, false, true, "MORE SUFFERING!"), "sans dictionnaire : la règle d'avant")
+        T.ok(RenderGate.tooUncertain("FREE", false, false, true, "KAZAN SUFFERING") { it in common } && RenderGate.tooUncertain("FREE", false, false, true, "IS IT") { it in common } && RenderGate.tooUncertain("FREE", false, false, true, "ODE IN AT") { it in common }, "un mot inconnu, trop peu de lettres : laissés tels quels")
         T.ok(!RenderGate.tooUncertain("FREE", true, false, true, "AY TOR") && !RenderGate.tooUncertain("FREE", false, false, false, "AY TOR") && !RenderGate.tooUncertain("IN_BUBBLE", false, false, true, "AY TOR"), "autres cas : rendu")
         T.ok(!RenderGate.tooUncertain("UNKNOWN", false, false, true, "AY TOR"), "sans détecteur : aucune règle")
     }
@@ -2212,6 +2216,66 @@ fun eraseWhiteBandTests() {
         // seule la frange de 1 px collée à l'étiquette peut partir ; avant, tout le décor de la boîte de lecture (des milliers de pixels) était repeint
         T.ok(darkErased < 700, "pixels sombres du décor, hors de l'étiquette, effacés puis repeints en blanc : $darkErased")
         T.ok(textKept < 40, "pixels du texte non effacés : $textKept sur ${ink.count { it }} (mode ${plan.mode}, région ${plan.w}x${plan.h} en (${plan.x0},${plan.y0}), boîte du texte $minX,$minY-$maxX,$maxY)")
+    }
+    // bulle « cri » à contour flou, gros lettrage lu dans une boîte bien plus haute que les lettres (« DIE!! » : boîte de 367 px pour des lettres de 200) : la zone d'effacement atteint
+    // le contour de la bulle, et la couleur de remplissage était relevée sur le bord flou (le premier pixel au-delà de l'intérieur, gris à 200) : la bulle blanche était repeinte en gris
+    fun shoutBubble(scene: Int, fill: Int, noise: Int): Triple<IntArray, Int, Int> {
+        val W = 900; val H = 700; val rnd = java.util.Random(23)
+        val px = IntArray(W * H) { i -> val x = i % W; rgb(((scene shr 16) and 0xFF) + (x / 9) % 3 * 6, ((scene shr 8) and 0xFF), (scene and 0xFF) + 8) }
+        for (y in 0 until H) for (x in 0 until W) {
+            val ex = (x - 450) / 340.0; val ey = (y - 350) / 240.0; val d = Math.sqrt(ex * ex + ey * ey)
+            val n = if (noise > 0) rnd.nextInt(2 * noise + 1) - noise else 0
+            if (d <= 0.98) px[y * W + x] = rgb(((fill shr 16) and 0xFF) + n, ((fill shr 8) and 0xFF) + n, (fill and 0xFF) + n)
+            else if (d < 1.02) {
+                val t = (d - 0.98) / 0.04; val dark = px[y * W + x]
+                px[y * W + x] = rgb((((fill shr 16) and 0xFF) * (1 - t) + ((dark shr 16) and 0xFF) * t).toInt(), (((fill shr 8) and 0xFF) * (1 - t) + ((dark shr 8) and 0xFF) * t).toInt(), ((fill and 0xFF) * (1 - t) + (dark and 0xFF) * t).toInt())
+            }
+        }
+        val letterCol = if (((fill shr 16) and 0xFF) > 128) rgb(0, 0, 0) else rgb(255, 255, 255)
+        for (g in 0 until 5) for (y in 290 until 420) for (x in 270 + g * 80 until 270 + g * 80 + 60) px[y * W + x] = letterCol
+        return Triple(px, W, H)
+    }
+    fun eraseShout(px: IntArray, W: Int, H: Int): Pair<Erasure.Plan, IntArray> {
+        // boîte lue : 540 × 360 pour des lettres de 400 × 130 ; hauteur de ligne = 360 (le rayon de la zone en dépend : elle couvre toute la bulle)
+        val plan = Erasure.plan(ArrayPixels(W, H, px), 1f, listOf(RectF(180f, 170f, 720f, 530f)), 360f, W.toFloat(), H.toFloat(), emptyList(), RectF(110f, 110f, 790f, 590f), free = false, extra = listOf(RectF(262f, 280f, 678f, 430f)))!!
+        return plan to apply(px, W, plan)
+    }
+    T.test("effacement : bulle blanche à contour flou et boîte de lecture trop haute pour le lettrage → l'intérieur reste blanc, jamais gris") {
+        val (px, W, H) = shoutBubble(rgb(25, 22, 38), rgb(255, 255, 255), 0)
+        val (plan, out) = eraseShout(px, W, H)
+        var dull = 0; var inside = 0
+        for (y in 0 until H) for (x in 0 until W) {
+            val ex = (x - 450) / 340.0; val ey = (y - 350) / 240.0
+            if (ex * ex + ey * ey <= 0.90 * 0.90) { inside++; if (lum(out[y * W + x]) < 245) dull++ }
+        }
+        T.ok(dull == 0, "pixels de l'intérieur de la bulle ni blancs ni effacés : $dull sur $inside (mode ${plan.mode}, masque ${plan.mask.count { it }} px)")
+    }
+    T.test("effacement : même chose pour une bulle sombre (texte clair) et une bulle blanche à léger bruit de compression") {
+        val (dpx, W, H) = shoutBubble(rgb(200, 200, 215), rgb(18, 18, 24), 0)
+        val (dplan, dout) = eraseShout(dpx, W, H)
+        var off = 0
+        for (y in 0 until H) for (x in 0 until W) {
+            val ex = (x - 450) / 340.0; val ey = (y - 350) / 240.0
+            if (ex * ex + ey * ey <= 0.90 * 0.90 && lum(dout[y * W + x]) > 40) off++
+        }
+        T.ok(off == 0, "pixels de l'intérieur de la bulle sombre devenus clairs : $off (mode ${dplan.mode})")
+        val (npx, _, _) = shoutBubble(rgb(25, 22, 38), rgb(252, 252, 252), 2)
+        val (nplan, nout) = eraseShout(npx, W, H)
+        var dull = 0
+        for (y in 0 until H) for (x in 0 until W) {
+            val ex = (x - 450) / 340.0; val ey = (y - 350) / 240.0
+            if (ex * ex + ey * ey <= 0.90 * 0.90 && lum(nout[y * W + x]) < 240) dull++
+        }
+        T.ok(dull == 0, "pixels de l'intérieur de la bulle bruitée ni blancs ni effacés : $dull (mode ${nplan.mode})")
+        // bruit trop fort pour un aplat « exact » : le fond reste blanc quand même (jamais la couleur du bord flou)
+        val (hpx, _, _) = shoutBubble(rgb(25, 22, 38), rgb(246, 246, 246), 14)
+        val (hplan, hout) = eraseShout(hpx, W, H)
+        var grey = 0
+        for (y in 0 until H) for (x in 0 until W) {
+            val ex = (x - 450) / 340.0; val ey = (y - 350) / 240.0
+            if (ex * ex + ey * ey <= 0.90 * 0.90 && lum(hout[y * W + x]) < 215) grey++
+        }
+        T.ok(grey == 0, "pixels de l'intérieur de la bulle très bruitée repeints en gris : $grey (mode ${hplan.mode})")
     }
 }
 

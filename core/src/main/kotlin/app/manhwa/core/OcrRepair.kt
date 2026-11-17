@@ -277,6 +277,8 @@ object OcrRepair {
 internal object OcrFragments {
     fun clean(text: String, lex: EnglishLexicon, protect: Set<String>): String {
         var s = text
+        s = strayBrackets(s)
+        s = quoteGlyphs(s)
         s = dotGlyphs.replace(s, "...")
         s = junkOpening(s)
         s = ntBangI.replace(s) { m -> m.groupValues[1] + "'" + m.groupValues[2] }
@@ -296,6 +298,39 @@ internal object OcrFragments {
      * Restent intacts : une seule puce (liste de statistiques), « 1,000 », « 0.000 », « 0001 », « SCORE: 000 ».
      */
     private val dotGlyphs = Regex("(?:(?<=[A-Za-z]) )?(?<![A-Za-z0-9,.:/•·∙-])(?<![:=#]\\s)(?:[•·∙]{2,}|0{3,}[lI|]?)(?![A-Za-z0-9:/•·∙-])")
+
+    // ---------- guillemets et crochets lus autrement ----------
+
+    /**
+     * Un crochet ou une parenthèse FERMANTE en tête du texte, ou OUVRANTE en fin de texte, n'a pas de pendant : c'est un débris du bord de la bulle ou d'une lettre (« ] DIE!! » → « DIE!! »).
+     * « [COMMANDER OF THE COMPANY » (crochet ouvrant en tête, fermant perdu) et « (HE SAID) » restent intacts.
+     */
+    private val leadingCloser = Regex("^\\s*[\\]\\)}】］）｝〕」』]+\\s*(?=[A-Za-z0-9\"'“‘])")
+    private val trailingOpener = Regex("(?<=[A-Za-z0-9.!?…,])\\s*[\\[({【［（｛〔「『]+\\s*$")
+    private fun strayBrackets(s: String): String = trailingOpener.replace(leadingCloser.replace(s, ""), "")
+
+    /**
+     * Guillemet fermant et points de suspension lus comme des chiffres : le guillemet courbe ” ressemble à « 99 », les trois points à « 88 » (« "HUMAN-DEMON CHRONICLES"... » devient
+     * « *HUMAN-DEMON CHRONICLES 99 88 »). Les deux ensemble après un mot, ou « 99 » seul en fin de texte quand un guillemet ouvrant (ou un « * » seul collé à un mot) attend sa fermeture.
+     * Un nombre qui suit « LEVEL », « CHAPTER », « AGE »… reste un nombre, comme « 99 88 » dans un texte presque sans mots.
+     */
+    private val quotePair = Regex("(?<=[A-Za-z!?])\\s?99\\s?(?:88|8|0{2,3}|o{2,3})(?![A-Za-z0-9])")
+    private val quoteLone = Regex("(?<=[A-Za-z!?])\\s?99\\s*$")
+    private val openingMarks = charArrayOf('"', '“', '«', '*')
+    private fun quoteGlyphs(s: String): String {
+        val pair = quotePair.find(s); val lone = if (pair == null) quoteLone.find(s) else null
+        val m = pair ?: lone ?: return s
+        val before = s.substring(0, m.range.first)
+        val words = Regex("[A-Za-z]{2,}").findAll(before).map { it.value.uppercase() }.toList()
+        if (words.isEmpty() || words.last() in numericLeaders) return s
+        val opener = before.count { it in openingMarks } % 2 == 1
+        if (pair != null && words.size < 3 && !opener) return s
+        if (lone != null && !opener) return s
+        var head = before
+        // un seul « * » collé au début d'un mot, avec ce guillemet fermant : c'était le guillemet ouvrant (« *HUMAN-DEMON »)
+        if (before.count { it == '*' } == 1) head = head.replace(Regex("(?<![A-Za-z0-9*])\\*(?=[A-Za-z])"), "\"")
+        return head + "\"" + (if (pair != null) "..." else "") + s.substring(m.range.last + 1)
+    }
 
     /** Mots qui ouvrent une phrase : un nombre isolé devant l'un d'eux est un « ... » mal lu (« 910 HE WAS… »). */
     private val subjectStarts = setOf("HE", "SHE", "IT", "WE", "THEY", "YOU", "I", "THIS", "THAT", "THERE", "HERE", "WHAT", "WHO", "WHY", "HOW", "WHEN", "IF", "BUT", "SO", "THEN", "WELL", "HIS", "HER", "THEIR", "OUR", "MY", "YOUR", "THE", "NOW", "YES", "NOT")
@@ -324,7 +359,7 @@ internal object OcrFragments {
     // ---------- « I » lu autrement ----------
 
     /** Ce qui suit le pronom « I » : verbes, auxiliaires et morceaux de contraction. « 1 WILL », « 1 M » (« I'M »), « 1 LOOK » : le « 1 » est un « I ». */
-    private val iFollowers = setOf(
+    internal val iFollowers = setOf(
         "M", "LL", "VE", "D", "AM", "WILL", "WAS", "CAN", "COULD", "WOULD", "SHOULD", "MUST", "HAVE", "HAD", "DON'T", "DIDN'T", "WON'T", "CAN'T", "COULDN'T", "WOULDN'T", "HAVEN'T", "SHALL", "MAY", "MIGHT", "DO", "DID",
         "GOT", "WANT", "NEED", "KNOW", "THINK", "LOOK", "SEE", "FEEL", "SAID", "TOLD", "MEAN", "SWEAR", "PROMISE", "GUESS", "SUPPOSE", "HOPE", "WISH", "LIKE", "LOVE", "HATE", "HEARD", "SAW", "NEVER", "ALSO", "ALWAYS",
         "JUST", "ALREADY", "ONLY", "STILL", "REALLY", "TRULY", "IMAGINE", "BELIEVE", "UNDERSTAND", "REMEMBER", "FORGOT", "MISS", "KNEW", "THOUGHT", "DOUBT", "BET", "AGREE", "ADMIT", "WONDER", "FEAR", "FOUND", "FELT",

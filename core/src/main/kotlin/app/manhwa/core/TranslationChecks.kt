@@ -30,7 +30,10 @@ object TranslationChecks {
             val nameSet = names.map { it.lowercase() }.toSet()
             val eng = toks.filter { w -> val l = w.lowercase().replace('’', '\''); l in englishOnly && l !in nameSet }
             if (eng.size >= 2 && eng.size.toFloat() / toks.size.coerceAtLeast(1) >= 0.2f) out.add(Problem("non-traduit", "mots anglais : " + eng.distinct().take(6).joinToString(", ")))
-            if (sLetters >= 3 && normalize(src) == normalize(t) && toks.size >= 2 && toks.any { it.lowercase() in englishOnly || it.length > 3 }) out.add(Problem("non-traduit", "identique à l'original"))
+            // « Y-YOU… » recopié tel quel : un bégaiement est un seul « mot » (trait d'union) ; son second morceau est ce qui dit s'il est resté anglais
+            val englishStutter = toks.any { stutterEnglish(it, nameSet) }
+            if (englishStutter && eng.isEmpty()) out.add(Problem("non-traduit", "bégaiement resté en anglais : " + toks.first { stutterEnglish(it, nameSet) }))
+            if (sLetters >= 3 && normalize(src) == normalize(t) && ((toks.size >= 2 && toks.any { it.lowercase() in englishOnly || it.length > 3 }) || englishStutter)) out.add(Problem("non-traduit", "identique à l'original"))
         }
         // rendu mot à mot d'une expression toute faite (« tuer deux oiseaux », « faire du sens », « écume » pour « scum ») : la ligne est refaite avec l'équivalent
         if (target == "fr") for (h in IdiomHints.calques(src, t).take(2)) out.add(Problem("calque", "« ${h.matched} » est traduit mot à mot ; dire : ${h.french}"))
@@ -48,6 +51,14 @@ object TranslationChecks {
         // reste de format
         if (Regex("^\\s*\\d+\\s*\\|").containsMatchIn(t) || t.contains("**") || t.startsWith("```")) out.add(Problem("format", "résidu de mise en forme"))
         return out
+    }
+
+    /** Bégaiement (une ou deux lettres, trait d'union, mot) dont le mot est un mot anglais courant : « Y-YOU », « B-BUT », « W-WHAT ». « T-TOI », « a-t-il », « peut-être » n'y répondent pas. */
+    private val stutterRe = Regex("^\\p{L}{1,2}-\\p{L}[\\p{L}'’]*$")
+    private fun stutterEnglish(token: String, names: Set<String>): Boolean {
+        if (!stutterRe.matches(token)) return false
+        val word = token.substringAfter('-').lowercase().replace('’', '\'')
+        return word in englishOnly && word !in names
     }
 
     private fun toks(s: String) = tokenRe.findAll(s).map { it.value.lowercase() }.toList()

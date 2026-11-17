@@ -424,8 +424,11 @@ object Erasure {
             // le contour fin soudé aux lettres (thin) n'est jamais effacé, ni par le nettoyage de la zone ni par la dilatation des lettres
             val mask = BooleanArray(w * h) { !thin[it] && (clean[it] || grown[it]) }
             trace?.invoke("aplat : lettres=${raw.count { it }} (avant tri des hachures ${rawAll.count { it }}) zone=${zone.count { it }} nettoyage=${clean.count { it }} élargies=${grown.count { it }} retirées(fines)=${thin.count { it }} masque=${mask.count { it }}")
-            // fond uni : aplat exact (comportement d'origine) ; fond en dégradé, ombré ou légèrement bruité : reconstruction qui suit le fond autour de la zone, avec bords adoucis
-            val adaptiveFlat = TextErase.zoneFill(px, w, h, mask, a.bg)
+            // fond uni : aplat exact (comportement d'origine) ; fond en dégradé, ombré ou légèrement bruité : reconstruction qui suit le fond autour de la zone, avec bords adoucis.
+            // Le fond se juge d'abord sous le masque lui-même (hors lettres) : une zone qui atteint le contour de la bulle n'a plus de fond autour d'elle, seulement le bord flou du contour
+            val uniformUnder = TextErase.uniformBackground(px, w, h, mask, grown, a.bg)
+            if (uniformUnder) trace?.invoke("fond sous le masque uni (hors lettres) : aplat exact, sans reconstruction")
+            val adaptiveFlat = if (uniformUnder) null else TextErase.zoneFill(px, w, h, mask, a.bg)
             val featherF = if (adaptiveFlat != null) TextErase.featherAlpha(mask, w, h) else null
             val layer = IntArray(w * h) { if (mask[it]) ((featherF?.get(it) ?: 0xFF) shl 24) or ((adaptiveFlat?.get(it) ?: a.bg) and 0xFFFFFF) else 0 }
             val shape = bubbleShape(src, s, textUnion, a.bg, imageW, imageH, container = container)

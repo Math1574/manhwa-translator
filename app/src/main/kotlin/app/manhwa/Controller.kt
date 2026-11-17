@@ -1428,10 +1428,10 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val enhanced = s.enhancedOcr && graph.paddleModels.available
         val ocrEngine = CombinedOcr(s.source, MlKitOcr(s.source), if (enhanced) graph.paddle else null, Lexicon.get(ctx), parallel = !thermalHot, names = { graph.gemma.chapterNames() })
         val rereadOn = spec != null && s.source.code == "en" && graph.blockReader.available
-        // « pp4 » : lecture des lignes inclinées sur recadrage redressé + réparation du texte lu de la version 3 (« ... » mal lus, apostrophes perdues, parasites) + croisement des deux lecteurs anglais et de ML Kit mot par mot avec le dictionnaire, relecture élargie des lignes douteuses ; « rr » : relecture des textes douteux par Gemma (résultats différents, cache à part)
+        // « pp5 » : lecture des lignes inclinées sur recadrage redressé + réparation du texte lu de la version 3 (« ... » mal lus, apostrophes perdues, parasites, guillemets et « ... » lus « 99 88 », crochet parasite) + croisement des deux lecteurs anglais et de ML Kit mot par mot avec le dictionnaire, relecture élargie des lignes douteuses, ponctuation finale et « I » de début coupés par la boîte retrouvés ; « rr » : relecture des textes douteux par Gemma (résultats différents, cache à part)
         // onomatopées laissées telles quelles (anglais) : clé de cache distincte, pour ne pas reprendre d'anciens résultats où elles étaient traduites
         val skipSfx = !s.translateSfx && s.source.code != "ja" && s.source.code != "ko" && s.source.code != "zh"
-        val engineId = (if (spec == null) MlKitTranslation.ID else GemmaTranslator.engineId(spec)) + (if (enhanced) "+pp4" else "") + (if (rereadOn) "+rr1" else "") + (if (skipSfx) "+sfx0" else "") + seamTag
+        val engineId = (if (spec == null) MlKitTranslation.ID else GemmaTranslator.engineId(spec)) + (if (enhanced) "+pp5" else "") + (if (rereadOn) "+rr1" else "") + (if (skipSfx) "+sfx0" else "") + seamTag
         var debug: DebugInfo? = null
         val lexicon = Lexicon.get(ctx)
         candidatesById[c.id] = c

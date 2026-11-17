@@ -129,6 +129,84 @@ object OcrFusion {
         return if (replaced == 0) Result(base, 0) else Result(parts.joinToString(" "), replaced)
     }
 
+    // ---------- bord de ligne : ce que la boîte du détecteur a coupé ----------
+
+    /** Ce qu'une relecture sur recadrage élargi ajoute à la lecture de base : [prefix] à poser devant le texte (lettre manquante, « I »), [suffix] = nouvelle ponctuation finale (remplace l'ancienne). */
+    class Edges(val prefix: String, val suffix: String?)
+
+    private const val PUNCT = ".,!?…"
+    private fun trailingPunct(s: String) = s.takeLastWhile { it in PUNCT }
+    /** Ponctuation finale plausible : une virgule seule, ou un à quatre signes parmi « . ! ? … » (jamais « : », « } », une lettre). */
+    private fun okRun(run: String) = run == "," || (run.length in 1..4 && run.all { it in ".!?…" })
+
+    /**
+     * La boîte du détecteur coupe parfois une lettre étroite au bord de la ligne (un « I » seul à gauche : « I SAID, » lu « SAID. ») ou la virgule finale
+     * (« CHURCH FINDS OUT, » lu « CHURCH FINDS OUT »). Une relecture sur recadrage élargi ([padded]) les retrouve, mais elle invente aussi des lettres sur le décor
+     * (« THAT » → « STHAT, »). Seules deux additions sont donc prises, et seulement si le CORPS de la ligne est resté identique :
+     *  - ponctuation finale : une virgule, ou des « . ! ? … » en plus ;
+     *  - début : la ou les lettres qui complètent un mot inconnu en mot connu (« ALENT. » → « TALENT. »), ou un « I » seul devant un mot qui suit d'ordinaire « I » (« SAID », « WILL »…).
+     * Renvoie null quand il n'y a rien à ajouter.
+     */
+    fun edgeAdditions(base: String, padded: String, lex: EnglishLexicon, names: Set<String> = emptySet()): Edges? {
+        val b = base.trim(); val p = padded.trim()
+        if (b.isEmpty() || p.isEmpty() || b.length > MAX_LEN || p.length > MAX_LEN + 8) return null
+        val rb = trailingPunct(b); val rp = trailingPunct(p)
+        val bBody = b.dropLast(rb.length).trimEnd(); val pBody = p.dropLast(rp.length).trimEnd()
+        if (bBody.count { it.isLetter() } < 2) return null
+        val at = pBody.lowercase().indexOf(bBody.lowercase())
+        if (at < 0 || at + bBody.length != pBody.length) return null
+        val suffix = when {
+            rp.length > rb.length && rp.startsWith(rb) && okRun(rp) && (rb.isEmpty() || okRun(rb)) -> rp
+            rb == "." && rp == "," -> rp          // le point est la confusion habituelle d'une virgule vue de trop près : la lecture élargie voit la queue entière
+            else -> null
+        }
+        val pre = pBody.substring(0, at)
+        var prefix = ""
+        if (pre.isNotEmpty()) {
+            val w0 = Regex("^[A-Za-z]+(?:['’][A-Za-z]+)?").find(bBody)?.value
+            val letters = pre.trim()
+            if (w0 != null && !pre.any { it.isWhitespace() } && letters.length in 1..2 && letters.all { it.isLetter() }
+                && !isKnown(w0, lex, names) && isKnown(letters + w0, lex, names)) prefix = letters
+            else if (w0 != null && letters.length == 1 && letters[0] in "Il1|" && pre.length <= 2 && w0.uppercase() in OcrFragments.iFollowers) prefix = "I "
+        }
+        return if (prefix.isEmpty() && suffix == null) null else Edges(prefix, suffix)
+    }
+
+    /** Réunit les additions proposées par deux lectures (l'autre lecteur, la relecture élargie) : le premier début trouvé ; pour la fin, la virgule si l'une des deux la voit (le point est sa confusion habituelle), sinon la plus longue. */
+    fun mergeEdges(a: Edges?, b: Edges?): Edges? {
+        if (a == null) return b
+        if (b == null) return a
+        val sa = a.suffix; val sb = b.suffix
+        val suffix = when {
+            sa == null -> sb
+            sb == null -> sa
+            sa == "," || sb == "," -> ","
+            else -> if (sb.length > sa.length) sb else sa
+        }
+        return Edges(a.prefix.ifEmpty { b.prefix }, suffix)
+    }
+
+    /** Appliquée au texte final [t] (déjà croisé, relu) : le début n'est ajouté que si [t] ne l'a pas déjà, la fin que si la ponctuation finale de [t] est celle de la lecture de base. */
+    fun applyEdges(t: String, base: String, e: Edges): String {
+        var out = t.trim()
+        if (e.prefix.isNotEmpty() && !out.startsWith(e.prefix.trim(), ignoreCase = true)) out = e.prefix + out
+        if (e.suffix != null) {
+            val rb = trailingPunct(base.trim()); val rt = trailingPunct(out)
+            if (rt == rb) out = out.dropLast(rt.length) + e.suffix
+        }
+        return out
+    }
+
+    /** Vaut-il la peine de relire la ligne sur recadrage élargi ? Seulement si une lettre ou une virgule peut manquer : pas de ponctuation forte à la fin, premier mot inconnu ou qui suit « I ». */
+    fun worthEdgeRead(text: String, lex: EnglishLexicon, names: Set<String> = emptySet()): Boolean {
+        val t = text.trim()
+        if (t.count { it.isLetter() } < 3 || '/' in t) return false
+        val run = trailingPunct(t)
+        if (run.isEmpty() || run == "." || run == "..") return true
+        val w0 = Regex("^[^A-Za-z]*([A-Za-z]+(?:['’][A-Za-z]+)?)").find(t)?.groupValues?.get(1) ?: return false
+        return w0.uppercase() in OcrFragments.iFollowers || !isKnown(w0, lex, names)
+    }
+
     /** Fusion en chaîne : [base] corrigée successivement par chacune des [alts] (lectures du même texte). */
     fun fuseAll(base: String, alts: List<String>, lex: EnglishLexicon, names: Set<String> = emptySet()): Result {
         var cur = base; var total = 0

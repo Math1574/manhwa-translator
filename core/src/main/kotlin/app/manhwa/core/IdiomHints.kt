@@ -9,7 +9,8 @@ package app.manhwa.core
  *  - [calques] repère, dans une traduction déjà faite, le rendu mot à mot de l'une d'elles : la ligne est refaite avec l'équivalent.
  *
  * Format de la table (une expression par ligne) : `expression anglaise | équivalent français | [rendu fautif en français, expression régulière]`.
- * Dans l'expression : `~verbe` (toutes les formes : « ~get » = get, gets, got, gotten, getting), `*` (zéro à trois mots quelconques), `?` (zéro ou un mot), `a/b/c` (l'un de ces mots), `@be` (une forme du verbe être).
+ * Dans l'expression : `~verbe` (toutes les formes : « ~get » = get, gets, got, gotten, getting), `*` (zéro à trois mots quelconques), `?` (zéro ou un mot), `a/b/c` (l'un de ces mots), `@be` (une forme du verbe être),
+ * `^` en premier (début du texte) et `$` en dernier (fin du texte), `_` (un tiret qui coupe la phrase : « WHAT THE-?! »).
  */
 object IdiomHints {
     /** Une expression repérée dans la ligne [line] (à partir de 1) : [matched] est le texte de la ligne, [french] ce qu'il faut dire. */
@@ -23,7 +24,7 @@ object IdiomHints {
         for ((i, raw) in texts.withIndex()) {
             if (out.size >= maxTotal) break
             val s = normalize(raw)
-            if (s.length < 6) continue
+            if (s.length < MIN_NORMALIZED) continue
             for (h in matches(s).take(maxPerLine)) { if (out.size >= maxTotal) break; out.add(Hit(i + 1, h.second, h.first.french)) }
         }
         return out
@@ -32,16 +33,21 @@ object IdiomHints {
     /** Expressions de [src] dont la traduction [tr] est le rendu mot à mot connu. */
     fun calques(src: String, tr: String): List<Hit> {
         val s = normalize(src)
-        if (s.length < 6) return emptyList()
+        if (s.length < MIN_NORMALIZED) return emptyList()
         val low = tr.lowercase()
         return matches(s).filter { (e, _) -> e.bad != null && e.bad.containsMatchIn(low) }.map { (e, m) -> Hit(1, m, e.french) }
     }
 
     // ---------- mise en correspondance ----------
 
+    /** Texte normalisé le plus court qui vaille d'être cherché : « die » seul (" die ") en fait cinq. */
+    private const val MIN_NORMALIZED = 5
+    /** Un tiret qui coupe la phrase (« WHAT THE-?! », « I—», « WAIT-- ») : il devient le mot « _ », que la table peut viser (« what the _ »). */
+    private val cutDash = Regex("(?<=[A-Za-z])\\s?[-–—]+(?=\\s*(?:[?!.…]|$))")
+
     private fun normalize(raw: String): String {
         val sb = StringBuilder(" ")
-        for (ch in raw.lowercase()) sb.append(if (ch in 'a'..'z' || ch in '0'..'9' || ch == '\'') ch else if (ch == '’') '\'' else ' ')
+        for (ch in cutDash.replace(raw, " _ ").lowercase()) sb.append(if (ch in 'a'..'z' || ch in '0'..'9' || ch == '\'' || ch == '_') ch else if (ch == '’') '\'' else ' ')
         return sb.toString().replace(Regex(" +"), " ").let { if (it.endsWith(" ")) it else "$it " }
     }
 
@@ -88,8 +94,10 @@ object IdiomHints {
     }
 
     private fun compile(phrase: String): Regex {
-        val sb = StringBuilder("(?<= )")
-        val toks = phrase.trim().split(Regex("\\s+"))
+        val toks = phrase.trim().split(Regex("\\s+")).toMutableList()
+        val atStart = toks.firstOrNull() == "^"; if (atStart) toks.removeAt(0)
+        val atEnd = toks.lastOrNull() == "$"; if (atEnd) toks.removeAt(toks.size - 1)
+        val sb = StringBuilder(if (atStart) "(?<=^ )" else "(?<= )")
         for ((i, t) in toks.withIndex()) {
             val last = i == toks.size - 1
             when {
@@ -101,7 +109,7 @@ object IdiomHints {
                 else -> sb.append(Regex.escape(t)).append(if (last) "" else " ")
             }
         }
-        sb.append("(?= )")
+        sb.append(if (atEnd) "(?= \$)" else "(?= )")
         return Regex(sb.toString())
     }
 
@@ -274,6 +282,23 @@ in heat | en chaleur | période de chaleur
 on edge | sur les nerfs
 no matter what | quoi qu'il arrive, coûte que coûte ; « no matter what X » = peu importe ce que X | peu importe quoi
 no wonder | pas étonnant que
+# ===== phrases coupées, ironie, ordres, bégaiements =====
+what the _ | mais qu'est-ce que… ?! (juron coupé par un tiret : ne le complète pas et n'écris pas « quoi-ch… ») | quoi.ch
+what the $ | mais qu'est-ce que… ?! (juron coupé : ne le complète pas et n'écris pas « quoi-ch… ») | quoi.ch
+who the _ | mais qui… ?! (juron coupé par un tiret : ne le complète pas)
+^ die | meurs ! (crié à quelqu'un : impératif, jamais « morte » ni « mort ») ; « die, you scum » = crève, ordure | \bmorte?s?\b
+i said | j'ai dit (c'est celui qui parle : jamais « il a dit ») ; « I said, stop! » = j'ai dit : arrête ! | ^\W*(il|elle) a dit\b
+of all things | en plus de ça, comble de l'ironie, justement (« a demon of all things » = un démon, par-dessus le marché ; jamais « de toutes choses ») | de toutes (les )?choses
+of all people | et justement lui, elle ou toi (ironie ; jamais « de tous les gens ») | de tous les gens
+of all places | et justement là, justement ici (ironie ; jamais « de tous les endroits ») | de tous les endroits
+of all times | et au pire moment (ironie ; jamais « de tous les temps ») | de tous les temps
+only to be/find/discover/realize/learn/end/lose/die/wake/become | pour finalement, avant de, et voilà que (mauvaise surprise : « I lived well, only to be reborn as a demon » = j'ai bien vécu, et voilà que je me réincarne en démon ; jamais « seulement pour ») | seulement pour|uniquement pour
+~find out | apprendre, découvrir (« if the church finds out, we're done » = si l'Église l'apprend, on est finis ; jamais « trouver dehors ») | trouv\w* dehors
+every last one of | jusqu'au dernier de (« every last one of us » = jusqu'au dernier d'entre nous)
+y you | « Y-You… » = « T-Toi… » (le bégaiement se garde : la lettre répétée est la première du mot français ; jamais l'anglais recopié) | \by-you
+b but | « B-But… » = « M-Mais… » | \bb-but
+w what | « W-What… » = « Q-Quoi… » | \bw-what
+w wait | « W-Wait… » = « A-Attends… » | \bw-wait
 # ===== faux amis et mots piégeux =====
 ~realize that/how/what/why/who/where/when/it/this/i/you/he/she/we/they/now/just | se rendre compte (de), comprendre, prendre conscience (jamais « réaliser » pour « comprendre ») | réalis(?!é par)
 definitely | à coup sûr, sans aucun doute, forcément (jamais « définitivement ») | définitivement

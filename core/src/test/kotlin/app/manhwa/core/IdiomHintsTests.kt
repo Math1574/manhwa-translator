@@ -114,4 +114,43 @@ fun idiomHintsTests() {
         T.ok(!LlmPrompt.user(listOf("Hi."), emptyList(), emptyList()).contains("Expressions"), "pas de conseil, pas de section")
         T.ok(LlmPrompt.fixUser("Get away!", "Se lever !", listOf("calque: x"), emptyList(), emptyList(), emptyList(), IdiomHints.find(listOf("Get away!"))).contains("s'enfuir"), "conseils dans la correction")
     }
+
+    T.test("remarques de tes captures : juron coupé, « die » seul, ironie « of all things », « only to be », « find out », « I said »") {
+        T.ok(frenchOf("WHAT THE-?! IS THIS ME?!").contains("qu'est-ce que") && frenchOf("WHAT THE—").contains("qu'est-ce que") && frenchOf("WHAT THE...").contains("qu'est-ce que"), "what the-")
+        T.ok(frenchOf("What the hell is this?").contains("bon sang") && !frenchOf("What the hell is this?").contains("juron coupé"), "« what the hell » reste l'expression complète")
+        T.eq(emptyList<IdiomHints.Hit>(), hint("What the monster did was terrible."), "« what the » ordinaire : pas de conseil")
+        T.ok(frenchOf("DIE!!").contains("meurs") && frenchOf("Die, you scum!").contains("meurs"), "die en tête")
+        T.eq(emptyList<IdiomHints.Hit>(), hint("I don't want to die."), "« die » ailleurs qu'en tête : pas de conseil")
+        T.ok(IdiomHints.calques("DIE!!", "MORTE !").isNotEmpty() && IdiomHints.calques("DIE!!", "MEURS !!").isEmpty(), "calque : « morte »")
+        T.ok(frenchOf("AND I'M IN A DEMON'S BODY, OF ALL THINGS!!").contains("ironie") && IdiomHints.calques("OF ALL THINGS!!", "DE TOUTES CHOSES !!").isNotEmpty(), "of all things")
+        T.ok(frenchOf("Why you, of all people?").contains("justement") && frenchOf("Here, of all places?").contains("justement"), "of all people / places")
+        val lived = "I LIVED SUCH A GOOD LIFE, ONLY TO BE REBORN AS A DEMON OF ALL THINGS... THIS IS THE WORST..."
+        T.ok(frenchOf(lived).contains("voilà que") && frenchOf(lived).contains("ironie"), "only to be + of all things : $lived")
+        T.eq(emptyList<IdiomHints.Hit>(), hint("I came only to see you.", "He was the only one to speak."), "« only to » sans verbe d'issue : pas de conseil")
+        T.ok(frenchOf("IF THE CHURCH FINDS OUT, OUR VILLAGE IS FINISHED!").contains("l'apprend") && frenchOf("I'll find out who did it.").contains("découvrir"), "find out")
+        T.ok(IdiomHints.calques("Find out!", "Trouve dehors !").isNotEmpty() && IdiomHints.calques("Find out!", "Découvre-le !").isEmpty(), "calque : trouver dehors")
+        T.ok(frenchOf("I SAID, STOP!!").contains("j'ai dit") && IdiomHints.calques("I SAID, STOP!!", "Il a dit : arrêtez !!").isNotEmpty() && IdiomHints.calques("I SAID, STOP!!", "J'ai dit : arrête !!").isEmpty(), "I said")
+        T.ok(frenchOf("THEY'LL WIPE OUT EVERY LAST ONE OF US!").contains("jusqu'au dernier"), "every last one of")
+    }
+    T.test("bégaiement resté en anglais (« Y-YOU… » recopié) : repéré par le contrôle, conseillé, et secouru en dernier recours") {
+        fun probs(src: String, tr: String) = TranslationChecks.problems(src, tr, "fr")
+        T.ok(probs("Y-YOU...", "Y-YOU...").any { it.code == "non-traduit" }, "recopié tel quel")
+        T.ok(probs("B-BUT...", "B-BUT...").any { it.code == "non-traduit" } && probs("W-WHAT?!", "W-WHAT?!").any { it.code == "non-traduit" }, "autres bégaiements")
+        T.ok(probs("Y-YOU... TRAITOR!", "Y-YOU... TRAÎTRE !").any { it.code == "non-traduit" }, "bégaiement anglais dans une phrase traduite")
+        T.ok(probs("Y-YOU...", "T-TOI...").isEmpty() && probs("B-BUT...", "M-MAIS...").isEmpty(), "bégaiements français : aucun problème")
+        T.ok(probs("KAZAN-NIM!", "KAZAN-NIM !").none { it.code == "non-traduit" } && probs("S-RANK", "S-RANK").none { it.code == "non-traduit" }, "nom avec suffixe, rang : intacts")
+        T.ok(frenchOf("Y-YOU...").contains("T-Toi") && frenchOf("B-BUT, I...").contains("M-Mais") && frenchOf("W-WAIT!").contains("A-Attends"), "conseils de bégaiement")
+        T.ok(IdiomHints.calques("Y-YOU...", "Y-YOU...").isNotEmpty() && IdiomHints.calques("Y-YOU...", "T-TOI...").isEmpty(), "calque : bégaiement recopié")
+        fun r(src: String, tr: String) = TranslationPost.rescueStutter(src, tr)
+        T.eq("T-TOI…", r("Y-YOU…", "Y-YOU…"))
+        T.eq("T-Toi...", r("Y-You...", "Y-You..."))
+        T.eq("M-MAIS !", r("B-BUT!", "B-BUT !"))
+        T.eq("Q-QUOI ?!", r("W-WHAT?!", "W-WHAT?!"))
+        T.eq("A-ATTENDS", r("W-WAIT", "W-WAIT"))
+        T.eq("T-TOI…", r("Y-YOU…", "T-TOI…"))                          // déjà traduit : intact
+        T.eq("ATTENDS", r("W-WAIT", "ATTENDS"))
+        T.eq("KAZAN-NIM !", r("KAZAN-NIM!", "KAZAN-NIM !"))              // pas un bégaiement
+        T.eq("S-RANK", r("S-RANK", "S-RANK"))
+        T.eq("Y-YOU... TRAITOR!", r("Y-YOU... TRAITOR!", "Y-YOU... TRAITOR!"))   // plus d'un mot : laissé au modèle
+    }
 }

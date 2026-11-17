@@ -17,11 +17,14 @@ object RenderGate {
 
     /**
      * Texte libre (« FREE » : le détecteur a fonctionné et n'a vu ni bulle ni zone) dont le fond est un dessin (mode « ART ») : on le laisse tel quel, sauf s'il s'agit
-     * manifestement d'une vraie phrase (au moins 8 lettres et 3 mots : narration ou réplique courte sur le dessin, « Deal with it. »). Un nom ou une syllabe lue sur un motif reste laissé tel quel. Sans détecteur (kind « UNKNOWN »), aucune règle ne s'applique.
+     * manifestement d'une vraie phrase (au moins 8 lettres et 3 mots : narration ou réplique courte sur le dessin, « Deal with it. »), ou de deux mots courants du dictionnaire (« MORE SUFFERING! »). Un nom ou une syllabe lue sur un motif reste laissé tel quel. Sans détecteur (kind « UNKNOWN »), aucune règle ne s'applique.
      */
-    fun tooUncertain(kind: String, hasZone: Boolean, hasContainer: Boolean, artBackground: Boolean, source: String = ""): Boolean {
+    fun tooUncertain(kind: String, hasZone: Boolean, hasContainer: Boolean, artBackground: Boolean, source: String = "", isCommonWord: (String) -> Boolean = { false }): Boolean {
         if (kind != "FREE" || hasZone || hasContainer || !artBackground) return false
         val letters = source.count { it.isLetter() }; val words = source.split(Regex("\\s+")).count { w -> w.count { it.isLetter() } >= 2 }
-        return !(letters >= 8 && words >= 3)
+        if (letters >= 8 && words >= 3) return false
+        // « MORE SUFFERING! » : deux mots (ou plus) tous courants d'après le dictionnaire, d'au moins trois lettres, ne sont ni un nom ni un motif du décor
+        val toks = source.split(Regex("[^A-Za-z']+")).filter { it.isNotEmpty() }
+        return !(letters >= 8 && toks.size >= 2 && toks.all { it.length >= 3 && isCommonWord(it.lowercase()) })
     }
 }
