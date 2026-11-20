@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); queueBatchTests(); readingOrderTests(); eraseWhiteBandTests(); fontPolicyTests(); blockEditTests(); seamTests(); modelTests(); settingsTests(); utilTests(); textTests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests(); openBubbleTests(); barrierShapeTests(); safetyTests(); artEraseTests(); updateTests(); settingsSearchTests(); ignoredTests(); termRefreshTests(); discardedTests(); correctionsTests(); libraryViewTests(); homeViewTests(); editorViewTests(); coverTests(); crashTraceTests(); gpuGuardTests(); artFillTests(); blockLayoutTests(); textPaintTests(); textTiltTests(); tiltedResultTests(); tiltedReadingTests(); detectionTilesTests(); translationOrderTests(); ocrQualityTests(); idiomHintsTests()
+    groupingTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); queueBatchTests(); readingOrderTests(); eraseWhiteBandTests(); fontPolicyTests(); blockEditTests(); seamTests(); modelTests(); settingsTests(); utilTests(); textTests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests(); openBubbleTests(); barrierShapeTests(); safetyTests(); artEraseTests(); updateTests(); settingsSearchTests(); ignoredTests(); termRefreshTests(); discardedTests(); correctionsTests(); libraryViewTests(); homeViewTests(); editorViewTests(); coverTests(); crashTraceTests(); gpuGuardTests(); artFillTests(); blockLayoutTests(); textPaintTests(); textTiltTests(); tiltedResultTests(); tiltedReadingTests(); detectionTilesTests(); translationOrderTests(); ocrQualityTests(); idiomHintsTests(); agreementTests(); positionEditTests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -2276,6 +2276,46 @@ fun eraseWhiteBandTests() {
             if (ex * ex + ey * ey <= 0.90 * 0.90 && lum(hout[y * W + x]) < 215) grey++
         }
         T.ok(grey == 0, "pixels de l'intérieur de la bulle très bruitée repeints en gris : $grey (mode ${hplan.mode})")
+    }
+    // bulle ronde à fond en dégradé, lettrage blanc cerné de noir dont le dernier mot est d'un rouge sombre cerné de brun foncé (peu contrasté avec le fond) ; une griffure du dessin traverse la
+    // dernière ligne et rejoint le contour : le remplissage depuis le pourtour du texte ne contenait plus le mot sombre, qui restait sous la traduction (« DEMONS. »)
+    fun darkWordBubble(streak: Boolean): Triple<IntArray, Int, Int> {
+        val W = 900; val H = 700
+        val px = IntArray(W * H) { rgb(205, 125, 135) }
+        for (y in 0 until H) for (x in 0 until W) {
+            val ex = (x - 450) / 340.0; val ey = (y - 350) / 300.0; val d = Math.sqrt(ex * ex + ey * ey)
+            if (d <= 0.94) { val t = y / H.toDouble(); px[y * W + x] = rgb((72 + 28 * t).toInt(), (70 + 10 * t).toInt(), (76 + 2 * t).toInt()) }
+            else if (d <= 1.0) px[y * W + x] = rgb(125, 36, 60)
+        }
+        fun bar(x: Int, y: Int, fill: Int, outline: Int) {
+            for (yy in y - 5 until y + 55 + 5) for (xx in x - 5 until x + 36 + 5) px[yy * W + xx] = outline
+            for (yy in y until y + 55) for (xx in x until x + 36) px[yy * W + xx] = fill
+        }
+        if (streak) for (y in 457..458) for (x in 100 until 640) px[y * W + x] = rgb(150, 140, 142)
+        for (k in 0 until 4) for (g in 0 until 7) {
+            val red = k == 3 && g >= 3
+            bar(300 + g * 44, 220 + k * 78, if (red) rgb(100, 38, 35) else rgb(255, 255, 255), if (red) rgb(48, 27, 27) else rgb(0, 0, 0))
+        }
+        return Triple(px, W, H)
+    }
+    T.test("effacement : bulle à fond en dégradé, dernier mot sombre peu contrasté et griffure qui traverse la ligne → tout le lettrage est effacé, mot sombre compris") {
+        for (streak in listOf(false, true)) {
+            val (px, W, H) = darkWordBubble(streak)
+            val lines = (0 until 4).map { k -> RectF(295f, 215f + k * 78, 300f + 7 * 44 - 8 + 5, 280f + k * 78) }   // boîtes lues : lettres et cerne
+            val plan = Erasure.plan(ArrayPixels(W, H, px), 1f, lines, 55f, W.toFloat(), H.toFloat(), emptyList(), RectF(110f, 50f, 790f, 650f), free = false, extra = listOf(RectF(284f, 205f, 616f, 545f)))!!
+            val out = apply(px, W, plan)
+            // pixels du lettrage (remplissage et cerne) qui n'ont pas été remplacés par le fond
+            var left = 0; var total = 0
+            for (k in 0 until 4) for (g in 0 until 7) for (yy in 220 + k * 78 - 5 until 220 + k * 78 + 60) for (xx in 300 + g * 44 - 5 until 300 + g * 44 + 41) {
+                total++
+                if (kotlin.math.abs(lum(out[yy * W + xx]) - lum(px[yy * W + xx])) < 12 && (lum(px[yy * W + xx]) > 200 || lum(px[yy * W + xx]) < 45 || (px[yy * W + xx] shr 16 and 0xFF) in 95..105)) left++
+            }
+            T.ok(left <= total / 200, "pixels du lettrage restés visibles : $left sur $total (griffure=$streak, mode ${plan.mode}, masque ${plan.mask.count { it }} px)")
+            // l'intérieur de la bulle hors du lettrage n'est pas dénaturé : le dégradé reste sombre
+            var bright = 0
+            for (y in 100 until 600) for (x in 200 until 700) { val ex = (x - 450) / 340.0; val ey = (y - 350) / 300.0; if (ex * ex + ey * ey <= 0.80 * 0.80 && lum(out[y * W + x]) > 140 && lum(px[y * W + x]) < 140) bright++ }
+            T.ok(bright == 0, "pixels clairs apparus dans l'intérieur : $bright (griffure=$streak)")
+        }
     }
 }
 

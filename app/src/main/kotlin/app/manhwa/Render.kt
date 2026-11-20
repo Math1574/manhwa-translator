@@ -217,6 +217,8 @@ object PageRenderer {
             // taille : les blocs dont le texte d'origine a la même hauteur de lettre (à 18 % près) reçoivent la même hauteur de référence : la mesure de chacun est bruitée, la taille du texte
             // d'origine ne l'est pas ; deux bulles de même taille d'origine ne doivent pas recevoir des tailles de traduction différentes à cause d'une mesure
             val sizes: FloatArray = try { BlockLayout.harmonizedHeights(preps, s) } catch (e: Throwable) { FloatArray(preps.size) }
+            // blocs dont la position est fixée (zone dessinée à la main ou position choisie qui s'applique vraiment) : la mise en page automatique ne les déplace plus ; note de diagnostic par bloc
+            val pinned = HashSet<Int>(); val editNotes = HashMap<Int, String>()
             for (i in preps.indices) {
                 val pk = picks.getOrNull(i)
                 val ed = edits[preps[i].block.id]
@@ -226,12 +228,25 @@ object PageRenderer {
                 if (laid != null && ed != null && kotlin.math.abs(ed.scale - 1f) > 0.005f) laid = laid.scaled(ed.scale.coerceIn(0.3f, 3f))
                 // position choisie : le texte est décalé (la mise en page automatique reste la référence du « centrer » et de l'aperçu)
                 if (sink != null && laid != null) { sink.baseRect = laid.placed(0f); sink.target = EditApplier.centerTarget(preps[i].bubble ?: preps[i].container, preps[i].block.zone, preps[i].block.lineBoxes.ifEmpty { listOf(preps[i].block.box) }.reduce { a, c -> a.union(c) }) }
-                if (laid != null && ed != null && (ed.dx != 0f || ed.dy != 0f)) laid = laid.shifted(ed.dx, ed.dy)
+                if (ed?.manual == true) pinned.add(preps[i].block.id)
+                if (laid != null && ed != null && ed.pinned) {
+                    // position choisie : en absolu, le centre du texte va là où l'utilisateur l'a posé ; relative (ancienne version), elle n'est gardée que si le texte reste sur son emplacement (voir EditApplier.positionShift)
+                    val blk = preps[i].block
+                    val orig = blk.lineBoxes.ifEmpty { listOf(blk.box) }.reduce { a, c -> a.union(c) }
+                    val base = laid.placed(0f)
+                    val sh = EditApplier.positionShift(ed, base, orig)
+                    if (sh != null) {
+                        laid = laid.shifted(sh.first, sh.second); pinned.add(blk.id)
+                        editNotes[blk.id] = (if (ed.anchored) "ancré" else if (ed.manual) "zone à la main, relatif" else "relatif") + " (%.0f,%.0f)".format(java.util.Locale.ROOT, sh.first, sh.second)
+                    } else if (!ed.manual) {
+                        editNotes[blk.id] = "relatif (%.0f,%.0f) ignoré : texte hors de son emplacement".format(java.util.Locale.ROOT, ed.dx, ed.dy)
+                    }
+                }
                 laids.add(laid)
             }
             // 2) collisions : un texte hors bulle (forme libre) dont le texte placé recouvre celui d'un autre bloc est replacé (voir BlockLayout.resolveCollisions)
             val results = ArrayList<BlockLayout.Result?>(laids.map { it?.r })
-            BlockLayout.resolveCollisions(preps, results, { pr -> edits[pr.block.id]?.pinned == true }) { pr, k ->
+            BlockLayout.resolveCollisions(preps, results, { pr -> pr.block.id in pinned }) { pr, k ->
                 try { layoutBlock(fonts, s, pr, iw, ih, settings.textScale * k, src)?.r } catch (e: Throwable) { null }
             }
             for (i in laids.indices) { val old = laids[i] ?: continue; val nr = results[i] ?: continue; if (nr !== old.r) laids[i] = Laid(old.font, old.paint, nr) }
@@ -241,6 +256,7 @@ object PageRenderer {
                 // textes traduits des autres blocs : dessinés par-dessus l'effacement de ce bloc quand ils recouvrent son patch (voir paintBlock)
                 val neighbours: List<Pair<Prep, Laid>> = if (sink != null) emptyList() else preps.indices.filter { it != i }.mapNotNull { j -> laids[j]?.let { preps[j] to it } }
                 val rendered = try { paintBlock(s, preps[i], laid, iw, ih, neighbours, sink) } catch (e: Throwable) { null } ?: continue
+                editNotes[preps[i].block.id]?.let { rendered.second.put("edit", it) }
                 patches.put(rendered.first); report.put(rendered.second)
             }
             val json = JSONObject().put("w", result.imageWidth).put("h", result.imageHeight).put("patches", patches).put("blocks", report).put("skipped", skipped)

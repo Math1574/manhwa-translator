@@ -120,10 +120,18 @@ data class BlockEdit(
     val blockKind: String = "", val bubble: RectF? = null,
     /** Effacement précis : seules les lettres (et un léger contour) sont remplacées, pas toute la zone du texte (évite le grand rectangle clair derrière la traduction). */
     val precise: Boolean = false,
+    /**
+     * Position choisie, en absolu : centre du texte traduit tel que l'utilisateur l'a posé (pixels de l'image). Contrairement à (dx, dy), qui est relatif à une mise en page automatique
+     * qui change d'une version à l'autre, ce point reste juste quand la mise en page évolue. Null : aucune position choisie, ou correction enregistrée avant l'ancre (voir [EditApplier.positionShift]).
+     */
+    val anchorX: Float? = null, val anchorY: Float? = null,
 ) {
+    /** Vrai si la position est enregistrée en absolu. */
+    val anchored: Boolean get() = anchorX != null && anchorY != null
+
     /** Vrai si cette correction ne change rien (à ne pas conserver). */
     val isNeutral: Boolean
-        get() = kind == EditKind.ADJUST && translation == null && source == null && !hidden && dx == 0f && dy == 0f && scale == 1f && fontId == null && !precise
+        get() = kind == EditKind.ADJUST && translation == null && source == null && !hidden && dx == 0f && dy == 0f && scale == 1f && fontId == null && !precise && !anchored
 }
 
 /** Ce que le rendu doit appliquer à un bloc en plus de sa mise en page automatique (coordonnées de la fenêtre traitée). */
@@ -135,9 +143,14 @@ class RenderEdit(
     val hidden: Boolean = false,
     /** Effacement précis des lettres seules (voir [BlockEdit.precise]). */
     val precise: Boolean = false,
+    /** Centre choisi pour le texte traduit, en coordonnées de la fenêtre traitée (voir [BlockEdit.anchorX]). */
+    val anchorX: Float? = null, val anchorY: Float? = null,
 ) {
-    /** Position fixée par l'utilisateur : la mise en page automatique ne la déplace plus. */
-    val pinned: Boolean get() = manual || dx != 0f || dy != 0f
+    /** Vrai si la position est donnée en absolu. */
+    val anchored: Boolean get() = anchorX != null && anchorY != null
+
+    /** Position demandée par l'utilisateur. Le rendu ne la retient que si elle s'applique vraiment (voir [EditApplier.positionShift]) : la mise en page automatique ne déplace alors plus ce texte. */
+    val pinned: Boolean get() = manual || dx != 0f || dy != 0f || anchored
 }
 
 /** Enregistrement texte des corrections (sans bibliothèque JSON : le cœur est du Kotlin pur). */
@@ -175,6 +188,7 @@ object EditsCodec {
         "E", e.id, e.kind.name, rect(e.match), esc(e.matchSource), strokes(e.region), nstr(e.source), nstr(e.translation), if (e.hidden) "1" else "0",
         "${e.dx}", "${e.dy}", "${e.scale}", nstr(e.fontId), if (e.vertical) "1" else "0", "${e.lineHeight}",
         e.lineBoxes.joinToString(";") { rect(it) }, e.lineTexts.joinToString(SEP.toString()) { esc(it) }, esc(e.blockKind), rect(e.bubble), if (e.precise) "1" else "0",
+        e.anchorX?.takeIf { it.isFinite() }?.toString() ?: "-", e.anchorY?.takeIf { it.isFinite() }?.toString() ?: "-",
     ).joinToString("\t")
 
     fun decode(line: String): BlockEdit? {
@@ -188,6 +202,9 @@ object EditsCodec {
                 lineBoxes = if (f[15].isEmpty()) emptyList() else f[15].split(';').mapNotNull { parseRect(it) },
                 lineTexts = if (f[16].isEmpty()) emptyList() else f[16].split(SEP).map { unesc(it) },
                 blockKind = unesc(f[17]), bubble = parseRect(f[18]), precise = f.getOrNull(19) == "1",
+                // les lignes enregistrées avant l'ancre n'ont pas ces deux champs ; l'ancre n'a de sens qu'avec ses deux coordonnées
+                anchorX = f.getOrNull(20)?.toFloatOrNull()?.takeIf { it.isFinite() && f.getOrNull(21)?.toFloatOrNull()?.isFinite() == true },
+                anchorY = f.getOrNull(21)?.toFloatOrNull()?.takeIf { it.isFinite() && f.getOrNull(20)?.toFloatOrNull()?.isFinite() == true },
             )
         } catch (_: Exception) { null }
     }

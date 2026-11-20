@@ -19,7 +19,10 @@ object TranslationChecks {
 
     private val tokenRe = Regex("[\\p{L}][\\p{L}'’-]*")
 
-    fun problems(src: String, tr: String, target: String, names: Collection<String> = emptyList()): List<Problem> {
+    /** Mot anglais courant qui n'existe pas en français (voir [englishOnly]). */
+    internal fun isEnglishOnly(word: String): Boolean = word.lowercase().replace('’', '\'') in englishOnly
+
+    fun problems(src: String, tr: String, target: String, names: Collection<String> = emptyList(), style: StyleMemory? = null): List<Problem> {
         val out = ArrayList<Problem>()
         val t = tr.trim()
         if (t.isEmpty()) return listOf(Problem("vide", "traduction vide"))
@@ -37,12 +40,14 @@ object TranslationChecks {
         }
         // rendu mot à mot d'une expression toute faite (« tuer deux oiseaux », « faire du sens », « écume » pour « scum ») : la ligne est refaite avec l'équivalent
         if (target == "fr") for (h in IdiomHints.calques(src, t).take(2)) out.add(Problem("calque", "« ${h.matched} » est traduit mot à mot ; dire : ${h.french}"))
+        // tu / vous et genre du narrateur : plusieurs personnes tutoyées, formes mêlées, interlocuteur ou chapitre qui change de registre
+        if (target == "fr") out.addAll(FrenchAgreement.problems(src, t, names, style))
         // chiffres : ceux de l'original doivent se retrouver
         val digits = Regex("(?<![A-Za-z0-9])\\d+(?![A-Za-z0-9])").findAll(src).map { it.value }.toList()   // nombres isolés ; « INJURIE3 » est une erreur de lecture
         if (digits.any { it !in t }) out.add(Problem("chiffres", "chiffre(s) perdu(s) : " + digits.filter { it !in t }.joinToString(", ")))
         // noms à conserver
         val lower = src.lowercase(); val tl = t.lowercase()
-        for (n in names) if (n.length >= 3 && lower.contains(n.lowercase()) && !tl.contains(n.lowercase())) out.add(Problem("nom", "nom modifié : $n"))
+        for (n in names) if (n.length >= 3 && mentions(lower, n.lowercase()) && !mentions(tl, n.lowercase())) out.add(Problem("nom", "nom modifié : $n"))
         // répétition anormale d'un mot (« de de de »)
         val words = toks(t)
         for (i in 2 until words.size) if (words[i] == words[i - 1] && words[i] == words[i - 2] && words[i].length > 1) { out.add(Problem("répétition", "mot répété : ${words[i]}")); break }
@@ -61,6 +66,10 @@ object TranslationChecks {
         return word in englishOnly && word !in names
     }
 
+    /** Le nom figure-t-il dans le texte ? Un nom court (jusqu'à 4 lettres) y est comme mot entier (« por » n'est pas dans « important »), un nom plus long peut y être décliné (« Kandeya's »). */
+    private fun mentions(text: String, name: String): Boolean =
+        if (name.length > 4) text.contains(name) else Regex("(?<![\\p{L}])" + Regex.escape(name) + "(?![\\p{L}])").containsMatchIn(text)
+
     private fun toks(s: String) = tokenRe.findAll(s).map { it.value.lowercase() }.toList()
     private fun normalize(s: String) = s.lowercase().filter { it.isLetterOrDigit() }
 }
@@ -68,33 +77,79 @@ object TranslationChecks {
 /**
  * Mémoire d'un chapitre : noms propres et termes à garder tels quels. Un mot de l'original qui se retrouve identique dans la traduction
  * (nom de personnage, de lieu) et qui revient au moins deux fois est ajouté à la liste fournie au modèle pour les pages suivantes.
+ * Un nom de trois lettres (« Gaf », « Zod ») doit revenir trois fois, comme mot entier, et n'être ni un mot courant ni une interjection : tant de mots anglais
+ * de trois lettres sont identiques en français qu'il faut plus de preuves. [isCommonWord] : le dictionnaire des mots courants (l'application le fournit).
+ * [style] : tutoiement et genre du narrateur déjà établis (voir [StyleMemory]).
  */
-class ChapterMemory(private val maxNames: Int = 14) {
+class ChapterMemory(private val maxNames: Int = 14, private val isCommonWord: (String) -> Boolean = { false }) {
     private val counts = LinkedHashMap<String, Int>()
+    private val shortCounts = LinkedHashMap<String, Int>()
     private val display = HashMap<String, String>()
     private val tok = Regex("[\\p{L}][\\p{L}'’-]{3,}")
+    private val shortTok = Regex("(?<![\\p{L}])\\p{L}{3}(?![\\p{L}])")
+    private val stutterPrefix = Regex("^(?:\\p{L}-)+")
+    private val possessive = Regex("['’][sS]$")
     private val common = setOf(
         "that", "this", "with", "have", "from", "they", "there", "what", "when", "will", "would", "could", "your", "just", "about", "then", "than",
         "dans", "pour", "avec", "mais", "plus", "tout", "tous", "cette", "elle", "nous", "vous", "sont", "être", "fait", "comme", "sans", "sous",
     )
+    /** Mots de trois lettres très courants en anglais et en français : jamais des noms. */
+    private val shortCommon = (
+        "the and you are for not but all any can had her was one our out day get has him his how man new now old see two way who boy did its let put say she too use yes yet why war try top sun sit sir run red off odd nor net may map low lot lie led law key job ice hot hit god gas fun fly far eye end eat dog die cut cry cup car bed bad bag big bit box buy cat den dry due ear egg era fan fat fee few fit fix fox gun guy hat hip ill ink jar jaw joy kid lap lay leg lip mad mix mud nap nod oil pan pat pay pen pet pig pit pop raw row sad sea set shy sin sky son sum tag tax tea ten tie tip toe ton tug van wet win won zip age ago aid aim air arm art ask ate awe bar bat bay bet bow bus cap cow dad fed fur gap gym hug hum jam jet lad mom nut oak own pad pie pub rid rub rug sip sob tan tin toy vow wax web wig yep nah yay wow aha ooh ahh umm gah tsk mmm hee heh boo eww bam pow zap " +
+            "les des une que qui pas par sur est ses tes mes nos vos ils nul oui non mal bon ici peu mot bas cas eau fin fou ami âme roi feu vie ans dit fut vit vue rue mer sac vin jeu lui moi toi ton aux ces cet"
+        ).split(' ').toSet()
+    private val shortMinSightings = 3
+
+    val style = StyleMemory()
+    fun styleCopy(): StyleMemory = style.copy()
+    fun styleHints(): List<String> = style.hints()
 
     fun observe(src: String, tr: String) {
-        val trLower = tr.lowercase()
         for (m in tok.findAll(src)) {
-            val w = m.value; val l = w.lowercase()
-            if (l in common || l in TranslationChecksWords.stop) continue
-            if (trLower.contains(l)) { counts[l] = (counts[l] ?: 0) + 1; display.putIfAbsent(l, w) }
+            if (stutterPrefix.containsMatchIn(m.value)) continue          // « G-GAF » : le nom est compté seul (mots de trois lettres), pas avec son bégaiement
+            val w = m.value.replace(possessive, ""); val l = w.lowercase()   // « KANDEYA'S » compte pour « KANDEYA »
+            if (l.length < 4 || l in common || l in TranslationChecksWords.stop) continue
+            if (keptAsName(tr, l)) { counts[l] = (counts[l] ?: 0) + 1; display.putIfAbsent(l, w) }
         }
+        for (w in shortTok.findAll(src).map { it.value }.distinct()) {
+            val l = w.lowercase()
+            if (isShortCommon(l) || !keptAsName(tr, l)) continue
+            shortCounts[l] = (shortCounts[l] ?: 0) + 1; display.putIfAbsent(l, w)
+        }
+        style.observe(src, tr, namesToKeep())
     }
 
-    /** Noms à conserver (vus au moins deux fois), les plus fréquents d'abord. Les mots écrits en majuscules sont remis en casse de titre. */
+    /**
+     * La traduction garde-t-elle [l] comme un nom ? Le mot y figure en entier (« Kandeya's » compte), avec une majuscule en cours de phrase (« Et toi, Gaf ? »), ou en début de phrase
+     * si ce n'est pas un mot courant. Un mot qui s'écrit pareil dans les deux langues (« village », « long », « change ») reste en minuscule : ce n'est pas un nom. Une traduction
+     * toute en majuscules ne permet pas de juger : le mot compte s'il y figure.
+     */
+    private fun keptAsName(tr: String, l: String): Boolean {
+        val lower = tr.lowercase()
+        val allCaps = tr.none { it.isLowerCase() }
+        val commonWord = isCommonWord(l)
+        for (m in Regex("(?<![\\p{L}])" + Regex.escape(l) + "(?![\\p{L}])").findAll(lower)) {
+            if (allCaps) return true
+            val i = m.range.first
+            if (!tr[i].isUpperCase()) continue
+            val before = tr.substring(0, i).trimEnd()
+            val sentenceStart = before.isEmpty() || before.last() in ".!?…:«\"“(-–—"
+            if (!sentenceStart || !commonWord) return true
+        }
+        return false
+    }
+
+    private fun isShortCommon(l: String): Boolean =
+        l in shortCommon || l in common || l in TranslationChecksWords.stop || TranslationChecks.isEnglishOnly(l) || JunkFilter.isInterjectionToken(l) || isCommonWord(l)
+
+    /** Noms à conserver (vus au moins deux fois ; trois pour un nom de trois lettres), les plus fréquents d'abord. Les mots écrits en majuscules sont remis en casse de titre. */
     fun namesToKeep(): List<String> =
-        counts.filter { it.value >= 2 }.entries.sortedByDescending { it.value }.take(maxNames).map { e ->
+        (counts.filter { it.value >= 2 } + shortCounts.filter { it.value >= shortMinSightings }).entries.sortedByDescending { it.value }.take(maxNames).map { e ->
             val d = display[e.key] ?: e.key
             if (d.all { !it.isLetter() || it.isUpperCase() }) d.lowercase().replaceFirstChar { it.uppercase() } else d
         }
 
-    fun reset() { counts.clear(); display.clear() }
+    fun reset() { counts.clear(); shortCounts.clear(); display.clear(); style.reset() }
 }
 
 internal object TranslationChecksWords {
