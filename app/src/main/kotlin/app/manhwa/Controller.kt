@@ -1428,10 +1428,11 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val enhanced = s.enhancedOcr && graph.paddleModels.available
         val ocrEngine = CombinedOcr(s.source, MlKitOcr(s.source), if (enhanced) graph.paddle else null, Lexicon.get(ctx), parallel = !thermalHot, names = { graph.gemma.chapterNames() })
         val rereadOn = spec != null && s.source.code == "en" && graph.blockReader.available
+        // « pp6 » : pp5 + signes japonais lus à la place de lettres remis en lettres (« IしEA »), noms du chapitre mal lus corrigés, noms courts appris, accords tu/vous et genre du narrateur contrôlés à la traduction : clé distincte, pour ne pas reprendre d'anciennes traductions
         // « pp5 » : lecture des lignes inclinées sur recadrage redressé + réparation du texte lu de la version 3 (« ... » mal lus, apostrophes perdues, parasites, guillemets et « ... » lus « 99 88 », crochet parasite) + croisement des deux lecteurs anglais et de ML Kit mot par mot avec le dictionnaire, relecture élargie des lignes douteuses, ponctuation finale et « I » de début coupés par la boîte retrouvés ; « rr » : relecture des textes douteux par Gemma (résultats différents, cache à part)
         // onomatopées laissées telles quelles (anglais) : clé de cache distincte, pour ne pas reprendre d'anciens résultats où elles étaient traduites
         val skipSfx = !s.translateSfx && s.source.code != "ja" && s.source.code != "ko" && s.source.code != "zh"
-        val engineId = (if (spec == null) MlKitTranslation.ID else GemmaTranslator.engineId(spec)) + (if (enhanced) "+pp5" else "") + (if (rereadOn) "+rr1" else "") + (if (skipSfx) "+sfx0" else "") + seamTag
+        val engineId = (if (spec == null) MlKitTranslation.ID else GemmaTranslator.engineId(spec)) + (if (enhanced) "+pp6" else "") + (if (rereadOn) "+rr1" else "") + (if (skipSfx) "+sfx0" else "") + seamTag
         var debug: DebugInfo? = null
         val lexicon = Lexicon.get(ctx)
         candidatesById[c.id] = c
@@ -1552,7 +1553,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                         .put("fs", Math.round(r.optDouble("fs") * 10) / 10.0).put("lines", r.optInt("lines")).put("fits", r.optBoolean("fits")).put("shape", r.optBoolean("shape"))
                         .put("bubbleOk", r.optBoolean("bubbleOk")).put("rectBubble", r.optBoolean("rectBubble")).put("erase", r.optInt("erase")).put("lay", r.optString("lay"))
                         .put("family", r.optString("family")).put("fontInfo", r.optString("fontInfo")).put("fg", r.optString("fg")).put("orig", r.opt("orig")).put("cont", r.opt("cont")).put("zone", r.opt("zoneBox"))
-                        .put("out", JSONArray(listOf("x", "y", "w", "h").map { k -> Math.round(r.optDouble(k)) })),
+                        .put("out", JSONArray(listOf("x", "y", "w", "h").map { k -> Math.round(r.optDouble(k)) }))
+                        .apply { r.optString("edit").takeIf { it.isNotEmpty() }?.let { put("edit", it) } },
                 )
             }
             graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "layout").put("url", pageUrl).put("img", c.id).put("renderMs", stageInfo[c.id]?.get(2) ?: 0L).put("w", out.result.imageWidth).put("h", out.result.imageHeight).put("skipped", json.optInt("skipped")).put("blocks", blocks))
@@ -1593,6 +1595,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     class EditFields(
         val src: String, val translation: String, val hidden: Boolean, val region: UserRegion?, val zoneChanged: Boolean, val read: RegionRead?,
         val dx: Float, val dy: Float, val scale: Float, val fontId: String?, val precise: Boolean = false,
+        /** Centre posé à la main pour le texte traduit (voir BlockEdit.anchorX) ; null : pas de position choisie. */
+        val anchorX: Float? = null, val anchorY: Float? = null,
     )
 
     /** Police de la bibliothèque (aperçu des polices dans l'éditeur). */
@@ -1647,13 +1651,14 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             BlockEdit(
                 id, EditKind.MANUAL, matchBox, matchSrc, region, newSrc, newTr, f.hidden, f.dx, f.dy, f.scale, f.fontId,
                 f.read?.vertical ?: shown.vertical, f.read?.lineHeight ?: shown.lineHeight, boxes, texts, shown.kind, shown.bubble?.let { imageRect(it, shift) }, f.precise,
+                anchorX = f.anchorX, anchorY = f.anchorY?.minus(shift.toFloat()),
             )
         } else {
             BlockEdit(
                 id, EditKind.ADJUST, matchBox, matchSrc, null,
                 if (newSrc != shown.source.trim()) newSrc else prev?.source,
                 if (newTr != shown.translated.trim()) newTr.ifEmpty { null } else prev?.translation,
-                f.hidden, f.dx, f.dy, f.scale, f.fontId, precise = f.precise,
+                f.hidden, f.dx, f.dy, f.scale, f.fontId, precise = f.precise, anchorX = f.anchorX, anchorY = f.anchorY?.minus(shift.toFloat()),
             )
         }
     }
@@ -1663,7 +1668,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val info = sn.info
         val others = graph.edits.forImage(info.imageKey).filter { it.id != draft.id }
         val withAuto = if (draft.fontId == null) autoFont(info, sn.block.id) else null            // police automatique du dernier rendu, pour que l'aperçu soit fidèle
-        val applied = EditApplier.apply(info.result, others + draft.copy(fontId = draft.fontId ?: withAuto, dx = 0f, dy = 0f), info.ctxH.toFloat())
+        val applied = EditApplier.apply(info.result, others + draft.copy(fontId = draft.fontId ?: withAuto, dx = 0f, dy = 0f, anchorX = null, anchorY = null), info.ctxH.toFloat())
         val id = applied.editByBlock.entries.firstOrNull { it.value.id == draft.id }?.key ?: return null
         val sink = LayerSink()
         synchronized(renderLock) { PageRenderer.render(fonts, info.bytes, applied.page, graph.settingsStore.settings, null, null, null, applied.render, only = id, sink = sink) }
@@ -1756,7 +1761,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             if (edit.translation != null) add("traduction")
             if (edit.source != null) add("lecture")
             if (edit.hidden) add("non traduit")
-            if (edit.dx != 0f || edit.dy != 0f) add("position %.0f,%.0f".format(java.util.Locale.ROOT, edit.dx, edit.dy))
+            if (edit.dx != 0f || edit.dy != 0f || edit.anchored) add("position %.0f,%.0f".format(java.util.Locale.ROOT, edit.dx, edit.dy) + (if (edit.anchored) " ancrée %.0f,%.0f".format(java.util.Locale.ROOT, edit.anchorX, edit.anchorY) else ""))
             if (edit.scale != 1f) add("taille %.2f".format(java.util.Locale.ROOT, edit.scale))
             if (edit.fontId != null) add("police ${edit.fontId}")
             if (termAdded) add("glossaire")

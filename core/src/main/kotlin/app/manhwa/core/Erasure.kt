@@ -438,7 +438,8 @@ object Erasure {
         // bulle au fond non uni (dégradé, ombre, lueur sombre) : on remplace toute la zone du texte à l'intérieur de la bulle par un fond lissé
         if (!free && !structured) run {
             // la forme de la bulle est calculée sur une région plus large que la zone du texte (la bulle entière doit y tenir)
-            val shape = bubbleShape(src, s, textUnion, a.bg, imageW, imageH, smooth = true, container = container)
+            // lignes lues et zone du détecteur : l'intérieur de la bulle les contient toujours (voir bubbleShape, paramètre force)
+            val shape = bubbleShape(src, s, textUnion, a.bg, imageW, imageH, smooth = true, container = container, force = lineBoxes + extra)
             if (shape != null) {
                 val farS = TextErase.localFarMask(px, w, h, max(5, (lh * 0.6f).toInt()), 40); val encS = TextErase.enclosedOnly(farS, w, h) // lettres isolées
                 val encG = TextErase.dilate(encS, w, h, max(2, (lh * 0.06f).toInt()))   // bords des lettres compris : ils ne doivent pas servir de référence au remplissage
@@ -729,7 +730,7 @@ object Erasure {
      * Forme libre de l'intérieur de la bulle autour du texte (remplissage borné par le contour, lettres comprises), en pixels de l'image.
      * Région d'analyse plus large que pour le rectangle inscrit : la bulle entière doit y tenir.
      */
-    private fun bubbleShape(src: PixelSource, s: Float, union: RectF, bg: Int, imageW: Float, imageH: Float, tol: Int = 42, smooth: Boolean = false, container: RectF? = null): RowShape? {
+    private fun bubbleShape(src: PixelSource, s: Float, union: RectF, bg: Int, imageW: Float, imageH: Float, tol: Int = 42, smooth: Boolean = false, container: RectF? = null, force: List<RectF> = emptyList()): RowShape? {
         val gx = union.width * 1.1f + 20f; val gy = union.height * 1.1f + 20f
         val x0 = (max(0f, union.left - gx) * s).toInt().coerceIn(0, src.width - 1); val y0 = (max(0f, union.top - gy) * s).toInt().coerceIn(0, src.height - 1)
         val x1 = (min(imageW, union.right + gx) * s).toInt().coerceIn(x0 + 1, src.width); val y1 = (min(imageH, union.bottom + gy) * s).toInt().coerceIn(y0 + 1, src.height)
@@ -739,13 +740,25 @@ object Erasure {
         val text = intArrayOf((union.left * s).toInt() - x0, (union.top * s).toInt() - y0, (union.right * s).toInt() - x0, (union.bottom * s).toInt() - y0)
         // bulle ronde détectée à fond non uni : remplissage borné à son ellipse, sans limite de couleur. Un dégradé blanc-noir dépasse l'écart toléré par rapport à la couleur autour du texte
         // (le haut clair de la bulle restait hors de la forme : lignes poussées de côté, forme étroite) ; l'ellipse borne la fuite par le contour flou. Sinon, comportement d'origine.
+        var ellipse: BooleanArray? = null
         val bounded: BooleanArray? = if (smooth && container != null && !BubbleVerifier.isRectangular(src, s, container, imageW, imageH)) {
             val cx = (container.left + container.right) / 2f; val cy = (container.top + container.bottom) / 2f
             val rx = container.width / 2f * 0.98f; val ry = container.height / 2f * 0.98f
             val area = BooleanArray(w * h) { i -> val ex = ((x0 + i % w + 0.5f) / s - cx) / rx; val ey = ((y0 + i / w + 0.5f) / s - cy) / ry; ex * ex + ey * ey <= 1f }
+            ellipse = area
             BubbleMask.interiorSmooth(px, w, h, text, maxFill = 0.97f, farLimit = 255, allowed = area)
         } else null
         val mask = bounded ?: (if (smooth) BubbleMask.interiorSmooth(px, w, h, text, maxFill = 0.97f) else BubbleMask.interior(px, w, h, text, bg, tol = tol, maxFill = 0.97f)) ?: return null
+        // Le texte est dans la bulle par définition : tout ce que contiennent les lignes lues et la zone du détecteur fait partie de l'intérieur. Le remplissage depuis le pourtour du texte
+        // laisse en dehors les poches qu'un trait fin relie au contour (une griffure du dessin qui traverse le lettrage) : un mot sombre cerné de noir, peu contrasté avec le fond (« DEMONS. »
+        // en rouge sombre) restait alors hors de la forme, donc hors de l'effacement, et réapparaissait sous la traduction. Borné à l'ellipse de la bulle ronde.
+        if (smooth && force.isNotEmpty()) {
+            for (r in force) {
+                val fl = ((r.left * s).toInt() - x0).coerceIn(0, w); val fr = ((r.right * s).toInt() - x0).coerceIn(0, w)
+                val ft = ((r.top * s).toInt() - y0).coerceIn(0, h); val fb = ((r.bottom * s).toInt() - y0).coerceIn(0, h)
+                for (yy in ft until fb) for (xx in fl until fr) { val i = yy * w + xx; if (ellipse == null || ellipse[i]) mask[i] = true }
+            }
+        }
         // bulle détectée : le remplissage ne doit pas déborder de sa boîte (fuite vers le décor ou une bulle voisine)
         if (container != null) {
             val c = container.inflate(4f, 4f)

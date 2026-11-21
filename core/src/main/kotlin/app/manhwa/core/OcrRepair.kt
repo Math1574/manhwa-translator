@@ -58,7 +58,9 @@ object OcrRepair {
     internal fun isLegitMixed(token: String): Boolean = legitMixedRe.matches(token)
 
     /** Répare un texte lu par l'OCR. [protect] : mots à ne jamais modifier (noms du chapitre). Texte non anglais : renvoyé tel quel. */
-    fun repair(text: String, lex: EnglishLexicon, protect: Set<String> = emptySet()): String {
+    fun repair(text0: String, lex: EnglishLexicon, protect: Set<String> = emptySet()): String {
+        // « IしEA » / « ルEA » pour « ILEA » : des signes japonais lus à la place de lettres, dans un texte anglais ; remis en lettres avant de juger l'écriture du texte
+        val text = LookalikeGlyphs.fix(text0, lex, protect)
         if (ScriptDetector.dominant(text) != "en") return text
         // signes et lettres mal lus (points de suspension lus « 910 » ou « 2L », « I » lu « | » ou « 1 », apostrophes perdues) : avant tout le reste
         var s = OcrFragments.clean(text, lex, protect)
@@ -142,6 +144,8 @@ object OcrRepair {
         }
         // cris et rires étirés (« AAAAARGH », « HEHEHE », « PWAHAHA ») : jamais coupés ni « corrigés »
         if (!hasDigit && JunkFilter.isInterjectionToken(core)) return if (caps) tok.uppercase() else tok
+        // nom du chapitre mal lu : « RANDEYA » ou « KANDEA » pour « KANDEYA » (mot inconnu à une lettre près d'un nom connu)
+        if (!hasDigit) snapToName(core, protect)?.let { return recase(tok, it, caps) }
         // 1) chiffres pris pour des lettres (INJURIE3 → INJURIES, 50 → SO, wA4NT → WANT)
         if (hasDigit) digitFix(core, lex)?.let { return recase(tok, it, caps).let { r -> keepApostrophes(tok, r) } }
         if (core.length < 3) return tok
@@ -253,9 +257,28 @@ object OcrRepair {
         return found
     }
 
+    /**
+     * Un mot inconnu à une lettre près (deux pour un nom de sept lettres ou plus) d'UN nom du chapitre est ce nom mal lu : « RANDEYA », « KANDEA » → « KANDEYA ».
+     * Un nom de quatre lettres doit garder sa première lettre ; deux noms également proches : on ne devine pas. Les mots du dictionnaire ne passent jamais ici.
+     */
+    private fun snapToName(core: String, protect: Set<String>): String? {
+        if (core.length < 4 || protect.isEmpty()) return null
+        val w = core.lowercase()
+        var found: String? = null
+        for (n in protect) {
+            if (n.length < 4 || n == w || n.any { !it.isLetter() } || kotlin.math.abs(n.length - w.length) > 2) continue
+            if (n.length == 4 && n[0] != w[0]) continue
+            if (editDistance(w, n) <= (if (n.length >= 7) 2 else 1)) { if (found != null) return null; found = n }
+        }
+        return found
+    }
+
     /** Distance d'édition (suppression, insertion, substitution, transposition) d'au plus 2 ? */
-    internal fun distanceAtMost2(a: String, b: String): Boolean {
-        if (kotlin.math.abs(a.length - b.length) > 2) return false
+    internal fun distanceAtMost2(a: String, b: String): Boolean = editDistance(a, b) <= 2
+
+    /** Distance d'édition (suppression, insertion, substitution, transposition de deux lettres voisines). */
+    internal fun editDistance(a: String, b: String): Int {
+        if (kotlin.math.abs(a.length - b.length) > 2) return 3
         val n = a.length; val m = b.length
         val d = Array(n + 1) { IntArray(m + 1) }
         for (i in 0..n) d[i][0] = i
@@ -266,7 +289,80 @@ object OcrRepair {
             if (i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1]) v = minOf(v, d[i - 2][j - 2] + 1)
             d[i][j] = v
         }
-        return d[n][m] <= 2
+        return d[n][m]
+    }
+}
+
+/**
+ * Signes japonais ou chinois lus à la place de lettres latines dans un texte anglais : « IしEA » et « ルEA » pour « ILEA », « WAIT ー WHAT », « W一WAIT », « HERE・・・ ».
+ * Dans une ligne dont l'écriture dominante est le latin (ou presque : un seul signe collé à un mot), un tel signe n'est jamais du texte. Il redevient la lettre qu'il imite,
+ * celle qui donne un nom du chapitre ou un mot du dictionnaire de préférence, sinon la plus probable ; sans équivalent connu, il disparaît. Les signes de largeur
+ * pleine (« ！ », « ， ») et la ponctuation japonaise (« 。 », « ・ ») redeviennent de la ponctuation ordinaire.
+ */
+internal object LookalikeGlyphs {
+    /** Lettres que chaque signe imite, la plus probable d'abord. */
+    private val imitates: Map<Char, List<String>> = mapOf(
+        'し' to listOf("L", "U", "J"), 'ル' to listOf("IL", "L"), 'レ' to listOf("L", "V"),
+        'ー' to listOf("-", "I"), '一' to listOf("-", "I"), '丨' to listOf("I"), 'ノ' to listOf("I", "/"),
+        'ロ' to listOf("O", "D"), '口' to listOf("O", "D"), '〇' to listOf("O"),
+        'メ' to listOf("X"), 'ハ' to listOf("A", "N"), 'ヨ' to listOf("E"), 'ス' to listOf("Z"),
+        'エ' to listOf("I", "E"), '工' to listOf("I", "E"), 'ト' to listOf("F", "T", "I"), '丁' to listOf("T"),
+    )
+    private val glyphToken = Regex("[A-Za-z0-9'’\\u3040-\\u30FF\\u3400-\\u4DBF\\u4E00-\\u9FFF]*[\\u3040-\\u30FF\\u3400-\\u4DBF\\u4E00-\\u9FFF][A-Za-z0-9'’\\u3040-\\u30FF\\u3400-\\u4DBF\\u4E00-\\u9FFF]*")
+    private val middleDots = Regex("\u30FB+")
+    private val spaces = Regex("[ \t]{2,}")
+
+    private fun isGlyph(c: Char): Boolean = c.code in 0x3040..0x30FF || c.code in 0x3400..0x4DBF || c.code in 0x4E00..0x9FFF
+    /** Le point médian « ・ » et le trait « ー » sont de la ponctuation : ils ne comptent pas comme des lettres japonaises. */
+    private fun isMark(c: Char): Boolean = c == '\u30FB' || c == '\u30FC'
+    private fun isLatinLetter(c: Char): Boolean = c in 'A'..'Z' || c in 'a'..'z'
+
+    fun fix(text: String, lex: EnglishLexicon, protect: Set<String>): String {
+        if (text.none { it.code >= 0x3000 }) return text
+        val latin = text.count { it.isLetter() && it.code < 0x250 }
+        val letters = text.count { isGlyph(it) && !isMark(it) }
+        if (latin < 2) return text
+        // même règle que ScriptDetector.dominant (trois lettres latines pour un signe), plus le cas d'un seul signe collé à un mot (« ルEA » : trop court pour la règle)
+        if (letters > 0 && latin < 3 * letters && !(letters == 1 && attachedToLatin(text))) return text
+        val plain = StringBuilder(text.length)
+        for (c in text) plain.append(when {
+            c.code in 0xFF01..0xFF5E -> (c.code - 0xFEE0).toChar()
+            c == '\u3000' -> ' '
+            c == '\u3002' -> '.'
+            c == '\u3001' -> ','
+            else -> c
+        })
+        var s = middleDots.replace(plain.toString()) { ".".repeat(it.value.length.coerceAtMost(3)) }
+        s = glyphToken.replace(s) { m -> resolve(m.value, lex, protect) }
+        return spaces.replace(s, " ").trim()
+    }
+
+    private fun attachedToLatin(text: String): Boolean {
+        val i = text.indexOfFirst { isGlyph(it) && !isMark(it) }
+        return i >= 0 && ((i > 0 && isLatinLetter(text[i - 1])) || (i + 1 < text.length && isLatinLetter(text[i + 1])))
+    }
+
+    /** La lettre imitée prend la casse du mot : minuscule si la lettre voisine (suivante, sinon précédente) l'est. */
+    private fun caseLike(letters: String, token: String, i: Int): String {
+        val next = token.drop(i + 1).firstOrNull { isLatinLetter(it) } ?: token.take(i).lastOrNull { isLatinLetter(it) }
+        return if (next != null && next in 'a'..'z') letters.lowercase() else letters
+    }
+
+    private fun resolve(token: String, lex: EnglishLexicon, protect: Set<String>): String {
+        if (token.none { isLatinLetter(it) }) return if (token.all { it == '\u30FC' || it == '\u4E00' }) "-".repeat(token.length.coerceAtMost(2)) else ""   // un signe seul entre deux mots : un tiret ou rien
+        // pour chaque signe, ses lettres possibles avec leur « coût » (0 pour la plus probable, 1 pour la suivante…, 3 pour le retirer)
+        val slots: List<List<Pair<String, Int>>> = token.mapIndexed { i, c ->
+            if (!isGlyph(c)) listOf(c.toString() to 0) else imitates[c].orEmpty().mapIndexed { k, l -> caseLike(l, token, i) to k } + ("" to 3)
+        }
+        var cands = listOf("" to 0)
+        for (opts in slots) cands = cands.flatMap { (p, cp) -> opts.map { (o, co) -> (p + o) to (cp + co) } }.take(256)
+        fun core(c: String) = c.trim('\'', '’')
+        fun known(c: String) = core(c).let { it.isNotEmpty() && (it.lowercase() in protect || lex.known(it)) }
+        // un nom du chapitre d'abord ; puis la lecture la plus probable des signes qui donne un mot du dictionnaire ; puis le mot le plus courant
+        val best = cands.withIndex().filter { known(it.value.first) }
+            .minWithOrNull(compareBy({ if (core(it.value.first).lowercase() in protect) 0 else 1 }, { it.value.second }, { lex.rank(core(it.value.first)) }, { it.index }))
+        // aucun mot connu : la lecture la plus probable de chaque signe (« L » pour « し ») ; un signe sans équivalent disparaît
+        return best?.value?.first ?: cands.first().first
     }
 }
 

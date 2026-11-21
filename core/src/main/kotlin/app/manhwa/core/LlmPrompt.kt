@@ -81,7 +81,7 @@ Rules:
 2. Idioms, proverbs, phrasal verbs (get away, take down, turn against...), insults and exclamations always take their natural French equivalent, never a word-for-word rendering. When the message lists "Expressions" with their French meaning, use them.
 3. The lines come from OCR: they may contain recognition mistakes (a wrong letter, a missing word, two words glued together), be in capital letters, or be cut in the middle of a sentence. Use the surrounding lines, the previous dialogue and common sense to work out what was really said, and translate that. A strange short word or abbreviation that makes no sense (for example "YOY" instead of "YOU") is a recognition mistake, not an acronym: never expand it.
 4. A stutter ("B-But", "W-wait", "Th-the") keeps its stutter in French, repeating the first letter of the French word that follows: "M-Mais", "A-Attends", "L-Le".
-5. Register: choose "tu" or "vous" from the relationship between the speakers (family, friends and equals say "tu"; subordinates, strangers, elders and rivals in formal martial-arts settings often say "vous"), and stay consistent with the previous dialogue.
+5. Register: choose "tu" or "vous" from the relationship between the speakers (family, friends and equals say "tu"; subordinates, strangers, elders and rivals in formal martial-arts settings often say "vous"), and stay consistent with the previous dialogue: the same two characters keep the same form from one line to the next. "you" said to several people (everyone, you all, you guys, yourselves) is always "vous" (with "votre", "vos", imperatives in -ez); to one person it is "tu" or "vous", never both in the same line.
 6. Fantasy and martial-arts vocabulary: use the usual French terms and keep them consistent: Heavenly Demon -> Démon Céleste, meridians -> méridiens, inner energy / qi -> qi, sect -> secte, cultivation -> cultivation, martial arts -> arts martiaux, murim -> murim, sword -> épée, disciple -> disciple, master -> maître. Translate every title and rank, never leave it in English: elder -> ancien (or doyen), young master -> jeune maître, eldest young master -> jeune maître aîné, sect leader -> chef de secte, patriarch -> patriarche, grandmaster -> grand maître, senior / junior (martial brother or sister) -> aîné / cadet or grand frère / petit frère d'armes, Alliance -> Alliance, general -> général, majesty -> majesté. Keep character names exactly as in the glossary or the previous dialogue; never translate a name. Never leave other English words in the French text.
 7. Pick the meaning that fits the setting, not the commonest everyday one: storage / storehouse -> entrepôt or réserve; a drunk -> un ivrogne; nerve / guts -> culot; "to handle" -> s'occuper de; "to teach someone a lesson" -> donner une leçon à quelqu'un; "play dumb" -> faire l'innocent.
 8. Sound effects and interjections: give the natural French equivalent ("Ugh" -> "Argh", "Tsk" -> "Tss", "Haha" -> "Haha"), or keep the sound effect unchanged if there is no equivalent.
@@ -95,8 +95,9 @@ Rules:
 
     /** Seconde passe optionnelle : relecture du brouillon (variante « r »). */
     /** Demande de correction d'une seule ligne dont la première traduction a échoué aux contrôles automatiques. */
-    fun fixUser(text: String, previous: String, problems: List<String>, history: List<Pair<String, String>>, glossary: List<GlossaryEntry>, names: List<String>, hints: List<IdiomHints.Hit> = emptyList()): String = buildString {
+    fun fixUser(text: String, previous: String, problems: List<String>, history: List<Pair<String, String>>, glossary: List<GlossaryEntry>, names: List<String>, hints: List<IdiomHints.Hit> = emptyList(), style: List<String> = emptyList()): String = buildString {
         if (names.isNotEmpty()) { appendLine("Names and terms to keep exactly as written: ${names.joinToString(", ")}"); appendLine() }
+        if (style.isNotEmpty()) { appendLine("Established in this chapter (keep it consistent):"); style.forEach { appendLine("- $it") }; appendLine() }
         if (hints.isNotEmpty()) { appendLine("Expressions in this line to render by meaning, never word for word (conjugate the French to fit the sentence and keep its negation, tense and person):"); hints.forEach { appendLine("- \"${it.matched}\": ${it.french}") }; appendLine() }
         if (history.isNotEmpty()) { appendLine("Previous dialogue (context only):"); history.takeLast(6).forEach { (a, b) -> appendLine("- ${oneLine(a)} => ${oneLine(b)}") }; appendLine() }
         if (glossary.isNotEmpty()) { appendLine("Glossary (use exactly):"); glossary.forEach { appendLine("${it.source} = ${it.target}") }; appendLine() }
@@ -124,8 +125,9 @@ You are a senior French editor of professionally published manhwa. You receive s
         texts.forEachIndexed { i, t -> appendLine("${i + 1}| source: ${oneLine(t)}") ; appendLine("${i + 1}| draft: ${oneLine(draft.getOrElse(i) { "" })}") }
     }.trim()
 
-    fun user(texts: List<String>, history: List<Pair<String, String>>, glossary: List<GlossaryEntry>, series: String? = null, names: List<String> = emptyList(), hints: List<IdiomHints.Hit> = emptyList()): String = buildString {
+    fun user(texts: List<String>, history: List<Pair<String, String>>, glossary: List<GlossaryEntry>, series: String? = null, names: List<String> = emptyList(), hints: List<IdiomHints.Hit> = emptyList(), style: List<String> = emptyList()): String = buildString {
         if (names.isNotEmpty()) { appendLine("Names and terms of this chapter to keep exactly as written (never translate them): ${names.joinToString(", ")}"); appendLine() }
+        if (style.isNotEmpty()) { appendLine("Established in this chapter (keep it consistent):"); style.forEach { appendLine("- $it") }; appendLine() }
         if (!series.isNullOrBlank()) { appendLine("Series: $series (background only: never put the series title or its words in a translation unless the source line itself contains them)"); appendLine() }
         if (history.isNotEmpty()) {
             appendLine("Previous dialogue of this chapter (context only, do not translate again):")

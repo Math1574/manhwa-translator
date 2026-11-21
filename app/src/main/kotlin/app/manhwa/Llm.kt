@@ -106,10 +106,12 @@ class GemmaTranslator(
     /** Version du prompt et relecture : réglables par le banc d'essai de traduction. */
     @Volatile var promptVariant: Int = LlmPrompt.CURRENT
     @Volatile var refine: Boolean = false
+    /** Durée au-delà de laquelle une génération est interrompue. Seul le banc d'essai l'allonge : sur le processeur de l'émulateur de test le grand modèle met près d'une minute par page. */
+    @Volatile var generationTimeoutMs: Long = GENERATION_TIMEOUT_MS
     /** Titre de la série (déduit de l'adresse) : aide le modèle à comprendre le genre et les noms. */
     @Volatile var seriesTitle: String? = null
     /** Noms et termes du chapitre en cours (mémoire) et rapport des contrôles de la dernière page. */
-    private val memory = ChapterMemory()
+    private val memory = ChapterMemory(isCommonWord = { w -> Lexicon.peek()?.isCommon(w) == true })
     @Volatile var lastReport: List<LineReport> = emptyList()
 
     /**
@@ -122,6 +124,8 @@ class GemmaTranslator(
     private val history = ArrayDeque<Pair<String, String>>()
     private fun recentDialogue(): List<Pair<String, String>> = synchronized(ctxLock) { history.toList() }
     private fun keptNames(): List<String> = synchronized(ctxLock) { memory.namesToKeep() }
+    /** Ce que le chapitre a établi (tutoiement, genre du narrateur) quand c'est net : rappelé au modèle, en français seulement. */
+    private fun styleNotes(target: String): List<String> = if (target == "fr" && promptVariant >= 4) synchronized(ctxLock) { memory.styleHints() } else emptyList()
 
     /** Noms propres repérés dans le chapitre (minuscules) : le réparateur de texte lu ne doit pas les « corriger ». */
     fun chapterNames(): Set<String> = keptNames().map { it.lowercase() }.toSet()
@@ -216,25 +220,28 @@ class GemmaTranslator(
      */
     private fun checkAndFix(eng: Engine, texts: List<String>, draft: List<String>, target: String, source: String, glossary: List<GlossaryEntry>): List<String> {
         val names = keptNames()
+        // tutoiement et genre du narrateur établis par le chapitre ; chaque ligne de la page y est ajoutée une fois finie, pour que la suivante s'y accorde
+        val style = synchronized(ctxLock) { memory.styleCopy() }
         val out = draft.toMutableList(); val reports = ArrayList<LineReport>()
         for (i in out.indices) {
-            var probs = TranslationChecks.problems(texts[i], out[i], target, names)
+            var probs = TranslationChecks.problems(texts[i], out[i], target, names, style)
             var retried = false; var fixed = false
             if (probs.isNotEmpty()) {
                 retried = true
-                val again = try { askFix(eng, texts[i], out[i], probs.map { "${it.code}: ${it.detail}" }, source, target, glossary, names) } catch (e: Throwable) { null }
+                val again = try { askFix(eng, texts[i], out[i], probs.map { "${it.code}: ${it.detail}" }, source, target, glossary, names, if (target == "fr" && promptVariant >= 4) style.hints() else emptyList()) } catch (e: Throwable) { null }
                 if (again != null) {
-                    val p2 = TranslationChecks.problems(texts[i], again, target, names)
+                    val p2 = TranslationChecks.problems(texts[i], again, target, names, style)
                     if (p2.size < probs.size) { out[i] = again; fixed = p2.isEmpty(); probs = p2 }
                 }
             }
             reports.add(LineReport(texts[i], out[i], probs.map { it.code }, retried, fixed))
+            if (target == "fr") style.observe(texts[i], out[i], names)
         }
         lastReport = reports
         return out
     }
 
-    private fun askFix(eng: Engine, text: String, previous: String, problems: List<String>, source: String, target: String, glossary: List<GlossaryEntry>, names: List<String>): String? {
+    private fun askFix(eng: Engine, text: String, previous: String, problems: List<String>, source: String, target: String, glossary: List<GlossaryEntry>, names: List<String>, styleHints: List<String> = emptyList()): String? {
         val t0 = SystemClock.uptimeMillis(); var createMs = 0L; var outLen = -1
         val system = LlmPrompt.system(source, target, promptVariant)
         var inLen = system.length
@@ -247,7 +254,7 @@ class GemmaTranslator(
             val reply = eng.createConversation(config).use { conv ->
                 createMs = SystemClock.uptimeMillis() - t0
                 val hints = if (promptVariant >= 4 && target == "fr") IdiomHints.find(listOf(text)) else emptyList()
-                withWatchdog(conv) { val u = LlmPrompt.fixUser(text, previous, problems, recentDialogue(), glossary, names, hints); inLen += u.length; textOf(conv.sendMessage(u)) }
+                withWatchdog(conv) { val u = LlmPrompt.fixUser(text, previous, problems, recentDialogue(), glossary, names, hints, styleHints); inLen += u.length; textOf(conv.sendMessage(u)) }
             }
             outLen = reply.length
             return LlmPrompt.parse(reply, 1).firstOrNull()
@@ -267,7 +274,7 @@ class GemmaTranslator(
             val reply = eng.createConversation(config).use { conv ->
                 createMs = SystemClock.uptimeMillis() - t0
                 val hints = if (promptVariant >= 4 && target == "fr") IdiomHints.find(texts) else emptyList()
-                withWatchdog(conv) { val u = LlmPrompt.user(texts, recentDialogue(), glossary, series, keptNames(), hints); inLen += u.length; textOf(conv.sendMessage(u)) }
+                withWatchdog(conv) { val u = LlmPrompt.user(texts, recentDialogue(), glossary, series, keptNames(), hints, styleNotes(target)); inLen += u.length; textOf(conv.sendMessage(u)) }
             }
             outLen = reply.length
             return LlmPrompt.parse(reply, texts.size).toMutableList()
@@ -277,7 +284,7 @@ class GemmaTranslator(
     /** Interrompt une génération qui dure trop longtemps (sécurité) : la réponse partielle reste exploitable ligne par ligne. */
     private fun <T> withWatchdog(conv: com.google.ai.edge.litertlm.Conversation, block: () -> T): T {
         val timer = java.util.Timer("mt-llm-watchdog", true)
-        timer.schedule(object : java.util.TimerTask() { override fun run() { try { conv.cancelProcess() } catch (_: Throwable) {} } }, GENERATION_TIMEOUT_MS)
+        timer.schedule(object : java.util.TimerTask() { override fun run() { try { conv.cancelProcess() } catch (_: Throwable) {} } }, generationTimeoutMs)
         val guarded = engineIsGpu && gpuUnproven() // première génération sur le GPU avec cette version : sous garde (voir plus haut)
         try {
             if (guarded) gpuMark(GpuGuard.running(BuildConfig.BUILD_NUMBER))

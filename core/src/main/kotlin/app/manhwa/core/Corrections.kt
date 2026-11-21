@@ -53,7 +53,7 @@ object Corrections {
                 if (e.source != null) parts += "texte d'origine corrigé"
             }
         }
-        if (e.dx != 0f || e.dy != 0f) parts += "position changée"
+        if (e.dx != 0f || e.dy != 0f || e.anchored) parts += "position changée"
         if (e.scale != 1f) parts += "taille changée"
         if (e.fontId != null) parts += "police changée"
         if (parts.isEmpty()) parts += "effacement précis"

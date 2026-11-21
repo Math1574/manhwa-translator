@@ -27,7 +27,7 @@ object EditApplier {
             val target = findBlock(blocks, e, shiftY) ?: continue
             val i = blocks.indexOf(target)
             blocks[i] = target.copy(source = e.source ?: target.source, translated = e.translation ?: target.translated)
-            render[target.id] = RenderEdit(e.dx, e.dy, e.scale, e.fontId, null, false, e.id, e.hidden, e.precise)
+            render[target.id] = RenderEdit(e.dx, e.dy, e.scale, e.fontId, null, false, e.id, e.hidden, e.precise, anchorX(e), anchorY(e, shiftY))
             byBlock[target.id] = e
         }
         // 2) blocs définis à la main : ils remplacent le bloc détecté qu'ils corrigent et ceux qu'ils recouvrent
@@ -50,11 +50,14 @@ object EditApplier {
                     e.blockKind, e.bubble?.offset(0f, shiftY), zone,
                 ),
             )
-            render[id] = RenderEdit(e.dx, e.dy, e.scale, e.fontId, region, true, e.id, e.hidden, e.precise)
+            render[id] = RenderEdit(e.dx, e.dy, e.scale, e.fontId, region, true, e.id, e.hidden, e.precise, anchorX(e), anchorY(e, shiftY))
             byBlock[id] = e
         }
         return Applied(PageResult(result.imageWidth, result.imageHeight, blocks), render, removed, byBlock)
     }
+
+    private fun anchorX(e: BlockEdit): Float? = if (e.anchored) e.anchorX else null
+    private fun anchorY(e: BlockEdit, shiftY: Float): Float? = if (e.anchored) e.anchorY!! + shiftY else null
 
     /** Bloc détecté visé par une correction : celui dont la boîte recouvre le mieux la boîte conservée, ou à défaut le même texte lu au même endroit. */
     private fun findBlock(blocks: List<TranslatedBlock>, e: BlockEdit, shiftY: Float): TranslatedBlock? {
@@ -99,4 +102,35 @@ object EditApplier {
 
     /** Décalage (dx, dy) qui amène le centre du texte placé [placed] sur celui de [target]. */
     fun centerOffset(placed: RectF, target: Pair<Float, Float>): Pair<Float, Float> = (target.first - placed.centerX) to (target.second - placed.centerY)
+
+    /**
+     * Décalage à appliquer à la mise en page automatique d'un bloc pour respecter la position choisie par l'utilisateur, ou null s'il n'y a rien à appliquer.
+     * [base] : texte placé par la mise en page automatique d'aujourd'hui (taille choisie comprise) ; [original] : boîte du texte d'origine.
+     *
+     * – Position en absolu (ancre) : le centre du texte va exactement là où l'utilisateur l'a posé, quelle que soit la mise en page automatique.
+     * – Position relative d'une ancienne version (dx, dy sans ancre) : elle compensait la mise en page de l'époque. Si la mise en page a changé depuis, la ré-appliquer pousse le texte
+     *   loin de sa place (vu : 373 px au-dessus de son cadre, 100 px au-dessus de sa bulle). Elle n'est donc retenue que si le texte décalé reste sur le texte d'origine (voir [staysOnText]).
+     *   Un bloc défini à la main garde son décalage : sa zone est celle de l'utilisateur, la mise en page ne s'y éloigne pas.
+     */
+    fun positionShift(ed: RenderEdit, base: RectF, original: RectF): Pair<Float, Float>? {
+        val ax = ed.anchorX; val ay = ed.anchorY
+        if (ax != null && ay != null) return (ax - base.centerX) to (ay - base.centerY)
+        if (ed.dx == 0f && ed.dy == 0f) return null
+        if (ed.manual) return ed.dx to ed.dy
+        return if (staysOnText(base.offset(ed.dx, ed.dy), original)) ed.dx to ed.dy else null
+    }
+
+    /** Vrai si le texte placé [placed] recouvre encore le texte d'origine [original] (agrandi de 15 % de la hauteur) : au moins le quart du plus petit des deux. */
+    fun staysOnText(placed: RectF, original: RectF): Boolean {
+        val grow = 0.15f * max(original.height, placed.height)
+        val zone = original.inflate(grow, grow)
+        val i = placed.intersection(zone) ?: return false
+        return i.area >= 0.25f * kotlin.math.min(placed.area, zone.area)
+    }
+
+    /** Centre absolu d'un texte décalé de ([dx], [dy]) depuis le texte placé automatiquement [base] ; null si le texte n'est pas déplacé ou si [base] est inconnu. */
+    fun anchorOf(base: RectF?, dx: Float, dy: Float): Pair<Float, Float>? {
+        if (base == null || (dx == 0f && dy == 0f)) return null
+        return (base.centerX + dx) to (base.centerY + dy)
+    }
 }

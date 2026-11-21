@@ -98,6 +98,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.manhwa.core.BrushStroke
+import app.manhwa.core.EditApplier
 import app.manhwa.core.EditKind
 import app.manhwa.core.EditorView
 import app.manhwa.core.FontLibrary
@@ -282,10 +283,46 @@ private class EditorState(val sn: TranslationController.EditSession) {
 
     val canSave: Boolean get() = !(isNew && translation.isBlank())
 
-    fun fields(forPreview: Boolean) = TranslationController.EditFields(
-        src, translation, hidden && !forPreview, if (zoneChanged || existing?.kind == EditKind.MANUAL) region() else null, zoneChanged, read,
-        if (forPreview) 0f else dx, if (forPreview) 0f else dy, scale, fontId, precise,
-    )
+    fun fields(forPreview: Boolean): TranslationController.EditFields {
+        val a = if (forPreview) null else anchor()
+        return TranslationController.EditFields(
+            src, translation, hidden && !forPreview, if (zoneChanged || existing?.kind == EditKind.MANUAL) region() else null, zoneChanged, read,
+            if (forPreview) 0f else dx, if (forPreview) 0f else dy, scale, fontId, precise, a?.first, a?.second,
+        )
+    }
+
+    // Position posée à la main. L'aperçu est calculé sans décalage (c'est le texte placé automatiquement) ; le décalage (dx, dy) est relatif à lui. À l'enregistrement, la position est
+    // conservée en absolu (centre du texte) : une mise en page automatique qui change plus tard ne la déplace pas. À l'ouverture, on affiche la position que la page applique vraiment :
+    // une ancienne position relative qui éloignerait le texte de sa place est abandonnée (voir EditApplier.positionShift).
+    private var adopted = false
+    private var adoptedDx = 0f
+    private var adoptedDy = 0f
+
+    /** À appeler à chaque nouvel aperçu (le texte placé automatiquement est alors connu). */
+    fun onPreview() {
+        val base = preview?.sink?.baseRect ?: return
+        val ex = existing
+        if (!adopted) {
+            adopted = true
+            if (ex == null || (ex.dx == 0f && ex.dy == 0f && !ex.anchored)) return
+            val applied = sn.info.applied.render[block.id]
+            val sh = if (applied != null) EditApplier.positionShift(applied, base, textBox()) else null
+            dx = sh?.first ?: 0f; dy = sh?.second ?: 0f
+            adoptedDx = dx; adoptedDy = dy
+        } else if (ex != null && ex.anchored && dx == adoptedDx && dy == adoptedDy) {
+            // position enregistrée en absolu et pas touchée : elle reste où elle est même si le texte placé automatiquement a changé (traduction ou police modifiée)
+            dx = ex.anchorX!! - base.centerX; dy = ex.anchorY!! + sn.info.ctxH - base.centerY
+            adoptedDx = dx; adoptedDy = dy
+        }
+    }
+
+    /** Centre absolu du texte posé à la main (coordonnées de la fenêtre traitée) ; null si le texte n'est pas déplacé (ou si l'aperçu n'est pas encore là). */
+    fun anchor(): Pair<Float, Float>? {
+        if (dx == 0f && dy == 0f) return null
+        val ex = existing
+        if (ex != null && ex.anchored && (!adopted || (dx == adoptedDx && dy == adoptedDy))) return ex.anchorX!! to (ex.anchorY!! + sn.info.ctxH)
+        return EditApplier.anchorOf(preview?.sink?.baseRect, dx, dy)
+    }
 
     /** Change à chaque modification qui demande un nouveau calcul de l'aperçu (le déplacement du texte, lui, se voit sans recalcul). */
     val previewKey: Int get() = listOf(translation, fontId, scale, rect, strokes.fold(0) { h, s -> h * 31 + s.points.size * 2 + (if (s.erase) 1 else 0) }, zoneChanged, zoneMode, precise).hashCode()
@@ -364,6 +401,7 @@ fun BlockEditor(graph: AppGraph, target: EditTarget, onClose: () -> Unit) {
         val p = withContext(Dispatchers.Default) { try { c.renderEditPreview(sn, c.makeEdit(sn, st.fields(true))) } catch (e: Throwable) { null } }
         st.busy = false
         st.preview = p
+        st.onPreview()
     }
 
     // posé sur toute l'application (même fenêtre, mêmes marges que le reste) ; la surface empêche les touchers de passer à la page dessous
