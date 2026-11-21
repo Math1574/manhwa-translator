@@ -154,6 +154,27 @@ object FontLibrary {
         Spec("specialelite", "lib/SpecialElite-Regular.ttf", "", "mono"),
     )
 
-    private val byId: Map<String, Spec> = specs.associateBy { it.id }
+    /** Polices stylisées (classes tech, gothic, horror, script, stencil, impact) : hors du modèle de style appris, jamais choisies par StyleMatcher ; voir [StyledFonts] et l'éditeur de correction. */
+    val styled: List<Spec> = listOf(
+        Spec("rajdhani-bold", "lib/Rajdhani-Bold.ttf", "", "tech"),
+        Spec("exo2-w600", "lib/Exo2-VF.ttf", "'wght' 600", "tech"),
+        Spec("exo2-w800", "lib/Exo2-VF.ttf", "'wght' 800", "tech"),
+        Spec("oxanium-w700", "lib/Oxanium-VF.ttf", "'wght' 700", "tech"),
+        Spec("pirataone", "lib/PirataOne-Regular.ttf", "", "gothic"),
+        Spec("medievalsharp", "lib/MedievalSharp.ttf", "", "gothic"),
+        Spec("almendra", "lib/Almendra-Regular.ttf", "", "gothic"),
+        Spec("almendra-bold", "lib/Almendra-Bold.ttf", "", "gothic"),
+        Spec("creepster", "lib/Creepster-Regular.ttf", "", "horror"),
+        Spec("butcherman", "lib/Butcherman-Regular.ttf", "", "horror"),
+        Spec("dancingscript-w600", "lib/DancingScript-VF.ttf", "'wght' 600", "script"),
+        Spec("dancingscript-w700", "lib/DancingScript-VF.ttf", "'wght' 700", "script"),
+        Spec("kaushanscript", "lib/KaushanScript-Regular.ttf", "", "script"),
+        Spec("blackopsone", "lib/BlackOpsOne-Regular.ttf", "", "stencil"),
+        Spec("stardosstencil-bold", "lib/StardosStencil-Bold.ttf", "", "stencil"),
+        Spec("titanone", "lib/TitanOne-Regular.ttf", "", "impact"),
+        Spec("knewave", "lib/Knewave-Regular.ttf", "", "impact"),
+    )
+
+    private val byId: Map<String, Spec> = (specs + styled).associateBy { it.id }
     fun spec(id: String): Spec? = byId[id]
 }

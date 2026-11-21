@@ -15,7 +15,7 @@ import kotlin.math.*
 import kotlin.random.Random
 
 object Lib {
-    val dir = File("/tmp/fontlib/static")
+    val dir = File(System.getProperty("fonts") ?: "/tmp/fontlib/static")
     private val fonts = HashMap<String, Font>()
     private val caps = HashMap<String, Float>()
     fun font(id: String): Font = fonts.getOrPut(id) { Font.createFont(Font.TRUETYPE_FONT, File(dir, "$id.ttf")) }

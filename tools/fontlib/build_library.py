@@ -32,6 +32,13 @@ FILES = {
  "NotoSans-VF.ttf": "notosans/NotoSans[wdth,wght].ttf", "NotoSerif-VF.ttf": "notoserif/NotoSerif[wdth,wght].ttf", "Lora-VF.ttf": "lora/Lora[wght].ttf",
  "Playfair-VF.ttf": "playfairdisplay/PlayfairDisplay[wght].ttf", "Cinzel-VF.ttf": "cinzel/Cinzel[wght].ttf",
  "CourierPrime-Regular.ttf": "courierprime/CourierPrime-Regular.ttf", "CourierPrime-Bold.ttf": "courierprime/CourierPrime-Bold.ttf", "SpecialElite-Regular.ttf": "specialelite/SpecialElite-Regular.ttf",
+ # polices stylisées (voir STYLED plus bas)
+ "Rajdhani-Bold.ttf": "rajdhani/Rajdhani-Bold.ttf", "Exo2-VF.ttf": "exo2/Exo2[wght].ttf", "Oxanium-VF.ttf": "oxanium/Oxanium[wght].ttf",
+ "PirataOne-Regular.ttf": "pirataone/PirataOne-Regular.ttf", "MedievalSharp.ttf": "medievalsharp/MedievalSharp.ttf", "Almendra-Regular.ttf": "almendra/Almendra-Regular.ttf", "Almendra-Bold.ttf": "almendra/Almendra-Bold.ttf",
+ "Creepster-Regular.ttf": "creepster/Creepster-Regular.ttf", "Butcherman-Regular.ttf": "butcherman/Butcherman-Regular.ttf",
+ "DancingScript-VF.ttf": "dancingscript/DancingScript[wght].ttf", "KaushanScript-Regular.ttf": "kaushanscript/KaushanScript-Regular.ttf",
+ "BlackOpsOne-Regular.ttf": "blackopsone/BlackOpsOne-Regular.ttf", "StardosStencil-Bold.ttf": "stardosstencil/StardosStencil-Bold.ttf",
+ "TitanOne-Regular.ttf": "titanone/TitanOne-Regular.ttf", "Knewave-Regular.ttf": "knewave/Knewave-Regular.ttf",
 }
 
 # classes grossières : comic (lettrage de bulle rond ou gras), hand (écriture fine), brush (marqueur, pinceau), display (très gras de titre), condensed (condensé numérique),
@@ -92,6 +99,21 @@ for w in (400, 600, 800): S(f"cinzel-w{w}", "Cinzel-VF.ttf", "serif", {"wght": w
 # --- machine à écrire
 S("courierprime", "CourierPrime-Regular.ttf", "mono"); S("courierprime-bold", "CourierPrime-Bold.ttf", "mono"); S("specialelite", "SpecialElite-Regular.ttf", "mono")
 
+# --- polices stylisées : HORS du modèle de style appris (StyleModel) ; elles ne sont jamais choisies par StyleMatcher. StyledFonts les choisit seulement quand l'original le demande
+# (fenêtre « système » : technique ; lettrage nettement gothique, d'horreur, script, pochoir ou percutant : par la forme des lettres) ; on peut aussi les choisir à la main dans l'éditeur.
+# Toutes couvrent le français (é è ê à ç œ « » ’ …) ; Orbitron, qui n'a pas « » , est écartée.
+styled = []   # (id, fichier, axes dict, classe)
+def X(i, f, cls, axes=None): styled.append((i, f, axes or {}, cls))
+X("rajdhani-bold", "Rajdhani-Bold.ttf", "tech")
+for w in (600, 800): X(f"exo2-w{w}", "Exo2-VF.ttf", "tech", {"wght": w})
+X("oxanium-w700", "Oxanium-VF.ttf", "tech", {"wght": 700})
+X("pirataone", "PirataOne-Regular.ttf", "gothic"); X("medievalsharp", "MedievalSharp.ttf", "gothic"); X("almendra", "Almendra-Regular.ttf", "gothic"); X("almendra-bold", "Almendra-Bold.ttf", "gothic")
+X("creepster", "Creepster-Regular.ttf", "horror"); X("butcherman", "Butcherman-Regular.ttf", "horror")
+for w in (600, 700): X(f"dancingscript-w{w}", "DancingScript-VF.ttf", "script", {"wght": w})
+X("kaushanscript", "KaushanScript-Regular.ttf", "script")
+X("blackopsone", "BlackOpsOne-Regular.ttf", "stencil"); X("stardosstencil-bold", "StardosStencil-Bold.ttf", "stencil")
+X("titanone", "TitanOne-Regular.ttf", "impact"); X("knewave", "Knewave-Regular.ttf", "impact")
+
 def axes_str(a): return ", ".join(f"'{k}' {fmt(float(v)) if not float(v).is_integer() else int(v)}" for k, v in a.items())
 
 def kotlin():
@@ -107,7 +129,12 @@ def kotlin():
         pen = PENALTY.get(i, 0.0); au = i in AUTO
         extra = (", true" if it else (", false" if (pen or au) else "")) + ((f", {pen}f" if pen else ", 0f") if au else (f", {pen}f" if pen else "")) + (", true" if au else "")
         L.append(f'        Spec("{i}", "lib/{f}", "{axes_str(a)}", "{c}"' + extra + "),")
-    L += ["    )", "", "    private val byId: Map<String, Spec> = specs.associateBy { it.id }", "    fun spec(id: String): Spec? = byId[id]", "}", ""]
+    L += ["    )", "",
+          "    /** Polices stylisées (classes tech, gothic, horror, script, stencil, impact) : hors du modèle de style appris, jamais choisies par StyleMatcher ; voir [StyledFonts] et l'éditeur de correction. */",
+          "    val styled: List<Spec> = listOf("]
+    for (i, f, a, c) in styled:
+        L.append(f'        Spec("{i}", "lib/{f}", "{axes_str(a)}", "{c}"),')
+    L += ["    )", "", "    private val byId: Map<String, Spec> = (specs + styled).associateBy { it.id }", "    fun spec(id: String): Spec? = byId[id]", "}", ""]
     return "\n".join(L)
 
 if __name__ == "__main__":
@@ -117,20 +144,22 @@ if __name__ == "__main__":
     ap.add_argument("--repo", default=os.path.join(os.path.dirname(__file__), "..", ".."))
     a = ap.parse_args()
     repo = os.path.abspath(a.repo)
-    ids = [s[0] for s in specs]
+    ids = [s[0] for s in specs] + [s[0] for s in styled]
     assert len(ids) == len(set(ids)), "identifiants en double"
     open(os.path.join(repo, "core/src/main/kotlin/app/manhwa/core/FontLibrary.kt"), "w", encoding="utf8").write(kotlin())
     dst = os.path.join(repo, "app/src/main/assets/fonts/lib"); os.makedirs(dst, exist_ok=True)
     for name, rel in FILES.items():
         p = os.path.join(a.src, rel)
-        if not os.path.exists(p): print("manque", p); sys.exit(1)
+        if not os.path.exists(p):
+            if os.path.exists(os.path.join(dst, name)): continue          # déjà dans l'application (--src ne contient alors que les nouvelles polices)
+            print("manque", p); sys.exit(1)
         shutil.copyfile(p, os.path.join(dst, name))
-    print(len(specs), "candidats,", len(FILES), "fichiers de police")
+    print(len(specs), "candidats,", len(styled), "polices stylisées,", len(FILES), "fichiers de police")
     if a.static:
         from fontTools.ttLib import TTFont
         from fontTools.varLib import instancer
         os.makedirs(a.static, exist_ok=True)
-        for (i, f, ax, c, it) in specs:
+        for (i, f, ax, c, it) in specs + [(i, f, ax, c, False) for (i, f, ax, c) in styled]:
             out = os.path.join(a.static, i + ".ttf")
             if os.path.exists(out): continue
             font = TTFont(os.path.join(dst, f))

@@ -194,6 +194,27 @@ private fun LibraryHome(graph: AppGraph, ui: LibraryUi, onOpenSeries: (String) -
     }
 }
 
+/** Synopsis de l'œuvre, tel que le site (ou l'annuaire) le donne : cinq lignes, puis « Lire la suite » quand le texte est plus long. Un appui déplie ou replie. */
+@Composable
+private fun SynopsisCard(text: String) {
+    val cs = MaterialTheme.colorScheme
+    var expanded by remember(text) { mutableStateOf(false) }
+    var overflow by remember(text) { mutableStateOf(false) }
+    GlassCard(Modifier.fillMaxWidth(), onClick = { expanded = !expanded }, contentPadding = 16.dp) {
+        Text("Synopsis", style = MaterialTheme.typography.titleSmall, color = cs.onSurfaceVariant)
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text, style = MaterialTheme.typography.bodyMedium,
+            maxLines = if (expanded) Int.MAX_VALUE else 5, overflow = TextOverflow.Ellipsis,
+            onTextLayout = { if (!expanded) overflow = it.hasVisualOverflow },
+        )
+        if (overflow || expanded) {
+            Spacer(Modifier.height(6.dp))
+            Text(if (expanded) "Réduire" else "Lire la suite", style = MaterialTheme.typography.labelLarge, color = cs.primary)
+        }
+    }
+}
+
 /** Pastille de statut (« Terminée »). */
 @Composable
 private fun StatusChip(text: String, color: Color) {
@@ -263,6 +284,7 @@ private fun SeriesPage(graph: AppGraph, key: String, onBack: () -> Unit, onGloss
             dismissButton = { TextButton(onClick = { confirm = false }) { Text("Annuler") } },
         )
     }
+    val synopsis = graph.covers.synopsis.textOf(key)
     val lastDone = lib.progressOf(entry.lastUrl)?.done == true
     val resume = resumeAt(entry.percent, lastDone)
     val nextUrl = if (lastDone) ChapterNav.next(entry.lastUrl) else null
@@ -297,6 +319,7 @@ private fun SeriesPage(graph: AppGraph, key: String, onBack: () -> Unit, onGloss
                 }
             }
         }
+        if (synopsis != null) item { SynopsisCard(synopsis) }
         item {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -342,7 +365,8 @@ private fun SeriesPage(graph: AppGraph, key: String, onBack: () -> Unit, onGloss
         if (shownChapters.isEmpty() && chapterQuery.isNotBlank()) item { Text("Aucun chapitre ne correspond.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
         items(shownChapters.withIndex().toList(), key = { it.value.url }) { (i, ch) ->
             Entrance(ch.url, i, seen) {
-                GlassCard(Modifier.fillMaxWidth(), onClick = { onOpen(ch.url, resumeAt(ch.percent, ch.done)) }, contentPadding = 0.dp) {
+                // un chapitre s'ouvre en haut : l'endroit où l'on s'était arrêté est proposé par le bouton « Reprendre à N % » (et par « Reprendre » plus haut), pas imposé
+                GlassCard(Modifier.fillMaxWidth(), onClick = { onOpen(ch.url, 0) }, contentPadding = 0.dp) {
                     Row(Modifier.fillMaxWidth().padding(start = 16.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
                             Text(ch.label, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)

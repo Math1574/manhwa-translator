@@ -76,6 +76,9 @@ import app.manhwa.core.TermRefresh
 import app.manhwa.core.TextNormalizer
 import app.manhwa.core.TranslatedBlock
 import app.manhwa.core.UserRegion
+import app.manhwa.core.TextFormat
+import app.manhwa.core.TextLook
+import app.manhwa.core.ZoneShape
 import app.manhwa.core.PagePipeline
 import app.manhwa.core.PageResult
 import app.manhwa.core.PageQueue
@@ -116,17 +119,21 @@ data class EditTarget(val imageId: String, val bid: Int, val src: String, val tr
 
 /** Identifiant d'un texte à ajouter à la main (zone non traduite). */
 const val NEW_BLOCK_ID = -2
+/** Éditeur ouvert sur une zone à effacer (carré d'effacement) : même éditeur que l'ajout d'une traduction, avec l'effacement de toute la zone activé. */
+const val NEW_WIPE_ID = -3
 
 /** Zone non traduite touchée longuement : coordonnées dans l'image d'origine. */
 class EmptySpot(val imageId: String, val x: Float, val y: Float)
 
 /** Geste qui peut encore être défait : texte du bandeau (« Traduction supprimée ») et ce qu'il faut faire pour l'annuler. */
-class UndoBanner(val message: String, val undo: () -> Unit)
+class UndoBanner(val message: String, val undo: () -> Unit, val label: String = "Annuler")
 
 /** Ce que le contrôleur garde d'une page traitée pour pouvoir corriger ses blocs : fenêtre traitée, résultat avant et après corrections, empreinte de l'image. */
 class WorkInfo(
     val imageId: String, val imageSrc: String, val imageKey: String, val bytes: ByteArray, val ctxH: Int,
     val result: PageResult, val applied: EditApplier.Applied, val series: String?,
+    /** Octets de l'image telle que la page la donne (sans le contexte de l'image du dessus) et fenêtre de jonction construite : un retraitement (correction enregistrée) les reprend sans rien retélécharger. */
+    val orig: ByteArray? = null, val seam: SeamWindow? = null,
 )
 
 /** Navigateur + orchestration de la traduction (collecte des images, file d'attente, overlay). */
@@ -215,6 +222,13 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     private val refreshSoon = HashMap<String, Runnable>()
     /** Numéro du dernier retraitement lancé pour chaque page : un retraitement plus ancien encore en cours ne redessine pas la page (il écraserait le résultat à jour). */
     private val fixRuns = ConcurrentHashMap<String, Long>()
+    /** Images dont une partie du texte est posée sur l'image du dessus (calque « ~up ») : si cette partie disparaît, le calque est vidé. */
+    private val upSent = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    /** Nombre de corrections perdues notées au journal (plafonné) et dernière correction enregistrée à l'éditeur (pour dire à l'écran si elle ne s'affiche pas). */
+    private val lostEntries = java.util.concurrent.atomic.AtomicInteger(0)
+    @Volatile private var watchedEdit: String? = null
+    /** Numéro de l'envoi de calque en cours : une partie de calque arrivée en retard d'un envoi plus ancien est ignorée par la page (voir PageScript.apply). */
+    private val overlayGen = java.util.concurrent.atomic.AtomicLong(0)
     /** Mode « textes écartés » : chaque texte lu mais laissé de côté (onomatopée, débris, lecture peu sûre) est entouré, un appui simple le traduit. Se coupe en changeant de page. */
     var discardMode by mutableStateOf(false)
     /** Textes écartés de chaque page (identifiant d'image → liste, coordonnées de la fenêtre traitée) : établis à la lecture complète de la page, sinon relus à la demande. */
@@ -892,8 +906,10 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     }
 
     /** Propose « Annuler » pendant [undoWindowMs] ; la proposition précédente est remplacée (son geste devient définitif). */
-    fun showUndo(message: String, undo: () -> Unit) {
-        undoBanner = UndoBanner(message, undo)
+    fun showUndo(message: String, undo: () -> Unit) { showUndo(message, "Annuler", undo) }
+
+    fun showUndo(message: String, label: String, undo: () -> Unit) {
+        undoBanner = UndoBanner(message, undo, label)
         main.removeCallbacks(clearUndo); main.postDelayed(clearUndo, undoWindowMs)
     }
 
@@ -1174,6 +1190,13 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         peekEmpty = null; main.removeCallbacks(clearPeekEmpty)
         openEdit(EditTarget(sp.imageId, NEW_BLOCK_ID, "", "", sp.x, sp.y))      // page plus en mémoire : retraitée d'abord, l'éditeur s'ouvre ensuite
     }
+
+    /** Efface une zone à la main à l'endroit touché (carré d'effacement) : l'éditeur s'ouvre sur un rectangle à ajuster, avec l'effacement de toute la zone activé. */
+    fun openNewWipe() {
+        val sp = peekEmpty ?: return
+        peekEmpty = null; main.removeCallbacks(clearPeekEmpty)
+        openEdit(EditTarget(sp.imageId, NEW_WIPE_ID, "", "", sp.x, sp.y))
+    }
     /**
      * Adresse de la page dont WebView annonce la fin. Si elle est annoncée sous une adresse qui n'est pas celle d'un site (« about:blank ») alors que la page affichée est bien celle qu'on suit
      * (celle de [currentUrl], posée au début du chargement), c'est cette page-là qui vient de finir. Après un retour à l'accueil, [currentUrl] est vide : rien n'est rattaché à une ancienne page.
@@ -1223,7 +1246,10 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         active = true
         warmUp()
         wv.evaluateJavascript(PageScript.INJECT, null)
-        wv.evaluateJavascript("window.__mt.collect($force)") { r -> onCandidates(r) }
+        // page de chapitre : seules les images de la colonne du chapitre sont données (pas les commentaires, vignettes et bandeaux du site sous le dernier chapitre) ;
+        // page où la traduction a été demandée à la main : toutes les images assez grandes
+        val strict = BrowsingLibrary.looksLikeChapter(currentUrl)
+        wv.evaluateJavascript("window.__mt.collect($force, $strict)") { r -> onCandidates(r) }
     }
 
     fun stop() { stopWork(); active = false }
@@ -1385,8 +1411,11 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val pageUrl = currentUrl
         val pageSeries = BrowsingLibrary.seriesKey(pageUrl)
         BatchContext.cancelled.set(cancelled); BatchContext.order.set(c.top); BatchContext.priority.set { c.priorityAt(viewportY, viewportH) }; BatchContext.lastBatch.remove(); BatchContext.lastDetail.remove()
-        runStage[c.id] = "téléchargement"
-        val bytes = try { fetch(c, pageUrl) } catch (e: Exception) {
+        // retraitement après une correction : l'image et sa fenêtre de jonction sont déjà en mémoire, on ne retélécharge rien (un site qui refuse un second téléchargement, ou une
+        // connexion coupée, faisait perdre la correction sans rien afficher)
+        val reuse: WorkInfo? = if (fix) workInfo(c.id)?.takeIf { it.imageSrc == c.src && it.orig != null } else null
+        runStage[c.id] = if (reuse != null) "préparation" else "téléchargement"
+        val bytes = reuse?.orig ?: try { fetch(c, pageUrl) } catch (e: Exception) {
             val f = PageOutcome.Failed("image", e.message ?: "téléchargement impossible")
             if (testing) logForTest(c, f, null, null, 0)
             return f
@@ -1412,7 +1441,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val nextTakes = !testNoSeam && Seams.nextTakesOver(c.nextH)
         // (une image ignorée du dessus, bandeau de début de chapitre par exemple, ne sert pas de contexte : son texte ne doit pas être lu avec la page)
         val ctxWanted = if (testNoSeam || c.prevSrc == null || c.prevId == null || c.prevId?.let { skipped.containsKey(it) } == true) 0 else Seams.windowContext(imageH, c.prevH.takeIf { it > 0 })
-        val window: SeamWindow? = if (ctxWanted > 0) {
+        val window: SeamWindow? = if (reuse != null) reuse.seam else if (ctxWanted > 0) {
             runStage[c.id] = "assemblage avec l'image du dessus"
             val prevSrc = c.prevSrc!!; val prevId = c.prevId!!
             val prevBytes = synchronized(recentBytes) { recentBytes[prevSrc] }
@@ -1492,10 +1521,19 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val ignoreEdits = if (basePage != null && ignoreRules.texts.isNotEmpty()) {
             basePage.blocks.filter { ignoreRules.textIgnored(pageSeries, it.source) }.map { b -> BlockEdit(IGNORE_EDIT_PREFIX + b.id, EditKind.ADJUST, imageRect(b.box, ctxH), b.source, hidden = true) }
         } else emptyList()
-        val applied: EditApplier.Applied? = if (basePage != null) try { EditApplier.apply(basePage, graph.edits.forImage(imageKey) + ignoreEdits, ctxH.toFloat()) } catch (e: Throwable) { null } else null
-        if (basePage != null && !staleFix()) synchronized(workInfos) {
-            workInfos[c.id] = WorkInfo(c.id, c.src, imageKey, workBytes, ctxH, basePage, applied ?: EditApplier.Applied(basePage, emptyMap(), emptyList(), emptyMap()), pageSeries)
+        // les corrections sont relues juste avant le dessin (voir plus bas) : une correction enregistrée pendant que la page attendait son tour d'affichage est prise en compte,
+        // au lieu de dessiner la page avec l'état d'avant (deux retraitements de la même image ne peuvent plus s'écraser l'un l'autre avec une version périmée)
+        fun editsNow(): List<BlockEdit> = graph.edits.forImage(imageKey) + ignoreEdits
+        fun applyEdits(list: List<BlockEdit>): EditApplier.Applied? = if (basePage != null) try { EditApplier.apply(basePage, list, ctxH.toFloat()) } catch (e: Throwable) { null } else null
+        var usedEdits = editsNow()
+        var applied: EditApplier.Applied? = applyEdits(usedEdits)
+        fun remember() {
+            val a = applied
+            if (basePage != null && !staleFix()) synchronized(workInfos) {
+                workInfos[c.id] = WorkInfo(c.id, c.src, imageKey, workBytes, ctxH, basePage, a ?: EditApplier.Applied(basePage, emptyMap(), emptyList(), emptyMap()), pageSeries, bytes, window)
+            }
         }
+        remember()
         var overlayForLog: JSONObject? = null
         var overlayUpForLog: JSONObject? = null
         BatchContext.lastBatch.get()?.let { batchInfo[c.id] = it }
@@ -1506,15 +1544,35 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             val tRender = SystemClock.uptimeMillis()
             if (testing) android.util.Log.i("MT", "ordre : ${c.id} arrive à l'affichage (priorité ${c.priorityAt(viewportY, viewportH)})")
             val json = renderTurns.run({ c.priorityAt(viewportY, viewportH) }) { finishing.remove(c.id); if (testing) android.util.Log.i("MT", "ordre : ${c.id} s'affiche (attente ${SystemClock.uptimeMillis() - tRender} ms)"); synchronized(renderLock) {
-                when {
-                    out is PageOutcome.Done -> PageRenderer.render(fonts, workBytes, applied?.page ?: out.result, s, debug, graph.fontMemory, pageSeries, applied?.render ?: emptyMap())
-                    // page sans texte détecté mais avec des textes ajoutés à la main
-                    out is PageOutcome.NoText && applied != null && applied.page.blocks.isNotEmpty() -> PageRenderer.render(fonts, workBytes, applied.page, s, debug, graph.fontMemory, pageSeries, applied.render)
-                    s.diagnostic && debug != null -> OverlayBuilder.debugOnly(debug!!)
-                    else -> null
-                }
+                var round = 0
+                var drawn: JSONObject?
+                do {
+                    // corrections relues au moment de dessiner ; si l'une d'elles change pendant le dessin (enregistrée entre-temps), on redessine une fois avec la dernière
+                    val now = editsNow()
+                    if (round > 0 || now != usedEdits) { usedEdits = now; applied = applyEdits(now); remember() }
+                    val a = applied
+                    drawn = when {
+                        out is PageOutcome.Done -> PageRenderer.render(fonts, workBytes, a?.page ?: out.result, s, debug, graph.fontMemory, pageSeries, a?.render ?: emptyMap())
+                        // page sans texte détecté mais avec des textes ajoutés à la main
+                        out is PageOutcome.NoText && a != null && a.page.blocks.isNotEmpty() -> PageRenderer.render(fonts, workBytes, a.page, s, debug, graph.fontMemory, pageSeries, a.render)
+                        s.diagnostic && debug != null -> OverlayBuilder.debugOnly(debug!!)
+                        else -> null
+                    }
+                    round++
+                } while (round < 2 && drawn != null && editsNow() != usedEdits)
+                drawn
             } }
             stages[2] = SystemClock.uptimeMillis() - tRender
+            // corrections de cette page qui n'ont retrouvé aucun texte : elles ne s'affichent pas ; on le note au journal, et la correction qui vient d'être enregistrée le dit à l'écran
+            val lost = applied?.lost(usedEdits.filter { !it.id.startsWith(IGNORE_EDIT_PREFIX) }) ?: emptyList()
+            if (lost.isNotEmpty()) {
+                if (lostEntries.incrementAndGet() <= 40) graph.journal.add(
+                    JSONObject().put("t", System.currentTimeMillis()).put("type", "editlost").put("img", c.id).put("fix", fix)
+                        .put("edits", JSONArray(lost.map { e -> JSONObject().put("id", e.id).put("src", e.matchSource.take(40)).put("tr", (e.translation ?: "").take(40)) })),
+                )
+                val watch = watchedEdit
+                if (fix && watch != null && lost.any { it.id == watch }) { watchedEdit = null; main.post { showUndo("La correction n'a trouvé aucun texte à cet endroit", "Réessayer") { reprocess(c.id) } } }
+            }
             json?.optJSONArray("blocks")?.let { arr ->
                 val m = HashMap<Int, String>()
                 for (i in 0 until arr.length()) { val r = arr.getJSONObject(i); if (r.has("bid")) m[r.getInt("bid")] = r.optString("family") }
@@ -1527,7 +1585,9 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                 own = sp.own; up = sp.up
             }
             if (own != null) sendOverlay(c.id, own)
-            if (up != null) sendOverlay(c.id + "~up", up, c.prevId)
+            if (up != null) { sendOverlay(c.id + "~up", up, c.prevId); upSent.add(c.id) }
+            // la partie posée sur l'image du dessus n'existe plus (texte corrigé, déplacé ou supprimé) : l'ancienne ne doit pas rester affichée
+            else if (window != null && c.prevId != null && upSent.remove(c.id)) sendOverlay(c.id + "~up", JSONObject().put("w", window.width).put("h", kotlin.math.max(1, c.prevH)).put("patches", JSONArray()), c.prevId)
             if (basePage != null) main.post { refreshDiscards(c.id) }
             overlayForLog = own; overlayUpForLog = up
             if (own != null && out is PageOutcome.Done) journalLayout(c, pageUrl, out, own)
@@ -1586,7 +1646,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     class RegionRead(val source: String, val translation: String, val lineBoxes: List<CRect>, val lineTexts: List<String>, val vertical: Boolean, val lineHeight: Float)
 
     /** Bloc en cours de correction : page traitée, bloc visé (dans la page corrigée), correction déjà enregistrée pour lui, nom de l'œuvre. */
-    class EditSession(val info: WorkInfo, val block: TranslatedBlock, val existing: BlockEdit?, val seriesName: String?, val isNew: Boolean = false)
+    class EditSession(val info: WorkInfo, val block: TranslatedBlock, val existing: BlockEdit?, val seriesName: String?, val isNew: Boolean = false, val startWipe: Boolean = false)
 
     /** Aperçu en direct : couches d'effacement et de texte du bloc, mises en page avec la correction en cours. À recycler après usage. */
     class EditPreview(val sink: LayerSink, val blockId: Int)
@@ -1597,6 +1657,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val dx: Float, val dy: Float, val scale: Float, val fontId: String?, val precise: Boolean = false,
         /** Centre posé à la main pour le texte traduit (voir BlockEdit.anchorX) ; null : pas de position choisie. */
         val anchorX: Float? = null, val anchorY: Float? = null,
+        /** Mise en forme (alignement, lignes, interligne, casse, rotation), apparence (couleur, contour, lueur) et effacement de toute la zone. */
+        val format: TextFormat = TextFormat(), val look: TextLook = TextLook(), val wipe: Boolean = false,
     )
 
     /** Police de la bibliothèque (aperçu des polices dans l'éditeur). */
@@ -1615,14 +1677,14 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     fun editSession(t: EditTarget): EditSession? {
         val info = workInfo(t.imageId) ?: return null
         val name = currentSeriesKey?.let { SeriesHint.fromUrl(currentUrl) ?: it }
-        if (t.bid == NEW_BLOCK_ID) {
-            // texte à ajouter : rectangle de départ autour du point touché (coordonnées de l'image, décalées du contexte de la fenêtre)
+        if (t.bid == NEW_BLOCK_ID || t.bid == NEW_WIPE_ID) {
+            // texte à ajouter (ou zone à effacer) : rectangle de départ autour du point touché (coordonnées de l'image, décalées du contexte de la fenêtre)
             val iw = info.result.imageWidth.toFloat(); val ih = info.result.imageHeight.toFloat()
             val w = (iw * 0.45f).coerceIn(160f, 520f).coerceAtMost(iw); val h = kotlin.math.min(130f, ih)
             val cx = (if (t.x >= 0f) t.x else iw / 2f); val cy = (if (t.y >= 0f) t.y else ih / 2f) + info.ctxH
             val l = (cx - w / 2f).coerceIn(0f, kotlin.math.max(0f, iw - w)); val tp = (cy - h / 2f).coerceIn(0f, kotlin.math.max(0f, ih - h))
             val box = CRect(l, tp, kotlin.math.min(iw, l + w), kotlin.math.min(ih, tp + h))
-            return EditSession(info, TranslatedBlock(NEW_BLOCK_ID, box, "", "", false, 40f, emptyList(), emptyList()), null, name, isNew = true)
+            return EditSession(info, TranslatedBlock(NEW_BLOCK_ID, box, "", "", false, 40f, emptyList(), emptyList()), null, name, isNew = true, startWipe = t.bid == NEW_WIPE_ID)
         }
         val b = info.applied.page.blocks.firstOrNull { it.id == t.bid } ?: return null
         return EditSession(info, b, info.applied.editByBlock[b.id]?.takeUnless { it.id.startsWith(IGNORE_EDIT_PREFIX) }, name)
@@ -1638,10 +1700,12 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val info = sn.info; val shift = info.ctxH
         val orig = info.result.blocks.firstOrNull { it.id == sn.block.id }          // bloc détecté (null pour un bloc défini à la main)
         val prev = sn.existing
-        val manual = sn.isNew || prev?.kind == EditKind.MANUAL || f.zoneChanged
+        val manual = sn.isNew || prev?.kind == EditKind.MANUAL || f.zoneChanged || f.wipe
         val id = prev?.id ?: ("e" + java.util.UUID.randomUUID().toString().take(8))
         val shown = sn.block
         val newSrc = f.src.trim(); val newTr = f.translation.trim()
+        // les retours à la ligne d'une traduction automatique sont des espaces (seuls ceux tapés par l'utilisateur comptent, voir BlockEdit.hasBreaks)
+        val shownTr = if (prev?.hasBreaks == true) shown.translated.trim() else shown.translated.trim().replace('\n', ' ')
         val boxes = (f.read?.lineBoxes ?: shown.lineBoxes).map { imageRect(it, shift) }
         val texts = f.read?.lineTexts ?: shown.lineTexts
         val matchBox = if (prev?.kind == EditKind.MANUAL) prev.match else (orig?.box?.let { imageRect(it, shift) } ?: prev?.match)
@@ -1651,14 +1715,14 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             BlockEdit(
                 id, EditKind.MANUAL, matchBox, matchSrc, region, newSrc, newTr, f.hidden, f.dx, f.dy, f.scale, f.fontId,
                 f.read?.vertical ?: shown.vertical, f.read?.lineHeight ?: shown.lineHeight, boxes, texts, shown.kind, shown.bubble?.let { imageRect(it, shift) }, f.precise,
-                anchorX = f.anchorX, anchorY = f.anchorY?.minus(shift.toFloat()),
+                anchorX = f.anchorX, anchorY = f.anchorY?.minus(shift.toFloat()), format = f.format, look = f.look, wipe = f.wipe,
             )
         } else {
             BlockEdit(
                 id, EditKind.ADJUST, matchBox, matchSrc, null,
                 if (newSrc != shown.source.trim()) newSrc else prev?.source,
-                if (newTr != shown.translated.trim()) newTr.ifEmpty { null } else prev?.translation,
-                f.hidden, f.dx, f.dy, f.scale, f.fontId, precise = f.precise, anchorX = f.anchorX, anchorY = f.anchorY?.minus(shift.toFloat()),
+                if (newTr != shownTr) newTr.ifEmpty { null } else prev?.translation,
+                f.hidden, f.dx, f.dy, f.scale, f.fontId, precise = f.precise, anchorX = f.anchorX, anchorY = f.anchorY?.minus(shift.toFloat()), format = f.format, look = f.look,
             )
         }
     }
@@ -1732,8 +1796,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
      * (avant → après) est d'abord proposé : l'éditeur reste ouvert dessous, et rien n'est enregistré avant la confirmation.
      */
     fun saveEdit(sn: EditSession, edit: BlockEdit, terms: List<GlossaryEntry>, termsForSeries: Boolean) {
-        // un texte ajouté sans traduction n'a rien à afficher : on n'enregistre pas de zone vide
-        if (sn.isNew && edit.translation.isNullOrBlank()) { editTarget = null; return }
+        // un texte ajouté sans traduction n'a rien à afficher : on n'enregistre pas de zone vide (sauf une zone à effacer, qui n'a pas de traduction)
+        if (sn.isNew && edit.translation.isNullOrBlank() && !edit.wipe) { editTarget = null; return }
         val series = if (termsForSeries) sn.info.series else null
         proposeTerms(terms, series, sn, edit) { afterTerms -> doSaveEdit(sn, edit, terms, termsForSeries, afterTerms) }
     }
@@ -1743,6 +1807,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val info = sn.info
         editTarget = null
         graph.edits.upsert(info.imageKey, edit)
+        watchedEdit = edit.id
         val series = info.series
         var termAdded = false
         for (t in terms) {
@@ -1757,13 +1822,16 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val manualTr = edit.translation
         if (manualTr != null && manualTr.isNotBlank() && edit.kind == EditKind.ADJUST && detected.isNotBlank()) graph.glossary.addCorrection(detected, manualTr)
         val summary = buildList {
-            if (edit.kind == EditKind.MANUAL) add("zone")
+            if (edit.kind == EditKind.MANUAL) add("zone" + (edit.region?.shape?.takeIf { it != ZoneShape.RECT }?.let { " " + it.name.lowercase() } ?: ""))
+            if (edit.wipe) add("zone effacée")
             if (edit.translation != null) add("traduction")
             if (edit.source != null) add("lecture")
             if (edit.hidden) add("non traduit")
             if (edit.dx != 0f || edit.dy != 0f || edit.anchored) add("position %.0f,%.0f".format(java.util.Locale.ROOT, edit.dx, edit.dy) + (if (edit.anchored) " ancrée %.0f,%.0f".format(java.util.Locale.ROOT, edit.anchorX, edit.anchorY) else ""))
             if (edit.scale != 1f) add("taille %.2f".format(java.util.Locale.ROOT, edit.scale))
             if (edit.fontId != null) add("police ${edit.fontId}")
+            if (!edit.format.isDefault) add("mise en forme ${edit.format.encode()}")
+            if (!edit.look.isDefault) add("apparence ${edit.look.encode()}")
             if (termAdded) add("glossaire")
         }.joinToString(", ")
         graph.journal.add(
@@ -1950,12 +2018,20 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         reprocess(sn.info.imageId)
     }
 
-    private fun reprocess(imageId: String, attempt: Int = 0, epoch: Int = pageEpoch) {
+    private fun reprocess(imageId: String, attempt: Int = 0, epoch: Int = pageEpoch, redo: Int = 0) {
         if (epoch != pageEpoch) return   // on a changé de page entre-temps : l'ancienne image n'est plus là
         val cand = candidatesById[imageId] ?: return
-        val accepted = queue.submit(PageJob(cand.id + "#fix" + System.nanoTime(), 0) { cancelled -> process(cand, cancelled, fix = true) })
+        val accepted = queue.submit(PageJob(cand.id + "#fix" + System.nanoTime(), 0) { cancelled ->
+            val out = process(cand, cancelled, fix = true)
+            // le retraitement n'a rien affiché (annulé par un changement de file, image illisible, erreur) : il est relancé, puis l'écran le dit au lieu de se taire
+            if ((cancelled() || out is PageOutcome.Failed) && epoch == pageEpoch) {
+                if (redo < 3) main.postDelayed({ reprocess(imageId, 0, epoch, redo + 1) }, 2000L * (redo + 1))
+                else main.post { showUndo("La page n'a pas pu être redessinée", "Réessayer") { reprocess(imageId) } }
+            }
+            out
+        })
         // la file est pleine (le chapitre se traduit encore) : le rafraîchissement n'est pas perdu, on réessaie dans un instant (une suppression ou son annulation s'affichent alors à coup sûr)
-        if (!accepted && attempt < 40) main.postDelayed({ reprocess(imageId, attempt + 1, epoch) }, 750)
+        if (!accepted && attempt < 40) main.postDelayed({ reprocess(imageId, attempt + 1, epoch, redo) }, 750)
     }
 
     /** Recadrage d'une image encodée (coordonnées de la fenêtre) ramené à [maxSide] pixels au plus : bitmap et échelle (pixels du bitmap par pixel de la fenêtre). */
@@ -1979,15 +2055,16 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     /** Envoie l'overlay à la page par morceaux d'environ 1,2 Mo : évite une énorme chaîne JavaScript d'un seul bloc. */
     private fun sendOverlay(id: String, json: JSONObject, target: String? = null) {
         val patches = json.optJSONArray("patches") ?: JSONArray()
+        val gen = overlayGen.incrementAndGet()      // tous les morceaux d'un même envoi portent son numéro : la page écarte ceux d'un envoi plus ancien arrivés après un plus récent
         val chunks = ArrayList<JSONObject>()
         var cur = JSONArray(); var size = 0
         for (i in 0 until patches.length()) {
             val p = patches.getJSONObject(i)
             val len = p.optString("png").length
-            if (size > 0 && size + len > 1_200_000) { chunks.add(JSONObject().put("w", json.get("w")).put("h", json.get("h")).put("patches", cur).also { if (target != null) it.put("target", target) }); cur = JSONArray(); size = 0 }
+            if (size > 0 && size + len > 1_200_000) { chunks.add(JSONObject().put("w", json.get("w")).put("h", json.get("h")).put("patches", cur).put("gen", gen).also { if (target != null) it.put("target", target) }); cur = JSONArray(); size = 0 }
             cur.put(p); size += len
         }
-        val first = JSONObject().put("w", json.get("w")).put("h", json.get("h")).put("patches", cur).also { if (target != null) it.put("target", target) }
+        val first = JSONObject().put("w", json.get("w")).put("h", json.get("h")).put("patches", cur).put("gen", gen).also { if (target != null) it.put("target", target) }
         json.optJSONArray("dbg")?.let { first.put("dbg", it) }
         chunks.add(first)
         chunks.forEachIndexed { i, ch ->

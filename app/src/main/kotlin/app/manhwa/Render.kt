@@ -23,6 +23,7 @@ import app.manhwa.core.FontMatcher
 import app.manhwa.core.FontLibrary
 import app.manhwa.core.RenderEdit
 import app.manhwa.core.StyleMatcher
+import app.manhwa.core.StyledFonts
 import app.manhwa.core.EditApplier
 import app.manhwa.core.GlyphRender
 import app.manhwa.core.GlyphRenderer
@@ -169,7 +170,7 @@ object PageRenderer {
         val bmp = decodeSampled(imageBytes, result.imageWidth, result.imageHeight)
         val s = if (bmp == null) 1f else bmp.width.toFloat() / result.imageWidth
         val iw = result.imageWidth.toFloat(); val ih = result.imageHeight.toFloat()
-        val blocks = result.blocks.filter { it.translated.isNotBlank() || edits[it.id]?.hidden == true }
+        val blocks = result.blocks.filter { it.translated.isNotBlank() || edits[it.id]?.hidden == true || edits[it.id]?.wipe == true }            // carré d'effacement : zone effacée sans traduction
         val lineHs = blocks.map { BlockLayout.lineHeightOf(it) }.sorted()
         val medianLine = if (lineHs.isEmpty()) 0f else lineHs[lineHs.size / 2]
         val patches = JSONArray(); val report = JSONArray()
@@ -196,7 +197,7 @@ object PageRenderer {
                 // « ne pas traduire » : l'image n'est pas touchée ; un patch invisible garde le bloc touchable (appui long) pour pouvoir le rétablir
                 if (edit?.hidden == true) { if (sink == null) patches.put(inertPatch(b)); skipped++; continue }
                 // traduction identique au texte lu (nom propre, interjection, décor lu comme du texte) : l'image n'est pas touchée (sauf dans l'aperçu de l'éditeur, qui montre toujours le texte)
-                if (sink == null && RenderGate.unchanged(b.source, b.translated)) { skipped++; continue }
+                if (sink == null && edit?.wipe != true && RenderGate.unchanged(b.source, b.translated)) { skipped++; continue }
                 // lignes des autres blocs : ce bloc ne doit pas les effacer
                 val others = blocks.withIndex().filter { it.index != bi }.flatMap { it.value.lineBoxes.ifEmpty { listOf(it.value.box) } }
                 val prep = BlockLayout.prepare(b, src, s, iw, ih, medianLine, settings.target.code, others, blocks, verified, isRect, edit)
@@ -245,7 +246,7 @@ object PageRenderer {
                 laids.add(laid)
             }
             // 2) collisions : un texte hors bulle (forme libre) dont le texte placé recouvre celui d'un autre bloc est replacé (voir BlockLayout.resolveCollisions)
-            val results = ArrayList<BlockLayout.Result?>(laids.map { it?.r })
+            val results = ArrayList<BlockLayout.Result?>(laids.map { l -> l?.r?.takeIf { it.fit.lines.isNotEmpty() } })            // un carré d'effacement (aucune ligne) n'entre pas dans les collisions
             BlockLayout.resolveCollisions(preps, results, { pr -> pr.block.id in pinned }) { pr, k ->
                 try { layoutBlock(fonts, s, pr, iw, ih, settings.textScale * k, src)?.r } catch (e: Throwable) { null }
             }
@@ -307,10 +308,15 @@ object PageRenderer {
                 else StyleMatcher.describe(lines, if (p.plan?.mode == Erasure.Mode.ART) StyleMatcher.Regime.ART else StyleMatcher.Regime.FLAT)
             }
         }
-        val dec = StyleMatcher.decide(blocks, AndroidGlyphRenderer(fonts), memory, series)
+        val renderer = AndroidGlyphRenderer(fonts)
+        val dec = StyleMatcher.decide(blocks, renderer, memory, series)
+        // polices stylisées (technique, gothique, horreur…) : seulement quand le lettrage d'origine l'exige (fenêtre système, lettrage qu'aucune police ordinaire ne copie), voir StyledFonts
+        val styled: List<StyledFonts.Pick?> = try { StyledFonts.refine(blocks, dec, preps.map { hintOf(it) }, renderer) } catch (e: Throwable) { emptyList() }
         return dec.mapIndexed { i, d ->
             if (d == null || ScriptDetector.dominant(preps[i].block.source) != "en") null
             else {
+                val sp = styled.getOrNull(i)
+                if (sp != null) return@mapIndexed FontPick(sp.id, 0f, "stylisée : ${sp.reason} · ordinaire ${d.id}")           // une police stylisée n'est pas inclinée : son dessin est celui voulu
                 val b = blocks[i]; val top = d.ranking.firstOrNull()
                 val info = if (b == null) "non mesuré (voisin) · famille ${d.family}" else "famille %s · poids %.3f · dist %.1f · forme %.2f · pén %.2f%s · alt %s".format(
                     d.family, kotlin.math.exp(b.raw[0]), top?.dist ?: 0f, top?.shape ?: 0f, top?.penalty ?: 0f, if (d.fromMemory) " · série" else "",
@@ -318,6 +324,15 @@ object PageRenderer {
                 FontPick(d.id, b?.slant ?: 0f, info)
             }
         }
+    }
+
+    /** Ce que le choix de police stylisée doit savoir d'un bloc : texte d'origine, texte clair sur fond sombre (fenêtre système), bloc dans une bulle. */
+    private fun hintOf(p: Prep): StyledFonts.Hint {
+        val plan = p.plan
+        val fg = plan?.letterColor?.takeIf { it != 0 } ?: plan?.textColor ?: 0xFF000000.toInt()
+        val bg = plan?.bg ?: 0xFFFFFFFF.toInt()
+        val fl = ColorMath.luminance(fg); val bl = ColorMath.luminance(bg)
+        return StyledFonts.Hint(p.block.source, fl >= 0.55f && bl <= 0.40f && fl - bl >= 0.30f, p.bubble != null)
     }
 
     /** Police d'un bloc : sources CJK en Noto calibrée, tout le reste dans la police de la bibliothèque choisie pour lui (sans épaississement ni étirement), droite ou inclinée comme l'original. */
@@ -351,6 +366,8 @@ object PageRenderer {
     private fun layoutBlock(fonts: Typefaces, s: Float, p: Prep, iw: Float, ih: Float, userScale: Float, src: PixelSource? = null): Laid? {
         // police assortie au lettrage d'origine
         val font = matchFont(fonts, p)
+        // carré d'effacement sans traduction : aucune ligne à placer, seule la zone est effacée
+        if (p.text.isBlank() && p.plan != null) return Laid(font, Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = font.typeface }, BlockLayout.emptyResult())
         val cap = capRatio(font.typeface)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG or Paint.LINEAR_TEXT_FLAG).apply {
             typeface = font.typeface; letterSpacing = font.letterSpacing; textScaleX = font.scaleX; textSkewX = font.skew
@@ -374,15 +391,29 @@ object PageRenderer {
     /** Bulle en dégradé (mode lissé) où le texte contraste mal avec une partie du fond : le bloc est dessiné avec un contour, comme sur dessin (voir TextPaint). */
     private fun gradientOutline(p: Prep, laid: Laid, s: Float): Boolean = TextPaint.needsOutlineOnGradient(p.plan, textColorOf(p), laid.lineRects(0f), s)
 
+    /** Couleur opaque (alpha 255) d'une couleur RVB choisie à la main. */
+    private fun opaque(rgb: Int): Int = 0xFF000000.toInt() or (rgb and 0xFFFFFF)
+
     /** Dessine les lignes traduites d'un bloc sur [tc] (patch de rectangle [rect] à [ss] pixels par pixel de l'image) ; rend la couleur utilisée. */
     private fun drawLines(tc: Canvas, p: Prep, laid: Laid, rect: RectF, ss: Float, s: Float): Int {
-        val plan = p.plan; val font = laid.font; val paint = laid.paint; val fit = laid.fit; val art = laid.art || gradientOutline(p, laid, s); val allCaps = laid.allCaps
-        val fg = textColorOf(p)
+        val plan = p.plan; val font = laid.font; val paint = laid.paint; val fit = laid.fit; val allCaps = laid.allCaps
+        val look = p.look
+        // couleur, contour et lueur : choisis à la main, sinon ceux mesurés sur le lettrage d'origine (voir TextPaint)
+        val fg = look.fill?.let { opaque(it) } ?: textColorOf(p)
+        val autoOutline = laid.art || gradientOutline(p, laid, s)
+        val art = look.outlineW != 0f && (autoOutline || look.outlineW != null || look.outline != null)
         val px = fit.size * ss
         paint.textSize = px
         val capPx = Rect().also { paint.getTextBounds("H", 0, 1, it) }.height().toFloat()
         val allCapsOut = TextNormalizer.isAllCaps(p.text)
         val spec = p.paint
+        val strokeW = look.outlineW?.let { it * capPx } ?: if (spec != null && spec.outlineRel > 0f) spec.outlineRel * capPx else px * 0.11f
+        val strokeColor = look.outline?.let { opaque(it) } ?: if (spec != null && spec.outline != 0) 0xFF000000.toInt() or spec.outline else if (ColorMath.luminance(fg) > 0.5f) 0xFF000000.toInt() else 0xFFFFFFFF.toInt()
+        // lettrage à lueur (halo coloré sur fond uni) : la traduction reçoit le même halo ; la lueur peut aussi être demandée à la main (couleur opposée au texte par défaut)
+        val autoGlow = plan?.glow ?: 0
+        val glowOn = look.glowW != 0f && (autoGlow != 0 || look.glow != null || look.glowW != null)
+        val glowColor = look.glow?.let { opaque(it) } ?: if (autoGlow != 0) autoGlow else if (ColorMath.luminance(fg) > 0.5f) 0xFF000000.toInt() else 0xFFFFFFFF.toInt()
+        val glowRadius = px * (look.glowW ?: 0.32f)
         // texte d'origine penché : le bloc entier est tourné autour du centre de ses lignes (comme l'original), les lignes restent dessinées droites dans ce repère
         val tilt = laid.tilt
         val saved = tc.save()
@@ -393,17 +424,15 @@ object PageRenderer {
             val base = bandCenter + (if (allCapsOut || allCaps) capPx / 2f else capPx * 0.5f)
             paint.textAlign = Paint.Align.CENTER
             if (art) { // texte sur dessin : contour pour rester lisible, de la couleur mesurée sur l'original quand elle est colorée, sinon de couleur opposée
-                paint.style = Paint.Style.STROKE; paint.strokeWidth = if (spec != null && spec.outlineRel > 0f) spec.outlineRel * capPx else px * 0.11f; paint.strokeJoin = Paint.Join.ROUND
-                paint.color = if (spec != null && spec.outline != 0) 0xFF000000.toInt() or spec.outline else if (ColorMath.luminance(fg) > 0.5f) 0xFF000000.toInt() else 0xFFFFFFFF.toInt()
+                paint.style = Paint.Style.STROKE; paint.strokeWidth = strokeW; paint.strokeJoin = Paint.Join.ROUND
+                paint.color = strokeColor
                 tc.drawText(ln.text, cx, base, paint)
             }
             if (font.embolden > 0f) { paint.style = Paint.Style.FILL_AND_STROKE; paint.strokeWidth = font.embolden * px; paint.strokeJoin = Paint.Join.ROUND }
             else { paint.style = Paint.Style.FILL; paint.strokeWidth = 0f }
-            // lettrage à lueur (halo coloré sur fond uni) : la traduction reçoit le même halo
-            val glow = plan?.glow ?: 0
-            if (glow != 0) {
+            if (glowOn && glowRadius > 0.5f) {
                 paint.color = fg
-                paint.setShadowLayer(px * 0.32f, 0f, 0f, glow)
+                paint.setShadowLayer(glowRadius, 0f, 0f, glowColor)
                 tc.drawText(ln.text, cx, base, paint)
                 tc.drawText(ln.text, cx, base, paint)
                 paint.clearShadowLayer()
@@ -422,8 +451,12 @@ object PageRenderer {
         // zone du patch : région effacée + toutes les lignes placées
         var l = Float.MAX_VALUE; var t = Float.MAX_VALUE; var r = -Float.MAX_VALUE; var bt = -Float.MAX_VALUE
         for (ln in fit.lines) { l = min(l, ln.cx - ln.width / 2f); r = max(r, ln.cx + ln.width / 2f); t = min(t, ln.top); bt = max(bt, ln.top + fit.lineStep) }
-        var rect = laid.placed(fit.size * 0.3f)            // englobe aussi le texte penché
-        if (plan != null) rect = rect.union(RectF(plan.x0 / s, plan.y0 / s, (plan.x0 + plan.w) / s, (plan.y0 + plan.h) / s))
+        // marge autour du texte : la lueur (choisie à la main ou mesurée) déborde du texte de son rayon
+        val glowK = p.look.glowW ?: if ((plan?.glow ?: 0) != 0) 0.32f else 0f
+        val textRect: RectF? = if (fit.lines.isEmpty()) null else laid.placed(fit.size * max(0.3f, glowK * 1.2f))            // englobe aussi le texte penché ; rien pour un carré d'effacement sans traduction
+        val planRect: RectF? = plan?.let { RectF(it.x0 / s, it.y0 / s, (it.x0 + it.w) / s, (it.y0 + it.h) / s) }
+        var rect = textRect?.let { tr -> planRect?.union(tr) ?: tr } ?: planRect ?: return null
+        if (fit.lines.isEmpty()) { l = 0f; t = 0f; r = 0f; bt = 0f }
         rect = RectF(max(0f, rect.left), max(0f, rect.top), min(iw, rect.right), min(ih, rect.bottom))
         // double résolution pour les patches de taille normale ; réduite pour les très grands blocs afin de limiter mémoire et poids de l'envoi
         val areaImg = (rect.right - rect.left) * (rect.bottom - rect.top)

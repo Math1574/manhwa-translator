@@ -14,7 +14,17 @@ object EditApplier {
     const val MANUAL_ID_BASE = 100_000
 
     /** Résultat : page modifiée, directives de rendu par identifiant de bloc, blocs retirés (remplacés par un bloc défini à la main), correction appliquée à chaque bloc. */
-    class Applied(val page: PageResult, val render: Map<Int, RenderEdit>, val removed: List<TranslatedBlock>, val editByBlock: Map<Int, BlockEdit>)
+    class Applied(val page: PageResult, val render: Map<Int, RenderEdit>, val removed: List<TranslatedBlock>, val editByBlock: Map<Int, BlockEdit>) {
+        /**
+         * Corrections de blocs détectés (parmi [edits]) qui n'ont retrouvé aucun bloc de cette page : elles ne s'affichent pas. Une correction d'un bloc défini à la main
+         * a toujours sa zone : elle n'est jamais perdue.
+         */
+        fun lost(edits: List<BlockEdit>): List<BlockEdit> {
+            val used = HashSet<String>()
+            for (e in editByBlock.values) used.add(e.id)
+            return edits.filter { it.kind == EditKind.ADJUST && it.match != null && it.id !in used }
+        }
+    }
 
     fun apply(result: PageResult, edits: List<BlockEdit>, shiftY: Float = 0f): Applied {
         val blocks = ArrayList(result.blocks)
@@ -27,7 +37,7 @@ object EditApplier {
             val target = findBlock(blocks, e, shiftY) ?: continue
             val i = blocks.indexOf(target)
             blocks[i] = target.copy(source = e.source ?: target.source, translated = e.translation ?: target.translated)
-            render[target.id] = RenderEdit(e.dx, e.dy, e.scale, e.fontId, null, false, e.id, e.hidden, e.precise, anchorX(e), anchorY(e, shiftY))
+            render[target.id] = RenderEdit(e.dx, e.dy, e.scale, e.fontId, null, false, e.id, e.hidden, e.precise, anchorX(e), anchorY(e, shiftY), e.format, e.look, false, e.hasBreaks)
             byBlock[target.id] = e
         }
         // 2) blocs définis à la main : ils remplacent le bloc détecté qu'ils corrigent et ceux qu'ils recouvrent
@@ -50,7 +60,7 @@ object EditApplier {
                     e.blockKind, e.bubble?.offset(0f, shiftY), zone,
                 ),
             )
-            render[id] = RenderEdit(e.dx, e.dy, e.scale, e.fontId, region, true, e.id, e.hidden, e.precise, anchorX(e), anchorY(e, shiftY))
+            render[id] = RenderEdit(e.dx, e.dy, e.scale, e.fontId, region, true, e.id, e.hidden, e.precise, anchorX(e), anchorY(e, shiftY), e.format, e.look, e.wipe, e.hasBreaks)
             byBlock[id] = e
         }
         return Applied(PageResult(result.imageWidth, result.imageHeight, blocks), render, removed, byBlock)
@@ -59,18 +69,44 @@ object EditApplier {
     private fun anchorX(e: BlockEdit): Float? = if (e.anchored) e.anchorX else null
     private fun anchorY(e: BlockEdit, shiftY: Float): Float? = if (e.anchored) e.anchorY!! + shiftY else null
 
-    /** Bloc détecté visé par une correction : celui dont la boîte recouvre le mieux la boîte conservée, ou à défaut le même texte lu au même endroit. */
+    /**
+     * Bloc détecté visé par une correction : celui dont la boîte recouvre le mieux la boîte conservée, ou à défaut le même texte lu au même endroit (à une lettre ou deux près :
+     * une relecture ne rend pas toujours exactement les mêmes lettres, et la correction n'avait alors plus de cible, sans rien dire).
+     */
     private fun findBlock(blocks: List<TranslatedBlock>, e: BlockEdit, shiftY: Float): TranslatedBlock? {
         val m = e.match?.offset(0f, shiftY) ?: return null
-        var best: TranslatedBlock? = null; var bestIou = 0f
+        val wanted = norm(e.matchSource)
+        var best: TranslatedBlock? = null; var bestScore = 0f
         for (b in blocks) {
             if (b.id >= MANUAL_ID_BASE) continue
             val iou = iou(b.box, m)
-            val sameText = e.matchSource.isNotBlank() && norm(b.source) == norm(e.matchSource)
-            val score = if (sameText && iou > 0.1f) max(iou, 0.45f) else iou
-            if (score > bestIou) { bestIou = score; best = b }
+            val here = b.box.contains(m.centerX, m.centerY) || m.contains(b.box.centerX, b.box.centerY)       // même endroit : le centre de l'un est dans l'autre
+            val have = norm(b.source)
+            val sameText = wanted.isNotEmpty() && have == wanted
+            val closeText = !sameText && wanted.length >= 6 && have.length >= 6 && closeTo(have, wanted)
+            val score = when {
+                sameText && (iou > 0.1f || here) -> max(iou, 0.45f)
+                closeText && (iou > 0.2f || here) -> max(iou, 0.42f)
+                else -> iou
+            }
+            if (score > bestScore) { bestScore = score; best = b }
         }
-        return if (bestIou >= 0.4f) best else null
+        return if (bestScore >= 0.4f) best else null
+    }
+
+    /** Deux textes (déjà réduits à leurs lettres) qui ne diffèrent que d'environ un sixième de leurs lettres. */
+    private fun closeTo(a: String, b: String): Boolean {
+        val longest = max(a.length, b.length)
+        val limit = max(1, longest / 6)
+        if (kotlin.math.abs(a.length - b.length) > limit) return false
+        var prev = IntArray(b.length + 1) { it }
+        var cur = IntArray(b.length + 1)
+        for (i in 1..a.length) {
+            cur[0] = i
+            for (j in 1..b.length) cur[j] = minOf(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + if (a[i - 1] == b[j - 1]) 0 else 1)
+            val t = prev; prev = cur; cur = t
+        }
+        return prev[b.length] <= limit
     }
 
     private fun norm(s: String) = s.filter { it.isLetterOrDigit() }.lowercase()

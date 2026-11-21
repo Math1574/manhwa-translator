@@ -44,6 +44,9 @@ import app.manhwa.core.CoverCandidates
 import app.manhwa.core.CoverImg
 import app.manhwa.core.CoverPick
 import app.manhwa.core.SeriesEntry
+import app.manhwa.core.Synopsis
+import app.manhwa.core.SynopsisBook
+import app.manhwa.core.SynopsisText
 import app.manhwa.core.Sites
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -70,10 +73,30 @@ class CoverStore(private val dir: File) {
     /** Registre des illustrations. C'est un état : les écrans qui l'ont lu se redessinent quand une illustration arrive. */
     var book by mutableStateOf(CoverBook.parse(try { File(dir, "index.tsv").takeIf { it.exists() }?.readText() } catch (_: Throwable) { null }))
         private set
+    /** Registre des synopsis (même dossier). État aussi : la fiche d'une œuvre se redessine quand son synopsis arrive. */
+    var synopsis by mutableStateOf(SynopsisBook.parse(try { File(dir, "synopsis.tsv").takeIf { it.exists() }?.readText() } catch (_: Throwable) { null }))
+        private set
     private val memory = LruCache<String, ImageBitmap>(32)
 
     private fun file(key: String) = File(dir, CoverPick.fileKey(key) + ".jpg")
     private fun writeIndex() { try { dir.mkdirs(); File(dir, "index.tsv").writeText(book.serialize()) } catch (_: Throwable) {} }
+    private fun writeSynopsis() { try { dir.mkdirs(); File(dir, "synopsis.tsv").writeText(synopsis.serialize()) } catch (_: Throwable) {} }
+
+    /** Le synopsis de l'œuvre, ou null (pas encore trouvé). */
+    fun synopsisOf(key: String): String? = synopsis.textOf(key)
+
+    /** Faut-il le chercher (jamais essayé, ou essai raté il y a assez longtemps) ? */
+    fun synopsisWanted(key: String): Boolean = synopsis.wanted(key, System.currentTimeMillis())
+
+    /** Range le synopsis trouvé ; faux s'il est refusé parce que c'est le texte du site (le même pour une autre œuvre). Fil principal. */
+    fun saveSynopsis(key: String, text: String, source: String): Boolean {
+        val r = synopsis.saved(key, text, source, System.currentTimeMillis())
+        synopsis = r.book; writeSynopsis()
+        return r.accepted
+    }
+
+    /** Essai sans résultat : l'œuvre sera réessayée plus tard, quelques fois au plus. */
+    fun synopsisFailed(key: String) { synopsis = synopsis.failed(key, System.currentTimeMillis()); writeSynopsis() }
 
     /** L'illustration de l'œuvre, ou null (pas encore trouvée, ou fichier illisible). Fil principal. */
     fun get(key: String): ImageBitmap? {
@@ -105,20 +128,22 @@ class CoverStore(private val dir: File) {
     /** Essai sans résultat : l'œuvre sera réessayée plus tard, quelques fois au plus. */
     fun failed(key: String) { book = book.failed(key, System.currentTimeMillis()); writeIndex() }
 
-    /** Demande de l'utilisateur : une œuvre sans illustration est de nouveau à chercher tout de suite. */
-    fun again(key: String) { book = book.again(key); writeIndex() }
+    /** Demande de l'utilisateur : une œuvre sans illustration (ou sans synopsis) est de nouveau à chercher tout de suite. */
+    fun again(key: String) { book = book.again(key); writeIndex(); synopsis = synopsis.again(key); writeSynopsis() }
 
-    /** L'œuvre est oubliée : son illustration aussi. */
+    /** L'œuvre est oubliée : son illustration et son synopsis aussi. */
     fun forget(key: String) {
         memory.remove(key)
         try { file(key).delete() } catch (_: Throwable) {}
         book = book.forget(key)
         writeIndex()
+        synopsis = synopsis.forget(key)
+        writeSynopsis()
     }
 }
 
 /**
- * Va chercher les illustrations qui manquent, une œuvre à la fois, en tâche de fond (plus lentement pendant une traduction).
+ * Va chercher les illustrations et les synopsis qui manquent, une œuvre à la fois, en tâche de fond (plus lentement pendant une traduction). La page de l'œuvre n'est lue qu'une fois pour les deux.
  *  1. La page de l'œuvre, sur le site lu, est ouverte dans un navigateur caché (sans images) : on y relève ce qu'elle annonce comme illustration (« og:image », données structurées, image au titre de l'œuvre),
  *     en attendant le temps qu'il faut aux pages que leur propre script construit ; les images candidates sont essayées de la meilleure à la moins bonne, et téléchargées une seule fois.
  *  2. Sinon, et si le réglage le permet, l'annuaire public AniList : seul le titre de l'œuvre lui est envoyé, et l'image n'est gardée que si l'un des titres de l'annuaire est exactement celui de l'œuvre.
@@ -146,6 +171,9 @@ class CoverFetcher(
     /** D'où vient la dernière illustration trouvée : « site » ou « annuaire » (tests automatiques). */
     @Volatile var lastSource: String = ""
         private set
+    /** D'où vient le dernier synopsis trouvé : « site » ou « annuaire » (tests automatiques). */
+    @Volatile var lastSynopsisSource: String = ""
+        private set
     /** Adresse de l'annuaire : celle d'AniList, remplacée par un faux serveur dans les tests automatiques. */
     @Volatile var directory: String = AniListCovers.ENDPOINT
     /** Par site : échecs d'affilée de la page de l'œuvre et heure du dernier ; après quelques échecs, le site est laissé de côté un moment (inutile d'attendre à chaque œuvre une page qui ne s'ouvre pas). */
@@ -156,7 +184,7 @@ class CoverFetcher(
 
     /** Demande les illustrations qui manquent, dans l'ordre donné (celui de l'écran). Les œuvres déjà servies, déjà demandées ou récemment essayées sont ignorées. Fil principal. */
     fun request(series: List<SeriesEntry>) {
-        for (e in series) if (store.wanted(e.key) && queued.add(e.key)) queue.addLast(Wish(e.key, e.title))
+        for (e in series) if ((store.wanted(e.key) || store.synopsisWanted(e.key)) && queued.add(e.key)) queue.addLast(Wish(e.key, e.title))
         if (queue.isNotEmpty() && worker?.isActive != true) worker = scope.launch { work() }
     }
 
@@ -211,6 +239,41 @@ class CoverFetcher(
      *  3. enfin ce que la page du site annonce pour le partage sans que rien dise que c'est l'œuvre (ce peut être l'image du site : voir [CoverBook.saved], qui l'écarte quand elle sert à plusieurs œuvres).
      */
     private suspend fun fetch(w: Wish) {
+        val shared = Shared()
+        if (store.wanted(w.key)) {
+            try { fetchCover(w, shared) } catch (e: CancellationException) { throw e } catch (t: Throwable) { lastWhy = "erreur : ${t.javaClass.simpleName}"; store.failed(w.key) }
+        }
+        if (store.synopsisWanted(w.key)) {
+            try { fetchSynopsis(w, shared) } catch (e: CancellationException) { throw e } catch (t: Throwable) { store.synopsisFailed(w.key) }
+        }
+    }
+
+    /** Ce que la recherche d'une œuvre a déjà obtenu et que l'autre recherche réutilise : les pages lues (une seule fois chacune) et la réponse de l'annuaire (une seule demande). */
+    private class Shared {
+        val reads = HashMap<String, CoverCandidates?>()
+        var directory: Pair<String?, String>? = null
+    }
+
+    /**
+     * La page [page] de l'œuvre, lue une seule fois pour l'illustration et le synopsis. La lecture s'arrête dès que ce qu'on cherche est là (ou, si l'un des deux est trouvé,
+     * au bout de quelques relevés de plus pour l'autre : un site qui n'a pas de synopsis ne retarde pas l'illustration).
+     */
+    private suspend fun readPage(page: String, w: Wish, shared: Shared): CoverCandidates? {
+        if (shared.reads.containsKey(page)) return shared.reads[page]
+        val needCover = store.wanted(w.key)
+        val needSyn = store.synopsisWanted(w.key)
+        val coverOk = { c: CoverCandidates -> CoverPick.rank(c, w.title).isNotEmpty() }
+        val synOk = { c: CoverCandidates -> Synopsis.pick(c.texts, w.title) != null }
+        val r = read(
+            page,
+            enough = { c -> (!needCover || coverOk(c)) && (!needSyn || synOk(c)) },
+            partial = { c -> (needCover && coverOk(c)) || (needSyn && synOk(c)) },
+        )
+        shared.reads[page] = r
+        return r
+    }
+
+    private suspend fun fetchCover(w: Wish, shared: Shared) {
         val urls = library().history.filter { BrowsingLibrary.seriesKey(it.url) == w.key }.map { it.url }
         val host = w.key.substringBefore('|')
         val notes = ArrayList<String>()
@@ -221,7 +284,7 @@ class CoverFetcher(
         if (pages.isNotEmpty() && siteWorthTrying(host)) {
             var readable = false
             for (page in pages) {
-                val found = read(page, w.title)
+                val found = readPage(page, w, shared)
                 if (found == null) { notes.add("site : page illisible ou trop lente"); continue }
                 if (CoverPick.looksLikeChallenge(found.pageTitle)) { notes.add("site : page d'attente anti-robot « ${found.pageTitle.take(40)} »"); continue }
                 readable = true
@@ -238,9 +301,9 @@ class CoverFetcher(
         if (online()) {
             if (SystemClock.elapsedRealtime() < directoryPausedUntil) notes.add("annuaire : en pause (trop de demandes)")
             else {
-                val r = withContext(Dispatchers.IO) { directoryCover(w.title) }
-                val cover = r.first
-                if (cover == null) notes.add("annuaire : ${r.second}")
+                val r = shared.directory ?: withContext(Dispatchers.IO) { directoryRaw(w.title) }.also { shared.directory = it }
+                val cover = r.first?.let { AniListCovers.cover(it, w.title, allowHttp = !directory.startsWith("https://")) }
+                if (cover == null) notes.add("annuaire : ${if (r.first == null) r.second else "titre absent de l'annuaire"}")
                 else if (keep(w, cover, "", true, "annuaire", notes)) { report(w, true, "annuaire", notes, null); return }
             }
         }
@@ -252,8 +315,60 @@ class CoverFetcher(
         store.failed(w.key)
     }
 
-    /** L'annuaire : l'adresse de la couverture de l'œuvre, ou null avec la raison. Fil d'arrière-plan. */
-    private fun directoryCover(title: String): Pair<String?, String> {
+    /**
+     * Cherche le synopsis d'une œuvre : sur la page de l'œuvre du site (déjà lue pour l'illustration, sinon lue maintenant), puis, si le réglage le permet, dans l'annuaire
+     * (résumé de l'œuvre au titre exactement identique). Le texte est celui du site ou de l'annuaire, nettoyé ; un texte qui parle du site (« Lire X en ligne… »), ou le même pour deux œuvres, est refusé.
+     */
+    private suspend fun fetchSynopsis(w: Wish, shared: Shared) {
+        val urls = library().history.filter { BrowsingLibrary.seriesKey(it.url) == w.key }.map { it.url }
+        val host = w.key.substringBefore('|')
+        val notes = ArrayList<String>()
+        val pages = CoverPick.pagesFor(urls, max = 2)
+        var text: String? = null
+        var source = ""
+        var from = ""
+        if (pages.isEmpty()) notes.add("aucune page d'œuvre connue")
+        else if (siteWorthTrying(host) || pages.any { shared.reads.containsKey(it) }) {
+            var readable = false
+            var fresh = false
+            for (page in pages) {
+                if (!shared.reads.containsKey(page)) fresh = true
+                val found = readPage(page, w, shared)
+                if (found == null) { notes.add("site : page illisible ou trop lente"); continue }
+                if (CoverPick.looksLikeChallenge(found.pageTitle)) { notes.add("site : page d'attente anti-robot « ${found.pageTitle.take(40)} »"); continue }
+                readable = true
+                val t = Synopsis.pick(found.texts, w.title)
+                if (t != null) { text = t; source = "site"; from = page; break }
+                notes.add("site : aucun synopsis (${found.texts.size} texte(s) lu(s), aucun utilisable)")
+            }
+            if (fresh) noteSite(host, readable)
+        } else notes.add("site : laissé de côté un moment (échecs répétés)")
+        if (text == null && online()) {
+            if (SystemClock.elapsedRealtime() < directoryPausedUntil) notes.add("annuaire : en pause (trop de demandes)")
+            else {
+                val r = shared.directory ?: withContext(Dispatchers.IO) { directoryRaw(w.title) }.also { shared.directory = it }
+                val json = r.first
+                if (json == null) notes.add("annuaire : ${r.second}")
+                else {
+                    val raw = AniListCovers.description(json, w.title, allowHttp = !directory.startsWith("https://"))
+                    val t = raw?.let { Synopsis.accept(it, w.title) }
+                    if (t != null) { text = t; source = "annuaire" }
+                    else notes.add(if (raw == null) "annuaire : pas de résumé pour ce titre" else "annuaire : résumé inutilisable")
+                }
+            }
+        }
+        val found = text
+        var ok = false
+        if (found != null) {
+            ok = store.saveSynopsis(w.key, found, source)
+            if (!ok) notes.add("synopsis refusé (le même texte pour une autre œuvre : c'est celui du site)")
+        } else store.synopsisFailed(w.key)
+        if (ok) lastSynopsisSource = source
+        log(JSONObject().put("t", System.currentTimeMillis()).put("type", "synopsis").put("series", w.title).put("ok", ok).put("source", if (ok) source else "").put("why", notes.joinToString(" ; ")).put("page", from))
+    }
+
+    /** L'annuaire : sa réponse (JSON) à la recherche du titre, ou null avec la raison. Elle donne la couverture et le résumé de l'œuvre. Fil d'arrière-plan. */
+    private fun directoryRaw(title: String): Pair<String?, String> {
         val conn = try { URL(directory).openConnection() as HttpURLConnection } catch (_: Throwable) { return null to "adresse de l'annuaire illisible" }
         try {
             conn.requestMethod = "POST"
@@ -277,8 +392,7 @@ class CoverFetcher(
                     if (out.size() > 600_000) return null to "réponse trop longue"
                 }
             }
-            val url = AniListCovers.cover(out.toString("UTF-8"), title, allowHttp = !directory.startsWith("https://")) ?: return null to "titre absent de l'annuaire"
-            return url to ""
+            return out.toString("UTF-8") to ""
         } catch (e: Exception) {
             return null to "annuaire injoignable"
         } finally {
@@ -301,10 +415,11 @@ class CoverFetcher(
     }
 
     /**
-     * Ouvre la page dans le navigateur caché et relève ce qu'elle annonce comme illustration ; null si elle ne s'ouvre pas (introuvable, refusée, trop lente).
-     * Une page que son propre script construit n'a parfois rien à lire tout de suite : on relit toutes les secondes environ, jusqu'à ce qu'une image convienne ([title] est celui de l'œuvre) ou qu'une dizaine de lectures aient passé.
+     * Ouvre la page dans le navigateur caché et relève ce qu'elle annonce comme illustration et comme synopsis ; null si elle ne s'ouvre pas (introuvable, refusée, trop lente).
+     * Une page que son propre script construit n'a parfois rien à lire tout de suite : on relit toutes les secondes environ, jusqu'à ce que ce qu'on cherche soit là ([enough])
+     * ou qu'une dizaine de lectures aient passé (quelques-unes de plus seulement quand l'un des deux est déjà trouvé : [partial]).
      */
-    private suspend fun read(page: String, title: String): CoverCandidates? {
+    private suspend fun read(page: String, enough: (CoverCandidates) -> Boolean, partial: (CoverCandidates) -> Boolean = { false }): CoverCandidates? {
         val w = web ?: newWeb().also { web = it }
         return withTimeoutOrNull(32_000L) {
             suspendCancellableCoroutine<CoverCandidates?> { cont ->
@@ -321,8 +436,8 @@ class CoverFetcher(
                             if (done || g != gen) return@evaluateJavascript
                             val p = parse(raw)
                             if (p != null) last = p
-                            if (p != null && CoverPick.rank(p, title).isNotEmpty()) finish(p)
-                            else if (attempt >= POLLS_MAX) finish(last)
+                            if (p != null && enough(p)) finish(p)
+                            else if (attempt >= (if (p != null && partial(p)) POLLS_PARTIAL else POLLS_MAX)) finish(last)
                             else poll(g, attempt + 1)
                         }
                     }, if (attempt == 0) 600L else 900L)
@@ -361,7 +476,10 @@ class CoverFetcher(
         val imgs = o.optJSONArray("images")?.let { a ->
             (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { CoverImg(it.optString("src"), it.optString("alt"), it.optString("cls"), it.optInt("w"), it.optInt("h")) }
         } ?: emptyList()
-        CoverCandidates(strings("shared"), strings("structured"), imgs, o.optString("title"))
+        val texts = o.optJSONArray("texts")?.let { a ->
+            (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { SynopsisText(it.optString("s"), it.optString("t")) }.filter { it.text.isNotEmpty() }
+        } ?: emptyList()
+        CoverCandidates(strings("shared"), strings("structured"), imgs, o.optString("title"), texts)
     } catch (_: Throwable) { null }
 
     /** Image annoncée en « http:// » par une page en « https:// » (réglage fréquent des sites bâtis sur WordPress derrière un relais) : le navigateur la prend en https, l'application aussi, car le clair y est refusé. */
@@ -441,6 +559,8 @@ class CoverFetcher(
         const val MAX_EDGE = 360
         /** Relevés de la page de l'œuvre, d'une seconde environ, avant de rendre ce qu'on a. */
         const val POLLS_MAX = 9
+        /** Quand l'illustration ou le synopsis est déjà trouvé : relevés de plus pour l'autre. */
+        const val POLLS_PARTIAL = 4
         /** Après autant d'échecs d'affilée sur un site, on le laisse de côté ce temps (puis on réessaie). */
         const val SITE_MISSES_MAX = 3
         const val SITE_PAUSE_MS = 30L * 60_000L
@@ -467,7 +587,28 @@ class CoverFetcher(
   document.querySelectorAll('[style*="background-image"]').forEach(function(el,i){if(i>=20)return;
     var m=/url\(["']?([^"')]+)["']?\)/.exec(el.getAttribute('style')||'');if(!m)return;var a=abs(m[1]);if(!a)return;
     images.push({src:a,alt:el.getAttribute('aria-label')||el.getAttribute('title')||el.getAttribute('data-title')||'',cls:(typeof el.className==='string')?el.className:'',w:el.clientWidth||0,h:el.clientHeight||0})});
-  return {title:document.title||'',shared:shared.slice(0,6),structured:structured.slice(0,6),images:images};
+  // textes qui pourraient être le synopsis de l'œuvre : « head » = ce qui suit un titre « Synopsis », « dom » = bloc de description connu, « dom2 » = bloc dont la classe parle de résumé, « ld » = données structurées, « meta » = balises de description
+  var texts=[];
+  function addText(src,t){t=String(t||'').replace(/\u00a0/g,' ').trim();if(t.length>=30&&t.length<=6000)texts.push({s:src,t:t.slice(0,3000)})}
+  function txt(el){return String(el.innerText||el.textContent||'')}
+  try{var HEAD=/^((synopsis|summary|description|r[ée]sum[ée]|plot|story|storyline|overview|sinopsis|sinopse|intrigue)\b|あらすじ|ストーリー|줄거리|시놉시스|简介|內容簡介|内容简介|剧情简介|作品简介)/i;
+    document.querySelectorAll('h1,h2,h3,h4,h5,h6,strong,b,dt,th,label,span,p,div').forEach(function(h){
+      if(texts.length>=12||h.childElementCount>2)return;
+      var own=String(h.textContent||'').trim();if(own.length===0||own.length>90||!HEAD.test(own))return;
+      var nx=h.nextElementSibling,t=nx?txt(nx).trim():'',par=h.parentElement;
+      if(t.length<40&&par){var all=txt(par).trim();if(all.length>own.length+40&&all.length<3500)t=all.indexOf(own)===0?all.slice(own.length):all.replace(own,'')}
+      if(t.length<40&&par&&par.nextElementSibling)t=txt(par.nextElementSibling).trim();
+      if(t.length>=40)addText('head',t)})}catch(e){}
+  [['dom','[itemprop="description"]'],['dom','.summary__content'],['dom','.description-summary'],['dom','.manga-excerpt'],['dom','#manga-summary'],['dom','.series-synops'],['dom','.synopsis'],
+   ['dom2','[class*="synops"]'],['dom2','[class*="summary"]'],['dom2','[class*="description"]']].forEach(function(p){
+    try{var n=0;document.querySelectorAll(p[1]).forEach(function(el){if(n>=3||texts.length>=18)return;var t=txt(el).trim();
+      if(t.length>=40&&t.length<=3500&&el.querySelectorAll('a').length<8){n++;addText(p[0],t)}})}catch(e){}});
+  document.querySelectorAll('script[type="application/ld+json"]').forEach(function(sc){
+    try{(function walk(o,d){if(!o||d>6)return;if(Array.isArray(o)){o.forEach(function(x){walk(x,d+1)});return}if(typeof o!=='object')return;
+      if(typeof o.description==='string'&&/ComicSeries|Book|CreativeWorkSeries|Series|Comic|Manga|Periodical/i.test(JSON.stringify(o['@type']||'')))addText('ld',o.description);
+      for(var k in o){if(o[k]&&typeof o[k]==='object')walk(o[k],d+1)}})(JSON.parse(sc.textContent),0)}catch(e){}});
+  ['meta[property="og:description"]','meta[name="description"]','meta[name="twitter:description"]','meta[property="twitter:description"]'].forEach(function(sel){var m=document.querySelector(sel);if(m)addText('meta',m.getAttribute('content'))});
+  return {title:document.title||'',shared:shared.slice(0,6),structured:structured.slice(0,6),images:images,texts:texts.slice(0,20)};
 })()"""
     }
 }

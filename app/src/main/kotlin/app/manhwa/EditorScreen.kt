@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -27,6 +28,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AssistChip
 import androidx.compose.material.icons.materialIcon
@@ -60,9 +62,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.geometry.Size
@@ -106,7 +110,10 @@ import app.manhwa.core.GlossaryEntry
 import app.manhwa.core.History
 import app.manhwa.core.RectF
 import app.manhwa.core.Pt
+import app.manhwa.core.TextFormat
+import app.manhwa.core.TextLook
 import app.manhwa.core.UserRegion
+import app.manhwa.core.ZoneShape
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -121,8 +128,11 @@ import kotlin.math.roundToInt
 // Ouvert par l'appui long sur une traduction puis « Corriger cette traduction » : zone du texte (rectangle ou pinceau), texte lu et traduction, position et taille,
 // police, termes du glossaire. L'aperçu au-dessus est calculé par le moteur de rendu lui-même : ce que l'on voit est ce qui sera posé sur la page.
 
-private enum class EditorTab(val label: String) { TEXT("Texte"), ZONE("Zone"), POSITION("Position"), FONT("Police"), GLOSSARY("Glossaire") }
-private enum class ZoneMode { RECT, BRUSH }
+private enum class EditorTab(val label: String) { TEXT("Texte"), ZONE("Zone"), POSITION("Position"), LAYOUT("Disposition"), FONT("Police"), COLOR("Couleur"), GLOSSARY("Glossaire") }
+/** Forme de la zone : rectangle, ovale ou rectangle arrondi (formes prédéfinies, poignées sur le rectangle englobant) ou pinceau libre. */
+private enum class ZoneMode { RECT, ELLIPSE, ROUNDED, BRUSH }
+/** Ce que règle l'onglet « Couleur » : le remplissage du texte, son contour ou sa lueur. */
+private enum class LookTarget(val label: String) { FILL("Lettres"), OUTLINE("Contour"), GLOW("Lueur") }
 private enum class Handle { TL, T, TR, R, BR, B, BL, L, MOVE, NONE }
 
 private class TermRow(s0: String = "", t0: String = "") {
@@ -138,7 +148,8 @@ private class EditorState(val sn: TranslationController.EditSession) {
 
     var tab by mutableStateOf(if (sn.isNew) EditorTab.ZONE else EditorTab.TEXT)
     var src by mutableStateOf(block.source)
-    var translation by mutableStateOf(block.translated)
+    // les retours à la ligne d'une traduction automatique sont des espaces : seuls ceux tapés par l'utilisateur sont conservés (voir BlockEdit.hasBreaks)
+    var translation by mutableStateOf(if (existing?.hasBreaks == true) block.translated else block.translated.replace('\n', ' '))
     var hidden by mutableStateOf(existing?.hidden == true)
     val isNew = sn.isNew
 
@@ -155,6 +166,18 @@ private class EditorState(val sn: TranslationController.EditSession) {
     var autoFit by mutableStateOf(true)
     /** Effacement précis : seules les lettres sont remplacées, pas toute la zone. */
     var precise by mutableStateOf(existing?.precise == true)
+    /** Carré d'effacement : toute la zone est effacée (remplie avec ce qui l'entoure), même là où aucun texte n'a été lu. */
+    var wipe by mutableStateOf(existing?.wipe == true || sn.startWipe)
+
+    // mise en forme (onglet Disposition) et apparence (onglet Couleur) du texte traduit
+    var format by mutableStateOf(existing?.format ?: TextFormat())
+    var look by mutableStateOf(existing?.look ?: TextLook())
+    var lookTarget by mutableStateOf(LookTarget.FILL)
+    /** Pipette : un toucher sur l'image prélève sa couleur pour [lookTarget]. */
+    var pipette by mutableStateOf(false)
+    /** Image d'origine affichée et région qu'elle couvre : la pipette y prélève ses couleurs. */
+    var baseBmp: Bitmap? = null
+    var baseCovers: RectF? = null
 
     // position et taille du texte traduit
     var dx by mutableFloatStateOf(existing?.dx ?: 0f)
@@ -168,6 +191,8 @@ private class EditorState(val sn: TranslationController.EditSession) {
 
     // aperçu et vue
     var preview by mutableStateOf<TranslationController.EditPreview?>(null)
+    /** Clé de l'aperçu affiché (voir [previewKey]) : l'aperçu est à jour quand elle égale la clé courante. */
+    var shownKey by mutableIntStateOf(0)
     var busy by mutableStateOf(false)
     var reading by mutableStateOf(false)
     var translating by mutableStateOf(false)
@@ -181,18 +206,21 @@ private class EditorState(val sn: TranslationController.EditSession) {
     fun resetView() { crop = crop0 }
 
     // historique « défaire / refaire » des gestes sur la zone et la position du texte (le texte lui-même a son propre défaire, au clavier)
-    private class Geo(val rect: RectF, val strokes: List<BrushStroke>, val brush: Boolean, val zoneChanged: Boolean, val precise: Boolean, val dx: Float, val dy: Float, val scale: Float)
+    private class Geo(
+        val rect: RectF, val strokes: List<BrushStroke>, val mode: ZoneMode, val zoneChanged: Boolean, val precise: Boolean, val dx: Float, val dy: Float, val scale: Float,
+        val wipe: Boolean, val format: TextFormat, val look: TextLook,
+    )
     private val history = History<Geo>(80)
     var undoCount by mutableIntStateOf(0)
     var redoCount by mutableIntStateOf(0)
     /** Vrai pendant qu'un curseur de taille est tiré : un seul état est enregistré pour tout le glissement. */
     var sliding = false
 
-    private fun geo() = Geo(rect, strokes.toList(), zoneMode == ZoneMode.BRUSH, zoneChanged, precise, dx, dy, scale)
+    private fun geo() = Geo(rect, strokes.toList(), zoneMode, zoneChanged, precise, dx, dy, scale, wipe, format, look)
 
     private fun restore(g: Geo) {
-        rect = g.rect; strokes.clear(); strokes.addAll(g.strokes); zoneMode = if (g.brush) ZoneMode.BRUSH else ZoneMode.RECT
-        zoneChanged = g.zoneChanged; precise = g.precise; dx = g.dx; dy = g.dy; scale = g.scale
+        rect = g.rect; strokes.clear(); strokes.addAll(g.strokes); zoneMode = g.mode
+        zoneChanged = g.zoneChanged; precise = g.precise; dx = g.dx; dy = g.dy; scale = g.scale; wipe = g.wipe; format = g.format; look = g.look
     }
 
     private fun syncHistory() { undoCount = history.undoCount; redoCount = history.redoCount }
@@ -210,6 +238,7 @@ private class EditorState(val sn: TranslationController.EditSession) {
             val shifted = reg.shifted(sn.info.ctxH.toFloat())
             rect = shifted.bounds
             if (shifted.painted) { strokes.addAll(shifted.strokes); zoneMode = ZoneMode.BRUSH }
+            else zoneMode = when (shifted.shape) { ZoneShape.ELLIPSE -> ZoneMode.ELLIPSE; ZoneShape.ROUNDED -> ZoneMode.ROUNDED; else -> ZoneMode.RECT }
         }
     }
 
@@ -242,7 +271,92 @@ private class EditorState(val sn: TranslationController.EditSession) {
         crop = fit(RectF(cx - c.width * 0.8f, cy - c.height * 0.8f, cx + c.width * 0.8f, cy + c.height * 0.8f))
     }
 
-    fun region(): UserRegion = if (zoneMode == ZoneMode.BRUSH && strokes.isNotEmpty()) UserRegion(rect, strokes.toList()) else UserRegion(norm(rect))
+    private fun shapeOf(m: ZoneMode): ZoneShape = when (m) { ZoneMode.ELLIPSE -> ZoneShape.ELLIPSE; ZoneMode.ROUNDED -> ZoneShape.ROUNDED; else -> ZoneShape.RECT }
+
+    fun region(): UserRegion = if (zoneMode == ZoneMode.BRUSH && strokes.isNotEmpty()) UserRegion(rect, strokes.toList()) else UserRegion(norm(rect), emptyList(), shapeOf(zoneMode))
+
+    /** Choisit la forme de la zone (rectangle, ovale, arrondi) ; changer de forme est une modification de la zone. */
+    fun chooseShape(m: ZoneMode) {
+        if (zoneMode == m) return
+        val wasShape = zoneMode != ZoneMode.BRUSH
+        zoneMode = m
+        if (wasShape && m != ZoneMode.BRUSH) { zoneChanged = true }
+    }
+
+    /**
+     * « Modeler au pinceau » : la forme choisie (rectangle, ovale, arrondi) devient une zone peinte, que l'on peut ensuite agrandir au pinceau ou creuser à la gomme. Elle est remplie de barres
+     * arrondies qui se recouvrent, une par rangée, aussi larges que la forme à cette hauteur.
+     */
+    fun shapeToBrush() {
+        if (zoneMode == ZoneMode.BRUSH) return
+        val r = norm(rect)
+        if (r.width < 8f || r.height < 8f) return
+        val shape = UserRegion(r, emptyList(), shapeOf(zoneMode))
+        val rad = (min(r.width, r.height) / 14f).coerceIn(5f, 24f)
+        mark()
+        strokes.clear()
+        var y = r.top + rad
+        val last = r.bottom - rad
+        while (y <= last + 0.5f) {
+            var x0 = Float.NaN; var x1 = Float.NaN
+            var x = r.left
+            while (x <= r.right) { if (shape.contains(x, y)) { if (x0.isNaN()) x0 = x; x1 = x }; x += 2f }
+            if (!x0.isNaN()) {
+                val a = x0 + rad; val b = x1 - rad
+                strokes.add(if (b > a) BrushStroke(listOf(Pt(a, y), Pt(b, y)), rad) else BrushStroke(listOf(Pt((x0 + x1) / 2f, y)), rad))
+            }
+            y += rad * 1.2f
+        }
+        // dernière rangée collée au bord bas, si la dernière barre ne l'atteint pas
+        if (strokes.isEmpty()) { strokes.add(BrushStroke(listOf(Pt(r.centerX, r.centerY)), rad)) }
+        brush = rad
+        zoneMode = ZoneMode.BRUSH; zoneChanged = true
+        syncBrushRect()
+    }
+
+    /** Modifie la mise en forme du texte ([slider] : un seul état d'historique pour tout le glissement d'un curseur). */
+    fun changeFormat(f: TextFormat, slider: Boolean = false) {
+        val n = f.sane()
+        if (n == format) return
+        if (slider) { if (!sliding) { mark(); sliding = true } } else mark()
+        format = n
+    }
+
+    /** Modifie l'apparence du texte (couleur, contour, lueur). */
+    fun changeLook(l: TextLook, slider: Boolean = false) {
+        val n = l.sane()
+        if (n == look) return
+        if (slider) { if (!sliding) { mark(); sliding = true } } else mark()
+        look = n
+    }
+
+    /** Couleur du texte telle que le dernier aperçu l'a dessinée (RVB), pour partir d'elle quand on quitte le réglage automatique. */
+    fun previewTextColor(): Int? = try { preview?.sink?.report?.optString("fg")?.removePrefix("#")?.toLong(16)?.toInt()?.and(0xFFFFFF) } catch (e: Throwable) { null }
+
+    /** Couleur (RVB) de l'image d'origine au point (x, y) de la fenêtre : moyenne de 3 × 3 pixels ; null si l'image n'est pas affichée. */
+    fun sampleColor(x: Float, y: Float): Int? {
+        val b = baseBmp ?: return null; val c = baseCovers ?: return null
+        if (c.width <= 0f || c.height <= 0f || b.width < 1 || b.height < 1) return null
+        return try {
+            val px = ((x - c.left) / c.width * b.width).toInt().coerceIn(0, b.width - 1); val py = ((y - c.top) / c.height * b.height).toInt().coerceIn(0, b.height - 1)
+            var r = 0; var g = 0; var bl = 0; var n = 0
+            for (j in -1..1) for (i in -1..1) {
+                val v = b.getPixel((px + i).coerceIn(0, b.width - 1), (py + j).coerceIn(0, b.height - 1))
+                r += (v shr 16) and 255; g += (v shr 8) and 255; bl += v and 255; n++
+            }
+            ((r / n) shl 16) or ((g / n) shl 8) or (bl / n)
+        } catch (e: Throwable) { null }
+    }
+
+    /** Pipette : la couleur prélevée devient celle du réglage en cours (texte, contour ou lueur). */
+    fun pickColor(x: Float, y: Float) {
+        val c = sampleColor(x, y) ?: return
+        when (lookTarget) {
+            LookTarget.FILL -> changeLook(look.copy(fill = c))
+            LookTarget.OUTLINE -> changeLook(look.copy(outline = c, outlineW = look.outlineW ?: DEFAULT_OUTLINE))
+            LookTarget.GLOW -> changeLook(look.copy(glow = c, glowW = look.glowW ?: DEFAULT_GLOW))
+        }
+    }
 
     private fun norm(r: RectF) = RectF(min(r.left, r.right), min(r.top, r.bottom), max(r.left, r.right), max(r.top, r.bottom))
 
@@ -250,7 +364,7 @@ private class EditorState(val sn: TranslationController.EditSession) {
 
     fun syncBrushRect() { if (strokes.isNotEmpty()) rect = UserRegion(rect, strokes.toList()).bounds }
 
-    fun resetZone() { mark(); strokes.clear(); rect = initialRect(); zoneChanged = sn.isNew; read = null; zoneMode = ZoneMode.RECT }
+    fun resetZone() { mark(); strokes.clear(); rect = initialRect(); zoneChanged = sn.isNew; read = null; zoneMode = ZoneMode.RECT; wipe = sn.startWipe }
 
     /** Lignes dont la zone peut épouser la forme : celles qui viennent d'être lues, sinon celles du texte détecté. */
     fun fitLines(): List<RectF> = (read?.lineBoxes ?: block.lineBoxes)
@@ -281,13 +395,13 @@ private class EditorState(val sn: TranslationController.EditSession) {
         syncBrushRect()
     }
 
-    val canSave: Boolean get() = !(isNew && translation.isBlank())
+    val canSave: Boolean get() = !(isNew && translation.isBlank() && !wipe)
 
     fun fields(forPreview: Boolean): TranslationController.EditFields {
         val a = if (forPreview) null else anchor()
         return TranslationController.EditFields(
-            src, translation, hidden && !forPreview, if (zoneChanged || existing?.kind == EditKind.MANUAL) region() else null, zoneChanged, read,
-            if (forPreview) 0f else dx, if (forPreview) 0f else dy, scale, fontId, precise, a?.first, a?.second,
+            src, translation, hidden && !forPreview, if (zoneChanged || wipe || existing?.kind == EditKind.MANUAL) region() else null, zoneChanged || wipe, read,
+            if (forPreview) 0f else dx, if (forPreview) 0f else dy, scale, fontId, precise, a?.first, a?.second, format, look, wipe,
         )
     }
 
@@ -325,7 +439,7 @@ private class EditorState(val sn: TranslationController.EditSession) {
     }
 
     /** Change à chaque modification qui demande un nouveau calcul de l'aperçu (le déplacement du texte, lui, se voit sans recalcul). */
-    val previewKey: Int get() = listOf(translation, fontId, scale, rect, strokes.fold(0) { h, s -> h * 31 + s.points.size * 2 + (if (s.erase) 1 else 0) }, zoneChanged, zoneMode, precise).hashCode()
+    val previewKey: Int get() = listOf(translation, fontId, scale, rect, strokes.fold(0) { h, s -> h * 31 + s.points.size * 2 + (if (s.erase) 1 else 0) }, zoneChanged, zoneMode, precise, wipe, format, look).hashCode()
 
     fun hit(x: Float, y: Float, grab: Float): Handle {
         val r = norm(rect)
@@ -364,6 +478,7 @@ private class EditorState(val sn: TranslationController.EditSession) {
             "edUndo" to undoCount, "edRedo" to redoCount, "edCrop" to f(crop), "edCropW" to crop.width.roundToInt(), "edCropL" to crop.left.roundToInt(), "edCropT" to crop.top.roundToInt(),
             "edZoomed" to zoomed, "edBase" to (covers?.let { f(it) } ?: ""), "edRect" to f(rect), "edDx" to dx.roundToInt(), "edDy" to dy.roundToInt(), "edScale" to scale,
             "edArea" to (area?.joinToString(",") { it.roundToInt().toString() } ?: ""), "edWin" to "${iw.roundToInt()},${ih.roundToInt()}",
+            "edWipe" to wipe, "edFmt" to format.encode(), "edLook" to look.encode(), "edPrev" to (preview != null && shownKey == previewKey),
         )
     }
 
@@ -387,7 +502,7 @@ fun BlockEditor(graph: AppGraph, target: EditTarget, onClose: () -> Unit) {
             if (base != null) delay(90)
             val region = EditorView.decodeRegion(crop, st.iw, st.ih)
             val dec = withContext(Dispatchers.IO) { c.decodeCrop(sn.info.bytes, region, 1600) }
-            if (dec != null) base = EditBase(dec.first, region)
+            if (dec != null) { st.baseBmp = dec.first; st.baseCovers = region; base = EditBase(dec.first, region) }
         }
     }
     DisposableEffect(st) {
@@ -395,12 +510,14 @@ fun BlockEditor(graph: AppGraph, target: EditTarget, onClose: () -> Unit) {
         onDispose { EditorProbe.info = null; EditorProbe.host = null; EditorProbe.rootArea = null; EditorProbe.windowArea = null }
     }
     // aperçu en direct, recalculé 250 ms après la dernière modification
-    LaunchedEffect(st.previewKey) {
+    val previewKey = st.previewKey
+    LaunchedEffect(previewKey) {
         delay(250)
         st.busy = true
         val p = withContext(Dispatchers.Default) { try { c.renderEditPreview(sn, c.makeEdit(sn, st.fields(true))) } catch (e: Throwable) { null } }
         st.busy = false
         st.preview = p
+        st.shownKey = previewKey
         st.onPreview()
     }
 
@@ -410,20 +527,20 @@ fun BlockEditor(graph: AppGraph, target: EditTarget, onClose: () -> Unit) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = onClose) { Text("Annuler") }
                 Text(
-                    if (st.isNew) "Ajouter une traduction" else "Corriger la traduction", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall,
+                    if (st.isNew) (if (sn.startWipe) "Effacer une zone" else "Ajouter une traduction") else "Corriger la traduction", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall,
                     textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
                 Button(onClick = { c.saveEdit(sn, c.makeEdit(sn, st.fields(false)), st.termList(), st.termsForSeries && sn.info.series != null) }, enabled = st.canSave) { Text("Enregistrer") }
             }
             EditCanvas(st, base, Modifier.weight(1f).fillMaxWidth())
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (st.tab != EditorTab.ZONE) FilterChip(selected = st.showOriginal, onClick = { st.showOriginal = !st.showOriginal }, label = { Text("Voir l'original") })
+                if (st.tab != EditorTab.ZONE || st.wipe) FilterChip(selected = st.showOriginal, onClick = { st.showOriginal = !st.showOriginal }, label = { Text("Voir l'original") })
                 TextButton(onClick = { st.widen() }) { Text("Élargir la vue") }
                 if (st.zoomed) TextButton(onClick = { st.resetView() }) { Text("Vue d'origine") }
                 if (sn.existing != null) TextButton(onClick = { c.resetEdit(sn) }) { Text("Rétablir l'automatique") }
             }
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                EditorTab.values().forEach { t -> FilterChip(selected = st.tab == t, onClick = { st.tab = t }, label = { Text(t.label) }) }
+                EditorTab.values().forEach { t -> FilterChip(selected = st.tab == t, onClick = { st.tab = t; if (t != EditorTab.COLOR && st.pipette) { st.pipette = false; st.showOriginal = false } }, label = { Text(t.label) }) }
             }
             HorizontalDivider(Modifier.padding(top = 6.dp))
             // zone des réglages : elle prend la place restante et défile ; la marge du bas laisse remonter le dernier élément au-dessus du bord de l'écran
@@ -434,6 +551,8 @@ fun BlockEditor(graph: AppGraph, target: EditTarget, onClose: () -> Unit) {
                     EditorTab.TEXT -> TextTab(c, st, scope)
                     EditorTab.ZONE -> ZoneTab(c, st, scope)
                     EditorTab.POSITION -> PositionTab(st)
+                    EditorTab.LAYOUT -> LayoutTab(st)
+                    EditorTab.COLOR -> ColorTab(st)
                     else -> GlossaryTab(graph, st)
                 }
                 Spacer(Modifier.height(88.dp))
@@ -450,6 +569,10 @@ private enum class Act { NONE, DRAG, XFORM, IGNORE }
 
 /** Un second doigt qui se pose dans ce délai après le premier (en ms) annule le trait ou le glissement commencé : c'était le début d'un zoom. */
 private const val PINCH_GRACE_MS = 250L
+
+/** Épaisseur de contour et taille de lueur proposées quand on les règle à la main (relatives : voir [TextLook]). */
+private const val DEFAULT_OUTLINE = 0.12f
+private const val DEFAULT_GLOW = 0.32f
 
 /**
  * Gestes sur l'image. Un doigt : selon l'onglet, rectangle de zone, pinceau ou gomme, déplacement du texte ; dans les autres onglets il déplace la vue. Deux doigts : pincer pour zoomer,
@@ -476,7 +599,7 @@ private suspend fun PointerInputScope.editGestures(st: EditorState) {
             when (st.tab) {
                 EditorTab.ZONE -> {
                     st.mark(); st.zoneChanged = true
-                    if (st.zoneMode == ZoneMode.RECT) {
+                    if (st.zoneMode != ZoneMode.BRUSH) {
                         handle = st.hit(x, y, 32.dp.toPx() / lay.scale)
                         if (handle == Handle.NONE) { st.rect = RectF(x, y, x, y); handle = Handle.BR }
                     } else {
@@ -493,7 +616,7 @@ private suspend fun PointerInputScope.editGestures(st: EditorState) {
         fun dragTo(pos: Offset) {
             val lay = layout()
             when (st.tab) {
-                EditorTab.ZONE -> if (st.zoneMode == ZoneMode.RECT) st.dragRect(handle, (pos.x - last.x) / lay.scale, (pos.y - last.y) / lay.scale) else {
+                EditorTab.ZONE -> if (st.zoneMode != ZoneMode.BRUSH) st.dragRect(handle, (pos.x - last.x) / lay.scale, (pos.y - last.y) / lay.scale) else {
                     val p = pts
                     if (p != null) {
                         p.add(Pt(lay.imageX(pos.x, st.crop), lay.imageY(pos.y, st.crop)))
@@ -514,7 +637,11 @@ private suspend fun PointerInputScope.editGestures(st: EditorState) {
         while (true) {
             val event = awaitPointerEvent()
             val pressed = event.changes.count { it.pressed }
-            if (pressed == 0) { if (act == Act.DRAG) endDrag(false); break }
+            if (pressed == 0) {
+                if (act == Act.DRAG) endDrag(false)
+                else if (act == Act.NONE && st.tab == EditorTab.COLOR && st.pipette) { val lay = layout(); st.pickColor(lay.imageX(anchor.x, st.crop), lay.imageY(anchor.y, st.crop)) }       // simple toucher : la pipette prélève la couleur de l'image
+                break
+            }
 
             if (act != Act.XFORM && pressed >= 2) {
                 val young = event.changes.first().uptimeMillis - tStart < PINCH_GRACE_MS
@@ -581,11 +708,12 @@ private fun EditCanvas(st: EditorState, base: EditBase?, modifier: Modifier) {
                 }
                 val sink = pv?.sink
                 val r = sink?.rect
-                if (sink != null && r != null && eraseImage != null && textImage != null && st.tab != EditorTab.ZONE && !st.showOriginal) {
+                if (sink != null && r != null && eraseImage != null && textImage != null && (st.tab != EditorTab.ZONE || st.wipe) && !st.showOriginal) {
                     val ox = vx(r.left).roundToInt(); val oy = vy(r.top).roundToInt()
                     val sz = IntSize((r.width * view).roundToInt(), (r.height * view).roundToInt())
                     drawImage(eraseImage, dstOffset = IntOffset(ox, oy), dstSize = sz)
-                    drawImage(textImage, dstOffset = IntOffset(ox + (st.dx * view).roundToInt(), oy + (st.dy * view).roundToInt()), dstSize = sz)
+                    // onglet Zone : on voit le fond effacé (carré d'effacement), pas encore le texte
+                    if (st.tab != EditorTab.ZONE) drawImage(textImage, dstOffset = IntOffset(ox + (st.dx * view).roundToInt(), oy + (st.dy * view).roundToInt()), dstSize = sz)
                 }
                 if (st.tab == EditorTab.ZONE) {
                     st.read?.lineBoxes?.forEach { lb ->
@@ -609,15 +737,30 @@ private fun EditCanvas(st: EditorState, base: EditBase?, modifier: Modifier) {
                     } else {
                         val q = RectF(min(st.rect.left, st.rect.right), min(st.rect.top, st.rect.bottom), max(st.rect.left, st.rect.right), max(st.rect.top, st.rect.bottom))
                         val tl = Offset(vx(q.left), vy(q.top)); val sz = Size(q.width * view, q.height * view)
-                        drawRect(primary.copy(alpha = 0.16f), tl, sz)
-                        drawRect(primary, tl, sz, style = Stroke(2.dp.toPx()))
+                        val fillA = if (st.wipe) 0.07f else 0.16f            // zone effacée : le fond effacé reste lisible sous la forme
+                        when (st.zoneMode) {
+                            ZoneMode.ELLIPSE -> {
+                                drawOval(primary.copy(alpha = fillA), tl, sz)
+                                drawOval(primary, tl, sz, style = Stroke(2.dp.toPx()))
+                                drawRect(primary.copy(alpha = 0.55f), tl, sz, style = Stroke(1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f))))       // rectangle englobant : c'est lui que les poignées déplacent
+                            }
+                            ZoneMode.ROUNDED -> {
+                                val k = min(q.width, q.height) / 4f * view
+                                drawRoundRect(primary.copy(alpha = fillA), tl, sz, CornerRadius(k, k))
+                                drawRoundRect(primary, tl, sz, CornerRadius(k, k), style = Stroke(2.dp.toPx()))
+                            }
+                            else -> {
+                                drawRect(primary.copy(alpha = fillA), tl, sz)
+                                drawRect(primary, tl, sz, style = Stroke(2.dp.toPx()))
+                            }
+                        }
                         val hs = listOf(q.left to q.top, q.centerX to q.top, q.right to q.top, q.right to q.centerY, q.right to q.bottom, q.centerX to q.bottom, q.left to q.bottom, q.left to q.centerY)
                         for ((hx, hy) in hs) { drawCircle(Color.White, 8.dp.toPx(), Offset(vx(hx), vy(hy))); drawCircle(primary, 5.5.dp.toPx(), Offset(vx(hx), vy(hy))) }
                     }
                 }
                 if (st.tab == EditorTab.POSITION && sink != null) {
                     val bx = sink.baseRect
-                    if (bx != null) {
+                    if (bx != null && bx.width > 0f) {
                         val tl = Offset(vx(bx.left + st.dx), vy(bx.top + st.dy)); val sz = Size(bx.width * view, bx.height * view)
                         drawRect(primary, tl, sz, style = Stroke(1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 10f))))
                     }
@@ -718,7 +861,7 @@ private fun TextTab(c: TranslationController, st: EditorState, scope: kotlinx.co
                 st.translating = true
                 val t = withContext(Dispatchers.IO) { try { c.translateText(st.src.trim()) } catch (e: Throwable) { null } }
                 st.translating = false
-                if (t.isNullOrBlank()) st.message = "La traduction a échoué : réessayez." else { st.translation = t; st.message = null }
+                if (t.isNullOrBlank()) st.message = "La traduction a échoué : réessayez." else { st.translation = t.replace('\n', ' '); st.message = null }
             }
         },
         enabled = st.src.isNotBlank() && !st.translating,
@@ -729,36 +872,46 @@ private fun TextTab(c: TranslationController, st: EditorState, scope: kotlinx.co
         "Votre traduction est reprise chaque fois que ce même texte est lu. Si le texte d'origine est mal lu, corrigez-le puis touchez « Retraduire », ou redessinez la zone (onglet Zone).",
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+    Text(
+        "Pour couper une ligne à un endroit précis, touchez Entrée dans la traduction. L'onglet Disposition règle l'alignement, le nombre de lignes, l'interligne et la casse.",
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
     st.message?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
 }
 
 @Composable
 private fun ZoneTab(c: TranslationController, st: EditorState, scope: kotlinx.coroutines.CoroutineScope) {
     if (st.isNew) Text(
-        "Placez le rectangle sur le texte à traduire (ou dessinez-le au pinceau), puis touchez « Lire le texte de cette zone ».",
+        if (st.wipe) "Placez la forme sur ce qu'il faut effacer (filigrane, texte non lu, dessin), puis touchez « Enregistrer ». Vous pouvez aussi saisir une traduction (onglet Texte) : elle sera posée sur la zone effacée."
+        else "Placez le rectangle sur le texte à traduire (ou dessinez-le au pinceau), puis touchez « Lire le texte de cette zone ».",
         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary,
     )
+    // rôle de la zone : détecter le texte à traduire, ou effacer tout ce qu'elle contient (carré d'effacement). Les réglages viennent d'abord, les explications en bas de l'onglet
+    // (le panneau défile : les boutons du pinceau doivent rester à portée du pouce)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        FilterChip(selected = st.zoneMode == ZoneMode.RECT, onClick = { st.zoneMode = ZoneMode.RECT }, label = { Text("Rectangle") })
-        FilterChip(selected = st.zoneMode == ZoneMode.BRUSH, onClick = { st.zoneMode = ZoneMode.BRUSH }, label = { Text("Pinceau libre") })
+        FilterChip(selected = !st.wipe, onClick = { if (st.wipe) { st.mark(); st.wipe = false } }, label = { Text("Zone de détection") })
+        FilterChip(selected = st.wipe, onClick = { if (!st.wipe) { st.mark(); st.wipe = true; st.zoneChanged = true } }, label = { Text("Zone d'effacement") })
     }
-    Text(
-        if (st.zoneMode == ZoneMode.RECT) "Glissez les poignées pour ajuster le rectangle, glissez à l'intérieur pour le déplacer, ou tracez-en un nouveau en dehors."
-        else "Dessinez du doigt sur le texte à traduire : seule la zone peinte est lue et effacée. La gomme retire la zone peinte là où vous passez.",
-        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    Text(
-        "À deux doigts : pincez pour zoomer, glissez pour déplacer la vue. Les flèches en haut à gauche de l'image défont et refont vos gestes.",
-        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+    // forme de la zone : formes prédéfinies (les poignées déplacent le rectangle englobant) ou pinceau libre
+    Text("Forme de la zone", style = MaterialTheme.typography.labelMedium)
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilterChip(selected = st.zoneMode == ZoneMode.RECT, onClick = { st.chooseShape(ZoneMode.RECT) }, label = { Text("Rectangle") })
+        FilterChip(selected = st.zoneMode == ZoneMode.ELLIPSE, onClick = { st.chooseShape(ZoneMode.ELLIPSE) }, label = { Text("Ovale") })
+        FilterChip(selected = st.zoneMode == ZoneMode.ROUNDED, onClick = { st.chooseShape(ZoneMode.ROUNDED) }, label = { Text("Arrondi") })
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        FilterChip(selected = st.zoneMode == ZoneMode.BRUSH, onClick = { st.zoneMode = ZoneMode.BRUSH }, label = { Text("Pinceau libre") })
+        if (st.zoneMode != ZoneMode.BRUSH) OutlinedButton(onClick = { st.shapeToBrush() }) { Text("Modeler au pinceau", maxLines = 1) }
+    }
     if (st.zoneMode == ZoneMode.BRUSH) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // pinceau, gomme et « Tout effacer » sur une seule ligne (le panneau défile : tout reste visible sans descendre ; « Tout effacer » se défait avec la flèche)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             FilterChip(selected = !st.erasing, onClick = { st.erasing = false }, label = { Text("Peindre") })
             FilterChip(selected = st.erasing, onClick = { st.erasing = true }, label = { Text("Gommer") })
+            OutlinedButton(onClick = { st.mark(); st.strokes.clear() }, enabled = st.strokes.isNotEmpty()) { Text("Tout effacer", maxLines = 1, overflow = TextOverflow.Ellipsis) }
         }
         Text(if (st.erasing) "Taille de la gomme" else "Taille du pinceau", style = MaterialTheme.typography.labelMedium)
         Slider(st.brush, { st.brush = it }, valueRange = 6f..90f)
-        OutlinedButton(onClick = { st.mark(); st.strokes.clear() }, enabled = st.strokes.isNotEmpty(), modifier = Modifier.fillMaxWidth()) { Text("Tout effacer", maxLines = 1, overflow = TextOverflow.Ellipsis) }
     }
     Button(
         onClick = {
@@ -769,27 +922,43 @@ private fun ZoneTab(c: TranslationController, st: EditorState, scope: kotlinx.co
                 st.reading = false
                 if (r == null) st.message = "Aucun texte n'a pu être lu dans cette zone. Agrandissez-la un peu, ou saisissez le texte à la main (onglet Texte)."
                 else {
-                    st.src = r.source; st.translation = r.translation; st.read = r; st.zoneChanged = true
-                    if (st.autoFit) st.snapToLines()       // la zone épouse les lignes lues : cadres verts = lignes lues
+                    st.src = r.source; st.translation = r.translation.replace('\n', ' '); st.read = r; st.zoneChanged = true
+                    if (st.autoFit && !st.wipe) st.snapToLines()       // la zone épouse les lignes lues : cadres verts = lignes lues (pas pour une zone d'effacement : elle garde sa forme)
                 }
             }
         },
         enabled = !st.reading, modifier = Modifier.fillMaxWidth(),
     ) { Text(if (st.reading) "Lecture en cours…" else "Lire le texte de cette zone") }
-    ToggleRow(st.autoFit, { st.autoFit = it }, "Ajuster automatiquement la zone aux lignes lues")
-    OutlinedButton(onClick = { st.snapToLines() }, enabled = st.fitLines().isNotEmpty(), modifier = Modifier.fillMaxWidth()) { Text("Ajuster la zone au texte lu") }
-    ToggleRow(st.precise, { st.precise = it }, "Effacer seulement les lettres (plus précis)")
-    Text(
-        "Ajustée aux lignes, la zone n'efface que le texte : plus de grand rectangle clair derrière la traduction. Si des restes de l'original apparaissent, désactivez l'effacement précis.",
-        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    OutlinedButton(onClick = { st.resetZone() }, enabled = st.zoneChanged && !st.isNew || st.strokes.isNotEmpty(), modifier = Modifier.fillMaxWidth()) { Text("Rétablir la zone détectée") }
+    if (!st.wipe) {
+        ToggleRow(st.autoFit, { st.autoFit = it }, "Ajuster automatiquement la zone aux lignes lues")
+        OutlinedButton(onClick = { st.snapToLines() }, enabled = st.fitLines().isNotEmpty(), modifier = Modifier.fillMaxWidth()) { Text("Ajuster la zone au texte lu") }
+        ToggleRow(st.precise, { st.precise = it }, "Effacer seulement les lettres (plus précis)")
+        Text(
+            "Ajustée aux lignes, la zone n'efface que le texte : plus de grand rectangle clair derrière la traduction. Si des restes de l'original apparaissent, désactivez l'effacement précis.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    OutlinedButton(onClick = { st.resetZone() }, enabled = st.zoneChanged && !st.isNew || st.strokes.isNotEmpty() || st.zoneMode != ZoneMode.RECT, modifier = Modifier.fillMaxWidth()) { Text("Rétablir la zone détectée") }
     st.read?.let { r ->
         Text("Texte lu : ${r.source}", style = MaterialTheme.typography.bodySmall)
         if (r.translation.isNotBlank()) Text("Traduction : ${r.translation}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
         Text("Les cadres verts sur l'image sont les lignes lues. Corrigez le texte dans l'onglet Texte si besoin.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
     st.message?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+    Text(
+        if (st.wipe) "Zone d'effacement : toute la zone est effacée, remplie avec ce qui l'entoure, même sans texte (filigrane, texte non lu, dessin). Une traduction saisie est posée dessus. « Voir l'original » compare avec l'image d'origine."
+        else "Zone de détection : le texte lu dans la zone est effacé puis remplacé par la traduction.",
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Text(
+        if (st.zoneMode != ZoneMode.BRUSH) "Glissez les poignées pour ajuster la forme, glissez à l'intérieur pour la déplacer, ou tracez-en une nouvelle en dehors. « Modeler au pinceau » la transforme en zone peinte, que vous pouvez agrandir au pinceau ou creuser à la gomme."
+        else "Dessinez du doigt sur la zone voulue : seule la zone peinte est lue et effacée. La gomme retire la zone peinte là où vous passez.",
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Text(
+        "À deux doigts : pincez pour zoomer, glissez pour déplacer la vue. Les flèches en haut à gauche de l'image défont et refont vos gestes.",
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 @Composable
@@ -817,10 +986,127 @@ private fun PositionTab(st: EditorState) {
     OutlinedButton(onClick = { st.mark(); st.dx = 0f; st.dy = 0f; st.scale = 1f }, enabled = st.dx != 0f || st.dy != 0f || st.scale != 1f, modifier = Modifier.fillMaxWidth()) { Text("Réinitialiser position et taille") }
 }
 
+/** Disposition du texte : alignement des lignes, nombre de lignes, interligne, casse, inclinaison. Les valeurs par défaut sont la mise en page automatique. */
+@Composable
+private fun LayoutTab(st: EditorState) {
+    val f = st.format
+    Text("Alignement du texte", style = MaterialTheme.typography.labelMedium)
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        listOf(TextFormat.ALIGN_CENTER to "Centré", TextFormat.ALIGN_LEFT to "À gauche", TextFormat.ALIGN_RIGHT to "À droite").forEach { (v, label) ->
+            FilterChip(selected = f.align == v, onClick = { st.changeFormat(f.copy(align = v)) }, label = { Text(label) })
+        }
+    }
+    Text("Nombre de lignes", style = MaterialTheme.typography.labelMedium)
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        for (n in 0..6) FilterChip(selected = f.lines == n, onClick = { st.changeFormat(f.copy(lines = n)) }, label = { Text(if (n == 0) "Auto" else n.toString()) })
+    }
+    Text("Interligne : ${(f.spacing * 100).roundToInt()} %", style = MaterialTheme.typography.labelMedium)
+    Slider(f.spacing, { st.changeFormat(f.copy(spacing = it), slider = true) }, onValueChangeFinished = { st.sliding = false }, valueRange = TextFormat.MIN_SPACING..TextFormat.MAX_SPACING)
+    Text("Casse", style = MaterialTheme.typography.labelMedium)
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        listOf(TextFormat.CASE_AUTO to "Telle quelle", TextFormat.CASE_UPPER to "MAJUSCULES", TextFormat.CASE_LOWER to "minuscules").forEach { (v, label) ->
+            FilterChip(selected = f.caseMode == v, onClick = { st.changeFormat(f.copy(caseMode = v)) }, label = { Text(label) })
+        }
+    }
+    Text("Inclinaison du texte : ${f.angle.roundToInt()}°", style = MaterialTheme.typography.labelMedium)
+    Slider(f.angle, { st.changeFormat(f.copy(angle = it), slider = true) }, onValueChangeFinished = { st.sliding = false }, valueRange = -TextFormat.MAX_ANGLE..TextFormat.MAX_ANGLE)
+    Text(
+        "Pour couper une ligne à un endroit précis, touchez Entrée dans la traduction (onglet Texte). Le nombre de lignes est un maximum visé : le texte rétrécit si la place manque.",
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    OutlinedButton(onClick = { st.changeFormat(TextFormat()) }, enabled = !f.isDefault, modifier = Modifier.fillMaxWidth()) { Text("Rétablir la disposition automatique") }
+}
+
+/** Couleurs proposées pour le texte, son contour et sa lueur (RVB). */
+private val SWATCHES = intArrayOf(0xFFFFFF, 0x000000, 0xE53935, 0xFB8C00, 0xFDD835, 0x43A047, 0x00ACC1, 0x1E88E5, 0x5E35B1, 0xD81B60, 0x8D6E63, 0x9E9E9E)
+
+/** Noir ou blanc, selon ce qui contraste le mieux avec la couleur [rgb]. */
+private fun contrastOf(rgb: Int): Int {
+    val r = (rgb shr 16) and 255; val g = (rgb shr 8) and 255; val b = rgb and 255
+    return if (0.299f * r + 0.587f * g + 0.114f * b > 140f) 0x000000 else 0xFFFFFF
+}
+
+@Composable
+private fun Swatch(rgb: Int, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier.size(36.dp).clip(CircleShape).background(Color(0xFF000000.toInt() or rgb))
+            .border(if (selected) 3.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else Color(0x88888888), CircleShape)
+            .clickable(onClick = onClick),
+    )
+}
+
+/** Choix d'une couleur pour le réglage en cours : pastilles, pipette qui prélève la couleur d'un point de l'image d'origine. [current] : couleur actuelle (RVB). */
+@Composable
+private fun ColorPicker(st: EditorState, current: Int?) {
+    val pick: (Int) -> Unit = { rgb ->
+        val l = st.look
+        when (st.lookTarget) {
+            LookTarget.FILL -> st.changeLook(l.copy(fill = rgb))
+            LookTarget.OUTLINE -> st.changeLook(l.copy(outline = rgb, outlineW = l.outlineW ?: DEFAULT_OUTLINE))
+            LookTarget.GLOW -> st.changeLook(l.copy(glow = rgb, glowW = l.glowW ?: DEFAULT_GLOW))
+        }
+    }
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        for (rgb in SWATCHES) Swatch(rgb, current != null && (current and 0xFFFFFF) == rgb) { pick(rgb) }
+    }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        FilterChip(selected = st.pipette, onClick = { st.pipette = !st.pipette; st.showOriginal = st.pipette }, label = { Text(if (st.pipette) "Pipette : touchez l'image" else "Pipette") })
+        if (current != null) {
+            Box(Modifier.size(28.dp).clip(CircleShape).background(Color(0xFF000000.toInt() or (current and 0xFFFFFF))).border(1.dp, Color(0x88888888), CircleShape))
+            Text("#%06X".format(current and 0xFFFFFF), style = MaterialTheme.typography.bodySmall)
+        }
+    }
+    if (st.pipette) Text("Touchez un point de l'image d'origine (une lettre, un fond) : sa couleur est reprise.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+/** Apparence du texte : couleur des lettres, contour et lueur. Chaque réglage reste automatique (mesuré sur le lettrage d'origine) tant qu'on ne le change pas. */
+@Composable
+private fun ColorTab(st: EditorState) {
+    val l = st.look
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        LookTarget.values().forEach { t -> FilterChip(selected = st.lookTarget == t, onClick = { st.lookTarget = t }, label = { Text(t.label) }) }
+    }
+    when (st.lookTarget) {
+        LookTarget.FILL -> {
+            ToggleRow(l.fill == null, { on -> st.changeLook(if (on) l.copy(fill = null) else l.copy(fill = st.previewTextColor() ?: 0x000000)) }, "Couleur automatique (celle du texte d'origine)")
+            if (l.fill != null) ColorPicker(st, l.fill)
+        }
+        LookTarget.OUTLINE -> {
+            val auto = l.outline == null && l.outlineW == null
+            val base = l.fill ?: st.previewTextColor() ?: 0x000000
+            ToggleRow(auto, { on -> st.changeLook(if (on) l.copy(outline = null, outlineW = null) else l.copy(outline = contrastOf(base), outlineW = DEFAULT_OUTLINE)) }, "Contour automatique")
+            if (!auto) {
+                ColorPicker(st, l.outline ?: contrastOf(base))
+                val w = l.outlineW ?: DEFAULT_OUTLINE
+                Text("Épaisseur du contour : ${(w / TextLook.MAX_OUTLINE * 100).roundToInt()} %" + (if (w <= 0f) " (aucun)" else ""), style = MaterialTheme.typography.labelMedium)
+                Slider(w, { st.changeLook(l.copy(outlineW = it), slider = true) }, onValueChangeFinished = { st.sliding = false }, valueRange = 0f..TextLook.MAX_OUTLINE)
+            }
+        }
+        LookTarget.GLOW -> {
+            val auto = l.glow == null && l.glowW == null
+            val base = l.fill ?: st.previewTextColor() ?: 0x000000
+            ToggleRow(auto, { on -> st.changeLook(if (on) l.copy(glow = null, glowW = null) else l.copy(glow = contrastOf(base), glowW = DEFAULT_GLOW)) }, "Lueur automatique")
+            if (!auto) {
+                ColorPicker(st, l.glow ?: contrastOf(base))
+                val w = l.glowW ?: DEFAULT_GLOW
+                Text("Taille de la lueur : ${(w * 100).roundToInt()} %" + (if (w <= 0f) " (aucune)" else ""), style = MaterialTheme.typography.labelMedium)
+                Slider(w, { st.changeLook(l.copy(glowW = it), slider = true) }, onValueChangeFinished = { st.sliding = false }, valueRange = 0f..TextLook.MAX_GLOW)
+            }
+        }
+    }
+    Text(
+        "Automatique : le texte reprend la couleur, le contour et la lueur du lettrage d'origine. Un réglage à la main ne s'applique qu'à ce texte.",
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    OutlinedButton(onClick = { st.changeLook(TextLook()) }, enabled = !l.isDefault, modifier = Modifier.fillMaxWidth()) { Text("Rétablir les couleurs automatiques") }
+}
+
 /** Familles du sélecteur de police, dans l'ordre d'affichage. */
 private val FONT_CLASSES = listOf(
     "comic" to "Bande dessinée", "condensed" to "Condensé", "sans" to "Sans empattement", "hand" to "Écriture à la main", "brush" to "Pinceau",
     "display" to "Titre", "serif" to "Avec empattement", "mono" to "Chasse fixe",
+    // polices stylisées (FontLibrary.styled) : choisies seules quand le lettrage d'origine l'exige, ou à la main ici
+    "tech" to "Technique, fenêtre système", "gothic" to "Gothique, fantasy", "horror" to "Horreur", "script" to "Script élégant", "stencil" to "Pochoir", "impact" to "Titres percutants",
 )
 
 private fun fontLabel(sp: FontLibrary.Spec): String {
@@ -850,7 +1136,7 @@ private fun FontTab(c: TranslationController, st: EditorState, modifier: Modifie
         l.add(FontRow.Header("Recommandées"))
         FontLibrary.specs.filter { it.auto }.forEach { l.add(FontRow.Item(it)) }
         for ((cls, name) in FONT_CLASSES) {
-            val items = FontLibrary.specs.filter { it.cls == cls && !it.auto }
+            val items = (FontLibrary.specs + FontLibrary.styled).filter { it.cls == cls && !it.auto }
             if (items.isNotEmpty()) { l.add(FontRow.Header(name)); items.forEach { l.add(FontRow.Item(it)) } }
         }
         l

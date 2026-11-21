@@ -165,6 +165,9 @@ for path in sorted(glob.glob(f"{OUT}/reports/*.json")):
                 elif len(blks) != 1: problems.append(f"{name}: paire {g['pair']} : {len(blks)} blocs au lieu d'un (texte traduit deux fois ou en morceaux)")
                 if not up: problems.append(f"{name}: paire {g['pair']} : rien n'est posé sur l'image du dessus")
         P(f"- textes coupés lus en entier : {whole}/{len(gt)} ({'avec' if on else 'sans'} la jonction)")
+    if name.startswith("chapter_end"):
+        P(f"- fin de chapitre : {c.get('total')} image(s) repérée(s) (2 pages attendues, les vignettes en dessous ne comptent pas)")
+        if c.get("total") != 2: problems.append(f"{name}: {c.get('total')} images repérées au lieu de 2 : ce qui est sous le chapitre (vignettes, commentaires) est donné à la traduction, ou une page manque")
     if name.startswith("pc_en_toggle"):
         done_n = sum(1 for im in imgs if im.get("outcome", "").startswith("done"))
         tot_n = c.get("total") or 0

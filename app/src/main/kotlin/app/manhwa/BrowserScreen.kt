@@ -182,7 +182,7 @@ fun BrowserScreen(graph: AppGraph, onLibrary: () -> Unit = {}) {
                         Pill("Ignorer ce texte…", onClick = { c.holdPeek(); ignoreDialog = true })
                     }
                     // geste qui se défait : trois secondes pour l'annuler (le bandeau se referme ensuite et le geste est définitif)
-                    c.undoBanner?.let { Pill("${it.message} · Annuler", onClick = { c.runUndo() }) }
+                    c.undoBanner?.let { Pill("${it.message} · ${it.label}", onClick = { c.runUndo() }) }
                     // gomme : les traductions entourées en rouge se suppriment d'un appui ; ce bouton la coupe
                     if (c.eraser) Pill("Gomme active · Terminer", onClick = { c.switchEraser(false) })
                     // textes écartés : les cadres orange se traduisent d'un appui ; ce bouton coupe le mode
@@ -192,6 +192,8 @@ fun BrowserScreen(graph: AppGraph, onLibrary: () -> Unit = {}) {
                             Pill("Image ignorée · Rétablir", onClick = { c.unignorePeekImage() }, onClose = { c.peekEmpty = null })
                         } else {
                             Pill("Ajouter une traduction ici", onClick = { c.openNewEdit() }, onClose = { c.peekEmpty = null })
+                            // carré d'effacement : une zone entière (dessin, texte non détecté, filigrane) est remplie avec ce qui l'entoure
+                            Pill("Effacer une zone ici", onClick = { c.openNewWipe() })
                             // bandeau de début ou de fin de chapitre : l'image n'est plus jamais lue ni traduite
                             Pill("Ne jamais traduire cette image", onClick = { c.ignorePeekImage() })
                         }

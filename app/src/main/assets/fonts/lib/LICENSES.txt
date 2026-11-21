@@ -159,3 +159,51 @@ Sniglet-Regular.ttf — Sniglet
 SpecialElite-Regular.ttf — Special Elite
     Copyright (c) 2010 by Brian J. Bonislawsky DBA Astigmatic (AOETI). All rights reserved. Available under the Apache 2.0 licence. http://www.apache.org/licenses/LICENSE-2.0.html
     Licence : Licensed under the Apache License, Version 2.0
+
+Polices stylisées (techniques, gothiques, horreur, script, pochoir, titres ; voir FontLibrary.styled) :
+
+Rajdhani-Bold.ttf — Rajdhani
+    Copyright (c) 2014 Indian Type Foundry (info@indiantypefoundry.com)
+    Licence : This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: https://openfontlicense.org
+Exo2-VF.ttf — Exo 2
+    Copyright 2013 The Exo 2 Project Authors (https://github.com/googlefonts/Exo-2.0)
+    Licence : This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: https://openfontlicense.org
+Oxanium-VF.ttf — Oxanium
+    Copyright 2019 The Oxanium Project Authors (https://github.com/sevmeyer/oxanium)
+    Licence : This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: https://openfontlicense.org
+PirataOne-Regular.ttf — Pirata One
+    Copyright (c) 2012, Rodrigo Fuenzalida, Nicolas Massi (www.taip.com.ar / abc.taip.com.ar), with Reserved Font Name 'Pirata'
+    Licence : This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: https://openfontlicense.org
+MedievalSharp.ttf — MedievalSharp
+    Copyright (c) 2011, wmk69 (wmk69@o2.pl), with Reserved Font Name NovaRound.
+    Licence : This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: https://openfontlicense.org
+Almendra-Regular.ttf — Almendra
+    Copyright (c) 2011-2012, Ana Sanfelippo (anasanfe@gmail.com), with Reserved Font Name 'Almendra'
+    Licence : This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: https://openfontlicense.org
+Almendra-Bold.ttf — Almendra Bold
+    Copyright (c) 2011-2012, Ana Sanfelippo (anasanfe@gmail.com), with Reserved Font Name 'Almendra'
+    Licence : This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: https://openfontlicense.org
+Creepster-Regular.ttf — Creepster
+    Copyright (c) 2011, Font Diner, Inc (diner@fontdiner.com), with Reserved Font Names "Creepster"
+    Licence : This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: https://openfontlicense.org
+Butcherman-Regular.ttf — Butcherman
+    Copyright (c) 2011, Typomondo, with Reserved Font Name  "Butcherman".
+    Licence : This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: https://openfontlicense.org
+DancingScript-VF.ttf — Dancing Script
+    Copyright 2016 The Dancing Script Project Authors (https://github.com/googlefonts/DancingScript), with Reserved Font Name "Dancing Script".
+    Licence : This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: https://openfontlicense.org
+KaushanScript-Regular.ttf — Kaushan Script
+    Copyright (c) 2011, Pablo Impallari (www.impallari.com|impallari@gmail.com),Copyright (c) 2011, Igino Marini. (www.ikern.com|mail@iginomarini.com),with Reserved Font Name Kaushan Script.
+    Licence : This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: https://openfontlicense.org
+BlackOpsOne-Regular.ttf — Black Ops One
+    Copyright 2022 The PinyonScript Project Authors (https://github.com/SorkinType/Black-Ops)
+    Licence : This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: https://openfontlicense.org
+StardosStencil-Bold.ttf — Stardos Stencil Bold
+    Copyright (c) 2011 by vernon adams. All rights reserved.
+    Licence : This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: https://openfontlicense.org
+TitanOne-Regular.ttf — Titan One
+    Copyright (c) 2011 Rodrigo Fuenzalida (hello@rfuenzalida.com), with Reserved Font Name "Titan One"
+    Licence : This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: https://openfontlicense.org
+Knewave-Regular.ttf — Knewave
+    Copyright (c) 2011 by Tyler Finck. All rights reserved.
+    Licence : This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: https://openfontlicense.org

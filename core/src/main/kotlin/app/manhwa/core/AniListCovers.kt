@@ -7,7 +7,7 @@ package app.manhwa.core
 object AniListCovers {
     const val ENDPOINT = "https://graphql.anilist.co"
 
-    private const val QUERY = "query(\$s:String){Page(page:1,perPage:10){media(search:\$s,type:MANGA,sort:SEARCH_MATCH){format countryOfOrigin popularity title{romaji english native}synonyms coverImage{extraLarge large}}}}"
+    private const val QUERY = "query(\$s:String){Page(page:1,perPage:10){media(search:\$s,type:MANGA,sort:SEARCH_MATCH){format countryOfOrigin popularity title{romaji english native}synonyms coverImage{extraLarge large}description}}}"
 
     private fun quote(s: String): String {
         val sb = StringBuilder("\"")
@@ -20,8 +20,8 @@ object AniListCovers {
     /** Corps de la demande (JSON) : la recherche du titre. */
     fun requestBody(title: String): String = "{\"query\":${quote(QUERY)},\"variables\":{\"s\":${quote(title)}}}"
 
-    /** Une œuvre de la réponse : ses titres (tous), sa popularité et l'adresse de sa couverture. */
-    private data class Hit(val names: List<String>, val popularity: Double, val cover: String)
+    /** Une œuvre de la réponse : ses titres (tous), sa popularité, l'adresse de sa couverture (null si elle n'en a pas de vraie) et son résumé (brut, avec ses balises). */
+    private data class Hit(val names: List<String>, val popularity: Double, val cover: String?, val description: String?)
 
     @Suppress("UNCHECKED_CAST")
     private fun hits(json: String, allowHttp: Boolean): List<Hit> {
@@ -36,9 +36,11 @@ object AniListCovers {
             for (k in listOf("english", "romaji", "native")) (t?.get(k) as? String)?.let { names.add(it) }
             (o["synonyms"] as? List<*>)?.forEach { (it as? String)?.let { n -> names.add(n) } }
             val ci = o["coverImage"] as? Map<String, Any?>
-            val cover = (ci?.get("extraLarge") as? String) ?: (ci?.get("large") as? String) ?: continue
-            if (!(cover.startsWith("https://") || (allowHttp && cover.startsWith("http://"))) || cover.endsWith("/default.jpg")) continue
-            out.add(Hit(names, (o["popularity"] as? Number)?.toDouble() ?: 0.0, cover))
+            var cover = (ci?.get("extraLarge") as? String) ?: (ci?.get("large") as? String)
+            if (cover != null && (!(cover.startsWith("https://") || (allowHttp && cover.startsWith("http://"))) || cover.endsWith("/default.jpg"))) cover = null
+            val description = (o["description"] as? String)?.takeIf { it.isNotBlank() }
+            if (cover == null && description == null) continue
+            out.add(Hit(names, (o["popularity"] as? Number)?.toDouble() ?: 0.0, cover, description))
         }
         return out
     }
@@ -48,5 +50,12 @@ object AniListCovers {
      * Les adresses en https seulement ; [allowHttp] : aussi en http (faux annuaire des tests automatiques).
      */
     fun cover(json: String, title: String, allowHttp: Boolean = false): String? =
-        hits(json, allowHttp).filter { h -> h.names.any { CoverPick.sameTitle(it, title) } }.maxByOrNull { it.popularity }?.cover
+        hits(json, allowHttp).filter { h -> h.cover != null && h.names.any { CoverPick.sameTitle(it, title) } }.maxByOrNull { it.popularity }?.cover
+
+    /**
+     * Le résumé de l'œuvre [title] dans la réponse [json] (brut : c'est [Synopsis.clean] qui retire balises, spoilers et mentions de source), sous les mêmes conditions que la couverture :
+     * l'un des titres de l'annuaire est exactement celui de l'œuvre. Plusieurs : la plus populaire. Null si l'annuaire n'en donne pas.
+     */
+    fun description(json: String, title: String, allowHttp: Boolean = false): String? =
+        hits(json, allowHttp).filter { h -> h.description != null && h.names.any { CoverPick.sameTitle(it, title) } }.maxByOrNull { it.popularity }?.description
 }
