@@ -658,6 +658,21 @@ print(1 if b[0]<=c[0] and b[1]<=c[1] and b[2]>=c[2] and b[3]>=c[3] and (b[2]-b[0
   chk "éditeur : onglet Position : un glissé déplace le texte" $([ "$(stv edDx)" != "$dx0" ] || [ "$(stv edDy)" != "$dy0" ] && echo 1 || echo 0)
   tapt ed6 "=Défaire" 1; sleep 1.5; appstate
   chk "éditeur : défaire remet le texte à sa place" $([ "$(stv edDx)" = "$dx0" ] && [ "$(stv edDy)" = "$dy0" ] && echo 1 || echo 0)
+  # formes prédéfinies, zone d'effacement et disposition du texte : les nouveaux réglages de l'éditeur répondent, et l'aperçu (calculé par le vrai moteur de rendu) suit chaque changement
+  tapt ed6 "=Zone" 1; sleep 1.5; uidump ed7; tapt ed7 "=Ovale" 1; sleep 1.5; uidump ed8; shot ui 66
+  chk "éditeur : « Ovale » donne une zone ovale (forme prédéfinie, « Modeler au pinceau » proposé) et l'aperçu suit" $([ "$(okst waitst edMode ELLIPSE 6)" = 1 ] && [ "$(hasx ed8 '=Modeler au pinceau')" = 1 ] && [ "$(okst waitst edPrev True 10)" = 1 ] && echo 1 || echo 0)
+  tapt ed8 "=Arrondi" 1; sleep 1.5
+  chk "éditeur : « Arrondi » donne une zone en rectangle arrondi et l'aperçu suit" $([ "$(okst waitst edMode ROUNDED 6)" = 1 ] && [ "$(okst waitst edPrev True 10)" = 1 ] && echo 1 || echo 0)
+  tapt ed8 "=Zone d'effacement" 1; sleep 2.5; shot ui 67
+  chk "éditeur : « Zone d'effacement » efface toute la zone (forme gardée) et l'aperçu suit" $([ "$(okst waitst edWipe True 6)" = 1 ] && [ "$(stv edMode)" = ROUNDED ] && [ "$(okst waitst edPrev True 10)" = 1 ] && echo 1 || echo 0)
+  tapt ed8 "=Zone de détection" 1; sleep 2
+  chk "éditeur : « Zone de détection » rétablit le rôle d'origine" $([ "$(okst waitst edWipe False 6)" = 1 ] && [ "$(okst waitst edPrev True 10)" = 1 ] && echo 1 || echo 0)
+  tapt ed8 "=Rectangle" 1; sleep 1; tapt ed8 "=Disposition" 1; sleep 1.5; uidump ed9; shot ui 68
+  chk "éditeur : l'onglet Disposition propose l'alignement du texte (centré, à gauche, à droite)" $([ "$(hasx ed9 '=Centré')" = 1 ] && [ "$(hasx ed9 '=À gauche')" = 1 ] && [ "$(hasx ed9 '=À droite')" = 1 ] && echo 1 || echo 0)
+  tapt ed9 "=À gauche" 1; sleep 2.5; appstate
+  chk "éditeur : « À gauche » aligne le texte à gauche et l'aperçu suit" $(case "$(stv edFmt)" in a=1*) [ "$(okst waitst edPrev True 10)" = 1 ] && echo 1 || echo 0;; *) echo 0;; esac)
+  uidump ed10; tapt ed10 "=Centré" 1; sleep 2; appstate
+  chk "éditeur : « Centré » rétablit la disposition automatique" $([ "$(stv edFmt)" = "-" ] && echo 1 || echo 0)
   # un doigt sur l'image sert toujours au travail de l'onglet quand on est zoomé : la vue ne bouge pas
   tapt ed6 "=Annuler" 1; sleep 2; appstate
   chk "éditeur : « Annuler » referme l'éditeur sans rien enregistrer" $([ "$(stv edOpen)" = False ] && echo 1 || echo 0)
@@ -669,7 +684,11 @@ else
     "« Vue d'origine » rend la vue de départ" "onglet Zone en pinceau libre : « Peindre » et « Gommer » sont proposés" "un trait de pinceau ajoute une zone peinte et un état à défaire" \
     "un coup de gomme ajoute un trait de gomme (la zone peinte reste, creusée)" "« Défaire » retire le coup de gomme (et laisse le « Refaire »)" "« Refaire » le remet" \
     "défaire deux fois efface tout le dessin" "en mode rectangle un glissé change la zone et s'ajoute à l'historique" "défaire rend la zone d'avant" \
-    "onglet Position : un glissé déplace le texte" "défaire remet le texte à sa place" "« Annuler » referme l'éditeur sans rien enregistrer"; do chk "éditeur : $n" 0; done
+    "onglet Position : un glissé déplace le texte" "défaire remet le texte à sa place" \
+    "« Ovale » donne une zone ovale (forme prédéfinie, « Modeler au pinceau » proposé) et l'aperçu suit" "« Arrondi » donne une zone en rectangle arrondi et l'aperçu suit" \
+    "« Zone d'effacement » efface toute la zone (forme gardée) et l'aperçu suit" "« Zone de détection » rétablit le rôle d'origine" \
+    "l'onglet Disposition propose l'alignement du texte (centré, à gauche, à droite)" "« À gauche » aligne le texte à gauche et l'aperçu suit" "« Centré » rétablit la disposition automatique" \
+    "« Annuler » referme l'éditeur sans rien enregistrer"; do chk "éditeur : $n" 0; done
 fi
 # chapitre trop court pour défiler (page d'attente, chapitre à venir) : rien n'y est lu, il ne doit pas être marqué « lu » (le script de la page signalait 100 % dès l'ouverture)
 say "=== chapitre trop court pour défiler"

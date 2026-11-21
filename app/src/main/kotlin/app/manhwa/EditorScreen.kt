@@ -191,6 +191,8 @@ private class EditorState(val sn: TranslationController.EditSession) {
 
     // aperçu et vue
     var preview by mutableStateOf<TranslationController.EditPreview?>(null)
+    /** Clé de l'aperçu affiché (voir [previewKey]) : l'aperçu est à jour quand elle égale la clé courante. */
+    var shownKey by mutableIntStateOf(0)
     var busy by mutableStateOf(false)
     var reading by mutableStateOf(false)
     var translating by mutableStateOf(false)
@@ -476,7 +478,7 @@ private class EditorState(val sn: TranslationController.EditSession) {
             "edUndo" to undoCount, "edRedo" to redoCount, "edCrop" to f(crop), "edCropW" to crop.width.roundToInt(), "edCropL" to crop.left.roundToInt(), "edCropT" to crop.top.roundToInt(),
             "edZoomed" to zoomed, "edBase" to (covers?.let { f(it) } ?: ""), "edRect" to f(rect), "edDx" to dx.roundToInt(), "edDy" to dy.roundToInt(), "edScale" to scale,
             "edArea" to (area?.joinToString(",") { it.roundToInt().toString() } ?: ""), "edWin" to "${iw.roundToInt()},${ih.roundToInt()}",
-            "edWipe" to wipe, "edFmt" to format.encode(), "edLook" to look.encode(),
+            "edWipe" to wipe, "edFmt" to format.encode(), "edLook" to look.encode(), "edPrev" to (preview != null && shownKey == previewKey),
         )
     }
 
@@ -508,12 +510,14 @@ fun BlockEditor(graph: AppGraph, target: EditTarget, onClose: () -> Unit) {
         onDispose { EditorProbe.info = null; EditorProbe.host = null; EditorProbe.rootArea = null; EditorProbe.windowArea = null }
     }
     // aperçu en direct, recalculé 250 ms après la dernière modification
-    LaunchedEffect(st.previewKey) {
+    val previewKey = st.previewKey
+    LaunchedEffect(previewKey) {
         delay(250)
         st.busy = true
         val p = withContext(Dispatchers.Default) { try { c.renderEditPreview(sn, c.makeEdit(sn, st.fields(true))) } catch (e: Throwable) { null } }
         st.busy = false
         st.preview = p
+        st.shownKey = previewKey
         st.onPreview()
     }
 
@@ -882,17 +886,12 @@ private fun ZoneTab(c: TranslationController, st: EditorState, scope: kotlinx.co
         else "Placez le rectangle sur le texte à traduire (ou dessinez-le au pinceau), puis touchez « Lire le texte de cette zone ».",
         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary,
     )
-    // rôle de la zone : détecter le texte à traduire, ou effacer tout ce qu'elle contient (carré d'effacement)
-    Text("Cette zone sert à", style = MaterialTheme.typography.labelMedium)
+    // rôle de la zone : détecter le texte à traduire, ou effacer tout ce qu'elle contient (carré d'effacement). Les réglages viennent d'abord, les explications en bas de l'onglet
+    // (le panneau défile : les boutons du pinceau doivent rester à portée du pouce)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         FilterChip(selected = !st.wipe, onClick = { if (st.wipe) { st.mark(); st.wipe = false } }, label = { Text("Zone de détection") })
         FilterChip(selected = st.wipe, onClick = { if (!st.wipe) { st.mark(); st.wipe = true; st.zoneChanged = true } }, label = { Text("Zone d'effacement") })
     }
-    Text(
-        if (st.wipe) "Toute la zone est effacée : elle est remplie avec ce qui l'entoure, même sans texte (filigrane, texte non lu, dessin). Une traduction saisie est posée dessus. « Voir l'original » compare avec l'image d'origine."
-        else "Le texte lu dans la zone est effacé puis remplacé par la traduction.",
-        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
     // forme de la zone : formes prédéfinies (les poignées déplacent le rectangle englobant) ou pinceau libre
     Text("Forme de la zone", style = MaterialTheme.typography.labelMedium)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -904,15 +903,6 @@ private fun ZoneTab(c: TranslationController, st: EditorState, scope: kotlinx.co
         FilterChip(selected = st.zoneMode == ZoneMode.BRUSH, onClick = { st.zoneMode = ZoneMode.BRUSH }, label = { Text("Pinceau libre") })
         if (st.zoneMode != ZoneMode.BRUSH) OutlinedButton(onClick = { st.shapeToBrush() }) { Text("Modeler au pinceau", maxLines = 1) }
     }
-    Text(
-        if (st.zoneMode != ZoneMode.BRUSH) "Glissez les poignées pour ajuster la forme, glissez à l'intérieur pour la déplacer, ou tracez-en une nouvelle en dehors. « Modeler au pinceau » la transforme en zone peinte, que vous pouvez agrandir au pinceau ou creuser à la gomme."
-        else "Dessinez du doigt sur la zone voulue : seule la zone peinte est lue et effacée. La gomme retire la zone peinte là où vous passez.",
-        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    Text(
-        "À deux doigts : pincez pour zoomer, glissez pour déplacer la vue. Les flèches en haut à gauche de l'image défont et refont vos gestes.",
-        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
     if (st.zoneMode == ZoneMode.BRUSH) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = !st.erasing, onClick = { st.erasing = false }, label = { Text("Peindre") })
@@ -954,6 +944,20 @@ private fun ZoneTab(c: TranslationController, st: EditorState, scope: kotlinx.co
         Text("Les cadres verts sur l'image sont les lignes lues. Corrigez le texte dans l'onglet Texte si besoin.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
     st.message?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+    Text(
+        if (st.wipe) "Zone d'effacement : toute la zone est effacée, remplie avec ce qui l'entoure, même sans texte (filigrane, texte non lu, dessin). Une traduction saisie est posée dessus. « Voir l'original » compare avec l'image d'origine."
+        else "Zone de détection : le texte lu dans la zone est effacé puis remplacé par la traduction.",
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Text(
+        if (st.zoneMode != ZoneMode.BRUSH) "Glissez les poignées pour ajuster la forme, glissez à l'intérieur pour la déplacer, ou tracez-en une nouvelle en dehors. « Modeler au pinceau » la transforme en zone peinte, que vous pouvez agrandir au pinceau ou creuser à la gomme."
+        else "Dessinez du doigt sur la zone voulue : seule la zone peinte est lue et effacée. La gomme retire la zone peinte là où vous passez.",
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Text(
+        "À deux doigts : pincez pour zoomer, glissez pour déplacer la vue. Les flèches en haut à gauche de l'image défont et refont vos gestes.",
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 @Composable
