@@ -1,0 +1,180 @@
+11-21 19:37:21.297 11241 11241 I MT      : page : début http://10.0.2.2:8000/pc_en_long.html (translateOn=true active=false total=0)
+11-21 19:37:22.782 11241 11311 I MTTEST  : compteurs total/traitées/échecs/chargement 0/0/0/true à 2 s
+11-21 19:37:25.202 11241 11241 I MT      : page : fin http://10.0.2.2:8000/pc_en_long.html (affichée : idem) (translateOn=true active=false total=0)
+11-21 19:37:25.206 11241 11241 I MT      : départ : force=false url=http://10.0.2.2:8000/pc_en_long.html total=0
+11-21 19:37:25.263 11241 11241 I MT      : ordre : repérage i1(n=0,haut=75) i2(n=1,haut=645) i3(n=2,haut=1215) i4(n=4,haut=1794) i5(n=5,haut=2364) i6(n=6,haut=2934) i7(n=7,haut=3504) i8(n=8,haut=4075) i9(n=9,haut=4645) i10(n=11,haut=5223) i11(n=12,haut=5793) i12(n=13,haut=6364) i13(n=14,haut=6934) i14(n=15,haut=7504) i15(n=16,haut=8074) i16(n=18,haut=8653) i17(n=19,haut=9223) i18(n=20,haut=9793) i19(n=21,haut=10363) i20(n=22,haut=10933) i21(n=23,haut=11504) i22(n=25,haut=12082) i23(n=26,haut=12652) i24(n=27,haut=13222) i25(n=28,haut=13793) i26(n=29,haut=14363) i27(n=30,haut=14933) i28(n=32,haut=15512) i29(n=33,haut=16082) i30(n=34,haut=16652) i31(n=35,haut=17222) ; vue 0/700 ; ajoutées 31
+11-21 19:37:25.265 11241 11302 I MT      : ordre : i1 démarre
+11-21 19:37:25.269 11241 11303 I MT      : ordre : i2 démarre
+11-21 19:37:25.276 11241 11304 I MT      : ordre : i3 démarre
+11-21 19:37:25.283 11241 11301 I MT      : ordre : i4 démarre
+11-21 19:37:25.321 11241 11241 I MT      : départ : force=false url=http://10.0.2.2:8000/pc_en_long.html total=31
+11-21 19:37:26.368 11241 11301 I MT      : ordre : i4 arrive à la lecture du texte (priorité 200004)
+11-21 19:37:26.369 11241 11301 I MT      : ordre : lecture (priorité 200004) attend i1 ; en route : i1=téléchargement/50000 i2=assemblage avec l'image du dessus/50001 i3=assemblage avec l'image du dessus/200002 i4=attente de la lecture du texte/200004
+11-21 19:37:26.369 11241 11302 I MT      : ordre : i1 arrive à la lecture du texte (priorité 50000)
+11-21 19:37:26.369 11241 11302 I MT      : ordre : lecture (priorité 50000) passe ; en route : i1=attente de la lecture du texte/50000 i2=assemblage avec l'image du dessus/50001 i3=assemblage avec l'image du dessus/200002 i4=attente de la lecture du texte/200004
+11-21 19:37:26.370 11241 11302 I MT      : ordre : i1 lit le texte (attente 0 ms)
+11-21 19:37:26.382 11241 11304 I MT      : ordre : i3 arrive à la lecture du texte (priorité 200002)
+11-21 19:37:26.786 11241 11311 I MTTEST  : compteurs total/traitées/échecs/chargement 31/0/0/false à 6 s
+11-21 19:37:26.815 11241 11303 I MT      : ordre : i2 arrive à la lecture du texte (priorité 50001)
+11-21 19:37:35.470 11241 11303 I MT      : ordre : lecture (priorité 50001) passe ; en route : i1=lecture du texte/50000 i2=attente de la lecture du texte/50001 i3=attente de la lecture du texte/200002 i4=attente de la lecture du texte/200004
+11-21 19:37:35.470 11241 11303 I MT      : ordre : i2 lit le texte (attente 8655 ms)
+11-21 19:37:35.479 11241 11302 I MT      : écarté « SHHSHH » (bruit, hors zone)
+11-21 19:37:35.479 11241 11302 I MT      : écarté « w » (bruit, hors zone)
+11-21 19:37:35.479 11241 11302 I MT      : écarté « 24 » (bruit, hors zone)
+11-21 19:37:35.479 11241 11302 I MT      : écarté « PLOP » (onomatopée laissée telle quelle, hors zone)
+11-21 19:37:35.480 11241 11302 I MT      : écarté « PLOP » (onomatopée laissée telle quelle, hors zone)
+11-21 19:37:36.333 11241 11302 I MT      : ordre : i1 arrive à l'affichage (priorité 50000)
+11-21 19:37:36.334 11241 11302 I MT      : ordre : i1 s'affiche (attente 0 ms)
+11-21 19:37:41.212 11241 11302 I MT      : ordre : i5 démarre
+11-21 19:37:41.772 11241 11241 I MT      : départ : force=false url=http://10.0.2.2:8000/pc_en_long.html total=31
+11-21 19:37:42.144 11241 11304 I MT      : ordre : lecture (priorité 200002) passe ; en route : i2=lecture du texte/50001 i3=attente de la lecture du texte/200002 i4=attente de la lecture du texte/200004 i5=assemblage avec l'image du dessus/200005
+11-21 19:37:42.144 11241 11304 I MT      : ordre : i3 lit le texte (attente 15763 ms)
+11-21 19:37:42.162 11241 11303 I MT      : écarté « PLOR » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-21 19:37:42.162 11241 11303 I MT      : écarté « PLOP » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-21 19:37:42.162 11241 11303 I MT      : écarté « 3 » (bruit, hors zone)
+11-21 19:37:42.163 11241 11303 I MT      : écarté « LASH » (débris, filigrane ou répété, hors zone)
+11-21 19:37:42.511 11241 11302 I MT      : ordre : i5 arrive à la lecture du texte (priorité 200005)
+11-21 19:37:42.724 11241 11303 I MT      : ordre : i2 arrive à l'affichage (priorité 50001)
+11-21 19:37:42.724 11241 11303 I MT      : ordre : i2 s'affiche (attente 10 ms)
+11-21 19:37:42.788 11241 11311 I MTTEST  : compteurs total/traitées/échecs/chargement 31/1/0/false à 22 s
+11-21 19:37:46.754 11241 11303 I MT      : ordre : i6 démarre
+11-21 19:37:47.317 11241 11241 I MT      : départ : force=false url=http://10.0.2.2:8000/pc_en_long.html total=31
+11-21 19:37:48.093 11241 11303 I MT      : ordre : i6 arrive à la lecture du texte (priorité 200006)
+11-21 19:37:48.493 11241 11301 I MT      : ordre : lecture (priorité 200004) passe ; en route : i3=lecture du texte/200002 i4=attente de la lecture du texte/200004 i5=attente de la lecture du texte/200005 i6=attente de la lecture du texte/200006
+11-21 19:37:48.493 11241 11301 I MT      : ordre : i4 lit le texte (attente 22124 ms)
+11-21 19:37:48.495 11241 11304 I MT      : écarté « ASH » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-21 19:37:48.495 11241 11304 I MT      : écarté « 18 » (bruit, hors zone)
+11-21 19:37:48.495 11241 11304 I MT      : écarté « 05/2014 » (bruit)
+11-21 19:37:48.789 11241 11311 I MTTEST  : compteurs total/traitées/échecs/chargement 31/2/0/false à 28 s
+11-21 19:37:48.872 11241 11304 I MT      : ordre : i3 arrive à l'affichage (priorité 200002)
+11-21 19:37:48.873 11241 11304 I MT      : ordre : i3 s'affiche (attente 9 ms)
+11-21 19:37:49.362 11241 11304 I MT      : ordre : i7 démarre
+11-21 19:37:49.858 11241 11241 I MT      : départ : force=false url=http://10.0.2.2:8000/pc_en_long.html total=31
+11-21 19:37:50.790 11241 11311 I MTTEST  : compteurs total/traitées/échecs/chargement 31/3/0/false à 30 s
+11-21 19:37:51.613 11241 11304 I MT      : ordre : i7 arrive à la lecture du texte (priorité 200007)
+11-21 19:37:55.141 11241 11302 I MT      : ordre : lecture (priorité 200005) passe ; en route : i4=lecture du texte/200004 i5=attente de la lecture du texte/200005 i6=attente de la lecture du texte/200006 i7=attente de la lecture du texte/200007
+11-21 19:37:55.141 11241 11302 I MT      : ordre : i5 lit le texte (attente 12629 ms)
+11-21 19:37:55.148 11241 11301 I MT      : écarté « KOMONA! » (débris, filigrane ou répété)
+11-21 19:37:56.226 11241 11301 I MT      : ordre : i4 arrive à l'affichage (priorité 200004)
+11-21 19:37:56.227 11241 11301 I MT      : ordre : i4 s'affiche (attente 0 ms)
+11-21 19:38:01.152 11241 11301 I MT      : ordre : i8 démarre
+11-21 19:38:01.737 11241 11241 I MT      : départ : force=false url=http://10.0.2.2:8000/pc_en_long.html total=31
+11-21 19:38:02.447 11241 11301 I MT      : ordre : i8 arrive à la lecture du texte (priorité 200008)
+11-21 19:38:02.792 11241 11311 I MTTEST  : compteurs total/traitées/échecs/chargement 31/4/0/false à 42 s
+11-21 19:38:03.896 11241 11303 I MT      : ordre : lecture (priorité 200006) passe ; en route : i5=lecture du texte/200005 i6=attente de la lecture du texte/200006 i7=attente de la lecture du texte/200007 i8=attente de la lecture du texte/200008
+11-21 19:38:03.896 11241 11303 I MT      : ordre : i6 lit le texte (attente 15803 ms)
+11-21 19:38:03.919 11241 11302 I MT      : écarté « ...but? » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-21 19:38:03.924 11241 11302 I MT      : écarté « Where am I ?!? » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-21 19:38:03.925 11241 11302 I MT      : écarté « quack? » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-21 19:38:04.574 11241 11302 I MT      : ordre : i5 arrive à l'affichage (priorité 200005)
+11-21 19:38:04.575 11241 11302 I MT      : ordre : i5 s'affiche (attente 1 ms)
+11-21 19:38:08.209 11241 11302 I MT      : ordre : i9 démarre
+11-21 19:38:08.724 11241 11241 I MT      : départ : force=false url=http://10.0.2.2:8000/pc_en_long.html total=31
+11-21 19:38:08.793 11241 11311 I MTTEST  : compteurs total/traitées/échecs/chargement 31/5/0/false à 48 s
+11-21 19:38:09.430 11241 11302 I MT      : ordre : i9 arrive à la lecture du texte (priorité 200009)
+11-21 19:38:13.507 11241 11304 I MT      : ordre : lecture (priorité 200007) passe ; en route : i9=attente de la lecture du texte/200009 i6=lecture du texte/200006 i7=attente de la lecture du texte/200007 i8=attente de la lecture du texte/200008
+11-21 19:38:13.507 11241 11304 I MT      : ordre : i7 lit le texte (attente 21895 ms)
+11-21 19:38:13.517 11241 11303 I MT      : écarté « Fan-tas-tic! » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-21 19:38:13.517 11241 11303 I MT      : écarté « You even thought of. bringing a potion,  » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-21 19:38:13.517 11241 11303 I MT      : écarté « ...let's see which potion you brought... » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-21 19:38:14.235 11241 11303 I MT      : ordre : i6 arrive à l'affichage (priorité 200006)
+11-21 19:38:14.236 11241 11303 I MT      : ordre : i6 s'affiche (attente 0 ms)
+11-21 19:38:18.626 11241 11303 I MT      : ordre : i10 démarre
+11-21 19:38:18.693 11241 11303 I MT      : ordre : i10 arrive à la lecture du texte (priorité 200011)
+11-21 19:38:18.794 11241 11311 I MTTEST  : compteurs total/traitées/échecs/chargement 31/6/0/false à 58 s
+11-21 19:38:19.139 11241 11241 I MT      : départ : force=false url=http://10.0.2.2:8000/pc_en_long.html total=31
+11-21 19:38:20.961 11241 11301 I MT      : ordre : lecture (priorité 200008) passe ; en route : i9=attente de la lecture du texte/200009 i10=attente de la lecture du texte/200011 i7=lecture du texte/200007 i8=attente de la lecture du texte/200008
+11-21 19:38:20.961 11241 11301 I MT      : ordre : i8 lit le texte (attente 18514 ms)
+11-21 19:38:20.975 11241 11304 I MT      : écarté « Nomon » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-21 19:38:20.980 11241 11304 I MT      : écarté « for this first edition. » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-21 19:38:20.981 11241 11304 I MT      : écarté « Please give a huge round of applause: » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-21 19:38:20.981 11241 11304 I MT      : écarté « 7 » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-21 19:38:20.981 11241 11304 I MT      : écarté « 3 » (bruit, hors zone)
+11-21 19:38:20.981 11241 11304 I MT      : écarté « SHHSHH » (bruit, hors zone)
+11-21 19:38:20.981 11241 11304 I MT      : écarté « PLOP » (onomatopée laissée telle quelle, hors zone)
+11-21 19:38:20.982 11241 11304 I MT      : écarté « PLOP » (onomatopée laissée telle quelle, hors zone)
+11-21 19:38:21.444 11241 11304 I MT      : ordre : i7 arrive à l'affichage (priorité 200007)
+11-21 19:38:21.444 11241 11304 I MT      : ordre : i7 s'affiche (attente 1 ms)
+11-21 19:38:22.134 11241 11304 I MT      : ordre : i11 démarre
+11-21 19:38:22.613 11241 11241 I MT      : départ : force=false url=http://10.0.2.2:8000/pc_en_long.html total=31
+11-21 19:38:22.795 11241 11311 I MTTEST  : compteurs total/traitées/échecs/chargement 31/7/0/false à 62 s
+11-21 19:38:23.873 11241 11304 I MT      : ordre : i11 arrive à la lecture du texte (priorité 200012)
+11-21 19:38:25.862 11241 11302 I MT      : ordre : lecture (priorité 200009) passe ; en route : i9=attente de la lecture du texte/200009 i11=attente de la lecture du texte/200012 i10=attente de la lecture du texte/200011 i8=lecture du texte/200008
+11-21 19:38:25.862 11241 11302 I MT      : ordre : i9 lit le texte (attente 16433 ms)
+11-21 19:38:25.880 11241 11301 I MT      : écarté « PLOR » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-21 19:38:25.880 11241 11301 I MT      : écarté « PLOP » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-21 19:38:25.880 11241 11301 I MT      : écarté « 3 » (bruit, hors zone)
+11-21 19:38:25.880 11241 11301 I MT      : écarté « LASH » (débris, filigrane ou répété, hors zone)
+11-21 19:38:26.314 11241 11301 I MT      : ordre : i8 arrive à l'affichage (priorité 200008)
+11-21 19:38:26.314 11241 11301 I MT      : ordre : i8 s'affiche (attente 0 ms)
+11-21 19:38:27.598 11241 11301 I MT      : ordre : i12 démarre
+11-21 19:38:28.104 11241 11241 I MT      : départ : force=false url=http://10.0.2.2:8000/pc_en_long.html total=31
+11-21 19:38:28.763 11241 11301 I MT      : ordre : i12 arrive à la lecture du texte (priorité 200013)
+11-21 19:38:28.796 11241 11311 I MTTEST  : compteurs total/traitées/échecs/chargement 31/8/0/false à 68 s
+11-21 19:38:30.090 11241 11303 I MT      : ordre : lecture (priorité 200011) passe ; en route : i9=lecture du texte/200009 i11=attente de la lecture du texte/200012 i10=attente de la lecture du texte/200011 i12=attente de la lecture du texte/200013
+11-21 19:38:30.090 11241 11303 I MT      : ordre : i10 lit le texte (attente 11397 ms)
+11-21 19:38:30.092 11241 11302 I MT      : écarté « ASH » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-21 19:38:30.092 11241 11302 I MT      : écarté « 18 » (bruit, hors zone)
+11-21 19:38:30.092 11241 11302 I MT      : écarté « 05/2014 » (bruit)
+11-21 19:38:30.413 11241 11302 I MT      : ordre : i9 arrive à l'affichage (priorité 200009)
+11-21 19:38:30.429 11241 11302 I MT      : ordre : i9 s'affiche (attente 16 ms)
+11-21 19:38:30.629 11241 11302 I MT      : ordre : i13 démarre
+11-21 19:38:30.796 11241 11311 I MTTEST  : compteurs total/traitées/échecs/chargement 31/9/0/false à 70 s
+11-21 19:38:31.132 11241 11241 I MT      : départ : force=false url=http://10.0.2.2:8000/pc_en_long.html total=31
+11-21 19:38:32.641 11241 11302 I MT      : ordre : i13 arrive à la lecture du texte (priorité 200014)
+11-21 19:38:35.867 11241 11304 I MT      : ordre : lecture (priorité 200012) passe ; en route : i11=attente de la lecture du texte/200012 i10=lecture du texte/200011 i13=attente de la lecture du texte/200014 i12=attente de la lecture du texte/200013
+11-21 19:38:35.867 11241 11304 I MT      : ordre : i11 lit le texte (attente 11994 ms)
+11-21 19:38:35.875 11241 11303 I MT      : écarté « KOMONA! » (débris, filigrane ou répété)
+11-21 19:38:36.872 11241 11303 I MT      : ordre : i10 arrive à l'affichage (priorité 200011)
+11-21 19:38:36.872 11241 11303 I MT      : ordre : i10 s'affiche (attente 0 ms)
+11-21 19:38:39.740 11241 11303 I MT      : ordre : i14 démarre
+11-21 19:38:40.248 11241 11241 I MT      : départ : force=false url=http://10.0.2.2:8000/pc_en_long.html total=31
+11-21 19:38:40.798 11241 11311 I MTTEST  : compteurs total/traitées/échecs/chargement 31/10/0/false à 80 s
+11-21 19:38:41.051 11241 11303 I MT      : ordre : i14 arrive à la lecture du texte (priorité 200015)
+11-21 19:38:42.928 11241 11301 I MT      : ordre : lecture (priorité 200013) passe ; en route : i11=lecture du texte/200012 i13=attente de la lecture du texte/200014 i12=attente de la lecture du texte/200013 i14=attente de la lecture du texte/200015
+11-21 19:38:42.929 11241 11301 I MT      : ordre : i12 lit le texte (attente 14166 ms)
+11-21 19:38:42.935 11241 11304 I MT      : écarté « ...but? » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-21 19:38:42.935 11241 11304 I MT      : écarté « Where am I ?!? » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-21 19:38:42.935 11241 11304 I MT      : écarté « quack? » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-21 19:38:43.519 11241 11304 I MT      : ordre : i11 arrive à l'affichage (priorité 200012)
+11-21 19:38:43.528 11241 11304 I MT      : ordre : i11 s'affiche (attente 10 ms)
+11-21 19:38:46.225 11241 11304 I MT      : ordre : i15 démarre
+11-21 19:38:46.743 11241 11241 I MT      : départ : force=false url=http://10.0.2.2:8000/pc_en_long.html total=31
+11-21 19:38:46.799 11241 11311 I MTTEST  : compteurs total/traitées/échecs/chargement 31/11/0/false à 86 s
+11-21 19:38:47.725 11241 11304 I MT      : ordre : i15 arrive à la lecture du texte (priorité 200016)
+11-21 19:38:53.790 11241 11302 I MT      : ordre : lecture (priorité 200014) passe ; en route : i13=attente de la lecture du texte/200014 i12=lecture du texte/200013 i15=attente de la lecture du texte/200016 i14=attente de la lecture du texte/200015
+11-21 19:38:53.790 11241 11302 I MT      : ordre : i13 lit le texte (attente 21149 ms)
+11-21 19:38:53.797 11241 11301 I MT      : écarté « Fan-tas-tic! » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-21 19:38:53.797 11241 11301 I MT      : écarté « You even thought of. bringing a potion,  » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-21 19:38:53.797 11241 11301 I MT      : écarté « ...let's see which potion you brought... » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-21 19:38:54.560 11241 11301 I MT      : ordre : i12 arrive à l'affichage (priorité 200013)
+11-21 19:37:21.885 11241 11395 I tflite  : Initialized TensorFlow Lite runtime.
+11-21 19:37:21.910 11241 11394 I native  : I0000 00:00:1795289841.910761   11394 tflite_lstm_client_base.cc:371] Resizing interpreter pool to 4
+11-21 19:37:21.921 11241 11395 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+11-21 19:37:21.922 11241 11395 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-21 19:37:21.927 11241 11395 I native  : I0000 00:00:1795289841.927232   11395 tflite_detector_client_with_shape_cache.cc:105] Caching size: 10
+11-21 19:37:21.937 11241 11405 I native  : I0000 00:00:1795289841.937755   11405 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/conv_model.fb
+11-21 19:37:21.938 11241 11405 I native  : I0000 00:00:1795289841.938499   11405 tflite_model_pooled_runner.cc:636] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/lstm_model.fb
+11-21 19:37:21.941 11241 11405 I native  : I0000 00:00:1795289841.941492   11405 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 4
+11-21 19:37:21.944 11241 11394 I native  : I0000 00:00:1795289841.944581   11394 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_splitting_custom_ops/model.tflite
+11-21 19:37:21.944 11241 11394 I native  : I0000 00:00:1795289841.944961   11394 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-21 19:37:21.945 11241 11394 I native  : I0000 00:00:1795289841.945347   11394 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_clustering_custom_ops/model.tflite
+11-21 19:37:21.945 11241 11394 I native  : I0000 00:00:1795289841.945781   11394 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-21 19:37:22.119 11241 11394 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-21 19:37:23.281 11241 11394 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-21 19:37:23.309 11241 11394 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-21 19:37:23.312 11241 11394 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-21 19:37:26.454 11241 11394 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-21 19:37:26.964 11241 11394 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-21 19:37:27.423 11241 11394 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-21 19:37:28.123 11241 11394 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-21 19:37:28.863 11241 11394 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-21 19:37:35.605 11241 11395 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-21 19:37:35.714 11241 11395 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-21 19:37:35.759 11241 11391 I tflite  : Initialized TensorFlow Lite runtime.
+11-21 19:37:35.759 11241 11391 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+11-21 19:37:35.925 11241 11395 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-21 19:37:36.109 11241 11395 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-21 19:37:36.950 11241 11395 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-21 19:37:37.461 11241 11395 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-21 19:37:48.564 11241 11395 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
