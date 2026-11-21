@@ -500,7 +500,8 @@ tapt lb16 "Effacer la recherche" 1; sleep 1.5
 adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump lib2
 tapt lib2 "=Réglages" 1; sleep 2; uidump set; shot ui 4
 # l'accueil des réglages est plus long qu'un écran : on le fait défiler pour voir les derniers groupes, puis on remonte et on relit l'écran du haut
-adb shell input swipe 540 1900 540 500 400; sleep 1; uidump setb; shot ui 41
+# (deux glissés : la distance d'un seul varie d'un passage à l'autre — 805 px au build 238 contre 1040 px au build 236 — et la carte « Données » restait parfois sous la barre du bas ; le second s'arrête au bas de la liste)
+adb shell input swipe 540 1900 540 500 400; sleep 1; adb shell input swipe 540 1900 540 500 400; sleep 1.5; uidump setb; shot ui 41
 adb shell input swipe 540 500 540 1900 400; sleep 1; adb shell input swipe 540 500 540 1900 400; sleep 1; uidump set
 hs() { if [ "$(has set "$1")" = 1 ] || [ "$(has setb "$1")" = 1 ]; then echo 1; else echo 0; fi; }
 chk "réglages : la page « Textes et images ignorés » est proposée à l'accueil" $(hs 'Textes et images ignor')
