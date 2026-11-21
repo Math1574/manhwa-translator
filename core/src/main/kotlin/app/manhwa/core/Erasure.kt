@@ -95,6 +95,110 @@ object Erasure {
         return Plan(p.mode, p.x0, p.y0, p.w, p.h, mask, layer, p.bg, p.textColor, p.outlined, p.bubbleArea, p.shape, p.strokePx, p.ink, meanFill(layer), p.glow, p.core, p.letterColor, p.haloColor, p.haloPx)
     }
 
+    // ---------- zone effacée en entier (carré d'effacement choisi à la main) ----------
+
+    /** Couleur médiane (RVB opaque) des pixels [idx] (indices dans [px]). */
+    private fun medianRgb(px: IntArray, idx: IntArray, n: Int): Int {
+        val hr = IntArray(256); val hg = IntArray(256); val hb = IntArray(256)
+        for (k in 0 until n) { val c = px[idx[k]]; hr[(c shr 16) and 0xFF]++; hg[(c shr 8) and 0xFF]++; hb[c and 0xFF]++ }
+        fun med(h: IntArray): Int { var acc = 0; for (v in 0..255) { acc += h[v]; if (acc * 2 >= n) return v }; return 255 }
+        return (0xFF shl 24) or (med(hr) shl 16) or (med(hg) shl 8) or med(hb)
+    }
+
+    /**
+     * Remplit les pixels [hole] de [px] (w × h) à partir de leurs abords : couche après couche, du bord vers le centre, chaque pixel prend la moyenne de ses voisins déjà connus ; le résultat est
+     * ensuite adouci (la propagation laisse des arêtes). Rend les couleurs ARGB opaques des pixels du trou (les autres sont inchangés). Sans aucun pixel connu autour, [fallback] partout.
+     */
+    internal fun diffuse(px: IntArray, w: Int, h: Int, hole: BooleanArray, fallback: Int): IntArray {
+        val out = px.copyOf()
+        val known = BooleanArray(w * h) { !hole[it] }
+        if (known.none { it }) { for (i in out.indices) if (hole[i]) out[i] = fallback or (0xFF shl 24); return out }
+        var frontier = ArrayList<Int>()
+        fun hasKnownNeighbour(i: Int): Boolean {
+            val x = i % w; val y = i / w
+            for (dy in -1..1) for (dx in -1..1) { if (dx == 0 && dy == 0) continue; val nx = x + dx; val ny = y + dy; if (nx in 0 until w && ny in 0 until h && known[ny * w + nx]) return true }
+            return false
+        }
+        for (i in 0 until w * h) if (hole[i] && hasKnownNeighbour(i)) frontier.add(i)
+        val queued = BooleanArray(w * h); for (i in frontier) queued[i] = true
+        while (frontier.isNotEmpty()) {
+            val vals = IntArray(frontier.size)
+            for ((k, i) in frontier.withIndex()) {
+                val x = i % w; val y = i / w
+                var r = 0; var g = 0; var b = 0; var n = 0
+                for (dy in -1..1) for (dx in -1..1) {
+                    if (dx == 0 && dy == 0) continue
+                    val nx = x + dx; val ny = y + dy
+                    if (nx in 0 until w && ny in 0 until h && known[ny * w + nx]) { val c = out[ny * w + nx]; r += (c shr 16) and 0xFF; g += (c shr 8) and 0xFF; b += c and 0xFF; n++ }
+                }
+                vals[k] = (0xFF shl 24) or ((r / n) shl 16) or ((g / n) shl 8) or (b / n)
+            }
+            val next = ArrayList<Int>()
+            for ((k, i) in frontier.withIndex()) { out[i] = vals[k]; known[i] = true }
+            for (i in frontier) {
+                val x = i % w; val y = i / w
+                for (dy in -1..1) for (dx in -1..1) {
+                    if (dx == 0 && dy == 0) continue
+                    val nx = x + dx; val ny = y + dy
+                    if (nx in 0 until w && ny in 0 until h) { val j = ny * w + nx; if (hole[j] && !known[j] && !queued[j]) { queued[j] = true; next.add(j) } }
+                }
+            }
+            frontier = next
+        }
+        // adoucissement : quelques passes de moyenne 3 × 3 sur les seuls pixels du trou
+        for (pass in 0 until 3) {
+            val prev = out.copyOf()
+            for (y in 0 until h) for (x in 0 until w) {
+                val i = y * w + x
+                if (!hole[i]) continue
+                var r = 0; var g = 0; var b = 0; var n = 0
+                for (dy in -1..1) for (dx in -1..1) { val nx = x + dx; val ny = y + dy; if (nx in 0 until w && ny in 0 until h) { val c = prev[ny * w + nx]; r += (c shr 16) and 0xFF; g += (c shr 8) and 0xFF; b += c and 0xFF; n++ } }
+                out[i] = (0xFF shl 24) or ((r / n) shl 16) or ((g / n) shl 8) or (b / n)
+            }
+        }
+        return out
+    }
+
+    /**
+     * Efface la zone [region] en entier, qu'elle contienne du texte ou non : chaque pixel de la zone est remplacé par ce qui l'entoure (aplat de la couleur du pourtour s'il est uni, sinon
+     * propagation depuis le pourtour). Aucun garde-fou : c'est le choix de l'utilisateur.
+     * [base] : plan d'effacement du texte du bloc, s'il y en a un et s'il couvre la zone : sa région d'analyse et ses mesures du lettrage (encre, couleurs) sont gardées pour que la police
+     * et la couleur de la traduction restent choisies d'après l'original ; seul l'effacement change. Sinon le plan ne contient que cette zone. Null si la zone est vide.
+     */
+    fun wipe(src: PixelSource, s: Float, region: UserRegion, base: Plan? = null): Plan? {
+        val b = region.bounds
+        val rx0 = Math.floor(((b.left - 2f) * s).toDouble()).toInt(); val ry0 = Math.floor(((b.top - 2f) * s).toDouble()).toInt()
+        val rx1 = Math.ceil(((b.right + 2f) * s).toDouble()).toInt(); val ry1 = Math.ceil(((b.bottom + 2f) * s).toDouble()).toInt()
+        val ringPx = max(3, (5f * s).toInt())
+        val reuse = base != null && base.x0 <= rx0 && base.y0 <= ry0 && base.x0 + base.w >= rx1 && base.y0 + base.h >= ry1
+        val x0: Int; val y0: Int; val w: Int; val h: Int
+        if (reuse) { x0 = base!!.x0; y0 = base.y0; w = base.w; h = base.h }
+        else {
+            x0 = max(0, rx0 - ringPx - 1); y0 = max(0, ry0 - ringPx - 1)
+            w = min(src.width, rx1 + ringPx + 1) - x0; h = min(src.height, ry1 + ringPx + 1) - y0
+        }
+        if (w < 2 || h < 2) return null
+        val mask = region.mask(x0, y0, w, h, s)
+        if (mask.none { it }) return null
+        val px = src.pixels(x0, y0, w, h)
+        val around = TextErase.dilate(mask, w, h, ringPx)
+        val idx = IntArray(w * h); var n = 0
+        for (i in 0 until w * h) if (around[i] && !mask[i]) idx[n++] = i
+        val fallbackColor = base?.bg ?: 0xFFFFFFFF.toInt()
+        val med = if (n >= 8) medianRgb(px, idx, n) else (fallbackColor or (0xFF shl 24))
+        var close = 0
+        if (n >= 8) for (k in 0 until n) { val c = px[idx[k]]; if (abs(((c shr 16) and 0xFF) - ((med shr 16) and 0xFF)) + abs(((c shr 8) and 0xFF) - ((med shr 8) and 0xFF)) + abs((c and 0xFF) - (med and 0xFF)) <= 36) close++ }
+        val flat = n < 8 || close >= 0.8f * n
+        val fill: IntArray = if (flat) IntArray(w * h) { med } else diffuse(px, w, h, mask, med)
+        val layer = IntArray(w * h) { if (mask[it]) (0xFF shl 24) or (fill[it] and 0xFFFFFF) else 0 }
+        val mode = if (flat) Mode.FLAT else Mode.SMOOTH
+        val bg = med and 0xFFFFFF or (0xFF shl 24)
+        return Plan(
+            mode, x0, y0, w, h, mask, layer, bg, base?.textColor ?: ColorMath.textColorFor(bg), base?.outlined ?: false, base?.bubbleArea, base?.shape, base?.strokePx ?: 0f, base?.ink,
+            meanFill(layer), base?.glow ?: 0, base?.core, base?.letterColor ?: 0, base?.haloColor ?: 0, base?.haloPx ?: 0f,
+        )
+    }
+
     /** @param exclude lignes de texte des AUTRES blocs (pixels de l'image) : un bloc n'efface jamais ce qui appartient à un voisin. */
     /** Cœur des lettres du plan : masque, couleur, couleur du halo, épaisseur du halo (zéros si l'encre est vide ou trop pauvre). */
     private class CoreInfo(val mask: BooleanArray?, val color: Int, val halo: Int, val haloPx: Float)

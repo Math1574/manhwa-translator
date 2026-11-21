@@ -12,11 +12,18 @@ data class Pt(val x: Float, val y: Float)
 /** Trait de pinceau libre : points et rayon en pixels de l'image ; [erase] : la gomme retire ce qui a été peint. */
 class BrushStroke(val points: List<Pt>, val radius: Float, val erase: Boolean = false)
 
+/** Forme prédéfinie d'une zone choisie à la main (sans pinceau) : rectangle, ellipse inscrite dans le rectangle ou rectangle aux coins arrondis. */
+enum class ZoneShape(val code: Char) {
+    RECT('R'), ELLIPSE('E'), ROUNDED('A');
+
+    companion object { fun of(code: Char): ZoneShape = values().firstOrNull { it.code == code } ?: RECT }
+}
+
 /**
- * Zone de texte choisie à la main, en pixels de l'image : un rectangle ([rect]) ou, si le pinceau a servi, la forme peinte ([strokes], gomme comprise).
+ * Zone choisie à la main, en pixels de l'image : une forme prédéfinie ([shape], inscrite dans [rect]) ou, si le pinceau a servi, la forme peinte ([strokes], gomme comprise).
  * Quand des traits existent, seuls les pixels peints appartiennent à la zone ; [rect] est alors leur boîte englobante.
  */
-class UserRegion(val rect: RectF, val strokes: List<BrushStroke> = emptyList()) {
+class UserRegion(val rect: RectF, val strokes: List<BrushStroke> = emptyList(), val shape: ZoneShape = ZoneShape.RECT) {
     /** Vrai si la zone est une forme peinte (et non un simple rectangle). */
     val painted: Boolean get() = strokes.any { !it.erase && it.points.isNotEmpty() }
 
@@ -29,9 +36,26 @@ class UserRegion(val rect: RectF, val strokes: List<BrushStroke> = emptyList()) 
             return RectF(l, t, r, b)
         }
 
+    /** Vrai si le point (x, y) est dans la forme prédéfinie [shape] de rectangle [r] (les coins arrondis ont un rayon du quart du plus petit côté). */
+    private fun inShape(r: RectF, x: Float, y: Float): Boolean {
+        if (!r.contains(x, y)) return false
+        return when (shape) {
+            ZoneShape.RECT -> true
+            ZoneShape.ELLIPSE -> {
+                val rx = r.width / 2f; val ry = r.height / 2f
+                if (rx <= 0f || ry <= 0f) true else { val ex = (x - r.centerX) / rx; val ey = (y - r.centerY) / ry; ex * ex + ey * ey <= 1f }
+            }
+            ZoneShape.ROUNDED -> {
+                val k = min(r.width, r.height) / 4f
+                val cx = x.coerceIn(r.left + k, r.right - k); val cy = y.coerceIn(r.top + k, r.bottom - k)
+                (x - cx) * (x - cx) + (y - cy) * (y - cy) <= k * k
+            }
+        }
+    }
+
     /** Vrai si le point (pixels de l'image) est dans la zone. */
     fun contains(x: Float, y: Float): Boolean {
-        if (!painted) return rect.contains(x, y)
+        if (!painted) return inShape(rect, x, y)
         var inside = false
         for (s in strokes) if (touches(s, x, y)) inside = !s.erase
         return inside
@@ -62,7 +86,10 @@ class UserRegion(val rect: RectF, val strokes: List<BrushStroke> = emptyList()) 
         if (!painted) {
             val l = (floor((rect.left - 2f) * s).toInt() - x0).coerceIn(0, w); val r = (ceil((rect.right + 2f) * s).toInt() - x0).coerceIn(0, w)
             val t = (floor((rect.top - 2f) * s).toInt() - y0).coerceIn(0, h); val b = (ceil((rect.bottom + 2f) * s).toInt() - y0).coerceIn(0, h)
-            for (y in t until b) for (x in l until r) m[y * w + x] = true
+            if (shape == ZoneShape.RECT) { for (y in t until b) for (x in l until r) m[y * w + x] = true; return m }
+            // forme prédéfinie : le rectangle agrandi de 2 pixels de l'image, dont la forme est calculée sur le centre de chaque pixel échantillonné
+            val grown = RectF(rect.left - 2f, rect.top - 2f, rect.right + 2f, rect.bottom + 2f)
+            for (y in t until b) for (x in l until r) if (inShape(grown, (x0 + x + 0.5f) / s, (y0 + y + 0.5f) / s)) m[y * w + x] = true
             return m
         }
         for (st in strokes) {
@@ -86,7 +113,7 @@ class UserRegion(val rect: RectF, val strokes: List<BrushStroke> = emptyList()) 
     }
 
     fun shifted(dy: Float): UserRegion =
-        if (dy == 0f) this else UserRegion(rect.offset(0f, dy), strokes.map { s -> BrushStroke(s.points.map { Pt(it.x, it.y + dy) }, s.radius, s.erase) })
+        if (dy == 0f) this else UserRegion(rect.offset(0f, dy), strokes.map { s -> BrushStroke(s.points.map { Pt(it.x, it.y + dy) }, s.radius, s.erase) }, shape)
 }
 
 enum class EditKind {
@@ -125,13 +152,21 @@ data class BlockEdit(
      * qui change d'une version à l'autre, ce point reste juste quand la mise en page évolue. Null : aucune position choisie, ou correction enregistrée avant l'ancre (voir [EditApplier.positionShift]).
      */
     val anchorX: Float? = null, val anchorY: Float? = null,
+    /** Mise en forme du texte traduit (alignement, lignes, interligne, casse, rotation) et apparence (couleur, contour, lueur) ; les valeurs par défaut sont l'automatique. */
+    val format: TextFormat = TextFormat(),
+    val look: TextLook = TextLook(),
+    /** MANUAL : toute la zone est effacée (remplie avec ce qui l'entoure), même là où aucun texte n'a été lu ; sans traduction, c'est une simple zone d'effacement. */
+    val wipe: Boolean = false,
 ) {
     /** Vrai si la position est enregistrée en absolu. */
     val anchored: Boolean get() = anchorX != null && anchorY != null
 
     /** Vrai si cette correction ne change rien (à ne pas conserver). */
     val isNeutral: Boolean
-        get() = kind == EditKind.ADJUST && translation == null && source == null && !hidden && dx == 0f && dy == 0f && scale == 1f && fontId == null && !precise && !anchored
+        get() = kind == EditKind.ADJUST && translation == null && source == null && !hidden && dx == 0f && dy == 0f && scale == 1f && fontId == null && !precise && !anchored && format.isDefault && look.isDefault && !wipe
+
+    /** Vrai si la traduction saisie contient des retours à la ligne voulus par l'utilisateur. */
+    val hasBreaks: Boolean get() = translation?.contains('\n') == true
 }
 
 /** Ce que le rendu doit appliquer à un bloc en plus de sa mise en page automatique (coordonnées de la fenêtre traitée). */
@@ -145,6 +180,13 @@ class RenderEdit(
     val precise: Boolean = false,
     /** Centre choisi pour le texte traduit, en coordonnées de la fenêtre traitée (voir [BlockEdit.anchorX]). */
     val anchorX: Float? = null, val anchorY: Float? = null,
+    /** Mise en forme et apparence du texte traduit (voir [BlockEdit.format], [BlockEdit.look]). */
+    val format: TextFormat = TextFormat(),
+    val look: TextLook = TextLook(),
+    /** Toute la zone est effacée (voir [BlockEdit.wipe]). */
+    val wipe: Boolean = false,
+    /** La traduction contient des retours à la ligne voulus : ils sont respectés (sinon ils sont remplacés par des espaces). */
+    val breaks: Boolean = false,
 ) {
     /** Vrai si la position est donnée en absolu. */
     val anchored: Boolean get() = anchorX != null && anchorY != null
@@ -166,12 +208,15 @@ object EditsCodec {
     private fun nstr(s: String?) = if (s == null) "N" else "S" + esc(s)
     private fun parseNstr(s: String): String? = if (s.startsWith("S")) unesc(s.substring(1)) else null
 
-    private fun strokes(r: UserRegion?): String = if (r == null) "-" else (rect(r.rect) + "|" + r.strokes.joinToString("/") { s ->
+    private fun strokes(r: UserRegion?): String = if (r == null) "-" else ((if (r.shape == ZoneShape.RECT) "" else "${r.shape.code}>") + rect(r.rect) + "|" + r.strokes.joinToString("/") { s ->
         "${s.radius}:${if (s.erase) 1 else 0}:" + s.points.joinToString(";") { "${it.x},${it.y}" }
     })
 
-    private fun parseRegion(s: String): UserRegion? {
-        if (s == "-" || s.isEmpty()) return null
+    private fun parseRegion(s0: String): UserRegion? {
+        if (s0 == "-" || s0.isEmpty()) return null
+        // forme prédéfinie : une lettre et « > » devant le rectangle (absentes pour un rectangle simple, comme dans les enregistrements d'avant)
+        val shape = if (s0.length > 2 && s0[1] == '>') ZoneShape.of(s0[0]) else ZoneShape.RECT
+        val s = if (s0.length > 2 && s0[1] == '>') s0.substring(2) else s0
         val i = s.indexOf('|')
         val rc = parseRect(if (i < 0) s else s.substring(0, i)) ?: return null
         val strokes = if (i < 0 || i == s.length - 1) emptyList() else s.substring(i + 1).split('/').mapNotNull { part ->
@@ -181,7 +226,7 @@ object EditsCodec {
             val pts = f[2].split(';').mapNotNull { q -> val c = q.split(','); if (c.size == 2) { val x = c[0].toFloatOrNull(); val y = c[1].toFloatOrNull(); if (x != null && y != null) Pt(x, y) else null } else null }
             if (pts.isEmpty()) null else BrushStroke(pts, radius, f[1] == "1")
         }
-        return UserRegion(rc, strokes)
+        return UserRegion(rc, strokes, shape)
     }
 
     fun encode(e: BlockEdit): String = listOf(
@@ -189,6 +234,7 @@ object EditsCodec {
         "${e.dx}", "${e.dy}", "${e.scale}", nstr(e.fontId), if (e.vertical) "1" else "0", "${e.lineHeight}",
         e.lineBoxes.joinToString(";") { rect(it) }, e.lineTexts.joinToString(SEP.toString()) { esc(it) }, esc(e.blockKind), rect(e.bubble), if (e.precise) "1" else "0",
         e.anchorX?.takeIf { it.isFinite() }?.toString() ?: "-", e.anchorY?.takeIf { it.isFinite() }?.toString() ?: "-",
+        e.format.encode(), e.look.encode(), if (e.wipe) "1" else "0",
     ).joinToString("\t")
 
     fun decode(line: String): BlockEdit? {
@@ -205,6 +251,8 @@ object EditsCodec {
                 // les lignes enregistrées avant l'ancre n'ont pas ces deux champs ; l'ancre n'a de sens qu'avec ses deux coordonnées
                 anchorX = f.getOrNull(20)?.toFloatOrNull()?.takeIf { it.isFinite() && f.getOrNull(21)?.toFloatOrNull()?.isFinite() == true },
                 anchorY = f.getOrNull(21)?.toFloatOrNull()?.takeIf { it.isFinite() && f.getOrNull(20)?.toFloatOrNull()?.isFinite() == true },
+                // champs ajoutés plus tard (mise en forme, apparence, zone effacée) : absents des enregistrements plus anciens, valeurs automatiques
+                format = TextFormat.decode(f.getOrNull(22)), look = TextLook.decode(f.getOrNull(23)), wipe = f.getOrNull(24) == "1",
             )
         } catch (_: Exception) { null }
     }

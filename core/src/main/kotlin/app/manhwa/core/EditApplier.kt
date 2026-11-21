@@ -37,7 +37,7 @@ object EditApplier {
             val target = findBlock(blocks, e, shiftY) ?: continue
             val i = blocks.indexOf(target)
             blocks[i] = target.copy(source = e.source ?: target.source, translated = e.translation ?: target.translated)
-            render[target.id] = RenderEdit(e.dx, e.dy, e.scale, e.fontId, null, false, e.id, e.hidden, e.precise, anchorX(e), anchorY(e, shiftY))
+            render[target.id] = RenderEdit(e.dx, e.dy, e.scale, e.fontId, null, false, e.id, e.hidden, e.precise, anchorX(e), anchorY(e, shiftY), e.format, e.look, false, e.hasBreaks)
             byBlock[target.id] = e
         }
         // 2) blocs définis à la main : ils remplacent le bloc détecté qu'ils corrigent et ceux qu'ils recouvrent
@@ -60,7 +60,7 @@ object EditApplier {
                     e.blockKind, e.bubble?.offset(0f, shiftY), zone,
                 ),
             )
-            render[id] = RenderEdit(e.dx, e.dy, e.scale, e.fontId, region, true, e.id, e.hidden, e.precise, anchorX(e), anchorY(e, shiftY))
+            render[id] = RenderEdit(e.dx, e.dy, e.scale, e.fontId, region, true, e.id, e.hidden, e.precise, anchorX(e), anchorY(e, shiftY), e.format, e.look, e.wipe, e.hasBreaks)
             byBlock[id] = e
         }
         return Applied(PageResult(result.imageWidth, result.imageHeight, blocks), render, removed, byBlock)
