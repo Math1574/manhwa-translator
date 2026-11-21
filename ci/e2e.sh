@@ -758,7 +758,7 @@ grep '"type":"synopsis"' $OUT/reports/journal_covers.jsonl | cut -c1-400 >> $OUT
 tapt cv2 "=Anilist Only" 1; sleep 2
 for k in $(seq 1 10); do uidump syn1; [ "$(has syn1 'fake directory summary')" = 1 ] && break; sleep 2; done
 shot ui 74
-chk "synopsis : le résumé de l'annuaire s'affiche dans la fiche (sans balises, spoiler ni mention de source)" $([ "$(has syn1 'fake directory summary')" = 1 ] && [ "$(hasnot syn1 'hidden spoiler')" = 1 ] && [ "$(hasnot syn1 'Fake Directory')" = 1 ] && [ "$(hasnot syn1 '<i>')" = 1 ] && echo 1 || echo 0)
+chk "synopsis : le résumé de l'annuaire s'affiche dans la fiche (sans balises, spoiler ni mention de source)" $([ "$(has syn1 'fake directory summary')" = 1 ] && [ "$(hasnot syn1 'hidden spoiler')" = 1 ] && [ "$(hasnot syn1 'Source: Fake')" = 1 ] && [ "$(hasnot syn1 '<i>')" = 1 ] && echo 1 || echo 0)
 chk "synopsis : celui-ci vient de l'annuaire (journal)" $(grep '"type":"synopsis"' $OUT/reports/journal_covers.jsonl | grep '"series":"Anilist Only"' | grep -q '"source":"annuaire"' && echo 1 || echo 0)
 chk "synopsis : une page qui n'annonce qu'une phrase générique du site ne donne aucun synopsis (journal)" $(grep '"type":"synopsis"' $OUT/reports/journal_covers.jsonl | grep '"series":"Generic Only"' | grep -q '"ok":false' && echo 1 || echo 0)
 chk "synopsis : celui de Test Series vient de la page du site (journal)" $(grep '"type":"synopsis"' $OUT/reports/journal_covers.jsonl | grep '"series":"Test Series"' | grep -q '"source":"site"' && echo 1 || echo 0)

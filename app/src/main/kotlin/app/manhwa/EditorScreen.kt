@@ -904,13 +904,14 @@ private fun ZoneTab(c: TranslationController, st: EditorState, scope: kotlinx.co
         if (st.zoneMode != ZoneMode.BRUSH) OutlinedButton(onClick = { st.shapeToBrush() }) { Text("Modeler au pinceau", maxLines = 1) }
     }
     if (st.zoneMode == ZoneMode.BRUSH) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // pinceau, gomme et « Tout effacer » sur une seule ligne (le panneau défile : tout reste visible sans descendre ; « Tout effacer » se défait avec la flèche)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             FilterChip(selected = !st.erasing, onClick = { st.erasing = false }, label = { Text("Peindre") })
             FilterChip(selected = st.erasing, onClick = { st.erasing = true }, label = { Text("Gommer") })
+            OutlinedButton(onClick = { st.mark(); st.strokes.clear() }, enabled = st.strokes.isNotEmpty()) { Text("Tout effacer", maxLines = 1, overflow = TextOverflow.Ellipsis) }
         }
         Text(if (st.erasing) "Taille de la gomme" else "Taille du pinceau", style = MaterialTheme.typography.labelMedium)
         Slider(st.brush, { st.brush = it }, valueRange = 6f..90f)
-        OutlinedButton(onClick = { st.mark(); st.strokes.clear() }, enabled = st.strokes.isNotEmpty(), modifier = Modifier.fillMaxWidth()) { Text("Tout effacer", maxLines = 1, overflow = TextOverflow.Ellipsis) }
     }
     Button(
         onClick = {
