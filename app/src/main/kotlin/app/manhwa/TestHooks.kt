@@ -25,6 +25,8 @@ import kotlin.concurrent.thread
  */
 object TestHooks {
     private const val TAG = "MTTEST"
+    /** Limite d'une génération pendant le banc d'essai de traduction (voir runLab). */
+    private const val LAB_GENERATION_TIMEOUT_MS = 300_000L
     @Volatile private var running = false
 
     @Volatile private var watching = false
@@ -409,6 +411,7 @@ object TestHooks {
             val result = JSONObject(); val variantsJson = JSONObject(); val notes = JSONArray()
             try {
                 graph.llm.refresh()
+                graph.gemma.generationTimeoutMs = LAB_GENERATION_TIMEOUT_MS      // l'émulateur de test n'a que son processeur : une page du grand modèle y approche la limite d'une minute, qui coupe la page entière
                 val pages = JSONObject(File(ctx.filesDir, "lab.json").readText()).getJSONArray("pages")
                 for (v in variants) {
                     graph.gemma.promptVariant = when { v.startsWith("v1") -> 1; v.startsWith("v3") -> 3; v.startsWith("v4") -> 4; else -> 2 }
@@ -421,7 +424,7 @@ object TestHooks {
                         val texts = raw.map { app.manhwa.core.TextNormalizer.fixCase(it) } // comme dans le pipeline réel
                         val t0 = System.currentTimeMillis()
                         val tr = try { graph.gemma.translateWithGlossary(texts, "en", "fr", emptyList()) } catch (e: Throwable) { notes.put("$v page $i : $e"); texts.map { "" } }
-                        out.put(JSONObject().put("page", i).put("ms", System.currentTimeMillis() - t0).put("src", JSONArray(raw)).put("tr", JSONArray(tr.mapIndexed { k, t -> app.manhwa.core.TextNormalizer.matchCase(raw[k], t) })))
+                        out.put(JSONObject().put("page", i).put("ms", System.currentTimeMillis() - t0).put("calls", graph.gemma.lastCallDetail() ?: "").put("src", JSONArray(raw)).put("tr", JSONArray(tr.mapIndexed { k, t -> app.manhwa.core.TextNormalizer.matchCase(raw[k], t) })))
                     }
                     variantsJson.put(v, out)
                     notes.put("variante $v terminée")
@@ -430,7 +433,7 @@ object TestHooks {
             } catch (e: Throwable) {
                 notes.put("exception : $e")
             }
-            graph.gemma.promptVariant = LlmPrompt.CURRENT; graph.gemma.refine = false
+            graph.gemma.promptVariant = LlmPrompt.CURRENT; graph.gemma.refine = false; graph.gemma.generationTimeoutMs = GemmaTranslator.GENERATION_TIMEOUT_MS
             result.put("engine", engine.name).put("variants", variantsJson).put("notes", notes)
             val tmp = File(ctx.filesDir, "lab_$name.json.tmp"); tmp.writeText(result.toString()); tmp.renameTo(File(ctx.filesDir, "lab_$name.json"))
             Log.i(TAG, "REPORT_READY lab_$name.json")

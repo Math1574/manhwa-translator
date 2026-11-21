@@ -106,6 +106,8 @@ class GemmaTranslator(
     /** Version du prompt et relecture : réglables par le banc d'essai de traduction. */
     @Volatile var promptVariant: Int = LlmPrompt.CURRENT
     @Volatile var refine: Boolean = false
+    /** Durée au-delà de laquelle une génération est interrompue. Seul le banc d'essai l'allonge : sur le processeur de l'émulateur de test le grand modèle met près d'une minute par page. */
+    @Volatile var generationTimeoutMs: Long = GENERATION_TIMEOUT_MS
     /** Titre de la série (déduit de l'adresse) : aide le modèle à comprendre le genre et les noms. */
     @Volatile var seriesTitle: String? = null
     /** Noms et termes du chapitre en cours (mémoire) et rapport des contrôles de la dernière page. */
@@ -282,7 +284,7 @@ class GemmaTranslator(
     /** Interrompt une génération qui dure trop longtemps (sécurité) : la réponse partielle reste exploitable ligne par ligne. */
     private fun <T> withWatchdog(conv: com.google.ai.edge.litertlm.Conversation, block: () -> T): T {
         val timer = java.util.Timer("mt-llm-watchdog", true)
-        timer.schedule(object : java.util.TimerTask() { override fun run() { try { conv.cancelProcess() } catch (_: Throwable) {} } }, GENERATION_TIMEOUT_MS)
+        timer.schedule(object : java.util.TimerTask() { override fun run() { try { conv.cancelProcess() } catch (_: Throwable) {} } }, generationTimeoutMs)
         val guarded = engineIsGpu && gpuUnproven() // première génération sur le GPU avec cette version : sous garde (voir plus haut)
         try {
             if (guarded) gpuMark(GpuGuard.running(BuildConfig.BUILD_NUMBER))
