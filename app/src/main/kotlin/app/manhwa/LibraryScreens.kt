@@ -194,14 +194,29 @@ private fun LibraryHome(graph: AppGraph, ui: LibraryUi, onOpenSeries: (String) -
     }
 }
 
-/** Synopsis de l'œuvre, tel que le site (ou l'annuaire) le donne : cinq lignes, puis « Lire la suite » quand le texte est plus long. Un appui déplie ou replie. */
+/**
+ * Synopsis de l'œuvre : cinq lignes, puis « Lire la suite » quand le texte est plus long ; un appui déplie ou replie. Il s'affiche en français dès que la traduction faite sur le téléphone est là
+ * ([french]), avec « Voir l'original » pour lire le texte du site ; en attendant (ou si la traduction n'est pas possible) c'est l'original, avec la mention « Traduction en cours… » tant qu'elle se fait.
+ */
 @Composable
-private fun SynopsisCard(text: String) {
+private fun SynopsisCard(original: String, french: String?, translating: Boolean) {
     val cs = MaterialTheme.colorScheme
+    var showOriginal by remember(original) { mutableStateOf(false) }
+    val text = if (french != null && !showOriginal) french else original
     var expanded by remember(text) { mutableStateOf(false) }
     var overflow by remember(text) { mutableStateOf(false) }
     GlassCard(Modifier.fillMaxWidth(), onClick = { expanded = !expanded }, contentPadding = 16.dp) {
-        Text("Synopsis", style = MaterialTheme.typography.titleSmall, color = cs.onSurfaceVariant)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Synopsis", style = MaterialTheme.typography.titleSmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
+            if (french != null) {
+                Text(
+                    if (showOriginal) "Voir la traduction" else "Voir l'original", style = MaterialTheme.typography.labelLarge, color = cs.primary,
+                    modifier = Modifier.clip(CircleShape).clickable { showOriginal = !showOriginal }.padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+            } else if (translating) {
+                Text("Traduction en cours…", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+            }
+        }
         Spacer(Modifier.height(6.dp))
         Text(
             text, style = MaterialTheme.typography.bodyMedium,
@@ -285,6 +300,9 @@ private fun SeriesPage(graph: AppGraph, key: String, onBack: () -> Unit, onGloss
         )
     }
     val synopsis = graph.covers.synopsis.textOf(key)
+    val synopsisFr = graph.covers.synopsis.frenchOf(key)
+    // la traduction française du synopsis se prépare dès que la fiche est ouverte (et que le synopsis est connu) ; elle attend un moment où aucun chapitre ne se traduit
+    LaunchedEffect(key, synopsis) { if (synopsis != null) graph.synopsisFrench.request(key) }
     val lastDone = lib.progressOf(entry.lastUrl)?.done == true
     val resume = resumeAt(entry.percent, lastDone)
     val nextUrl = if (lastDone) ChapterNav.next(entry.lastUrl) else null
@@ -319,7 +337,7 @@ private fun SeriesPage(graph: AppGraph, key: String, onBack: () -> Unit, onGloss
                 }
             }
         }
-        if (synopsis != null) item { SynopsisCard(synopsis) }
+        if (synopsis != null) item { SynopsisCard(synopsis, synopsisFr, key in graph.synopsisFrench.pending) }
         item {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -378,6 +396,13 @@ private fun SeriesPage(graph: AppGraph, key: String, onBack: () -> Unit, onGloss
                                     modifier = Modifier.clip(CircleShape).background(chipColor.copy(alpha = 0.14f)).padding(horizontal = 9.dp, vertical = 2.dp),
                                 )
                                 Text(RelativeTime.fr(now, ch.lastVisited), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                            }
+                            // part du chapitre déjà traduite (notée pendant la lecture) ; rien n'est affiché pour un chapitre lu avant que ce suivi existe
+                            if (ch.translated > 0) {
+                                Text(
+                                    "Traduit à ${ch.translated} %", style = MaterialTheme.typography.labelMedium, color = cs.secondary,
+                                    modifier = Modifier.padding(top = 4.dp).clip(CircleShape).background(cs.secondary.copy(alpha = 0.14f)).padding(horizontal = 9.dp, vertical = 2.dp),
+                                )
                             }
                             if (!ch.done && ch.percent > 0) {
                                 LinearProgressIndicator(

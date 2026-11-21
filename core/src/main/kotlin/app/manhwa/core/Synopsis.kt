@@ -135,10 +135,95 @@ object Synopsis {
 
     /** Empreinte d'un texte (ses 160 premières lettres et chiffres) : deux œuvres qui reçoivent le même texte, c'est le texte du site. */
     fun fingerprint(text: String): String = CoverPick.compact(text).take(160)
+
+    // ---------- version française ----------
+
+    /** Petits mots propres au français, et à l'anglais (sans ceux que les deux langues partagent : « a », « on », « en », « son », « plus », « an »…). */
+    private val frenchWords = setOf(
+        "le", "la", "les", "un", "une", "des", "du", "de", "et", "est", "sont", "qui", "que", "dans", "pour", "avec", "sur", "pas", "il", "elle", "ils", "elles", "au", "aux", "ce", "cette", "ces", "ses",
+        "mais", "où", "comme", "nous", "vous", "leur", "leurs", "été", "être", "ont", "sans", "sous", "entre", "après", "avant", "lui", "se", "ne", "était", "étaient", "ainsi", "depuis", "lorsque",
+        "quand", "alors", "afin", "chez", "vers", "dont", "aussi", "très", "bien", "tout", "tous", "toute", "toutes", "même", "autre", "autres", "mon", "ma", "mes", "votre", "notre", "l", "qu",
+    )
+    private val englishWords = setOf(
+        "the", "of", "and", "to", "in", "is", "are", "was", "were", "that", "this", "with", "for", "his", "her", "he", "she", "they", "their", "its", "it", "at", "by", "from", "be", "been", "has", "have",
+        "had", "but", "not", "who", "which", "when", "after", "into", "one", "him", "them", "will", "can", "what", "where", "while", "before", "only", "also", "every", "other", "all", "now", "once",
+        "there", "then", "than", "about", "over", "my", "your", "our", "you", "we", "i", "if", "so", "do", "does", "did", "would", "could", "should", "me",
+    )
+    private val wordRe = Regex("[\\p{L}]+")
+
+    private fun wordCounts(text: String): Pair<Int, Int> {
+        var fr = 0; var en = 0
+        for (m in wordRe.findAll(text.lowercase())) {
+            val w = m.value
+            if (w in frenchWords) fr++
+            if (w in englishWords) en++
+        }
+        return fr to en
+    }
+
+    /** Le texte est déjà en français (nettement plus de petits mots français qu'anglais) : inutile de le traduire. */
+    fun isFrench(text: String): Boolean {
+        val (fr, en) = wordCounts(text)
+        return fr >= 2 && fr > en * 2
+    }
+
+    /** Écriture dominante du texte à traduire : vrai pour du japonais, du coréen ou du chinois (on compte les caractères, pas les mots). */
+    private fun isCjk(text: String): Boolean = text.count { it.code in 0x3040..0x30FF || it.code in 0x4E00..0x9FFF || it.code in 0xAC00..0xD7AF } * 2 >= text.count { !it.isWhitespace() }
+
+    /**
+     * Ce que le modèle a répondu, mis au propre : phrase d'introduction (« Voici la traduction : »), titre de section, guillemets autour du tout et gras retirés, sauts de ligne compactés.
+     * Null si ce n'est pas une traduction exploitable : réponse vide, identique à l'original, pas en français (le modèle a recopié l'anglais), de longueur invraisemblable, ou coupée
+     * en pleine phrase alors que l'original finit par une ponctuation (génération interrompue : mieux vaut l'original entier qu'une traduction tronquée).
+     */
+    fun cleanFrench(raw: String, source: String): String? {
+        var lines = raw.replace("\r\n", "\n").replace('\r', '\n').trim().split('\n').map { it.trimEnd() }.toMutableList()
+        val intro = Regex("(?i)^\\W*(?:voici|here is|here's|traduction|translation|résumé traduit|synopsis)\\b.{0,60}[:：]\\s*$")
+        val heading = Regex("(?i)^\\W*(?:synopsis|résumé|traduction|translation)\\W*$")
+        while (lines.isNotEmpty() && (lines.first().isBlank() || intro.matches(lines.first().trim()) || heading.matches(lines.first().trim()))) lines.removeAt(0)
+        while (lines.isNotEmpty() && lines.last().isBlank()) lines.removeAt(lines.size - 1)
+        var t = lines.joinToString("\n").replace("**", "").replace(Regex("\\n{3,}"), "\n\n").trim()
+        if (t.length >= 2 && ((t.first() == '"' && t.last() == '"') || (t.first() == '«' && t.last() == '»') || (t.first() == '“' && t.last() == '”'))) t = t.substring(1, t.length - 1).trim()
+        if (t.count { it.isLetter() } < 15) return null
+        if (CoverPick.compact(t) == CoverPick.compact(source)) return null
+        val (fr, en) = wordCounts(t)
+        if (fr <= en) return null
+        if (!isCjk(source)) {
+            val ratio = t.length.toDouble() / source.length.coerceAtLeast(1)
+            if (ratio < 0.5 || ratio > 3.0) return null
+        }
+        val srcEnds = source.trimEnd().lastOrNull()?.let { it in ".!?…。！？»”\")" } == true
+        val outEnds = t.lastOrNull()?.let { !it.isLetterOrDigit() && it != ',' && it != ';' && it != ':' && it != '-' } == true
+        if (srcEnds && !outEnds) return null
+        return t
+    }
+}
+
+/**
+ * Consigne donnée au modèle pour traduire un synopsis : une conversation à part (aucune mémoire de chapitre), le texte tel que le site le donne, la réponse attendue en français seulement.
+ * Les noms propres restent tels quels : le titre, les personnages et les lieux ne se traduisent pas.
+ */
+object SynopsisPrompt {
+    fun system(): String = """
+        You translate the synopsis (the back-cover blurb) of a comic series — manhwa, manga, manhua or webtoon — into natural, fluent French.
+        - Translate everything faithfully: do not add, remove, summarize, explain or comment.
+        - Keep proper names exactly as written (characters, places, sects, clans, organizations, the series title). Do not translate them.
+        - Write natural French, in the register of a book blurb. Keep the verb tenses of the original.
+        - Keep the paragraph breaks of the original.
+        - Reply with the French translation only: no introduction, no quotation marks, no notes.
+    """.trimIndent()
+
+    fun user(text: String): String = "Translate this synopsis into French:\n\n" + text.trim()
+
+    /** Plafond de la réponse : le français est plus long que l'anglais, bien plus que le japonais ou le coréen n'ont de caractères. */
+    fun maxOutputTokens(text: String): Int {
+        val cjk = text.count { it.code in 0x3040..0x30FF || it.code in 0x4E00..0x9FFF || it.code in 0xAC00..0xD7AF }
+        val base = if (cjk * 2 >= text.count { !it.isWhitespace() }) text.length * 2.4 else text.length / 2.6 * 1.3
+        return (base + 64).toInt().coerceIn(160, 1100)
+    }
 }
 
 /** Ce que l'on sait du synopsis d'une œuvre : trouvé (texte, d'où il vient) ou introuvable (nombre d'essais, dernier essai). */
-data class SynopsisRecord(val key: String, val text: String, val source: String, val ok: Boolean, val tries: Int, val lastTry: Long)
+data class SynopsisRecord(val key: String, val text: String, val source: String, val ok: Boolean, val tries: Int, val lastTry: Long, val fr: String = "")
 
 /**
  * Registre des synopsis, données immuables (comme [CoverBook]) : une œuvre sans synopsis est réessayée quelques fois, pas à l'infini. Un même texte reçu par deux œuvres de titres
@@ -152,6 +237,19 @@ class SynopsisBook(val records: List<SynopsisRecord> = emptyList(), val banned: 
     fun textOf(key: String): String? = byKey[key]?.takeIf { it.ok }?.text
     fun sourceOf(key: String): String? = byKey[key]?.takeIf { it.ok }?.source
     fun has(key: String): Boolean = byKey[key]?.ok == true
+
+    /** La traduction française du synopsis, si elle est faite. */
+    fun frenchOf(key: String): String? = byKey[key]?.takeIf { it.ok && it.fr.isNotEmpty() }?.fr
+
+    /** Le synopsis est trouvé, pas encore traduit, et n'est pas déjà en français. */
+    fun needsFrench(key: String): Boolean = byKey[key]?.let { it.ok && it.fr.isEmpty() && !Synopsis.isFrench(it.text) } == true
+
+    /** Range la traduction faite pour [text] ; sans effet si le synopsis de l'œuvre a changé entre-temps (la traduction ne serait plus celle du texte affiché). */
+    fun withFrench(key: String, text: String, fr: String): SynopsisBook {
+        val r = byKey[key] ?: return this
+        if (!r.ok || r.text != text || fr.isBlank()) return this
+        return SynopsisBook(records.map { if (it.key == key) it.copy(fr = fr) else it }, banned)
+    }
 
     /** À chercher : jamais essayé, ou essayé sans succès depuis assez longtemps et pas trop souvent (mêmes délais que les illustrations). */
     fun wanted(key: String, now: Long): Boolean {
@@ -186,7 +284,7 @@ class SynopsisBook(val records: List<SynopsisRecord> = emptyList(), val banned: 
     fun forget(key: String) = SynopsisBook(records.filter { it.key != key }, banned)
 
     fun serialize(): String = buildString {
-        for (r in records) append("S\t${esc(r.key)}\t${esc(r.text)}\t${esc(r.source)}\t${if (r.ok) 1 else 0}\t${r.tries}\t${r.lastTry}\n")
+        for (r in records) append("S\t${esc(r.key)}\t${esc(r.text)}\t${esc(r.source)}\t${if (r.ok) 1 else 0}\t${r.tries}\t${r.lastTry}").append(if (r.fr.isEmpty()) "" else "\t" + esc(r.fr)).append('\n')
         for (b in banned) append("B\t${esc(b)}\n")
     }
 
@@ -210,7 +308,7 @@ class SynopsisBook(val records: List<SynopsisRecord> = emptyList(), val banned: 
                 val p = line.split('\t')
                 try {
                     when {
-                        p.size >= 7 && p[0] == "S" -> { val r = SynopsisRecord(unesc(p[1]), unesc(p[2]), unesc(p[3]), p[4] == "1", p[5].toInt(), p[6].toLong()); out[r.key] = r }
+                        p.size >= 7 && p[0] == "S" -> { val r = SynopsisRecord(unesc(p[1]), unesc(p[2]), unesc(p[3]), p[4] == "1", p[5].toInt(), p[6].toLong(), p.getOrNull(7)?.let { unesc(it) } ?: ""); out[r.key] = r }
                         p.size >= 2 && p[0] == "B" && p[1].isNotEmpty() -> ban.add(unesc(p[1]))
                     }
                 } catch (_: Exception) {}

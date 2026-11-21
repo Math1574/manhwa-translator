@@ -22,6 +22,12 @@ data class SeriesEntry(
 /** Avancement de lecture d'une page (un chapitre) : part de la page parcourue, et lue jusqu'au bout ou non. */
 data class ReadProgress(val url: String, val percent: Int, val done: Boolean, val updatedAt: Long)
 
+/**
+ * Avancement de la traduction d'une page (un chapitre) : part (1..100) des pages du chapitre déjà traitées par le traducteur. C'est le meilleur résultat obtenu :
+ * quitter un chapitre après quelques pages ne fait pas oublier qu'il a été traduit en entier (les traductions restent en cache).
+ */
+data class TranslationProgress(val url: String, val percent: Int, val updatedAt: Long)
+
 /** Œuvre mise en favori (clé d'œuvre : site + titre). */
 data class SeriesFavorite(val key: String, val title: String, val addedAt: Long)
 
@@ -31,8 +37,11 @@ data class SeriesFavorite(val key: String, val title: String, val addedAt: Long)
  */
 data class SeriesFinished(val key: String, val markedAt: Long, val chaptersAtMark: Int)
 
-/** Un chapitre d'une œuvre, tel que l'historique le connaît. */
-data class ChapterEntry(val url: String, val label: String, val number: Double?, val lastVisited: Long, val visits: Int, val percent: Int, val done: Boolean)
+/**
+ * Un chapitre d'une œuvre, tel que l'historique le connaît. [translated] : part du chapitre déjà traduite (1..100) ; 0 quand rien n'a été noté (chapitre lu avant que ce suivi existe,
+ * ou sans traduction) : l'écran n'affiche alors rien plutôt qu'un « 0 % » qui pourrait être faux.
+ */
+data class ChapterEntry(val url: String, val label: String, val number: Double?, val lastVisited: Long, val visits: Int, val percent: Int, val done: Boolean, val translated: Int = 0)
 
 /**
  * Bibliothèque de navigation : historique (récent en tête, dédoublonné par adresse) et favoris. Données immuables : chaque opération renvoie
@@ -41,8 +50,10 @@ data class ChapterEntry(val url: String, val label: String, val number: Double?,
 data class BrowsingLibrary(
     val history: List<VisitedPage> = emptyList(), val favorites: List<Favorite> = emptyList(),
     val progress: List<ReadProgress> = emptyList(), val seriesFavorites: List<SeriesFavorite> = emptyList(),
-    val finishedSeries: List<SeriesFinished> = emptyList(),
+    val finishedSeries: List<SeriesFinished> = emptyList(), val translations: List<TranslationProgress> = emptyList(),
 ) {
+    /** Traduction notée par adresse de page (construite une fois par bibliothèque : la liste des chapitres d'une œuvre la consulte pour chaque page de l'historique). */
+    private val translationByUrl: Map<String, Int> by lazy { translations.associate { it.url to it.percent } }
 
     fun visit(url: String, title: String, now: Long, maxHistory: Int = MAX_HISTORY): BrowsingLibrary {
         val u = normalize(url) ?: return this
@@ -84,6 +95,24 @@ data class BrowsingLibrary(
         return copy(progress = (listOf(ReadProgress(u, if (done) 100 else 0, done, now)) + progress.filter { it.url != u }).take(MAX_PROGRESS))
     }
 
+    // ---------- avancement de la traduction ----------
+
+    /** Part (0..100) de la page déjà traduite, 0 si rien n'a été noté. */
+    fun translationOf(url: String): Int = normalize(url)?.let { translationByUrl[it] } ?: 0
+
+    /**
+     * Note où en est la traduction d'une page : [done] pages traitées (traduites, ou sans texte à traduire) sur [total] pages du chapitre. Seul un meilleur résultat est retenu ;
+     * une page entièrement traitée vaut 100, sinon l'arrondi est vers le bas (jamais 100 tant qu'il reste une page).
+     */
+    fun setTranslation(url: String, done: Int, total: Int, now: Long): BrowsingLibrary {
+        val u = normalize(url) ?: return this
+        if (total <= 0 || done <= 0) return this
+        val p = if (done >= total) 100 else (done.toLong() * 100 / total).toInt().coerceIn(1, 99)
+        val old = translationByUrl[u]
+        if (old != null && old >= p) return this
+        return copy(translations = (listOf(TranslationProgress(u, p, now)) + translations.filter { it.url != u }).take(MAX_TRANSLATIONS))
+    }
+
     // ---------- œuvres ----------
 
     fun isSeriesFavorite(key: String) = seriesFavorites.any { it.key == key }
@@ -96,7 +125,7 @@ data class BrowsingLibrary(
     fun removeSeries(key: String): BrowsingLibrary {
         val urls = history.filter { seriesKey(it.url) == key }.map { it.url }.toSet()
         return copy(
-            history = history.filter { it.url !in urls }, progress = progress.filter { it.url !in urls },
+            history = history.filter { it.url !in urls }, progress = progress.filter { it.url !in urls }, translations = translations.filter { it.url !in urls },
             seriesFavorites = seriesFavorites.filter { it.key != key }, finishedSeries = finishedSeries.filter { it.key != key },
         )
     }
@@ -123,8 +152,9 @@ data class BrowsingLibrary(
         val out = byChapter.map { (label, hs) ->
             val last = hs.maxByOrNull { it.visitedAt }!!
             val prog = hs.mapNotNull { progressOf(it.url) }.maxByOrNull { it.updatedAt }
+            val translated = hs.maxOf { translationByUrl[it.url] ?: 0 }
             val number = Regex("([0-9]+(?:[.][0-9]+)?)").find(label.removePrefix("p|"))?.value?.toDoubleOrNull()?.takeIf { !label.startsWith("p|") }
-            ChapterEntry(last.url, if (label.startsWith("p|")) last.title.ifEmpty { "Page" } else label, number, last.visitedAt, hs.sumOf { it.visits }, prog?.percent ?: 0, prog?.done ?: false)
+            ChapterEntry(last.url, if (label.startsWith("p|")) last.title.ifEmpty { "Page" } else label, number, last.visitedAt, hs.sumOf { it.visits }, prog?.percent ?: 0, prog?.done ?: false, translated)
         }
         return out.sortedWith(compareByDescending<ChapterEntry> { it.number != null }.thenByDescending { it.number ?: 0.0 }.thenByDescending { it.lastVisited })
     }
@@ -152,12 +182,14 @@ data class BrowsingLibrary(
         for (p in progress) append("P\t${esc(p.url)}\t${p.percent}\t${if (p.done) 1 else 0}\t${p.updatedAt}\n")
         for (f in seriesFavorites) append("S\t${esc(f.key)}\t${esc(f.title)}\t${f.addedAt}\n")
         for (f in finishedSeries) append("D\t${esc(f.key)}\t${f.markedAt}\t${f.chaptersAtMark}\n")
+        for (t in translations) append("T\t${esc(t.url)}\t${t.percent}\t${t.updatedAt}\n")
     }
 
     companion object {
         const val MAX_HISTORY = 3000
         const val MAX_PROGRESS = 3000
         const val MAX_FINISHED = 1000
+        const val MAX_TRANSLATIONS = 3000
         /** Part de la page parcourue à partir de laquelle un chapitre est considéré comme lu. */
         const val DONE_AT = 94
 
@@ -210,7 +242,7 @@ data class BrowsingLibrary(
         /** Tolérant : une ligne illisible est ignorée. */
         fun parse(data: String?): BrowsingLibrary {
             if (data.isNullOrBlank()) return BrowsingLibrary()
-            val hist = ArrayList<VisitedPage>(); val favs = ArrayList<Favorite>(); val prog = ArrayList<ReadProgress>(); val sfavs = ArrayList<SeriesFavorite>(); val fin = ArrayList<SeriesFinished>()
+            val hist = ArrayList<VisitedPage>(); val favs = ArrayList<Favorite>(); val prog = ArrayList<ReadProgress>(); val sfavs = ArrayList<SeriesFavorite>(); val fin = ArrayList<SeriesFinished>(); val tr = ArrayList<TranslationProgress>()
             for (line in data.lines()) {
                 val p = line.split('\t')
                 try {
@@ -220,10 +252,11 @@ data class BrowsingLibrary(
                         p.size >= 5 && p[0] == "P" -> prog.add(ReadProgress(unesc(p[1]), p[2].toInt().coerceIn(0, 100), p[3] == "1", p[4].toLong()))
                         p.size >= 4 && p[0] == "S" -> sfavs.add(SeriesFavorite(unesc(p[1]), unesc(p[2]), p[3].toLong()))
                         p.size >= 4 && p[0] == "D" -> fin.add(SeriesFinished(unesc(p[1]), p[2].toLong(), p[3].toInt()))
+                        p.size >= 4 && p[0] == "T" -> tr.add(TranslationProgress(unesc(p[1]), p[2].toInt().coerceIn(0, 100), p[3].toLong()))
                     }
                 } catch (_: Exception) {}
             }
-            return BrowsingLibrary(hist, favs, prog, sfavs, fin)
+            return BrowsingLibrary(hist, favs, prog, sfavs, fin, tr.filter { it.percent > 0 })
         }
     }
 }

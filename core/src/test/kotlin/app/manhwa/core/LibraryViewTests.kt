@@ -127,5 +127,9 @@ fun libraryViewTests() {
         T.eq("title", AppSettings.parse(s.serialize()).librarySort)
         T.eq("recent", AppSettings.parse(s.serialize().replace("title", "nimporte")).librarySort)
         T.eq("recent", AppSettings.parse(null).librarySort)
+        // synopsis en français : activé par défaut, retenu quand on le coupe, et les anciens réglages (sans la clé) gardent la valeur par défaut
+        T.ok(AppSettings().synopsisFr && AppSettings.parse(null).synopsisFr, "activé par défaut")
+        T.ok(!AppSettings.parse(AppSettings().copy(synopsisFr = false).serialize()).synopsisFr, "désactivé : retenu")
+        T.ok(AppSettings.parse(AppSettings().serialize().lines().filter { !it.startsWith("synopsisFr") }.joinToString("\n")).synopsisFr, "ancien fichier : activé")
     }
 }

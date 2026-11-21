@@ -37,9 +37,22 @@ object PageScript {
   function srcOf(im){ var s = im.currentSrc || im.src || ''; if (s.indexOf('data:')===0 || s.indexOf('blob:')===0) return 'js:'; return s; }
   // images que l'application n'a pas pu traiter (travail interrompu) : la page les oublie, elles seront redonnées à la prochaine collecte
   function forget(ids){ for (var i=0;i<ids.length;i++){ delete S.seen[ids[i]]; delete S.first[ids[i]]; } }
+  // adresse d'une image sans son nom de fichier ni sa requête : les pages d'un chapitre sont rangées dans un même dossier
+  function dirOf(s){ var q = s.indexOf('?'); if (q >= 0) s = s.slice(0, q); q = s.indexOf('#'); if (q >= 0) s = s.slice(0, q); var i = s.lastIndexOf('/'); return i > 8 ? s.slice(0, i) : s; }
+  // position et taille affichées de chaque image assez grande (images des calques de l'application exclues)
+  function geoList(){
+    var geo = [], l = document.images;
+    for (var g0=0; g0<l.length; g0++){
+      var g = l[g0]; if (g.getAttribute('data-mt-img')) continue;
+      var gr = g.getBoundingClientRect(); if (gr.width < MIN*0.8 || gr.height < MIN*0.8) continue;
+      geo.push({im:g, top:gr.top + window.scrollY, bottom:gr.bottom + window.scrollY, left:gr.left + window.scrollX, width:gr.width});
+    }
+    return geo;
+  }
   // Colonne du chapitre : ses pages se suivent, empilées à (peu près) la même largeur, et ce sont elles qui occupent le plus de place dans la page. Ce qui est nettement plus étroit et
   // n'est pas dans cette colonne (avatars et images des commentaires, vignettes d'autres œuvres, boutons du site sous le dernier chapitre) n'est pas l'œuvre : on ne le donne pas à
-  // la traduction. Une image aussi large que les pages n'est jamais écartée (une page ne l'est donc jamais, quelle que soit la mise en page du site). Rend null s'il n'y a pas de colonne nette.
+  // la traduction. Une image aussi large que les pages, mais sous la colonne, n'est une page que si elle a la même largeur d'origine et vient du même dossier qu'elles (une page
+  // d'un chapitre coupé en deux par un grand vide l'est donc toujours ; une image de commentaire, une bannière ou une publicité ne l'est pas). Rend null s'il n'y a pas de colonne nette.
   function column(geo){
     var n = geo.length, i; if (n < 2) return null;
     var byW = geo.slice().sort(function(a, b){ return a.width - b.width; }), tot = 0;
@@ -57,21 +70,39 @@ object PageScript {
       else { cur = {top:p.top, bottom:p.bottom, left:p.left, right:p.left + p.width, area:pa}; }
       if (!best || cur.area > best.area || cur === best) best = cur;
     }
-    best.lim = lim;
+    best.lim = lim; best.fullBottom = best.bottom;
+    // portrait des pages de la colonne : les largeurs d'origine qui reviennent et les dossiers d'où elles viennent (au moins une page sur cinq chacun)
+    var mem = [], cw = {}, cd = {}, tot2 = 0, k;
+    for (i = 0; i < n; i++) {
+      var g2 = geo[i], w2 = g2.im.naturalWidth;
+      if (g2.width < lim || g2.top < best.top - 4 || g2.bottom > best.bottom + 4 || w2 < MIN) continue;
+      mem.push(g2); tot2++;
+      cw[w2] = (cw[w2] || 0) + 1;
+      var d2 = dirOf(srcOf(g2.im)); cd[d2] = (cd[d2] || 0) + 1;
+    }
+    best.nw = []; best.dirs = {}; best.nd = 0;
+    for (k in cw) { if (cw[k] >= 2 && cw[k] * 5 >= tot2) best.nw.push(+k); }
+    for (k in cd) { if (cd[k] >= 2 && cd[k] * 5 >= tot2) { best.dirs[k] = 1; best.nd++; } }
+    // bas de la colonne : une image qui la prolonge sans être de la même sorte que les pages (bannière ou image de commentaire collée à la dernière page) n'en fait pas partie
+    mem.sort(function(a, b){ return b.top - a.top; });
+    for (i = 0; i < mem.length; i++) { if (sameKind(mem[i].im, srcOf(mem[i].im), best)) { best.bottom = mem[i].bottom; break; } }
     return best;
   }
-  // « strict » : on ne donne que les images de la colonne du chapitre (pages de lecture) ; sinon (page où l'on a demandé la traduction à la main) toutes les images assez grandes
-  function collect(force, strict){
+  // l'image est de la même sorte que les pages de la colonne : même largeur d'origine (à 2 % près) et même dossier (au moins deux pages, et une sur cinq, en partagent un ;
+  // quand les pages ne partagent ni largeur ni dossier, rien ne permet de dire que l'image n'en est pas une : oui)
+  function sameKind(im, s, col){
+    var w = im.naturalWidth, ok = !col.nw.length;
+    for (var i = 0; i < col.nw.length; i++) { if (Math.abs(w - col.nw[i]) <= col.nw[i] * 0.02) { ok = true; break; } }
+    return ok && (!col.nd || !!col.dirs[dirOf(s)]);
+  }
+  // « strict » : on ne donne que les images de la colonne du chapitre (pages de lecture) ; sinon (page où l'on a demandé la traduction à la main) toutes les images assez grandes ;
+  // « all » : tout ce qui est assez grand, colonne ou non (l'utilisateur demande les images de dessous le chapitre)
+  function collect(force, strict, all){
     if (force) { S.seen = {}; }
     var out = [], l = document.images, now = Date.now();
     // images empilées : l'image collée juste au-dessus (son bord bas touche le bord haut de celle-ci, même colonne, même largeur) apporte le contexte
     // d'un texte que le découpage du chapitre a coupé en deux ; l'image collée dessous prendra en charge les textes coupés au bas de celle-ci
-    var geo = [];
-    for (var g0=0; g0<l.length; g0++){
-      var g = l[g0]; if (g.getAttribute('data-mt-img')) continue;
-      var gr = g.getBoundingClientRect(); if (gr.width < MIN*0.8 || gr.height < MIN*0.8) continue;
-      geo.push({im:g, top:gr.top + window.scrollY, bottom:gr.bottom + window.scrollY, left:gr.left + window.scrollX, width:gr.width});
-    }
+    var geo = geoList();
     function near(a, b){ return Math.abs(a - b) <= 3; }
     var col = strict ? column(geo) : null;
     for (var i=0;i<l.length;i++){
@@ -82,8 +113,15 @@ object PageScript {
       var s = srcOf(im); if (!s) continue;
       var id = idOf(im); if (S.seen[id] === s) continue;
       var top = r.top + window.scrollY, left = r.left + window.scrollX, prev = null, next = null;
-      // hors du chapitre : nettement plus étroite que les pages et ailleurs que dans leur colonne (une image plus étroite au milieu des pages, elle, reste)
-      if (col && r.width < col.lim && !(top >= col.top - 4 && top + r.height <= col.bottom + 4 && left >= col.left - 4 && left + r.width <= col.right + 4)) continue;
+      // hors du chapitre : ailleurs que dans la colonne des pages (une image plus étroite au milieu des pages, elle, reste), et soit nettement plus étroite qu'elles,
+      // soit sous la colonne sans être de la même sorte (largeur d'origine et dossier) : commentaire, bannière, vignette
+      if (col && !all) {
+        var inCol = top >= col.top - 4 && top + r.height <= col.bottom + 4 && left >= col.left - 4 && left + r.width <= col.right + 4;
+        if (!inCol) {
+          if (r.width < col.lim) continue;
+          if (top >= col.bottom - 4 && !sameKind(im, s, col)) continue;
+        }
+      }
       for (var k=0;k<geo.length;k++){
         var q = geo[k]; if (q.im === im || q.im.naturalWidth !== im.naturalWidth) continue;
         if (near(q.bottom, top) && near(q.left, left) && near(q.width, r.width)) prev = q.im;
@@ -100,6 +138,31 @@ object PageScript {
                 prev: prev ? {id:idOf(prev), src:srcOf(prev), h:prev.naturalHeight} : null, next: next ? {h:next.naturalHeight} : null});
     }
     return out;
+  }
+  // images qui attendent : chargées, assez grandes, pas encore données à la traduction, et pas une vignette (nettement plus étroite que les pages) — ce que la collecte laisse de côté
+  // sous le chapitre (commentaires, bannières) ou ce qui est apparu depuis ; l'application le propose d'un bouton discret
+  function waiting(strict){
+    var col = strict ? column(geoList()) : null, n = 0, l = document.images;
+    for (var i=0;i<l.length;i++){
+      var im = l[i]; if (im.getAttribute('data-mt-img')) continue;
+      if (!im.complete || im.naturalWidth < MIN || im.naturalHeight < MIN) continue;
+      var r = im.getBoundingClientRect(); if (r.width < MIN*0.8 || r.height < MIN*0.8) continue;
+      if (col && r.width < col.lim) continue;
+      var s = srcOf(im); if (!s) continue;
+      if (im.__mtid && S.seen[im.__mtid] === s) continue;
+      n++;
+    }
+    return n;
+  }
+  // images du chapitre pas encore chargées (affichées en grand mais encore vides : chargement différé) : tant qu'il en reste, le chapitre n'est pas complet
+  function chainPending(strict){
+    var geo = geoList(), col = strict ? column(geo) : null, n = 0;
+    for (var i=0;i<geo.length;i++){
+      var g = geo[i], im = g.im;
+      if (im.complete && im.naturalWidth >= MIN && im.naturalHeight >= MIN) continue;
+      if (!col || (g.top >= col.top - 4 && g.bottom <= col.fullBottom + 4)) n++;
+    }
+    return n;
   }
   function place(e){
     var r = e.img.getBoundingClientRect(), d = e.div;
@@ -170,14 +233,35 @@ object PageScript {
     if (S.timer) return;
     S.timer = setTimeout(function(){ S.timer = null; try { AndroidMT.onImagesChanged(); } catch(e) {} }, 500);
   }
-  document.addEventListener('load', function(e){ if (e.target && e.target.tagName === 'IMG') notify(); }, true);
-  try { new MutationObserver(notify).observe(document.documentElement, {childList:true, subtree:true, attributes:true, attributeFilter:['src','srcset','data-src']}); } catch(e) {}
+  // Ce que l'application pose elle-même (calques et morceaux de traduction) n'est pas un changement de la page : sans ce tri, chaque traduction posée relançait une collecte
+  // (script réinjecté, mise en page recalculée) une demi-seconde plus tard, juste au moment où la page se redessine.
+  function ours(n){ return !!n && n.nodeType === 1 && (n.hasAttribute('data-mt-overlay') || n.hasAttribute('data-mt-img') || (!!n.closest && !!n.closest('[data-mt-overlay]'))); }
+  document.addEventListener('load', function(e){ if (e.target && e.target.tagName === 'IMG' && !ours(e.target)) notify(); }, true);
+  try {
+    new MutationObserver(function(ms){
+      for (var i=0;i<ms.length;i++){
+        var m = ms[i];
+        if (m.type === 'attributes') { if (!ours(m.target)) { notify(); return; } continue; }
+        if (ours(m.target)) continue;
+        var a = m.addedNodes, r = m.removedNodes, j;
+        for (j=0;j<a.length;j++){ if (!ours(a[j])) { notify(); return; } }
+        for (j=0;j<r.length;j++){ if (!ours(r[j])) { notify(); return; } }
+      }
+    }).observe(document.documentElement, {childList:true, subtree:true, attributes:true, attributeFilter:['src','srcset','data-src']});
+  } catch(e) {}
   setInterval(function(){ for (var id in S.entries){ place(S.entries[id]); } }, 300);
   window.addEventListener('resize', function(){ for (var id in S.entries){ S.entries[id].key = ''; place(S.entries[id]); } });
   // fin de chapitre : prévient l'application quand on approche du bas de la page
   var nbState = false, nbTick = false;
   function nbCheck(){ nbTick = false; var nb = (window.innerHeight + window.scrollY) >= (document.documentElement.scrollHeight - 900); if (nb !== nbState) { nbState = nb; try { AndroidMT.onBottom(nb); } catch(e) {} } }
   window.addEventListener('scroll', function(){ if (!nbTick) { nbTick = true; setTimeout(nbCheck, 300); } }, {passive:true});
+  // défilement en cours : l'application le sait (début et fin, 0,18 s après le dernier mouvement) et attend qu'il s'arrête pour poser les traductions arrivées entre-temps
+  var scrTimer = null, scrOn = false;
+  window.addEventListener('scroll', function(){
+    if (!scrOn) { scrOn = true; try { AndroidMT.onScrolling(true); } catch(e) {} }
+    clearTimeout(scrTimer);
+    scrTimer = setTimeout(function(){ scrOn = false; try { AndroidMT.onScrolling(false); } catch(e) {} }, 180);
+  }, {passive:true});
   // position de lecture : l'application traduit d'abord ce que l'on regarde à cet instant
   var vpTick = false;
   function vpReport(){ vpTick = false; try { AndroidMT.onViewport(window.scrollY, window.innerHeight); } catch(e) {} }
@@ -477,7 +561,7 @@ object PageScript {
       setTimeout(tick, 400);
     })();
   }
-  window.__mt = {probe:probe, collect:collect, apply:apply, setVisible:setVisible, clear:clear, getB64:getB64, resumeTo:resumeTo, forget:forget, dropPatch:dropPatch, setErase:setErase, testErase:testErase, setDisc:setDisc, setDiscs:setDiscs, testDisc:testDisc};
+  window.__mt = {probe:probe, collect:collect, waiting:waiting, chainPending:chainPending, apply:apply, setVisible:setVisible, clear:clear, getB64:getB64, resumeTo:resumeTo, forget:forget, dropPatch:dropPatch, setErase:setErase, testErase:testErase, setDisc:setDisc, setDiscs:setDiscs, testDisc:testDisc};
 })();
 """
 }

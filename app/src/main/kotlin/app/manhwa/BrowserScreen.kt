@@ -164,11 +164,18 @@ fun BrowserScreen(graph: AppGraph, onLibrary: () -> Unit = {}) {
                 ReaderOverlay(graph, onQuickSettings = { quick = true })
             }
             // propositions discrètes : reprendre le chapitre où l'on s'était arrêté ; corriger la traduction dont on regarde l'original
-            if (!(c.fullscreen && c.readerBar) && (c.resumeOffer > 0 || c.peekTarget != null || c.peekEmpty != null || c.navBlocked != null || c.undoBanner != null || c.eraser || c.discardMode)) {
-                Column(Modifier.align(Alignment.BottomCenter).padding(bottom = if (c.fullscreen) 28.dp else 20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // en bas de chapitre, le bouton « Chapitre suivant » occupe le bas de l'écran : les propositions se posent au-dessus
+            val nextShown = !c.fullscreen && c.nearBottom && c.currentUrl.isNotEmpty() && ChapterNav.next(c.currentUrl) != null
+            if (!(c.fullscreen && c.readerBar) && (c.resumeOffer > 0 || c.lateOffer || c.peekTarget != null || c.peekEmpty != null || c.navBlocked != null || c.undoBanner != null || c.eraser || c.discardMode)) {
+                Column(Modifier.align(Alignment.BottomCenter).padding(bottom = if (c.fullscreen) 28.dp else if (nextShown) 84.dp else 20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (c.resumeOffer > 0) {
                         LaunchedEffect(c.resumeOffer) { delay(9000); c.dismissResumeOffer() }
                         Pill("Reprendre à ${c.resumeOffer} %", onClick = { c.resumeNow() }, onClose = { c.dismissResumeOffer() })
+                    }
+                    // chapitre terminé : la traduction ne reprend plus toute seule ; des images sont apparues dessous (commentaires, bannières), ce bouton les traduit si on le veut
+                    if (c.lateOffer) {
+                        LaunchedEffect(c.lateImages) { delay(12000); c.dismissLate() }
+                        Pill("${c.lateImages} image${if (c.lateImages > 1) "s" else ""} sous le chapitre · Traduire", onClick = { c.translateLate() }, onClose = { c.dismissLate() })
                     }
                     if (c.peekTarget != null && c.peekIgnored()) {
                         // texte laissé tel quel par une règle : on le rétablit plutôt que de le corriger

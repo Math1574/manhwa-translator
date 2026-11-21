@@ -60,7 +60,14 @@ if os.path.exists(f"{S}/synth/en_mixed.png"):
     open(f"{d}/4.html", "w").write(HEAD % "Test Series - Chapter 4" + "<h3 style='padding:8px'>Test Series - Chapter 4</h3>"
         + '<img src="/synth/en_mixed.png" style="display:block;width:100%;margin:0">' * 2
         + '<div style="height:60px;padding:16px">Chapitre suivant</div><h3 style="padding:8px">Séries populaires</h3>'
-        + '<div style="display:flex;flex-wrap:wrap;gap:8px;padding:8px">' + '<img src="/synth/en_caps.png" style="width:170px;display:block">' * 4 + '</div><div style="height:300px"></div></body></html>')
+        + '<div style="display:flex;flex-wrap:wrap;gap:8px;padding:8px">' + '<img src="/synth/en_caps.png" style="width:170px;display:block">' * 4 + '</div><div style="height:300px"></div>'
+        # commentaires : une image d'un autre dossier, presque aussi large que les pages (mise en page mobile) ; le filtre de la colonne l'écarte. Une image du même dossier et de la même largeur que les pages
+        # arrive plus tard (__lateAdd, appelée par le test une fois en bas de page) : le filtre ne peut pas la distinguer d'une page, c'est l'arrêt de fin de chapitre qui la retient
+        + '<h4 style="padding:8px">Commentaires</h4><img src="/comments/c1.png" style="display:block;width:80%;margin:12px auto"><div id="late"></div>'
+        + '<script>window.__lateAdd=function(){var i=new Image();i.src="/synth/en_mixed.png";i.style.cssText="display:block;width:80%;margin:12px auto";document.getElementById("late").appendChild(i)}</script></body></html>')
+    os.makedirs(f"{S}/comments", exist_ok=True)
+    import shutil as _sh
+    if os.path.exists(f"{S}/synth/en_caps.png"): _sh.copy(f"{S}/synth/en_caps.png", f"{S}/comments/c1.png")
     # chapitre trop court pour défiler (page d'attente, chapitre à venir) : rien n'y est lu, il ne doit jamais être marqué comme lu
     os.makedirs(f"{S}/comics/short-series-9z9z9z/chapter", exist_ok=True)
     open(f"{S}/comics/short-series-9z9z9z/chapter/1.html", "w").write(HEAD % "Short Series - Chapter 1" + "<h3 style='padding:8px'>Chapitre à venir</h3></body></html>")

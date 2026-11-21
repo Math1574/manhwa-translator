@@ -95,7 +95,10 @@ run pc_en_mlkit          pc_en.html          MLKIT EN FR "fr"      300
 run synth_en_caps_mlkit  synth_en_caps.html  MLKIT EN FR "fr"      200
 run synth_en_mixed_mlkit synth_en_mixed.html MLKIT EN FR "fr"      200
 # fin de chapitre : deux pages, puis des vignettes de séries proposées plus étroites (page de chapitre) : elles ne doivent pas être repérées pour la traduction
-run chapter_end_mlkit comics/test-series-1a2b3c/chapter/4.html MLKIT EN FR "fr" 200
+# puis en bas de page : le chapitre se déclare terminé, une image apparue ensuite ne repart pas toute seule, le bouton « Traduire » la traduit (voir TestHooks, mt_bottom)
+EXTRA=(--es mt_bottom true)
+run chapter_end_mlkit comics/test-series-1a2b3c/chapter/4.html MLKIT EN FR "fr" 250
+EXTRA=()
 run synth_en_variety_combined synth_en_variety.html MLKIT EN FR "fr" 300
 run adblock_mlkit adtest.html MLKIT EN FR "fr" 200
 run synth_layouts_combined synth_layouts.html MLKIT EN FR "fr" 400
@@ -416,6 +419,7 @@ else
   chk "réglages rapides : l'appui long ne bascule pas la traduction (même état du bouton avant et après)" 0
   chk "réglages rapides : le retour referme le panneau, la page reste affichée" 0
 fi
+appcmd "synfr off"      # synopsis laissés dans la langue du site : les vérifications qui suivent comparent son texte (la traduction française a ses propres vérifications plus bas)
 tapt nav "=Bibliothèque" 1; sleep 2; uidump lib; shot ui 2
 chk "bibliothèque : l'œuvre est listée, sans carte « Continuer la lecture » (la reprise est sur l'accueil)" $([ "$(has lib 'Test Series')" = 1 ] && [ "$(hasnot lib 'Continuer la lecture')" = 1 ] && echo 1 || echo 0)
 # illustrations : la page de l'œuvre du faux site (/comics/test-series-1a2b3c) annonce son image (og:image) ; l'application la lit dans un navigateur caché, la télécharge et l'affiche (quelques secondes, en tâche de fond)
@@ -480,6 +484,9 @@ tapt gl3 "=Retirer" 1; sleep 1.5
 chk "glossaire de l'œuvre : le terme se retire" $(okst waitst terms $gt0 15)
 for k in 1 2 3; do adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump glb; if [ "$(has glb 'Glossaire de cette')" = 1 ]; then break; fi; done
 chk "glossaire de l'œuvre : le retour ramène à la fiche de l'œuvre" $(has glb 'Glossaire de cette')
+# fiche de l'œuvre : la part déjà traduite de chaque chapitre (chapitre 5 en entier, chapitre 4 aux trois cinquièmes, les autres sans note : rien d'affiché)
+adb shell input swipe 540 1800 540 900 300; sleep 1.2; uidump trp; shot ui 45b
+chk "fiche d'une œuvre : la part traduite de chaque chapitre (100 %, 60 %), rien pour un chapitre sans suivi" $([ "$(has trp 'Traduit à 100 %')" = 1 ] && [ "$(has trp 'Traduit à 60 %')" = 1 ] && [ "$(hasnot trp 'Traduit à 0 %')" = 1 ] && echo 1 || echo 0)
 adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump lb9; shot ui 45
 chk "bibliothèque : l'œuvre terminée porte sa pastille, les pastilles se recomptent" $([ "$(hasx lb9 '=Terminée')" = 1 ] && [ "$(hasx lb9 '=Terminées (1)')" = 1 ] && [ "$(hasx lb9 '=En cours (3)')" = 1 ] && echo 1 || echo 0)
 tapt lb9 "=Terminées (1)" 1; sleep 1.5; uidump lb10
@@ -763,6 +770,16 @@ chk "synopsis : le résumé de l'annuaire s'affiche dans la fiche (sans balises,
 chk "synopsis : celui-ci vient de l'annuaire (journal)" $(grep '"type":"synopsis"' $OUT/reports/journal_covers.jsonl | grep '"series":"Anilist Only"' | grep -q '"source":"annuaire"' && echo 1 || echo 0)
 chk "synopsis : une page qui n'annonce qu'une phrase générique du site ne donne aucun synopsis (journal)" $(grep '"type":"synopsis"' $OUT/reports/journal_covers.jsonl | grep '"series":"Generic Only"' | grep -q '"ok":false' && echo 1 || echo 0)
 chk "synopsis : celui de Test Series vient de la page du site (journal)" $(grep '"type":"synopsis"' $OUT/reports/journal_covers.jsonl | grep '"series":"Test Series"' | grep -q '"source":"site"' && echo 1 || echo 0)
+adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump syn2
+# synopsis en français : avec une traduction de remplacement (texte fixe, comme si le modèle avait répondu), la fiche montre le français ; l'original est à un appui, et un appui le ramène
+appcmd "synfr fake"
+tapt syn2 "=Anilist Only" 1; sleep 2
+for k in $(seq 1 10); do uidump syn3; [ "$(has syn3 'traduit en français pour le test')" = 1 ] && break; sleep 2; done
+shot ui 74b
+chk "synopsis en français : la fiche affiche la traduction, le texte de l'annuaire n'est plus affiché, « Voir l'original » est proposé" $([ "$(has syn3 'traduit en français pour le test')" = 1 ] && [ "$(hasnot syn3 'fake directory summary')" = 1 ] && [ "$(hasx syn3 "=Voir l'original")" = 1 ] && echo 1 || echo 0)
+tapt syn3 "=Voir l'original" 1; sleep 1.5; uidump syn4
+chk "synopsis en français : « Voir l'original » rend le texte d'origine, « Voir la traduction » le propose en retour" $([ "$(has syn4 'fake directory summary')" = 1 ] && [ "$(hasx syn4 '=Voir la traduction')" = 1 ] && echo 1 || echo 0)
+appcmd "synfr off"
 adb shell input keyevent KEYCODE_BACK; sleep 1.5
 chk "illustrations : l'échec est expliqué au journal" $(grep '"series":"Generic Only"' $OUT/reports/journal_covers.jsonl | grep -q 'aucune image retenue' && echo 1 || echo 0)
 chk "illustrations : l'image du site (partage générique) n'est jamais téléchargée" $([ "$(grep -c 'GET /site-og/og-image.png' /tmp/server.log 2>/dev/null; true)" = 0 ] && echo 1 || echo 0)

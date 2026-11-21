@@ -166,6 +166,31 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     var currentUrl by mutableStateOf("")
     /** Vrai quand la page est lue presque jusqu'en bas (bouton « Chapitre suivant »). */
     var nearBottom by mutableStateOf(false)
+    /**
+     * Chapitre terminé : tout ce qui a été repéré est traduit, toutes les images de la colonne du chapitre sont chargées et le lecteur est en bas de la page depuis un moment.
+     * Plus rien ne repart tout seul (commentaires qui se chargent, bannières) ; ce qui apparaît ensuite est proposé par un bouton discret ([lateOffer]).
+     */
+    var chapterDone by mutableStateOf(false)
+        private set
+    /** Images apparues après la fin du chapitre et pas traduites (commentaires, bannières) ; [lateDismissed] : nombre déjà écarté d'un geste par l'utilisateur. */
+    var lateImages by mutableIntStateOf(0)
+        private set
+    private var lateDismissed by mutableIntStateOf(0)
+    /** Le bouton discret « Traduire » est proposé : le chapitre est terminé et des images attendent sous lui. */
+    val lateOffer: Boolean get() = active && chapterDone && lateImages > lateDismissed
+    fun dismissLate() { lateDismissed = lateImages }
+    private val latchCheck = Runnable { checkLatch() }
+    /**
+     * Suivi de la traduction par chapitre (bibliothèque : « Traduit à N % »). [countersUrl] : page dont [total] et [done] racontent la traduction, retenue au départ car l'adresse affichée change avant que les
+     * compteurs soient remis à zéro ; [baseDone] et [baseTotal] : ce que les compteurs valaient quand le site a changé de page sans la recharger (le chapitre suivant compte à partir de là) ;
+     * [trackPending] : images encore vides dans la colonne du chapitre à la dernière mesure (chargement différé), des pages à venir qui comptent dans le total.
+     */
+    private var countersUrl = ""
+    private var baseDone = 0
+    private var baseTotal = 0
+    private var trackPending = 0
+    private var trackedAt = 0L
+    private val trackRun = Runnable { trackTranslation() }
     /** Titre de la page affichée (pour les favoris). */
     val pageTitle: String get() = webView?.title ?: ""
     /** Dernier titre de page relevé quand elle a fini de charger : lisible depuis n'importe quel fil (celui de la WebView ne l'est que du fil principal). */
@@ -455,6 +480,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                         }
                     }
                 }
+                maybeLatch()      // la dernière page du chapitre vient peut-être de finir
+                trackTranslation()
             }
             pump()
         }
@@ -616,7 +643,11 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
             override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
                 canGoBack = view.canGoBack(); canGoForward = view.canGoForward()
-                if (url.startsWith("http")) currentUrl = url
+                if (url.startsWith("http")) {
+                    val before = currentUrl
+                    currentUrl = url
+                    if (!isReload && !loading && before.startsWith("http") && pagePath(before) != pagePath(url)) internalNavigation()
+                }
             }
 
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
@@ -1237,19 +1268,108 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
     // ---------- traduction ----------
 
-    /** Lance la traduction des images de la page ; force = retraiter aussi les images déjà vues (réglages modifiés). */
-    fun start(force: Boolean) {
+    /**
+     * Lance la traduction des images de la page ; force = retraiter aussi les images déjà vues (réglages modifiés) ; all = donner aussi ce qui est sous le chapitre
+     * (commentaires, bannières : bouton « Traduire » de [lateOffer]). Tout départ lève l'arrêt de fin de chapitre ([chapterDone]) : il est rétabli plus tard si le chapitre est de nouveau terminé.
+     */
+    fun start(force: Boolean, all: Boolean = false) {
         val wv = webView ?: return
         if (currentUrl.isEmpty()) return
-        if (testing) android.util.Log.i("MT", "départ : force=$force url=$currentUrl total=$total")
+        if (testing) android.util.Log.i("MT", "départ : force=$force all=$all url=$currentUrl total=$total")
         if (force) { stopWork(); resetCounters() }
+        main.removeCallbacks(latchCheck); chapterDone = false; lateImages = 0; lateDismissed = 0
+        if (countersUrl.isEmpty()) countersUrl = currentUrl
         active = true
         warmUp()
         wv.evaluateJavascript(PageScript.INJECT, null)
         // page de chapitre : seules les images de la colonne du chapitre sont données (pas les commentaires, vignettes et bandeaux du site sous le dernier chapitre) ;
         // page où la traduction a été demandée à la main : toutes les images assez grandes
         val strict = BrowsingLibrary.looksLikeChapter(currentUrl)
-        wv.evaluateJavascript("window.__mt.collect($force, $strict)") { r -> onCandidates(r) }
+        wv.evaluateJavascript("window.__mt.collect($force, $strict, $all)") { r -> onCandidates(r) }
+    }
+
+    /** Bouton discret « Traduire » du bas de chapitre : traduit aussi les images qui sont apparues sous le chapitre. */
+    fun translateLate() { start(false, all = true) }
+
+    /** Images en attente sous le chapitre (voir [lateImages]) : relevées quand la page change après la fin du chapitre. */
+    private fun refreshLate() {
+        val strict = BrowsingLibrary.looksLikeChapter(currentUrl)
+        webView?.evaluateJavascript("window.__mt?window.__mt.waiting($strict):0") { r -> if (chapterDone) lateImages = r?.trim()?.toIntOrNull() ?: 0 }
+    }
+
+    /**
+     * Le chapitre semble terminé : tout ce qui a été repéré est traité (rien en attente ni en cours) et le lecteur est en bas de la page. Si cela dure [LATCH_SETTLE_MS] sans rien de nouveau,
+     * [checkLatch] arrête les reprises automatiques.
+     */
+    private fun maybeLatch() {
+        main.removeCallbacks(latchCheck)
+        if (chapterDone || !active || total <= 0 || !nearBottom || loading || done + failed < total) return
+        main.postDelayed(latchCheck, LATCH_SETTLE_MS)
+    }
+
+    private fun checkLatch() {
+        val wv = webView ?: return
+        if (chapterDone || !active || total <= 0 || !nearBottom || loading || done + failed < total) return
+        val busy = synchronized(backlog) { backlog.isNotEmpty() } || queue.snapshot().let { it.running > 0 || it.pending > 0 }
+        if (busy) return
+        val strict = BrowsingLibrary.looksLikeChapter(currentUrl)
+        val epoch = pageEpoch
+        // images de la colonne encore vides (chargement différé) : le chapitre n'est pas complet, ce que l'on lit en remontant sera encore à traduire
+        wv.evaluateJavascript("window.__mt?window.__mt.chainPending($strict):-1") { r ->
+            // jugé à nouveau au retour : la page a pu changer, une image arriver ou le lecteur remonter pendant l'appel
+            if (epoch == pageEpoch && r?.trim() == "0" && !chapterDone && active && nearBottom && total > 0 && done + failed >= total) {
+                chapterDone = true
+                if (testing) android.util.Log.i("MT", "chapitre terminé : plus de reprise automatique (total=$total)")
+                refreshLate()
+                trackPending = 0
+                trackTranslation(now = true)
+            }
+        }
+    }
+
+    /** Lève l'arrêt de fin de chapitre (voir [chapterDone]) : la traduction automatique peut reprendre. */
+    private fun releaseLatch() { main.removeCallbacks(latchCheck); chapterDone = false; lateImages = 0; lateDismissed = 0 }
+
+    /**
+     * Note dans la bibliothèque où en est la traduction du chapitre ouvert : pages traitées sur pages du chapitre (celles qui ont été repérées, plus les places encore vides de la colonne, des pages à venir).
+     * Au plus toutes les [TRACK_EVERY_MS] (un seul rappel attend) ; [now] : tout de suite (fin du chapitre) ; [leaving] : page quittée, sans relire la page web (la dernière mesure des places vides sert).
+     * Un chapitre n'est suivi que si une traduction l'a vraiment commencé : sans page traitée, rien n'est noté.
+     */
+    private fun trackTranslation(now: Boolean = false, leaving: Boolean = false) {
+        main.removeCallbacks(trackRun)
+        val url = countersUrl
+        if (url.isEmpty() || total - baseTotal <= 0 || done - baseDone <= 0) return
+        if (leaving) { graph.library.translation(url, done - baseDone, total - baseTotal + trackPending); return }
+        val t = SystemClock.uptimeMillis()
+        if (!now && t - trackedAt < TRACK_EVERY_MS) { main.postDelayed(trackRun, TRACK_EVERY_MS - (t - trackedAt)); return }
+        trackedAt = t
+        val wv = webView
+        if (wv == null || loading) { graph.library.translation(url, done - baseDone, total - baseTotal + trackPending); return }
+        val epoch = pageEpoch
+        val strict = BrowsingLibrary.looksLikeChapter(url)
+        wv.evaluateJavascript("window.__mt?window.__mt.chainPending($strict):-1") { r ->
+            if (epoch != pageEpoch || url != countersUrl) return@evaluateJavascript
+            trackPending = if (chapterDone) 0 else (r?.trim()?.toIntOrNull() ?: 0).coerceAtLeast(0)
+            graph.library.translation(url, done - baseDone, total - baseTotal + trackPending)
+        }
+    }
+
+    /** Chemin d'une adresse (sans requête ni fragment) : ce qui distingue une page d'une autre pour le site. */
+    private fun pagePath(url: String): String = url.substringBefore('#').substringBefore('?')
+
+    /**
+     * Le site a changé de page sans la recharger (navigation interne : le chemin de l'adresse change, aucun début de page n'est annoncé). Pour la traduction c'est une nouvelle page : le chapitre
+     * quitté est noté tel qu'il est, ce qui lui restait à traduire est abandonné, l'arrêt de fin de chapitre est levé et les images du nouveau chapitre sont repérées tout de suite (comme après
+     * un chargement, la traduction ne reprend que sur une page de chapitre).
+     */
+    private fun internalNavigation() {
+        trackTranslation(leaving = true)
+        if (active) stopWork()
+        baseDone = done; baseTotal = total; countersUrl = ""
+        pageEpoch++
+        releaseLatch()
+        if (!active) return
+        if (translateOn && BrowsingLibrary.looksLikeChapter(currentUrl)) start(false) else active = false
     }
 
     fun stop() { stopWork(); active = false }
@@ -1282,13 +1402,18 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     }
 
     private fun resetSession() {
+        trackTranslation(leaving = true)      // le chapitre quitté est noté tel qu'il est, avant que les compteurs repartent de zéro
         stopWork(); resetCounters(); skipped.clear(); active = false; overlaysVisible = true
         discardMode = false; discardedById.clear(); scanning.clear(); busyDisc.clear()
         eraser = false; fixRuns.clear(); refreshSoon.values.forEach { main.removeCallbacks(it) }; refreshSoon.clear()      // nouvelle page : la gomme se coupe, les redessins en attente de l'ancienne n'ont plus d'objet
         graph.gemma.resetContext()
     }
 
-    private fun resetCounters() { total = 0; done = 0; failed = 0; noText = 0; lastError = null; finishedIds.clear() }
+    private fun resetCounters() {
+        total = 0; done = 0; failed = 0; noText = 0; lastError = null; finishedIds.clear()
+        main.removeCallbacks(latchCheck); chapterDone = false; lateImages = 0; lateDismissed = 0
+        main.removeCallbacks(trackRun); countersUrl = ""; baseDone = 0; baseTotal = 0; trackPending = 0; trackedAt = 0L
+    }
 
     private fun stopWork() {
         queue.cancelAll()
@@ -1387,6 +1512,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             android.util.Log.i("MT", "ordre : repérage$lots ; vue ${viewportY.toInt()}/${viewportH.toInt()} ; ajoutées $added")
         }
         pump()
+        if (added == 0) maybeLatch()      // rien de nouveau à traduire : le chapitre est peut-être terminé
     }
 
     private fun pump() {
@@ -2224,7 +2350,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     }
 
     private inner class Bridge {
-        @JavascriptInterface fun onBottom(nb: Boolean) { main.post { nearBottom = nb } }
+        @JavascriptInterface fun onBottom(nb: Boolean) { main.post { nearBottom = nb; if (nb) maybeLatch() else main.removeCallbacks(latchCheck) } }
         @JavascriptInterface fun onScrollDir(down: Boolean) { main.post { onScrollDirection(down) } }
         @JavascriptInterface fun onProgress(percent: Int) { main.post { onProgressReported(percent) } }
         @JavascriptInterface fun onTap() { main.post { onPageTap() } }
@@ -2255,7 +2381,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         @JavascriptInterface fun onDiscard(id: String, did: String) {
             main.post { if (discardMode) translateDiscarded(id, did.toIntOrNull() ?: return@post) }
         }
-        @JavascriptInterface fun onImagesChanged() { main.post { if (active) start(false) } }
+        // chapitre terminé : une image qui apparaît (commentaire, bannière) ne relance rien, elle est seulement comptée pour le bouton discret
+        @JavascriptInterface fun onImagesChanged() { main.post { if (active) { if (chapterDone) refreshLate() else start(false) } } }
         // le lecteur a défilé : les pages en attente sont reclassées (celles qu'il regarde maintenant prennent la place des plus lointaines)
         @JavascriptInterface fun onViewport(y: Double, h: Double) { viewportY = y; if (h > 0) viewportH = h; if (active) pump() }
         @JavascriptInterface fun onB64(id: String, data: String) { b64Waiters[id]?.complete(data) }
@@ -2414,5 +2541,9 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         /** Une page bloquée depuis 1 min est signalée au journal ; depuis 4 min, son fil est abandonné et remplacé. */
         const val STALL_REPORT_MS = 60_000L
         const val STALL_ABANDON_MS = 240_000L
+        /** Fin de chapitre : durée pendant laquelle tout doit rester calme (traduction finie, lecteur en bas de la page) avant d'arrêter les reprises automatiques. */
+        const val LATCH_SETTLE_MS = 2000L
+        /** Suivi de la traduction par chapitre : au plus un enregistrement dans la bibliothèque toutes les 2,5 s. */
+        const val TRACK_EVERY_MS = 2500L
     }
 }
