@@ -1,0 +1,84 @@
+Performing Streamed Install
+Success
+Physical size: 1080x2400
+[e2e 05:09:19] === prep (index.html, MLKIT, EN→FR)
+[e2e 05:10:51] terminé : prep (91 s)
+[e2e 05:10:51] aucune image traitée : nouvel essai de prep
+[e2e 05:10:51] === prep (index.html, MLKIT, EN→FR)
+[e2e 05:11:45] terminé : prep (54 s)
+[e2e 05:11:45] === pc_en_mlkit (pc_en.html, MLKIT, EN→FR)
+[e2e 05:12:43] terminé : pc_en_mlkit (57 s)
+[e2e 05:12:43] === synth_en_caps_mlkit (synth_en_caps.html, MLKIT, EN→FR)
+[e2e 05:13:32] terminé : synth_en_caps_mlkit (48 s)
+[e2e 05:13:32] === synth_en_mixed_mlkit (synth_en_mixed.html, MLKIT, EN→FR)
+[e2e 05:14:21] terminé : synth_en_mixed_mlkit (48 s)
+[e2e 05:14:21] === synth_en_variety_combined (synth_en_variety.html, MLKIT, EN→FR)
+[e2e 05:15:10] terminé : synth_en_variety_combined (49 s)
+[e2e 05:15:10] === adblock_mlkit (adtest.html, MLKIT, EN→FR)
+[e2e 05:15:59] terminé : adblock_mlkit (49 s)
+[e2e 05:15:59] === synth_layouts_combined (synth_layouts.html, MLKIT, EN→FR)
+[e2e 05:17:24] terminé : synth_layouts_combined (85 s)
+[e2e 05:17:24] === synth_atypical_combined (synth_atypical.html, MLKIT, EN→FR)
+[e2e 05:18:31] terminé : synth_atypical_combined (67 s)
+[e2e 05:18:31] === synth_en_fancy_mlkitonly (synth_en_fancy.html, MLKIT, EN→FR)
+[e2e 05:19:08] terminé : synth_en_fancy_mlkitonly (36 s)
+[e2e 05:19:08] === synth_en_fancy_combined (synth_en_fancy.html, MLKIT, EN→FR)
+[e2e 05:19:57] terminé : synth_en_fancy_combined (48 s)
+[e2e 05:19:57] === pc_en_ref_mlkit (pc_en_ref.html, MLKIT, EN→FR)
+[e2e 05:20:49] terminé : pc_en_ref_mlkit (52 s)
+[e2e 05:20:49] === seam_mlkit (seam_cut.html, MLKIT, EN→FR)
+[e2e 05:21:50] terminé : seam_mlkit (61 s)
+[e2e 05:21:50] === seam_off_mlkit (seam_cut.html, MLKIT, EN→FR)
+[e2e 05:22:51] terminé : seam_off_mlkit (61 s)
+[e2e 05:22:51] === pc_en_batch_mlkit (pc_en.html, MLKIT, EN→FR)
+[e2e 05:23:43] terminé : pc_en_batch_mlkit (52 s)
+[e2e 05:23:43] === pc_en_long_mlkit (pc_en_long.html, MLKIT, EN→FR)
+[e2e 05:27:42] terminé : pc_en_long_mlkit (239 s)
+[e2e 05:27:42] === pc_en_toggle_mlkit (pc_en_toggle.html, MLKIT, EN→FR)
+[e2e 05:30:05] terminé : pc_en_toggle_mlkit (142 s)
+[e2e 05:30:05] === pc_en_once_mlkit (pc_en_once.html, MLKIT, EN→FR)
+[e2e 05:31:04] terminé : pc_en_once_mlkit (58 s)
+[e2e 05:31:04] === pc_en_strict_mlkit (pc_en_strict.html, MLKIT, EN→FR)
+[e2e 05:32:02] terminé : pc_en_strict_mlkit (58 s)
+[e2e 05:32:02] === pc_en_lazy_mlkit (pc_en_lazy.html, MLKIT, EN→FR)
+[e2e 05:33:05] terminé : pc_en_lazy_mlkit (63 s)
+[e2e 05:33:05] === synth_ko_mlkit (synth_ko.html, MLKIT, KO→FR)
+[e2e 05:33:54] terminé : synth_ko_mlkit (49 s)
+[e2e 05:33:54] === synth_ja_vert_mlkit (synth_ja_vertical.html, MLKIT, JA→FR)
+[e2e 05:34:42] terminé : synth_ja_vert_mlkit (48 s)
+[e2e 05:34:42] === synth_zh_mlkit (synth_zh.html, MLKIT, ZH_HANS→FR)
+[e2e 05:35:25] terminé : synth_zh_mlkit (43 s)
+[e2e 05:35:25] === pc_ja_mlkit (pc_ja.html, MLKIT, JA→FR)
+[e2e 05:36:34] terminé : pc_ja_mlkit (69 s)
+[e2e 05:36:34] === bloqueur de publicités
+[e2e 05:37:09] bloqueur terminé (6224 octets de rapport)
+[e2e 05:37:09] === interface
+  [avant appui]   mCurrentFocus=Window{e724ec5 u0 app.manhwa.translator/app.manhwa.MainActivity}
+  [avant appui]     topResumedActivity=ActivityRecord{2c13cf3 u0 app.manhwa.translator/app.manhwa.MainActivity t33}
+  [avant appui]   ResumedActivity: ActivityRecord{2c13cf3 u0 app.manhwa.translator/app.manhwa.MainActivity t33}
+  [après appui]   mCurrentFocus=Window{e724ec5 u0 app.manhwa.translator/app.manhwa.MainActivity}
+  mCurrentFocus=Window{e724ec5 u0 app.manhwa.translator/app.manhwa.MainActivity}
+        InsetsSource id=68f50000 type=statusBars frame=[0,0][1080,128] visible=true flags= insetsRoundedCornerFrame=false
+        mSource=InsetsSource id=68f50000 type=statusBars frame=[0,0][1080,128] visible=true flags= insetsRoundedCornerFrame=false
+[e2e 05:40:43] textes écartés : 2 cadre(s) proposé(s), listes connues pour 2 page(s) sur 2
+[e2e 05:42:23] === appuis longs réels
+[e2e 05:42:26] appuis longs : doigt posé en (723,1014) sur une traduction, en (54,569) sur une zone sans traduction
+[e2e 05:43:30] illustrations : 1 trouvée(s), 0 sans résultat («  »)
+[e2e 05:48:43] === éditeur
+[e2e 05:49:10] éditeur : bord gauche de la vue 154 → 201 (un doigt) → 241 (deux doigts), largeur 308 → 308, sens 1, fenêtre de 800 px
+[e2e 05:50:11] === chapitre trop court pour défiler
+[e2e 05:50:21] === changement de chapitre pendant une traduction
+[e2e 05:50:29] chapitre suivant pendant une traduction : retard du fil principal « 0 » ms, adresse « http://10.0.2.2:8000/comics/test-series-1a2b3c/chapter/2.html », page 8 (avant : 7)
+[e2e 05:50:33] === processus d'affichage de la page perdu
+[e2e 05:51:01] page perdue : processus 14574 → 14574, incidents comptés « 1 », page 9 (avant : 8), adresse « http://10.0.2.2:8000/comics/test-series-1a2b3c/chapter/2.html », avancement « 2/2 »
+  [journal système] 30 ligne(s) d'ANR ou de plantage
+[e2e 05:51:05] === illustrations : page construite par son script, annuaire, image de site seule
+{"t":1795239804145,"type":"cover","series":"Test Series","ok":true,"source":"site","why":"","page":"http:\/\/10.0.2.2:8000\/comics\/test-series-1a2b3c"}
+{"t":1795239821156,"type":"cover","series":"Zulu Quest","ok":false,"source":"","why":"site : page illisible ou trop lente ; annuaire : titre absent de l'annuaire","page":"https:\/\/seed.test\/comics\/zulu-quest-a1b2c3"}
+{"t":1795239821668,"type":"cover","series":"Mid Tale","ok":false,"source":"","why":"site : page illisible ou trop lente ; annuaire : titre absent de l'annuaire","page":"https:\/\/seed.test\/comics\/mid-tale-0a1b2c"}
+{"t":1795239822180,"type":"cover","series":"Alpha Saga","ok":false,"source":"","why":"site : page illisible ou trop lente ; annuaire : titre absent de l'annuaire","page":"https:\/\/seed.test\/comics\/alpha-saga-d4e5f6"}
+{"t":1795240291113,"type":"cover","series":"Spa Series","ok":true,"source":"site","why":"","page":"http:\/\/10.0.2.2:8000\/comics\/spa-series-7a7a7a"}
+{"t":1795240301865,"type":"cover","series":"Anilist Only","ok":true,"source":"annuaire","why":"site : aucune image retenue (partage 0, données 0, page 0)","page":""}
+{"t":1795240312105,"type":"cover","series":"Generic Only","ok":false,"source":"","why":"site : aucune image retenue (partage 1, données 0, page 0) ; annuaire : titre absent de l'annuaire","page":"http:\/\/10.0.2.2:8000\/comics\/generic-only-8c8c8c"}
+[e2e 05:52:32] illustrations : demandes à l'annuaire avant / après la recherche avec le réglage coupé : 5 / 5
+[e2e 05:52:34] toutes les scènes sont terminées
