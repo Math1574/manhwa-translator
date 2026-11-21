@@ -1100,6 +1100,8 @@ private fun ColorTab(st: EditorState) {
 private val FONT_CLASSES = listOf(
     "comic" to "Bande dessinée", "condensed" to "Condensé", "sans" to "Sans empattement", "hand" to "Écriture à la main", "brush" to "Pinceau",
     "display" to "Titre", "serif" to "Avec empattement", "mono" to "Chasse fixe",
+    // polices stylisées (FontLibrary.styled) : choisies seules quand le lettrage d'origine l'exige, ou à la main ici
+    "tech" to "Technique, fenêtre système", "gothic" to "Gothique, fantasy", "horror" to "Horreur", "script" to "Script élégant", "stencil" to "Pochoir", "impact" to "Titres percutants",
 )
 
 private fun fontLabel(sp: FontLibrary.Spec): String {
@@ -1129,7 +1131,7 @@ private fun FontTab(c: TranslationController, st: EditorState, modifier: Modifie
         l.add(FontRow.Header("Recommandées"))
         FontLibrary.specs.filter { it.auto }.forEach { l.add(FontRow.Item(it)) }
         for ((cls, name) in FONT_CLASSES) {
-            val items = FontLibrary.specs.filter { it.cls == cls && !it.auto }
+            val items = (FontLibrary.specs + FontLibrary.styled).filter { it.cls == cls && !it.auto }
             if (items.isNotEmpty()) { l.add(FontRow.Header(name)); items.forEach { l.add(FontRow.Item(it)) } }
         }
         l

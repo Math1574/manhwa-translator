@@ -23,6 +23,7 @@ import app.manhwa.core.FontMatcher
 import app.manhwa.core.FontLibrary
 import app.manhwa.core.RenderEdit
 import app.manhwa.core.StyleMatcher
+import app.manhwa.core.StyledFonts
 import app.manhwa.core.EditApplier
 import app.manhwa.core.GlyphRender
 import app.manhwa.core.GlyphRenderer
@@ -307,10 +308,15 @@ object PageRenderer {
                 else StyleMatcher.describe(lines, if (p.plan?.mode == Erasure.Mode.ART) StyleMatcher.Regime.ART else StyleMatcher.Regime.FLAT)
             }
         }
-        val dec = StyleMatcher.decide(blocks, AndroidGlyphRenderer(fonts), memory, series)
+        val renderer = AndroidGlyphRenderer(fonts)
+        val dec = StyleMatcher.decide(blocks, renderer, memory, series)
+        // polices stylisées (technique, gothique, horreur…) : seulement quand le lettrage d'origine l'exige (fenêtre système, lettrage qu'aucune police ordinaire ne copie), voir StyledFonts
+        val styled: List<StyledFonts.Pick?> = try { StyledFonts.refine(blocks, dec, preps.map { hintOf(it) }, renderer) } catch (e: Throwable) { emptyList() }
         return dec.mapIndexed { i, d ->
             if (d == null || ScriptDetector.dominant(preps[i].block.source) != "en") null
             else {
+                val sp = styled.getOrNull(i)
+                if (sp != null) return@mapIndexed FontPick(sp.id, 0f, "stylisée : ${sp.reason} · ordinaire ${d.id}")           // une police stylisée n'est pas inclinée : son dessin est celui voulu
                 val b = blocks[i]; val top = d.ranking.firstOrNull()
                 val info = if (b == null) "non mesuré (voisin) · famille ${d.family}" else "famille %s · poids %.3f · dist %.1f · forme %.2f · pén %.2f%s · alt %s".format(
                     d.family, kotlin.math.exp(b.raw[0]), top?.dist ?: 0f, top?.shape ?: 0f, top?.penalty ?: 0f, if (d.fromMemory) " · série" else "",
@@ -318,6 +324,15 @@ object PageRenderer {
                 FontPick(d.id, b?.slant ?: 0f, info)
             }
         }
+    }
+
+    /** Ce que le choix de police stylisée doit savoir d'un bloc : texte d'origine, texte clair sur fond sombre (fenêtre système), bloc dans une bulle. */
+    private fun hintOf(p: Prep): StyledFonts.Hint {
+        val plan = p.plan
+        val fg = plan?.letterColor?.takeIf { it != 0 } ?: plan?.textColor ?: 0xFF000000.toInt()
+        val bg = plan?.bg ?: 0xFFFFFFFF.toInt()
+        val fl = ColorMath.luminance(fg); val bl = ColorMath.luminance(bg)
+        return StyledFonts.Hint(p.block.source, fl >= 0.55f && bl <= 0.40f && fl - bl >= 0.30f, p.bubble != null)
     }
 
     /** Police d'un bloc : sources CJK en Noto calibrée, tout le reste dans la police de la bibliothèque choisie pour lui (sans épaississement ni étirement), droite ou inclinée comme l'original. */
