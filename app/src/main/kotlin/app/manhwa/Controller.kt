@@ -76,6 +76,9 @@ import app.manhwa.core.TermRefresh
 import app.manhwa.core.TextNormalizer
 import app.manhwa.core.TranslatedBlock
 import app.manhwa.core.UserRegion
+import app.manhwa.core.TextFormat
+import app.manhwa.core.TextLook
+import app.manhwa.core.ZoneShape
 import app.manhwa.core.PagePipeline
 import app.manhwa.core.PageResult
 import app.manhwa.core.PageQueue
@@ -116,6 +119,8 @@ data class EditTarget(val imageId: String, val bid: Int, val src: String, val tr
 
 /** Identifiant d'un texte à ajouter à la main (zone non traduite). */
 const val NEW_BLOCK_ID = -2
+/** Éditeur ouvert sur une zone à effacer (carré d'effacement) : même éditeur que l'ajout d'une traduction, avec l'effacement de toute la zone activé. */
+const val NEW_WIPE_ID = -3
 
 /** Zone non traduite touchée longuement : coordonnées dans l'image d'origine. */
 class EmptySpot(val imageId: String, val x: Float, val y: Float)
@@ -1185,6 +1190,13 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         peekEmpty = null; main.removeCallbacks(clearPeekEmpty)
         openEdit(EditTarget(sp.imageId, NEW_BLOCK_ID, "", "", sp.x, sp.y))      // page plus en mémoire : retraitée d'abord, l'éditeur s'ouvre ensuite
     }
+
+    /** Efface une zone à la main à l'endroit touché (carré d'effacement) : l'éditeur s'ouvre sur un rectangle à ajuster, avec l'effacement de toute la zone activé. */
+    fun openNewWipe() {
+        val sp = peekEmpty ?: return
+        peekEmpty = null; main.removeCallbacks(clearPeekEmpty)
+        openEdit(EditTarget(sp.imageId, NEW_WIPE_ID, "", "", sp.x, sp.y))
+    }
     /**
      * Adresse de la page dont WebView annonce la fin. Si elle est annoncée sous une adresse qui n'est pas celle d'un site (« about:blank ») alors que la page affichée est bien celle qu'on suit
      * (celle de [currentUrl], posée au début du chargement), c'est cette page-là qui vient de finir. Après un retour à l'accueil, [currentUrl] est vide : rien n'est rattaché à une ancienne page.
@@ -1634,7 +1646,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     class RegionRead(val source: String, val translation: String, val lineBoxes: List<CRect>, val lineTexts: List<String>, val vertical: Boolean, val lineHeight: Float)
 
     /** Bloc en cours de correction : page traitée, bloc visé (dans la page corrigée), correction déjà enregistrée pour lui, nom de l'œuvre. */
-    class EditSession(val info: WorkInfo, val block: TranslatedBlock, val existing: BlockEdit?, val seriesName: String?, val isNew: Boolean = false)
+    class EditSession(val info: WorkInfo, val block: TranslatedBlock, val existing: BlockEdit?, val seriesName: String?, val isNew: Boolean = false, val startWipe: Boolean = false)
 
     /** Aperçu en direct : couches d'effacement et de texte du bloc, mises en page avec la correction en cours. À recycler après usage. */
     class EditPreview(val sink: LayerSink, val blockId: Int)
@@ -1645,6 +1657,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val dx: Float, val dy: Float, val scale: Float, val fontId: String?, val precise: Boolean = false,
         /** Centre posé à la main pour le texte traduit (voir BlockEdit.anchorX) ; null : pas de position choisie. */
         val anchorX: Float? = null, val anchorY: Float? = null,
+        /** Mise en forme (alignement, lignes, interligne, casse, rotation), apparence (couleur, contour, lueur) et effacement de toute la zone. */
+        val format: TextFormat = TextFormat(), val look: TextLook = TextLook(), val wipe: Boolean = false,
     )
 
     /** Police de la bibliothèque (aperçu des polices dans l'éditeur). */
@@ -1663,14 +1677,14 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     fun editSession(t: EditTarget): EditSession? {
         val info = workInfo(t.imageId) ?: return null
         val name = currentSeriesKey?.let { SeriesHint.fromUrl(currentUrl) ?: it }
-        if (t.bid == NEW_BLOCK_ID) {
-            // texte à ajouter : rectangle de départ autour du point touché (coordonnées de l'image, décalées du contexte de la fenêtre)
+        if (t.bid == NEW_BLOCK_ID || t.bid == NEW_WIPE_ID) {
+            // texte à ajouter (ou zone à effacer) : rectangle de départ autour du point touché (coordonnées de l'image, décalées du contexte de la fenêtre)
             val iw = info.result.imageWidth.toFloat(); val ih = info.result.imageHeight.toFloat()
             val w = (iw * 0.45f).coerceIn(160f, 520f).coerceAtMost(iw); val h = kotlin.math.min(130f, ih)
             val cx = (if (t.x >= 0f) t.x else iw / 2f); val cy = (if (t.y >= 0f) t.y else ih / 2f) + info.ctxH
             val l = (cx - w / 2f).coerceIn(0f, kotlin.math.max(0f, iw - w)); val tp = (cy - h / 2f).coerceIn(0f, kotlin.math.max(0f, ih - h))
             val box = CRect(l, tp, kotlin.math.min(iw, l + w), kotlin.math.min(ih, tp + h))
-            return EditSession(info, TranslatedBlock(NEW_BLOCK_ID, box, "", "", false, 40f, emptyList(), emptyList()), null, name, isNew = true)
+            return EditSession(info, TranslatedBlock(NEW_BLOCK_ID, box, "", "", false, 40f, emptyList(), emptyList()), null, name, isNew = true, startWipe = t.bid == NEW_WIPE_ID)
         }
         val b = info.applied.page.blocks.firstOrNull { it.id == t.bid } ?: return null
         return EditSession(info, b, info.applied.editByBlock[b.id]?.takeUnless { it.id.startsWith(IGNORE_EDIT_PREFIX) }, name)
@@ -1686,10 +1700,12 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val info = sn.info; val shift = info.ctxH
         val orig = info.result.blocks.firstOrNull { it.id == sn.block.id }          // bloc détecté (null pour un bloc défini à la main)
         val prev = sn.existing
-        val manual = sn.isNew || prev?.kind == EditKind.MANUAL || f.zoneChanged
+        val manual = sn.isNew || prev?.kind == EditKind.MANUAL || f.zoneChanged || f.wipe
         val id = prev?.id ?: ("e" + java.util.UUID.randomUUID().toString().take(8))
         val shown = sn.block
         val newSrc = f.src.trim(); val newTr = f.translation.trim()
+        // les retours à la ligne d'une traduction automatique sont des espaces (seuls ceux tapés par l'utilisateur comptent, voir BlockEdit.hasBreaks)
+        val shownTr = if (prev?.hasBreaks == true) shown.translated.trim() else shown.translated.trim().replace('\n', ' ')
         val boxes = (f.read?.lineBoxes ?: shown.lineBoxes).map { imageRect(it, shift) }
         val texts = f.read?.lineTexts ?: shown.lineTexts
         val matchBox = if (prev?.kind == EditKind.MANUAL) prev.match else (orig?.box?.let { imageRect(it, shift) } ?: prev?.match)
@@ -1699,14 +1715,14 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             BlockEdit(
                 id, EditKind.MANUAL, matchBox, matchSrc, region, newSrc, newTr, f.hidden, f.dx, f.dy, f.scale, f.fontId,
                 f.read?.vertical ?: shown.vertical, f.read?.lineHeight ?: shown.lineHeight, boxes, texts, shown.kind, shown.bubble?.let { imageRect(it, shift) }, f.precise,
-                anchorX = f.anchorX, anchorY = f.anchorY?.minus(shift.toFloat()),
+                anchorX = f.anchorX, anchorY = f.anchorY?.minus(shift.toFloat()), format = f.format, look = f.look, wipe = f.wipe,
             )
         } else {
             BlockEdit(
                 id, EditKind.ADJUST, matchBox, matchSrc, null,
                 if (newSrc != shown.source.trim()) newSrc else prev?.source,
-                if (newTr != shown.translated.trim()) newTr.ifEmpty { null } else prev?.translation,
-                f.hidden, f.dx, f.dy, f.scale, f.fontId, precise = f.precise, anchorX = f.anchorX, anchorY = f.anchorY?.minus(shift.toFloat()),
+                if (newTr != shownTr) newTr.ifEmpty { null } else prev?.translation,
+                f.hidden, f.dx, f.dy, f.scale, f.fontId, precise = f.precise, anchorX = f.anchorX, anchorY = f.anchorY?.minus(shift.toFloat()), format = f.format, look = f.look,
             )
         }
     }
@@ -1780,8 +1796,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
      * (avant → après) est d'abord proposé : l'éditeur reste ouvert dessous, et rien n'est enregistré avant la confirmation.
      */
     fun saveEdit(sn: EditSession, edit: BlockEdit, terms: List<GlossaryEntry>, termsForSeries: Boolean) {
-        // un texte ajouté sans traduction n'a rien à afficher : on n'enregistre pas de zone vide
-        if (sn.isNew && edit.translation.isNullOrBlank()) { editTarget = null; return }
+        // un texte ajouté sans traduction n'a rien à afficher : on n'enregistre pas de zone vide (sauf une zone à effacer, qui n'a pas de traduction)
+        if (sn.isNew && edit.translation.isNullOrBlank() && !edit.wipe) { editTarget = null; return }
         val series = if (termsForSeries) sn.info.series else null
         proposeTerms(terms, series, sn, edit) { afterTerms -> doSaveEdit(sn, edit, terms, termsForSeries, afterTerms) }
     }
@@ -1806,13 +1822,16 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val manualTr = edit.translation
         if (manualTr != null && manualTr.isNotBlank() && edit.kind == EditKind.ADJUST && detected.isNotBlank()) graph.glossary.addCorrection(detected, manualTr)
         val summary = buildList {
-            if (edit.kind == EditKind.MANUAL) add("zone")
+            if (edit.kind == EditKind.MANUAL) add("zone" + (edit.region?.shape?.takeIf { it != ZoneShape.RECT }?.let { " " + it.name.lowercase() } ?: ""))
+            if (edit.wipe) add("zone effacée")
             if (edit.translation != null) add("traduction")
             if (edit.source != null) add("lecture")
             if (edit.hidden) add("non traduit")
             if (edit.dx != 0f || edit.dy != 0f || edit.anchored) add("position %.0f,%.0f".format(java.util.Locale.ROOT, edit.dx, edit.dy) + (if (edit.anchored) " ancrée %.0f,%.0f".format(java.util.Locale.ROOT, edit.anchorX, edit.anchorY) else ""))
             if (edit.scale != 1f) add("taille %.2f".format(java.util.Locale.ROOT, edit.scale))
             if (edit.fontId != null) add("police ${edit.fontId}")
+            if (!edit.format.isDefault) add("mise en forme ${edit.format.encode()}")
+            if (!edit.look.isDefault) add("apparence ${edit.look.encode()}")
             if (termAdded) add("glossaire")
         }.joinToString(", ")
         graph.journal.add(

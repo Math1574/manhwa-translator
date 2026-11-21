@@ -68,7 +68,10 @@ object BlockLayout {
         val rectangular = flat && plan?.shape == null && union.width > 2.2f * union.height && lineBoxes.size <= 2
         // boîte de bulle non confirmée : retenue seulement si elle laisse de la marge autour du texte. Un texte libre que le détecteur a aussi marqué « bulle » a une boîte qui
         // épouse son texte : l'ellipse inscrite le rognerait et le réduirait
-        val container = if (bubble == null) b.bubble?.takeIf { it.area >= 1.6f * union.area } else null
+        val container0 = if (bubble == null) b.bubble?.takeIf { it.area >= 1.6f * union.area } else null
+        // zone ovale tracée à la main (sans traduction à poser, rien à borner) : le texte reste dans l'ovale, comme dans une bulle ronde
+        val ovalZone = if (bubble == null && container0 == null && edit?.region?.shape == ZoneShape.ELLIPSE && !edit.region.painted && b.translated.isNotBlank()) edit.region.bounds else null
+        val container = container0 ?: ovalZone
         // rotation du texte d'origine (hors bulle seulement : un texte dans une bulle reste droit)
         val boxesPlan = if (plan != null) lineBoxes.map { r -> intArrayOf((r.left * s).toInt() - plan.x0, (r.top * s).toInt() - plan.y0, (r.right * s).toInt() - plan.x0, (r.bottom * s).toInt() - plan.y0) } else emptyList()
         val tiltDeg = if (plan != null && plan.ink != null && !b.vertical && bubble == null && container == null && plan.shape == null && edit?.manual != true) try { TextTilt.estimate(plan.ink, plan.w, plan.h, boxesPlan)?.degrees ?: 0f } catch (e: Throwable) { 0f } else 0f
@@ -82,10 +85,10 @@ object BlockLayout {
         val fmt = (edit?.format ?: TextFormat()).sane()
         val cased = fmt.applyCase(if (edit?.breaks == true) b.translated else b.translated.replace('\n', ' '))
         val text = if (target == "fr") Typography.french(cased) else cased
-        val obstacles = blocksAll.filter { it !== b }.map { o -> o.lineBoxes.ifEmpty { listOf(o.box) }.reduce { x, y -> x.union(y) } }
+        val obstacles = blocksAll.filter { it !== b && (it.id < EditApplier.MANUAL_ID_BASE || it.translated.isNotBlank()) }.map { o -> o.lineBoxes.ifEmpty { listOf(o.box) }.reduce { x, y -> x.union(y) } }
         // peinture de la traduction (couleur, contour) d'après les pixels d'origine
         val paint = if (plan != null && src != null && plan.ink != null) try { paintOf(plan, src, boxesPlan, if (inkH > 0f) inkH * s else lineH * s * 0.7f) } catch (e: Throwable) { null } else null
-        return BlockPrep(b, plan, style, text, bubble, obstacles, neighborBubbles, emptyList(), (bubble ?: container)?.let { isRect(it) } ?: false, container, paint = paint, tilt = tiltDeg, format = fmt, look = edit?.look ?: TextLook())
+        return BlockPrep(b, plan, style, text, bubble, obstacles, neighborBubbles, emptyList(), (if (ovalZone != null) false else (bubble ?: container)?.let { isRect(it) } ?: false), container, paint = paint, tilt = tiltDeg, format = fmt, look = edit?.look ?: TextLook())
     }
 
     /** Peinture de la traduction d'après les pixels d'origine : couleur du corps des traits, contour coloré mesuré (voir TextPaint). [letterPx] : hauteur des lettres d'origine en pixels échantillonnés. */
@@ -172,7 +175,7 @@ object BlockLayout {
     fun harmonizedHeights(preps: List<BlockPrep>, s: Float): FloatArray {
         val raw = FloatArray(preps.size) { i ->
             val b = preps[i].block
-            if (b.vertical) 0f else { val drop = tiltDrop(preps[i]); val lineH = lineHeightFree(b, drop); baseHeightOf(lessTilt(inkHeightOf(preps[i], s), drop), if (lineH > 0f) lineH / 1.12f else Float.MAX_VALUE, lineH) }
+            if (b.vertical || preps[i].text.isBlank()) 0f else { val drop = tiltDrop(preps[i]); val lineH = lineHeightFree(b, drop); baseHeightOf(lessTilt(inkHeightOf(preps[i], s), drop), if (lineH > 0f) lineH / 1.12f else Float.MAX_VALUE, lineH) }
         }
         val out = raw.copyOf()
         val order = raw.indices.filter { raw[it] > 0f }.sortedBy { raw[it] }

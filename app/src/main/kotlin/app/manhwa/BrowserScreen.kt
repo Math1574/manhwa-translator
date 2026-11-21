@@ -192,6 +192,8 @@ fun BrowserScreen(graph: AppGraph, onLibrary: () -> Unit = {}) {
                             Pill("Image ignorée · Rétablir", onClick = { c.unignorePeekImage() }, onClose = { c.peekEmpty = null })
                         } else {
                             Pill("Ajouter une traduction ici", onClick = { c.openNewEdit() }, onClose = { c.peekEmpty = null })
+                            // carré d'effacement : une zone entière (dessin, texte non détecté, filigrane) est remplie avec ce qui l'entoure
+                            Pill("Effacer une zone ici", onClick = { c.openNewWipe() })
                             // bandeau de début ou de fin de chapitre : l'image n'est plus jamais lue ni traduite
                             Pill("Ne jamais traduire cette image", onClick = { c.ignorePeekImage() })
                         }

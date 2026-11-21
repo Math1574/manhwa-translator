@@ -222,4 +222,46 @@ fun formatTests() {
         T.ok(n >= 280 * 80 * 0.95, "toute la zone est effacée : $n pixels")
         T.eq(Erasure.Mode.FLAT, wiped.mode, "fond blanc : aplat")
     }
+
+    T.test("zone ovale : la traduction reste dans l'ovale ; un carré d'effacement sans texte n'est ni un obstacle ni une mesure de taille") {
+        val zone = RectF(100f, 100f, 400f, 260f)
+        val region = UserRegion(zone, emptyList(), ZoneShape.ELLIPSE)
+        // image blanche avec une ligne de texte noir au milieu de la zone : le plan d'effacement existe (sans lui, aucune borne n'est posée)
+        val w = 800; val h = 600
+        val px = IntArray(w * h) { 0xFFFFFFFF.toInt() }
+        for (y in 170 until 190) for (x in 150 until 350) if ((x / 6) % 2 == 0) px[y * w + x] = 0xFF000000.toInt()
+        val src = ArraySource(w, h, px)
+        val line = RectF(150f, 170f, 350f, 190f)
+        val blk = TranslatedBlock(EditApplier.MANUAL_ID_BASE, line, "HELLO", "Peu importe la situation, je dois rassembler plus d'âmes ce soir", false, 20f, listOf(line))
+        val meas = TextMeasurer { t, size -> t.length * size * 0.5f }
+        fun prepOf(reg: UserRegion) = BlockLayout.prepare(blk, src, 1f, w.toFloat(), h.toFloat(), 20f, "fr", emptyList(), listOf(blk), emptyMap<Int, RectF?>(), { false }, RenderEdit(0f, 0f, 1f, null, reg, true, "m"))
+        val prep = prepOf(region)
+        T.ok(prep.plan != null, "plan d'effacement")
+        T.ok(prep.container != null && !prep.bubbleRect, "ovale : le texte est borné comme dans une bulle ronde")
+        fun worstOf(pr: BlockPrep): Float {
+            val r = BlockLayout.layout(pr, 1f, w.toFloat(), h.toFloat(), 1f, src, meas, 0.7f)!!
+            var worst = 0f
+            for (ln in r.fit.lines) for (x in listOf(ln.cx - ln.width / 2f, ln.cx + ln.width / 2f)) for (y in listOf(ln.top, ln.top + r.fit.lineStep)) {
+                val ex = (x - zone.centerX) / (zone.width / 2f); val ey = (y - zone.centerY) / (zone.height / 2f)
+                worst = maxOf(worst, ex * ex + ey * ey)
+            }
+            return worst
+        }
+        val worst = worstOf(prep)
+        T.ok(worst <= 1.1f, "tous les coins de ligne sont dans l'ovale (pire : $worst)")
+        // zone rectangulaire (par défaut) : aucune borne ajoutée
+        val plain = prepOf(UserRegion(zone))
+        T.ok(plain.container == null, "rectangle : pas de bulle ajoutée")
+        // carré d'effacement sans traduction
+        val big = RectF(0f, 0f, 700f, 500f)
+        val wipeBlk = TranslatedBlock(EditApplier.MANUAL_ID_BASE + 1, big, "", "", false, 40f, listOf(big))
+        val other = TranslatedBlock(1, RectF(100f, 100f, 400f, 160f), "HELLO", "Bonjour", false, 60f, listOf(RectF(100f, 100f, 400f, 160f)))
+        val pOther = BlockLayout.prepare(other, null, 1f, 800f, 600f, 60f, "fr", emptyList(), listOf(other, wipeBlk), emptyMap<Int, RectF?>(), { false }, null)
+        T.eq(0, pOther.obstacles.size, "un carré d'effacement n'est pas un obstacle")
+        val pWipe = BlockLayout.prepare(wipeBlk, null, 1f, 800f, 600f, 40f, "fr", emptyList(), listOf(other, wipeBlk), emptyMap<Int, RectF?>(), { false }, RenderEdit(0f, 0f, 1f, null, UserRegion(big), true, "w", wipe = true))
+        val hs = BlockLayout.harmonizedHeights(listOf(pOther, pWipe), 1f)
+        T.eq(0f, hs[1], "pas de mesure de taille pour un bloc sans texte")
+        val unchanged = BlockLayout.harmonizedHeights(listOf(pOther), 1f)
+        T.eq(unchanged[0], hs[0], "les autres blocs gardent leur taille")
+    }
 }
