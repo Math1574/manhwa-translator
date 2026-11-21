@@ -406,6 +406,7 @@ object TestHooks {
         val name = intent.getStringExtra("mt_lab") ?: "lab"
         val variants = (intent.getStringExtra("mt_variants") ?: "v2").split(",").map { it.trim() }.filter { it.isNotEmpty() }
         val engine = TranslationEngineChoice.values().firstOrNull { it.name == intent.getStringExtra("mt_engine") } ?: TranslationEngineChoice.GEMMA_E2B
+        val onlyPages: Set<Int>? = intent.getStringExtra("mt_pages")?.split(",")?.mapNotNull { it.trim().toIntOrNull() }?.toSet()?.takeIf { it.isNotEmpty() }
         graph.settingsStore.update { it.copy(engine = engine, useGpu = false, source = SourceLang.EN, target = TargetLang.FR) }
         thread(name = "mt-lab") {
             val result = JSONObject(); val variantsJson = JSONObject(); val notes = JSONArray()
@@ -420,11 +421,14 @@ object TestHooks {
                     graph.gemma.seriesTitle = intent.getStringExtra("mt_series")
                     val out = JSONArray()
                     for (i in 0 until pages.length()) {
+                        if (onlyPages != null && i !in onlyPages) continue
                         val raw = (0 until pages.getJSONArray(i).length()).map { pages.getJSONArray(i).getString(it) }
                         val texts = raw.map { app.manhwa.core.TextNormalizer.fixCase(it) } // comme dans le pipeline réel
                         val t0 = System.currentTimeMillis()
                         val tr = try { graph.gemma.translateWithGlossary(texts, "en", "fr", emptyList()) } catch (e: Throwable) { notes.put("$v page $i : $e"); texts.map { "" } }
                         out.put(JSONObject().put("page", i).put("ms", System.currentTimeMillis() - t0).put("calls", graph.gemma.lastCallDetail() ?: "").put("src", JSONArray(raw)).put("tr", JSONArray(tr.mapIndexed { k, t -> app.manhwa.core.TextNormalizer.matchCase(raw[k], t) })))
+                        // résultats partiels après chaque page : un délai dépassé ne fait plus perdre la variante en cours
+                        try { File(ctx.filesDir, "lab_$name.partial.json").writeText(JSONObject().put("engine", engine.name).put("variants", JSONObject(variantsJson.toString()).put(v, out)).put("notes", notes).toString()) } catch (_: Throwable) {}
                     }
                     variantsJson.put(v, out)
                     notes.put("variante $v terminée")

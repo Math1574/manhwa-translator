@@ -59,13 +59,13 @@ run() { # nom page moteur source cible modèles timeout [lazy]
   if grep -q '"total":0' $OUT/reports/$name.json 2>/dev/null && [ "$TRIES" != 1 ]; then say "aucune image traitée : nouvel essai de $name"; TRIES=1 run "$@"; fi
 }
 
-lab() { # nom moteur variantes [délai en secondes, 2400 par défaut]
+lab() { # nom moteur variantes [délai en secondes, 2400 par défaut] [pages à traduire, séparées par des virgules ; toutes par défaut]
   say "=== banc d'essai de traduction : $1 ($2, variantes $3)"
   adb push ci/lab/lab.json /data/local/tmp/lab.json >/dev/null
   adb shell "cat /data/local/tmp/lab.json | run-as $PKG sh -c 'cat > files/lab.json'"
   adb shell am force-stop $PKG; adb shell "run-as $PKG rm -f files/lab_$1.json"
   adb logcat -c
-  adb shell am start -n $PKG/app.manhwa.MainActivity --es mt_lab $1 --es mt_engine $2 --es mt_variants $3 --es mt_series "The Heavenly Demon Wants A Quiet Life" >/dev/null
+  adb shell am start -n $PKG/app.manhwa.MainActivity --es mt_lab $1 --es mt_engine $2 --es mt_variants $3 ${5:+--es mt_pages $5} --es mt_series "The Heavenly Demon Wants A Quiet Life" >/dev/null
   local start=$(date +%s) dead=0 limit=${4:-2400}
   while :; do
     sleep 10
@@ -743,7 +743,7 @@ appcmd "coversonline on"
 fi # fin des scénarios web (absents de la suite lab)
 
 # --- suite complète / lab : Gemma 4 E2B ---
-if [ "$SUITE" != quick ] && [ -f /tmp/gemma/gemma-4-E2B-it.litertlm ]; then
+if false && [ "$SUITE" != quick ] && [ -f /tmp/gemma/gemma-4-E2B-it.litertlm ]; then   # essai ciblé : E2B déjà mesuré (50/59)
   push_model /tmp/gemma/gemma-4-E2B-it.litertlm gemma-4-E2B-it.litertlm 181938105e0eefd105961417e8da75903eacda102c4fce9ce90f50b97139a63c
   lab e2b GEMMA_E2B v3,v4 2400
   if [ "$SUITE" = full ]; then
@@ -755,7 +755,7 @@ if [ "$SUITE" != quick ] && [ -f /tmp/gemma/gemma-4-E2B-it.litertlm ]; then
 fi
 if [ "$SUITE" != quick ] && [ -f /tmp/gemma/gemma-4-E4B-it.litertlm ]; then
   push_model /tmp/gemma/gemma-4-E4B-it.litertlm gemma-4-E4B-it.litertlm 0b2a8980ce155fd97673d8e820b4d29d9c7d99b8fa6806f425d969b145bd52e0
-  lab e4b GEMMA_E4B v3,v4 3600
+  lab e4b GEMMA_E4B v4 3900 "5,6,7,9,11,12,13,14,15,16,17,20,21"   # essai ciblé : les 13 pages que le délai de 60 s avait vidées
   if [ "$SUITE" = full ]; then
   run pc_en_gemma4b          pc_en.html          GEMMA_E4B EN FR "" 1800
   run synth_en_caps_gemma4b  synth_en_caps.html  GEMMA_E4B EN FR "" 1200
