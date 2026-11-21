@@ -56,6 +56,11 @@ if os.path.exists(f"{S}/synth/en_mixed.png"):
     for n in (1, 2, 3):
         open(f"{d}/{n}.html", "w").write(HEAD % f"Test Series - Chapter {n}" + f"<h3 style='padding:8px'>Test Series - Chapter {n}</h3>"
             + '<img src="/synth/en_mixed.png" style="display:block;width:100%;margin:0">' * 2 + "</body></html>")
+    # chapitre de deux pages suivies du « bas de page » d'un site (séries proposées : vignettes plus étroites que les pages) : seules les deux pages sont à traduire, jamais ce qui est dessous
+    open(f"{d}/4.html", "w").write(HEAD % "Test Series - Chapter 4" + "<h3 style='padding:8px'>Test Series - Chapter 4</h3>"
+        + '<img src="/synth/en_mixed.png" style="display:block;width:100%;margin:0">' * 2
+        + '<div style="height:60px;padding:16px">Chapitre suivant</div><h3 style="padding:8px">Séries populaires</h3>'
+        + '<div style="display:flex;flex-wrap:wrap;gap:8px;padding:8px">' + '<img src="/synth/en_caps.png" style="width:170px;display:block">' * 4 + '</div><div style="height:300px"></div></body></html>')
     # chapitre trop court pour défiler (page d'attente, chapitre à venir) : rien n'y est lu, il ne doit jamais être marqué comme lu
     os.makedirs(f"{S}/comics/short-series-9z9z9z/chapter", exist_ok=True)
     open(f"{S}/comics/short-series-9z9z9z/chapter/1.html", "w").write(HEAD % "Short Series - Chapter 1" + "<h3 style='padding:8px'>Chapitre à venir</h3></body></html>")
@@ -69,8 +74,11 @@ if os.path.exists(f"{S}/synth/en_mixed.png"):
     open(f"{sd}/cover.png", "wb").write(png(240, 360, lambda x, y: (40 + y * 160 // 360, 90 + x * 100 // 240, 200 - y * 120 // 360) if 24 <= x < 216 and 24 <= y < 336 else (230, 200, 60)))
     open(f"{sd}/other.png", "wb").write(png(120, 180, lambda x, y: (200, 60, 60)))
     open(f"{sd}/index.html", "w").write('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test Series - Read Free Online</title>'
-        '<meta property="og:image" content="/comics/test-series-1a2b3c/cover.png"></head><body style="margin:0;background:#1c1c1c;color:#ddd;font-family:sans-serif">'
+        '<meta property="og:image" content="/comics/test-series-1a2b3c/cover.png">'
+        '<meta property="og:description" content="Read Test Series manhwa online for free at Test Scans. Updated daily."></head><body style="margin:0;background:#1c1c1c;color:#ddd;font-family:sans-serif">'
         "<h3 style='padding:8px'>Test Series</h3>"
+        # synopsis : la balise de partage est une phrase du site (refusée) ; le vrai résumé est sous le titre « Synopsis »
+        "<h4 style='padding:0 8px'>Synopsis</h4><p style='padding:0 8px'>An ordinary office clerk finds a hidden door in the basement of her building. Behind it lies a library where every book tells the story of someone who disappeared.</p>"
         '<img src="/comics/test-series-1a2b3c/other.png" alt="Another Story" class="thumb" style="width:80px">'
         '<img src="/comics/test-series-1a2b3c/cover.png" alt="Test Series" style="width:160px"></body></html>')
     # autres œuvres, pour les illustrations (page de chapitre : pour qu'elles entrent dans la bibliothèque)
@@ -92,7 +100,7 @@ if os.path.exists(f"{S}/synth/en_mixed.png"):
     # (c) la page de l'œuvre n'annonce que l'image du site : aucune illustration (la pastille reste)
     work("generic-only-8c8c8c", "Generic Only")
     gd = f"{S}/comics/generic-only-8c8c8c"
-    open(f"{gd}/index.html", "w").write('<!doctype html><html><head><meta charset="utf-8"><title>Generic Only</title><meta property="og:image" content="/site-og/og-image.png"></head><body><h3>Generic Only</h3></body></html>')
+    open(f"{gd}/index.html", "w").write('<!doctype html><html><head><meta charset="utf-8"><title>Generic Only</title><meta property="og:image" content="/site-og/og-image.png"><meta property="og:description" content="Read Generic Only manhwa online for free at Test Scans. Updated daily."></head><body><h3>Generic Only</h3></body></html>')
 # banc du bloqueur : page piégée + faux sites tiers (noms en « .test », servis par l'application depuis /__sites/<nom>/ en mode test)
 if os.path.exists(f"{S}/synth/en_caps.png"):
     import shutil

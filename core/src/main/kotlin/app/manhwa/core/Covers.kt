@@ -7,9 +7,10 @@ data class CoverImg(val src: String, val alt: String = "", val cls: String = "",
 
 /**
  * Ce que la page d'une œuvre annonce comme illustration, lu par le navigateur dans la page chargée (adresses déjà complètes).
- * [shared] : balises de partage (og:image, twitter:image, image_src), dans l'ordre de confiance ; [structured] : images des données structurées ; [images] : images de la page.
+ * [shared] : balises de partage (og:image, twitter:image, image_src), dans l'ordre de confiance ; [structured] : images des données structurées ; [images] : images de la page ;
+ * [texts] : textes qui pourraient être le synopsis de l'œuvre (lus dans la même page, au même moment).
  */
-data class CoverCandidates(val shared: List<String> = emptyList(), val structured: List<String> = emptyList(), val images: List<CoverImg> = emptyList(), val pageTitle: String = "")
+data class CoverCandidates(val shared: List<String> = emptyList(), val structured: List<String> = emptyList(), val images: List<CoverImg> = emptyList(), val pageTitle: String = "", val texts: List<SynopsisText> = emptyList())
 
 /** Choix de l'illustration d'une œuvre : où la chercher, quelle image retenir, à quelle condition on la garde. */
 object CoverPick {

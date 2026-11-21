@@ -94,6 +94,8 @@ run prep index.html MLKIT EN FR "fr,ja,ko,zh" 30
 run pc_en_mlkit          pc_en.html          MLKIT EN FR "fr"      300
 run synth_en_caps_mlkit  synth_en_caps.html  MLKIT EN FR "fr"      200
 run synth_en_mixed_mlkit synth_en_mixed.html MLKIT EN FR "fr"      200
+# fin de chapitre : deux pages, puis des vignettes de séries proposées plus étroites (page de chapitre) : elles ne doivent pas être repérées pour la traduction
+run chapter_end_mlkit comics/test-series-1a2b3c/chapter/4.html MLKIT EN FR "fr" 200
 run synth_en_variety_combined synth_en_variety.html MLKIT EN FR "fr" 300
 run adblock_mlkit adtest.html MLKIT EN FR "fr" 200
 run synth_layouts_combined synth_layouts.html MLKIT EN FR "fr" 400
@@ -425,6 +427,9 @@ uidump lib
 tapt lib "=Test Series" 1; sleep 2; uidump series; shot ui 3
 chk "fiche d'une œuvre : l'illustration est aussi en tête de la fiche" $(has series 'Illustration de Test Series')
 chk "fiche d'une œuvre : liste des chapitres" $(has series 'Chapitres')
+# synopsis : lu sous le titre « Synopsis » de la page de l'œuvre ; la balise de partage de cette page est une phrase du site (« Read … online for free »), elle ne doit pas être prise pour le résumé
+for k in $(seq 1 8); do [ "$(has series 'An ordinary office clerk')" = 1 ] && break; sleep 2; uidump series; done
+chk "synopsis : la fiche d'une œuvre affiche le résumé de la page de l'œuvre, pas la phrase générique du site" $([ "$(has series 'An ordinary office clerk')" = 1 ] && [ "$(hasnot series 'online for free')" = 1 ] && echo 1 || echo 0)
 # la lecture proposée dépend de l'avancement relevé à 1,5 s (page courte = chapitre « Lu ») : « Continuer / Reprendre » ou, si le chapitre est marqué lu, « Lire le chapitre suivant / Relire »
 chk "fiche d'une œuvre : page de l'œuvre et lecture proposées" $([ "$(has series 'Page de l')" = 1 ] && [ "$(has series 'Continuer')$(has series 'Reprendre')$(has series 'Lire le chapitre')$(has series 'Relire')" != "0000" ] && echo 1 || echo 0)
 adb shell input keyevent KEYCODE_BACK; sleep 1.5; uidump lib2
@@ -728,6 +733,17 @@ chk "illustrations : l'illustration de cette œuvre vient du site (journal)" $(g
 chk "illustrations : l'annuaire donne l'illustration d'une œuvre dont le site n'a aucune image" $(has cv2 'Illustration de Anilist Only')
 chk "illustrations : celle-ci vient de l'annuaire (journal)" $(grep '"series":"Anilist Only"' $OUT/reports/journal_covers.jsonl | grep -q '"source":"annuaire"' && echo 1 || echo 0)
 chk "illustrations : une page qui n'annonce que l'image du site ne donne aucune illustration (la pastille reste)" $([ "$(hasnot cv2 'Illustration de Generic Only')" = 1 ] && grep '"series":"Generic Only"' $OUT/reports/journal_covers.jsonl | grep -q '"ok":false' && echo 1 || echo 0)
+# synopsis : le résumé de l'annuaire (faux serveur) s'affiche dans la fiche de l'œuvre, sans ses balises, ses spoilers ni sa mention de source ; une phrase générique du site n'est jamais prise pour un synopsis
+adb exec-out "run-as $PKG cat files/journal.jsonl" > $OUT/reports/journal_covers.jsonl 2>/dev/null
+grep '"type":"synopsis"' $OUT/reports/journal_covers.jsonl | cut -c1-400 >> $OUT/run.log
+tapt cv2 "=Anilist Only" 1; sleep 2
+for k in $(seq 1 10); do uidump syn1; [ "$(has syn1 'fake directory summary')" = 1 ] && break; sleep 2; done
+shot ui 74
+chk "synopsis : le résumé de l'annuaire s'affiche dans la fiche (sans balises, spoiler ni mention de source)" $([ "$(has syn1 'fake directory summary')" = 1 ] && [ "$(hasnot syn1 'hidden spoiler')" = 1 ] && [ "$(hasnot syn1 'Fake Directory')" = 1 ] && [ "$(hasnot syn1 '<i>')" = 1 ] && echo 1 || echo 0)
+chk "synopsis : celui-ci vient de l'annuaire (journal)" $(grep '"type":"synopsis"' $OUT/reports/journal_covers.jsonl | grep '"series":"Anilist Only"' | grep -q '"source":"annuaire"' && echo 1 || echo 0)
+chk "synopsis : une page qui n'annonce qu'une phrase générique du site ne donne aucun synopsis (journal)" $(grep '"type":"synopsis"' $OUT/reports/journal_covers.jsonl | grep '"series":"Generic Only"' | grep -q '"ok":false' && echo 1 || echo 0)
+chk "synopsis : celui de Test Series vient de la page du site (journal)" $(grep '"type":"synopsis"' $OUT/reports/journal_covers.jsonl | grep '"series":"Test Series"' | grep -q '"source":"site"' && echo 1 || echo 0)
+adb shell input keyevent KEYCODE_BACK; sleep 1.5
 chk "illustrations : l'échec est expliqué au journal" $(grep '"series":"Generic Only"' $OUT/reports/journal_covers.jsonl | grep -q 'aucune image retenue' && echo 1 || echo 0)
 chk "illustrations : l'image du site (partage générique) n'est jamais téléchargée" $([ "$(grep -c 'GET /site-og/og-image.png' /tmp/server.log 2>/dev/null; true)" = 0 ] && echo 1 || echo 0)
 chk "illustrations : l'image au titre de l'œuvre, apparue après le chargement, est celle qui est téléchargée" $([ "$(grep -c 'GET /comics/spa-series-7a7a7a/cover.png' /tmp/server.log 2>/dev/null; true)" -ge 1 ] && echo 1 || echo 0)

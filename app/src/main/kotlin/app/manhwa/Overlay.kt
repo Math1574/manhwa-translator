@@ -28,7 +28,7 @@ object PageScript {
     val INJECT = """
 (function(){
   if (window.__mt) return;
-  var S = {entries:{}, seen:{}, first:{}, seq:0, visible:true, timer:null};
+  var S = {entries:{}, seen:{}, first:{}, seq:0, visible:true, timer:null, gen:{}};
   var ER = {on:false, t:0, x:0, y:0};      // gomme : active, instant et position du dernier toucher qui a supprimé une traduction
   function mark(el, on){ el.style.outline = on ? '2px dashed rgba(255,70,70,0.95)' : ''; el.style.outlineOffset = '-2px'; }
   var MIN = 150;
@@ -37,7 +37,31 @@ object PageScript {
   function srcOf(im){ var s = im.currentSrc || im.src || ''; if (s.indexOf('data:')===0 || s.indexOf('blob:')===0) return 'js:'; return s; }
   // images que l'application n'a pas pu traiter (travail interrompu) : la page les oublie, elles seront redonnées à la prochaine collecte
   function forget(ids){ for (var i=0;i<ids.length;i++){ delete S.seen[ids[i]]; delete S.first[ids[i]]; } }
-  function collect(force){
+  // Colonne du chapitre : ses pages se suivent, empilées à (peu près) la même largeur, et ce sont elles qui occupent le plus de place dans la page. Ce qui est nettement plus étroit et
+  // n'est pas dans cette colonne (avatars et images des commentaires, vignettes d'autres œuvres, boutons du site sous le dernier chapitre) n'est pas l'œuvre : on ne le donne pas à
+  // la traduction. Une image aussi large que les pages n'est jamais écartée (une page ne l'est donc jamais, quelle que soit la mise en page du site). Rend null s'il n'y a pas de colonne nette.
+  function column(geo){
+    var n = geo.length, i; if (n < 2) return null;
+    var byW = geo.slice().sort(function(a, b){ return a.width - b.width; }), tot = 0;
+    for (i = 0; i < n; i++) tot += byW[i].width * (byW[i].bottom - byW[i].top);
+    var acc = 0, ref = byW[n - 1].width;
+    for (i = 0; i < n; i++) { acc += byW[i].width * (byW[i].bottom - byW[i].top); if (acc * 2 >= tot) { ref = byW[i].width; break; } }   // largeur « médiane » pondérée par la surface
+    var lim = ref * 0.55, gap = Math.max(300, window.innerHeight * 0.6);
+    var pages = geo.filter(function(g){ return g.width >= lim; }).sort(function(a, b){ return a.top - b.top; });
+    if (!pages.length) return null;
+    // chaînes de pages (au plus « gap » entre deux voisines) : la plus étendue est le chapitre
+    var best = null, cur = null;
+    for (i = 0; i < pages.length; i++) {
+      var p = pages[i], pa = p.width * (p.bottom - p.top);
+      if (cur && p.top - cur.bottom <= gap) { cur.bottom = Math.max(cur.bottom, p.bottom); cur.left = Math.min(cur.left, p.left); cur.right = Math.max(cur.right, p.left + p.width); cur.area += pa; }
+      else { cur = {top:p.top, bottom:p.bottom, left:p.left, right:p.left + p.width, area:pa}; }
+      if (!best || cur.area > best.area || cur === best) best = cur;
+    }
+    best.lim = lim;
+    return best;
+  }
+  // « strict » : on ne donne que les images de la colonne du chapitre (pages de lecture) ; sinon (page où l'on a demandé la traduction à la main) toutes les images assez grandes
+  function collect(force, strict){
     if (force) { S.seen = {}; }
     var out = [], l = document.images, now = Date.now();
     // images empilées : l'image collée juste au-dessus (son bord bas touche le bord haut de celle-ci, même colonne, même largeur) apporte le contexte
@@ -49,6 +73,7 @@ object PageScript {
       geo.push({im:g, top:gr.top + window.scrollY, bottom:gr.bottom + window.scrollY, left:gr.left + window.scrollX, width:gr.width});
     }
     function near(a, b){ return Math.abs(a - b) <= 3; }
+    var col = strict ? column(geo) : null;
     for (var i=0;i<l.length;i++){
       var im = l[i], r = im.getBoundingClientRect();
       if (im.getAttribute('data-mt-img')) continue;
@@ -57,6 +82,8 @@ object PageScript {
       var s = srcOf(im); if (!s) continue;
       var id = idOf(im); if (S.seen[id] === s) continue;
       var top = r.top + window.scrollY, left = r.left + window.scrollX, prev = null, next = null;
+      // hors du chapitre : nettement plus étroite que les pages et ailleurs que dans leur colonne (une image plus étroite au milieu des pages, elle, reste)
+      if (col && r.width < col.lim && !(top >= col.top - 4 && top + r.height <= col.bottom + 4 && left >= col.left - 4 && left + r.width <= col.right + 4)) continue;
       for (var k=0;k<geo.length;k++){
         var q = geo[k]; if (q.im === im || q.im.naturalWidth !== im.naturalWidth) continue;
         if (near(q.bottom, top) && near(q.left, left) && near(q.width, r.width)) prev = q.im;
@@ -87,6 +114,8 @@ object PageScript {
   }
   function apply(id, data){
     var im = findImg(data.target || id); if (!im) return false;     // « target » : superposition rattachée à l'image du dessus (partie d'un texte coupé par la jonction)
+    // numéro d'envoi : un morceau d'un envoi plus ancien, arrivé après un envoi plus récent, ne se pose pas par-dessus (il remettrait l'ancien texte)
+    if (data.gen !== undefined) { var g0 = S.gen[id] || 0; if (data.append ? data.gen !== g0 : data.gen < g0) return false; S.gen[id] = data.gen; }
     var old = S.entries[id];
     if (data.append && old && old.div) {
       var d = old.div;

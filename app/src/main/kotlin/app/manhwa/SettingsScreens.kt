@@ -115,7 +115,7 @@ private val searchIndex: List<Pair<SearchEntry, Target>> = listOf(
     SearchEntry("reread", "Relecture des textes difficiles (Gemma)", "Reconnaissance du texte › Relecture", "gemma vision relire tester manuscrit incliné") to Target(SettingsPage.OCR, "relecture"),
     SearchEntry("ads", "Bloquer les publicités", "Navigation › Publicités", "pub adblock pop-up redirections liens invisibles") to Target(SettingsPage.BROWSING, "pubs"),
     SearchEntry("sites", "Sites sans bloqueur", "Navigation › Sites sans bloqueur", "exceptions rétablir autorisés destination") to Target(SettingsPage.BROWSING, "sites"),
-    SearchEntry("covers", "Illustrations des œuvres", "Données › Illustrations", "images couvertures bibliothèque anilist annuaire pastille chercher manquantes titre en ligne") to Target(SettingsPage.DATA, "illustrations"),
+    SearchEntry("covers", "Illustrations des œuvres", "Données › Illustrations", "images couvertures bibliothèque anilist annuaire pastille chercher manquantes titre en ligne synopsis résumé") to Target(SettingsPage.DATA, "illustrations"),
     SearchEntry("cache", "Cache de traductions", "Données › Stockage", "vider effacer espace disque taille modèles gemma stockés") to Target(SettingsPage.DATA, "stockage"),
     SearchEntry("gpu", "Accélération GPU (expérimental)", "Avancé › Performance", "processeur cpu tester gemma vitesse") to Target(SettingsPage.ADVANCED, "performance"),
     SearchEntry("diag", "Diagnostic de la détection", "Avancé › Diagnostic", "cadres vert rouge ocr rejeté signaler problème") to Target(SettingsPage.ADVANCED, "diagnostic"),
@@ -696,10 +696,10 @@ private fun DataSettings(graph: AppGraph, focus: String?) {
         SettingsGroup("Illustrations", "illustrations") {
             SwitchRow(
                 "Compléter avec l'annuaire AniList",
-                "Les illustrations de la bibliothèque viennent d'abord de la page de l'œuvre sur le site lu. Quand elle n'en donne pas, l'illustration est cherchée sur AniList (annuaire public d'œuvres) : seul le titre de l'œuvre lui est envoyé, et l'image n'est gardée que si le titre est exactement le même.",
+                "Les illustrations et les synopsis de la bibliothèque viennent d'abord de la page de l'œuvre sur le site lu. Quand elle n'en donne pas, ils sont cherchés sur AniList (annuaire public d'œuvres) : seul le titre de l'œuvre lui est envoyé, et le résultat n'est gardé que si le titre est exactement le même.",
                 s.coversOnline,
             ) { v -> store.update { it.copy(coversOnline = v) } }
-            GhostButton("Chercher les illustrations manquantes", {
+            GhostButton("Chercher les illustrations et synopsis manquants", {
                 graph.coverFetcher.retry(graph.library.library.series())
                 Toast.makeText(ctx, "Recherche lancée : les images arrivent une à une dans la bibliothèque", Toast.LENGTH_LONG).show()
             })

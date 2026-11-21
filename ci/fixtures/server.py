@@ -52,7 +52,8 @@ class H(http.server.SimpleHTTPRequestHandler):
         media = []
         if "".join(c for c in title.lower() if c.isalnum()) == "anilistonly":
             media = [{"format": "MANGA", "countryOfOrigin": "KR", "popularity": 100, "title": {"romaji": "Anilist Only", "english": "Anilist Only", "native": None}, "synonyms": [],
-                      "coverImage": {"extraLarge": "http://10.0.2.2:%d/comics/anilist-only-5e5e5e/cover.png" % PORT, "large": None}}]
+                      "coverImage": {"extraLarge": "http://10.0.2.2:%d/comics/anilist-only-5e5e5e/cover.png" % PORT, "large": None},
+                      "description": "A fake directory summary of the only series this server knows about, with <i>markup</i> inside.<br><br>~!A hidden spoiler.!~<br>(Source: Fake Directory)"}]
         out = json.dumps({"data": {"Page": {"media": media}}}).encode()
         self.send_response(200); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(out))); self.end_headers(); self.wfile.write(out)
 

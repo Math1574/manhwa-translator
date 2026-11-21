@@ -182,7 +182,7 @@ fun BrowserScreen(graph: AppGraph, onLibrary: () -> Unit = {}) {
                         Pill("Ignorer ce texte…", onClick = { c.holdPeek(); ignoreDialog = true })
                     }
                     // geste qui se défait : trois secondes pour l'annuler (le bandeau se referme ensuite et le geste est définitif)
-                    c.undoBanner?.let { Pill("${it.message} · Annuler", onClick = { c.runUndo() }) }
+                    c.undoBanner?.let { Pill("${it.message} · ${it.label}", onClick = { c.runUndo() }) }
                     // gomme : les traductions entourées en rouge se suppriment d'un appui ; ce bouton la coupe
                     if (c.eraser) Pill("Gomme active · Terminer", onClick = { c.switchEraser(false) })
                     // textes écartés : les cadres orange se traduisent d'un appui ; ce bouton coupe le mode
