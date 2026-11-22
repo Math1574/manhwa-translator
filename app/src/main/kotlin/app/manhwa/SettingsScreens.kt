@@ -101,7 +101,6 @@ private val searchIndex: List<Pair<SearchEntry, Target>> = listOf(
     SearchEntry("dst", "Traduire vers", "Traduction › Langues", "langue cible français anglais espagnol allemand") to Target(SettingsPage.TRANSLATION, "langues"),
     SearchEntry("engine", "Moteur de traduction", "Traduction › Moteur", "ML Kit Gemma E2B E4B qualité contexte rapide") to Target(SettingsPage.TRANSLATION, "moteur"),
     SearchEntry("sfx", "Traduire les onomatopées", "Traduction › Options", "bruitages sfx crack boom effets sonores") to Target(SettingsPage.TRANSLATION, "options"),
-    SearchEntry("relecture", "Relecture (traduction plus naturelle)", "Traduction › Options", "relecture naturel mot à mot calque seconde passe qualité gemma réécrire") to Target(SettingsPage.TRANSLATION, "options"),
     SearchEntry("orb", "Bouton Original | Traduit", "Lecture › Bouton rond", "replacer déplacer glisser position") to Target(SettingsPage.READING, "bouton"),
     SearchEntry("quick", "Réglages rapides de lecture", "Lecture › Bouton rond", "appui long panneau langue taille onomatopées retraduire page") to Target(SettingsPage.READING, "bouton"),
     SearchEntry("bars", "Masquer les barres en lisant", "Lecture › Affichage", "barre adresse onglets plein écran défilement") to Target(SettingsPage.READING, "affichage"),
@@ -452,8 +451,6 @@ private fun TranslationSettings(graph: AppGraph, focus: String?, open: (Settings
         }
         SettingsGroup("Options", "options") {
             SwitchRow("Traduire les onomatopées", "Désactivé (recommandé) : les bruitages (CRACK, BOOM…) restent tels quels.", s.translateSfx) { v -> store.update { it.copy(translateSfx = v) } }
-            HorizontalDivider()
-            SwitchRow("Relecture (traduction plus naturelle)", "Gemma relit sa traduction et réécrit ce qui sonne traduit mot à mot. Chaque page met 1,5 à 2 fois plus de temps. Sans effet avec ML Kit.", s.refinePass) { v -> store.update { it.copy(refinePass = v) } }
             HorizontalDivider()
             LinkRow("Glossaire", "Noms et termes à traduire toujours pareil") { open(SettingsPage.GLOSSARY, null) }
         }
