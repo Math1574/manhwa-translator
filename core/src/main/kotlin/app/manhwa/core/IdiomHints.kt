@@ -312,10 +312,53 @@ ugly mug | sale tronche
 sappy | à l'eau de rose, mièvre
 bullshit | conneries, foutaises
 cover your ears | bouchez-vous les oreilles, bouche-toi les oreilles | \bcouvrir (vos|tes)\b
+# ===== journal du 22/11 : calques et faux amis relevés dans les traductions =====
+what's wrong with | qu'est-ce qu'il a, qu'est-ce qu'elle a, qu'est-ce qu'ils ont (« what's wrong with my hands? » = qu'est-ce qu'elles ont, mes mains ? ; jamais « qu'est-ce qui ne va pas avec ») | ne va pas avec
+^ to think | dire que (« to think I ended up here » = dire que je me suis retrouvé ici ; jamais « de penser que ») | ^\W*(de|à) penser que
+one wrong move | un seul faux pas
+make no mistake | ne te méprends pas, que ce soit bien clair
+~reason with | faire entendre raison à, discuter avec (« I knew you could be reasoned with » = je savais qu'on pouvait discuter avec toi) | (être|es|êtes) raisonnée?s?\b
+deal with it | fais avec, débrouille-toi | gère ça
+~blame * on | rejeter la faute sur, s'en prendre à (« blame your misfortune on being here » = prends-t'en à ta malchance d'être là) | blâm
+color * back to * face | il a repris des couleurs | couleur est revenue
+color * returned to * face | il a repris des couleurs | couleur est revenue
+quite a mess | dans un sale état (« you're quite a mess » = tu es dans un sale état) | un vrai désastre
+malice | malveillance, méchanceté (jamais « malice », qui veut dire espièglerie en français) | \bmalice\b
+~cremate | incinérer | \bcrém
+on par with | au niveau de, à la hauteur de
+~stab * to death | poignarder, tuer à coups de lame | transperc\w* à mort
+limb from limb | mettre en pièces, réduire en charpie
+i take it | je suppose, si je comprends bien
+in * right mind | avoir toute sa tête (« none of them are in their right minds » = aucun d'eux n'a toute sa tête) | état de conscience
+petty pride | fierté mal placée | orgueil mesquin
+~keep * safe | protéger, assurer la sécurité de | gard\w* en sécurité
+we have a deal | marché conclu | nous avons un accord
+~let me be clear | que les choses soient claires | laisse(z)?-moi être clair
+~put a lot of effort into | se donner du mal pour | beaucoup d'efforts dans
+anyone can see | tout le monde voit bien | n'importe qui voit
+there's no point in | ça ne sert à rien de, inutile de
+how on earth | comment diable, mais comment
+what's gotten into you | qu'est-ce qui te prend
+dead tired | crevé, épuisé
+restrain | maîtriser, neutraliser (une personne) ; contenir (une émotion)
+~get rid of | se débarrasser de (« go get rid of him » = va te débarrasser de lui) | va t'en débarrasser
+~set * on fire | mettre le feu à (« set it on fire » = mettez-y le feu) | mettez-le au feu
+~learn of | apprendre (« if the Order learns of this » = si l'Ordre l'apprend ; jamais « en apprend ») | \ben apprend
+you're the ones who | c'est vous qui (pluriel) | c'est toi qui
+mongrel | bâtard, sang-mêlé | bouffon
+demon bastard | sale démon, démon de malheur | salaud démon|démon de salaud
+farewell | adieu
+stealth | discrétion, furtivité (nom féminin : « ma furtivité »)
+~transmigrate | se retrouver dans, être réincarné dans (« I've transmigrated into this novel » = je me suis retrouvé dans ce roman) | transmigr
+~enter into a contract | conclure un pacte, passer un contrat
+why should that concern me | en quoi ça me regarde ?
+~have no choice but to | n'avoir d'autre choix que de | pas le choix que de
+@be bound to | forcément, sans doute (« someone is bound to screen it » = quelqu'un va forcément la lire)
 # ===== titres, rangs et termes d'arts martiaux =====
 eldest young master | jeune maître aîné (le fils aîné) | plus jeune maître|plus âgé des jeunes
 young lady | jeune demoiselle, mademoiselle
-your/his/her lordship | Votre Seigneurie, Sa Seigneurie (jamais « votre seigneur ») | \b(son|votre|ton) seigneur\b
+your lordship | Votre Seigneurie (jamais « votre seigneur ») | \b(ton|votre) seigneur\b
+his/her lordship | Sa Seigneurie (jamais « Votre Seigneurie » ni « son seigneur ») | votre seigneurie|\bson seigneur\b
 senior brother | grand frère d'armes, aîné | senior
 junior brother | petit frère d'armes, cadet | junior
 senior sister | grande sœur d'armes | senior
