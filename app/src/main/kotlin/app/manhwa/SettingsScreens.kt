@@ -101,6 +101,7 @@ private val searchIndex: List<Pair<SearchEntry, Target>> = listOf(
     SearchEntry("dst", "Traduire vers", "Traduction › Langues", "langue cible français anglais espagnol allemand") to Target(SettingsPage.TRANSLATION, "langues"),
     SearchEntry("engine", "Moteur de traduction", "Traduction › Moteur", "ML Kit Gemma E2B E4B qualité contexte rapide") to Target(SettingsPage.TRANSLATION, "moteur"),
     SearchEntry("sfx", "Traduire les onomatopées", "Traduction › Options", "bruitages sfx crack boom effets sonores") to Target(SettingsPage.TRANSLATION, "options"),
+    SearchEntry("relecture", "Relecture (traduction plus naturelle)", "Traduction › Options", "relecture naturel mot à mot calque seconde passe qualité gemma réécrire") to Target(SettingsPage.TRANSLATION, "options"),
     SearchEntry("orb", "Bouton Original | Traduit", "Lecture › Bouton rond", "replacer déplacer glisser position") to Target(SettingsPage.READING, "bouton"),
     SearchEntry("quick", "Réglages rapides de lecture", "Lecture › Bouton rond", "appui long panneau langue taille onomatopées retraduire page") to Target(SettingsPage.READING, "bouton"),
     SearchEntry("bars", "Masquer les barres en lisant", "Lecture › Affichage", "barre adresse onglets plein écran défilement") to Target(SettingsPage.READING, "affichage"),
@@ -123,6 +124,7 @@ private val searchIndex: List<Pair<SearchEntry, Target>> = listOf(
     SearchEntry("filters", "Listes de filtres", "Avancé › Bloqueur de publicités", "ublock easylist hagezi mise à jour règles") to Target(SettingsPage.ADVANCED, "bloqueur"),
     SearchEntry("blocklog", "Journal du bloqueur", "Avancé › Bloqueur de publicités", "règles bloquées image n'apparaît pas pop-up") to Target(SettingsPage.ADVANCED, "bloqueur"),
     SearchEntry("models", "Modèles de traduction", "Traduction › Modèles", "télécharger supprimer gemma ml kit langues japonais vertical manga-ocr module") to Target(SettingsPage.MODELS, null),
+    SearchEntry("aierase", "Effacement par IA (dessin sous le texte)", "Traduction › Modèles", "effacement ia lama dessin sous le texte gommer retouche nettoyage propre flou tache module") to Target(SettingsPage.MODELS, null),
     SearchEntry("glossary", "Glossaire", "Traduction › Glossaire", "noms personnages termes œuvre remplacer") to Target(SettingsPage.GLOSSARY, null),
     SearchEntry("ignored", "Textes et images ignorés", "Texte et modèles › Textes et images ignorés", "ignorer bandeau filigrane crédit scan publicité ne pas traduire laisser tel quel retirer rétablir règle") to Target(SettingsPage.IGNORED, null),
     SearchEntry("corrections", "Centre de corrections", "Texte et modèles › Centre de corrections", "défaire annuler retirer rétablir corrections ignorés glossaire termes chapitre traductions écrites supprimées") to Target(SettingsPage.CORRECTIONS, null),
@@ -450,6 +452,8 @@ private fun TranslationSettings(graph: AppGraph, focus: String?, open: (Settings
         }
         SettingsGroup("Options", "options") {
             SwitchRow("Traduire les onomatopées", "Désactivé (recommandé) : les bruitages (CRACK, BOOM…) restent tels quels.", s.translateSfx) { v -> store.update { it.copy(translateSfx = v) } }
+            HorizontalDivider()
+            SwitchRow("Relecture (traduction plus naturelle)", "Gemma relit sa traduction et réécrit ce qui sonne traduit mot à mot. Chaque page met 1,5 à 2 fois plus de temps. Sans effet avec ML Kit.", s.refinePass) { v -> store.update { it.copy(refinePass = v) } }
             HorizontalDivider()
             LinkRow("Glossaire", "Noms et termes à traduire toujours pareil") { open(SettingsPage.GLOSSARY, null) }
         }

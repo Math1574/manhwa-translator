@@ -130,4 +130,13 @@ fun alignTests() {
         T.ok("répétition" !in TranslationChecks.problems("WHAT IS IT? IS SOMETHING WRONG?", "Qu'est-ce que c'est ? Y a-t-il un problème ?", "fr").map { it.code }, "normale")
         T.ok("répétition" !in TranslationChecks.problems("B-BUT... W-WAIT!", "M-Mais... A-Attends !", "fr").map { it.code }, "bégaiement de l'original")
     }
+
+    T.test("relecture : consigne d'éditeur avec exemples du journal, contexte (synopsis, noms, tutoiement), étiquette recopiée retirée") {
+        val sys = LlmPrompt.refineSystem()
+        T.ok(sys.contains("Qu'est-ce qu'elles ont, mes mains") && sys.contains("copy it unchanged") && sys.contains("N| edited translation"), "consigne")
+        val u = LlmPrompt.refineUser(listOf("WHAT'S WRONG WITH MY HANDS...?"), listOf("Qu'est-ce qui ne va pas avec mes mains... ?"), emptyList(), emptyList(), "Whispers", "Kim Yohan, un homme bon, se réincarne en demi-démon.", listOf("Gaf"), listOf("narrateur masculin"))
+        T.ok(u.contains("Story premise") && u.contains("Names to keep exactly as written: Gaf") && u.contains("narrateur masculin") && u.contains("1| draft: Qu'est-ce qui ne va pas"), u)
+        T.eq("Qu'est-ce qu'elles ont, mes mains... ?", LlmPrompt.stripRefineLabel("final: Qu'est-ce qu'elles ont, mes mains... ?"))
+        T.eq("Bon, d'accord.", LlmPrompt.stripRefineLabel("Bon, d'accord."))
+    }
 }

@@ -63,6 +63,8 @@ data class AppSettings(
     val coversOnline: Boolean = true,
     /** Synopsis des œuvres traduits en français (une fois par œuvre, sur le téléphone, par le moteur de traduction choisi) : l'original reste lisible d'un appui. */
     val synopsisFr: Boolean = true,
+    /** Effacement par IA (module LaMa téléchargé) : le dessin sous un texte posé sur une image est reconstruit par le modèle. Sans effet tant que le module n'est pas téléchargé. */
+    val aiErase: Boolean = true,
 ) {
     val adAllowSiteSet: Set<String> get() = adAllowSites.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
     val adAllowTargetSet: Set<String> get() = adAllowTargets.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
@@ -80,7 +82,7 @@ data class AppSettings(
         it["maxPrefetchPages"] = maxPrefetchPages.toString(); it["cacheMaxMb"] = cacheMaxMb.toString()
         it["schema"] = "2"; it["engine"] = engine.name; it["useGpu"] = useGpu.toString(); it["diagnostic"] = diagnostic.toString(); it["enhancedOcr"] = enhancedOcr.toString(); it["refinePass"] = refinePass.toString(); it["blockAds"] = blockAds.toString(); it["autoReread"] = autoReread.toString(); it["translateSfx"] = translateSfx.toString()
         it["themeAccent"] = themeAccent; it["themeBackground"] = themeBackground; it["reducedMotion"] = reducedMotion.toString(); it["showMascot"] = showMascot.toString(); it["themeMascot"] = themeMascot; it["adAllowSites"] = adAllowSites; it["adAllowTargets"] = adAllowTargets
-        it["readTranslate"] = readTranslate.toString(); it["orbRight"] = orbRight.toString(); it["orbY"] = orbY.toString(); it["hideBarsWhileReading"] = hideBarsWhileReading.toString(); it["librarySort"] = librarySort; it["homeSites"] = homeSites; it["homeHidden"] = homeHidden; it["coversOnline"] = coversOnline.toString(); it["synopsisFr"] = synopsisFr.toString()
+        it["readTranslate"] = readTranslate.toString(); it["orbRight"] = orbRight.toString(); it["orbY"] = orbY.toString(); it["hideBarsWhileReading"] = hideBarsWhileReading.toString(); it["librarySort"] = librarySort; it["homeSites"] = homeSites; it["homeHidden"] = homeHidden; it["coversOnline"] = coversOnline.toString(); it["synopsisFr"] = synopsisFr.toString(); it["aiErase"] = aiErase.toString()
     }.let { p -> java.io.StringWriter().also { w -> p.store(w, null) }.toString() }
 
     companion object {
@@ -121,6 +123,7 @@ data class AppSettings(
                 p.getProperty("homeHidden") ?: d.homeHidden,
                 p.getProperty("coversOnline")?.toBooleanStrictOrNull() ?: d.coversOnline,
                 p.getProperty("synopsisFr")?.toBooleanStrictOrNull() ?: d.synopsisFr,
+                p.getProperty("aiErase")?.toBooleanStrictOrNull() ?: d.aiErase,
             ).sanitized()
         }
     }

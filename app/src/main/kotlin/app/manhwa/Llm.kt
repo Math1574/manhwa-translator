@@ -175,7 +175,7 @@ class GemmaTranslator(
             var out = ask(eng, texts, source, target, glossary)
             out = realign(eng, texts, out, source, target, glossary)
             var final = out.mapIndexed { i, t -> t ?: throw IllegalStateException("Réponse du modèle incomplète (ligne ${i + 1})") }
-            if (refine || s.refinePass) final = refineDraft(eng, texts, final, glossary)
+            if ((refine || s.refinePass) && target == "fr") final = refineDraft(eng, texts, final, glossary)
             final = checkAndFix(eng, texts, final, target, source, glossary)
             if (target == "fr" && promptVariant >= 4) final = final.mapIndexed { i, t -> TranslationPost.rescueStutter(texts[i], TranslationPost.stutter(texts[i], t)) }   // « B-BUT » → « M-MAIS » (lettre répétée fausse ou perdue) ; « Y-YOU… » recopié → « T-TOI… »
             // la page a changé pendant la traduction (le contexte a été oublié) : ce dialogue n'appartient plus au chapitre en cours
@@ -234,10 +234,14 @@ class GemmaTranslator(
             )
             val reply = eng.createConversation(config).use { conv ->
                 createMs = SystemClock.uptimeMillis() - t0
-                withWatchdog(conv) { val u = LlmPrompt.refineUser(texts, draft, recentDialogue(), glossary, seriesTitle); inLen += u.length; textOf(conv.sendMessage(u)) }
+                withWatchdog(conv) { val u = LlmPrompt.refineUser(texts, draft, recentDialogue(), glossary, seriesTitle, seriesPremise, keptNames(), styleNotes("fr")); inLen += u.length; textOf(conv.sendMessage(u)) }
             }
             outLen = reply.length
-            LlmPrompt.parse(reply, texts.size, texts).mapIndexed { i, t -> t ?: draft[i] }
+            // une ligne relue vide, ou qui ne correspond plus à son texte (relecture décalée), garde le brouillon
+            val edited = LlmPrompt.parse(reply, texts.size, texts).mapIndexed { i, t -> t?.let { LlmPrompt.stripRefineLabel(it) }?.takeIf { it.isNotBlank() } ?: draft[i] }
+            val lex = try { Lexicon.get(ctx) } catch (_: Throwable) { null }
+            val shifted = try { TranslationAlign.suspects(texts, edited, lex, chapterNames()) } catch (_: Throwable) { emptySet() }
+            edited.mapIndexed { i, t -> if (i in shifted) draft[i] else t }
         } catch (e: Throwable) {
             draft
         } finally { note("refine", t0, createMs, inLen, outLen) }

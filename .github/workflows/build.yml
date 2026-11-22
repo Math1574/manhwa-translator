@@ -89,6 +89,25 @@ jobs:
           grep -v '^#' /tmp/ja-pack/ja.txt | while read -r name size sha url; do
             [ "$(stat -c %s "/tmp/ja-pack/$name")" = "$size" ] && [ "$(sha256sum "/tmp/ja-pack/$name" | cut -d' ' -f1)" = "$sha" ] || { echo "::error::$name ne correspond pas à son manifeste"; exit 1; }
           done
+      - name: "Module d'effacement par IA (LaMa manga, Apache-2.0), publié une fois en Release et repris de là ensuite"
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/inpaint-pack
+          if gh release view models-inpaint-v1 >/dev/null 2>&1; then
+            gh release download models-inpaint-v1 --dir /tmp/inpaint-pack --pattern inpaint.txt --clobber
+          else
+            # AnimeMangaInpainting (LaMa affiné sur 300 000 images de mangas et d'animés, MIT), version ONNX à taille d'entrée libre (Apache-2.0) ; somme de contrôle relevée au banc d'essai
+            curl -sSfL --retry 3 -o /tmp/inpaint-pack/lama-manga-dynamic.onnx https://huggingface.co/ogkalu/lama-manga-onnx-dynamic/resolve/main/lama-manga-dynamic.onnx
+            [ "$(sha256sum /tmp/inpaint-pack/lama-manga-dynamic.onnx | cut -d' ' -f1)" = de31ffa5ba26916b8ea35319f6c12151ff9654d4261bccf0583a69bb095315f9 ] || { echo "::error::le modèle d'effacement téléchargé n'est pas celui essayé au banc"; exit 1; }
+            BASE="https://github.com/${{ github.repository }}/releases/download/models-inpaint-v1"
+            ( cd /tmp/inpaint-pack
+              echo "# nom taille sha256 adresse (écrit par la compilation en ligne)" > inpaint.txt
+              f=lama-manga-dynamic.onnx; echo "$f $(stat -c %s "$f") $(sha256sum "$f" | cut -d' ' -f1) $BASE/$f" >> inpaint.txt )
+            gh release create models-inpaint-v1 /tmp/inpaint-pack/lama-manga-dynamic.onnx /tmp/inpaint-pack/inpaint.txt \
+              --title "Module d'effacement par IA (LaMa manga)" --notes "Modèle de retouche du dessin sous les textes effacés, téléchargé par l'application à la demande (Réglages, Modèles). AnimeMangaInpainting (MIT), version ONNX ogkalu/lama-manga-onnx-dynamic (Apache-2.0). Ne pas supprimer."
+          fi
+          cat /tmp/inpaint-pack/inpaint.txt
       - name: Clé de signature fixe (brouillon privé du dépôt)
         env: { GH_TOKEN: "${{ github.token }}", GH_REPO: "${{ github.repository }}" }
         run: |
@@ -111,6 +130,7 @@ jobs:
           set -o pipefail
           mkdir -p app/src/main/assets/packs
           cp /tmp/ja-pack/ja.txt app/src/main/assets/packs/ja.txt
+          cp /tmp/inpaint-pack/inpaint.txt app/src/main/assets/packs/inpaint.txt
           cp /tmp/ja-pack/manga_ocr_* app/src/main/assets/ocr/
           gradle :app:assembleDebug --no-daemon --stacktrace -PbuildNumber=${{ github.run_number }} -Pabis=x86_64 2>&1 | tee /tmp/apk.log
           mkdir -p apk-e2e && cp app/build/outputs/apk/debug/app-debug.apk apk-e2e/app-debug.apk
@@ -187,6 +207,12 @@ jobs:
           [ -f /tmp/gemma/gemma-4-E2B-it.litertlm ] || curl -sSfL -o /tmp/gemma/gemma-4-E2B-it.litertlm https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm
           [ -f /tmp/gemma/gemma-4-E4B-it.litertlm ] || curl -sSfL -o /tmp/gemma/gemma-4-E4B-it.litertlm https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/main/gemma-4-E4B-it.litertlm
           sha256sum /tmp/gemma/*.litertlm
+      - name: Module d'effacement par IA (essayé sur l'émulateur, voir ci/e2e.sh)
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          mkdir -p /tmp/inpaint
+          gh release download models-inpaint-v1 --repo "${{ github.repository }}" --dir /tmp/inpaint --pattern lama-manga-dynamic.onnx --pattern inpaint.txt --clobber || echo "module d'effacement indisponible"
+          ls -la /tmp/inpaint || true
       - name: Activer KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules

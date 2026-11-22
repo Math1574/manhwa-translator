@@ -793,6 +793,32 @@ say "illustrations : demandes à l'annuaire avant / après la recherche avec le 
 chk "illustrations : avec le réglage « annuaire » coupé, l'annuaire n'est plus interrogé" $([ "$after" = "$before" ] && echo 1 || echo 0)
 appcmd "coversonline on"
 
+# --- effacement par IA : le module (LaMa manga, ≈ 200 Mo) est posé dans l'application comme après son téléchargement, puis deux pages sont retraduites avec lui.
+# Le journal dit, page par page, combien de textes posés sur un dessin le modèle a reconstruits et en combien de temps : essai réel d'ONNX Runtime sur Android.
+say "=== effacement par IA"
+if [ -f /tmp/inpaint/lama-manga-dynamic.onnx ] && [ -f /tmp/inpaint/inpaint.txt ]; then
+  aisha=$(grep -v '^#' /tmp/inpaint/inpaint.txt | awk '$1=="lama-manga-dynamic.onnx"{print $3}')
+  adb push /tmp/inpaint/lama-manga-dynamic.onnx /data/local/tmp/lama.onnx >/dev/null
+  adb shell "run-as $PKG mkdir -p files/models/inpaint"
+  adb shell "cat /data/local/tmp/lama.onnx | run-as $PKG sh -c 'cat > files/models/inpaint/lama-manga-dynamic.onnx'"
+  adb shell "echo -n $aisha | run-as $PKG sh -c 'cat > files/models/inpaint/lama-manga-dynamic.onnx.ok'"
+  adb shell rm -f /data/local/tmp/lama.onnx
+  adb shell "run-as $PKG ls -la files/models/inpaint" | tee -a $OUT/run.log
+  j0=$(adb exec-out "run-as $PKG cat files/journal.jsonl" 2>/dev/null | wc -l)
+  run pc_en_aierase_mlkit pc_en.html MLKIT EN FR "fr" 400
+  run synth_layouts_aierase_combined synth_layouts.html MLKIT EN FR "fr" 500
+  adb exec-out "run-as $PKG cat files/journal.jsonl" 2>/dev/null | tail -n +$((j0 + 1)) | grep '"type":"layout"' > $OUT/reports/aierase_layout.jsonl
+  grep -o '"aiErase":"[^"]*"' $OUT/reports/aierase_layout.jsonl | sed 's/^/  [effacement par IA] /' | tee -a $OUT/run.log
+  ai_used=$(grep -c '"aiErase":"[1-9]' $OUT/reports/aierase_layout.jsonl; true)
+  ai_fail=$(grep -c '"aiErase":"[^"]*chec' $OUT/reports/aierase_layout.jsonl; true)
+  say "effacement par IA : $ai_used page(s) avec des textes reconstruits par le modèle, $ai_fail avec un échec"
+  chk "effacement par IA : le module posé dans l'application reconstruit les textes posés sur un dessin (ONNX Runtime Android, journal)" $([ "$ai_used" -ge 1 ] && [ "$ai_fail" = 0 ] && echo 1 || echo 0)
+  adb shell "run-as $PKG rm -rf files/models/inpaint"
+else
+  say "effacement par IA : module absent du serveur de test"
+  chk "effacement par IA : le module posé dans l'application reconstruit les textes posés sur un dessin (ONNX Runtime Android, journal)" 0
+fi
+
 fi # fin des scénarios web (absents de la suite lab)
 
 # --- suite complète / lab : Gemma 4 E2B ---

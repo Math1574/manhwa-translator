@@ -159,6 +159,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     private val fetchInfo = ConcurrentHashMap<String, Triple<String, Long, String>>()
     /** Image → durées en ms de la lecture du texte, de la traduction et de l'affichage (journal de diagnostic : où passe le temps). */
     private val stageInfo = ConcurrentHashMap<String, LongArray>()
+    /** Effacement par IA pendant le rendu de chaque page : nombre de textes reconstruits et temps passé (journal). */
+    private val aiInfo = ConcurrentHashMap<String, String>()
     /** Relit les images déjà chargées par la page dans la WebView elle-même (mêmes cookies, mêmes protections, aucun second téléchargement). */
     private val devTools = CdpClient({ ms -> openDevToolsSocket(ms) }, { currentUrl.ifEmpty { null } })
 
@@ -1139,7 +1141,16 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     fun testProbe() {
         val wv = webView ?: return
         testProbeJson = null
-        wv.evaluateJavascript("window.__mt&&window.__mt.probe()") { raw ->
+        // textes supprimés ou ignorés selon l'application : écartés du choix (juste après « Ignorer ce texte… dans toutes les œuvres », une autre page qui contient le même texte
+        // peut encore le montrer, le temps d'être redessinée ; l'appui long y proposait « Rétablir » et le test le prenait pour une traduction)
+        val bad = JSONObject()
+        for (id in testWorkIds()) {
+            val info = workInfo(id) ?: continue
+            val hidden = JSONArray()
+            for (b in info.applied.page.blocks) if (info.applied.editByBlock[b.id]?.hidden == true) hidden.put(b.id)
+            if (hidden.length() > 0) bad.put(id, hidden)
+        }
+        wv.evaluateJavascript("window.__mt&&window.__mt.probe($bad)") { raw ->
             try {
                 val str = org.json.JSONTokener(raw).nextValue() as? String ?: return@evaluateJavascript
                 val o = JSONObject(str)
@@ -1604,7 +1615,9 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         // « pp5 » : lecture des lignes inclinées sur recadrage redressé + réparation du texte lu de la version 3 (« ... » mal lus, apostrophes perdues, parasites, guillemets et « ... » lus « 99 88 », crochet parasite) + croisement des deux lecteurs anglais et de ML Kit mot par mot avec le dictionnaire, relecture élargie des lignes douteuses, ponctuation finale et « I » de début coupés par la boîte retrouvés ; « rr » : relecture des textes douteux par Gemma (résultats différents, cache à part)
         // onomatopées laissées telles quelles (anglais) : clé de cache distincte, pour ne pas reprendre d'anciens résultats où elles étaient traduites
         val skipSfx = !s.translateSfx && s.source.code != "ja" && s.source.code != "ko" && s.source.code != "zh"
-        val engineId = (if (spec == null) MlKitTranslation.ID else GemmaTranslator.engineId(spec)) + (if (enhanced) "+pp6" else "") + (if (rereadOn) "+rr1" else "") + (if (skipSfx) "+sfx0" else "") + seamTag
+        // relecture (seconde passe de Gemma) : une page traduite sans elle n'est pas reprise du cache quand on l'active, et inversement
+        val refineTag = if (spec != null && s.refinePass) "+rl1" else ""
+        val engineId = (if (spec == null) MlKitTranslation.ID else GemmaTranslator.engineId(spec)) + (if (enhanced) "+pp6" else "") + (if (rereadOn) "+rr1" else "") + (if (skipSfx) "+sfx0" else "") + refineTag + seamTag
         var debug: DebugInfo? = null
         val lexicon = Lexicon.get(ctx)
         candidatesById[c.id] = c
@@ -1685,6 +1698,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         if (out is PageOutcome.Done && !out.fromCache) journalPage(c, pageUrl, engineId, s.target.code, out, System.currentTimeMillis() - t0)
         if (!cancelled() && !staleFix()) {
             val tRender = SystemClock.uptimeMillis()
+            val ai0 = graph.lama.runs.get(); val aiMs0 = graph.lama.busyMs.get(); val aiFail0 = graph.lama.fails.get()
             if (testing) android.util.Log.i("MT", "ordre : ${c.id} arrive à l'affichage (priorité ${c.priorityAt(viewportY, viewportH)})")
             val json = renderTurns.run({ c.priorityAt(viewportY, viewportH) }) { finishing.remove(c.id); if (testing) android.util.Log.i("MT", "ordre : ${c.id} s'affiche (attente ${SystemClock.uptimeMillis() - tRender} ms)"); synchronized(renderLock) {
                 var round = 0
@@ -1706,6 +1720,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                 drawn
             } }
             stages[2] = SystemClock.uptimeMillis() - tRender
+            val aiN = graph.lama.runs.get() - ai0; val aiF = graph.lama.fails.get() - aiFail0
+            if (aiN > 0 || aiF > 0) aiInfo[c.id] = "$aiN texte(s), ${graph.lama.busyMs.get() - aiMs0} ms" + (if (aiF > 0) ", $aiF échec(s) : ${graph.lama.lastError}" else "") else aiInfo.remove(c.id)
             // corrections de cette page qui n'ont retrouvé aucun texte : elles ne s'affichent pas ; on le note au journal, et la correction qui vient d'être enregistrée le dit à l'écran
             val lost = applied?.lost(usedEdits.filter { !it.id.startsWith(IGNORE_EDIT_PREFIX) }) ?: emptyList()
             if (lost.isNotEmpty()) {
@@ -1760,7 +1776,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                         .apply { r.optString("edit").takeIf { it.isNotEmpty() }?.let { put("edit", it) } },
                 )
             }
-            graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "layout").put("url", pageUrl).put("img", c.id).put("renderMs", stageInfo[c.id]?.get(2) ?: 0L).put("w", out.result.imageWidth).put("h", out.result.imageHeight).put("skipped", json.optInt("skipped")).put("blocks", blocks))
+            graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "layout").put("url", pageUrl).put("img", c.id).put("renderMs", stageInfo[c.id]?.get(2) ?: 0L).put("aiErase", aiInfo[c.id] ?: "").put("w", out.result.imageWidth).put("h", out.result.imageHeight).put("skipped", json.optInt("skipped")).put("blocks", blocks))
         } catch (_: Throwable) {}
     }
 

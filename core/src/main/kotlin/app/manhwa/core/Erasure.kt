@@ -28,6 +28,17 @@ object Erasure {
     @JvmField var forceArt: Boolean = false
     /** Bancs d'essai seulement : force l'aplat (même si la mesure le refuse) pour voir ce qu'il donnerait. */
     @JvmField var forceFlat: Boolean = false
+    /** Retouche par IA du dessin sous les lettres (LaMa « manga », voir [AiFill]) : posée par l'application quand le module est téléchargé et le réglage actif ; nulle, la reconstruction classique sert. */
+    @JvmField @Volatile var inpainter: AiInpainter? = null
+
+    /** Reconstruction par IA de [hole] dans la région (null : pas de modèle, région trop grande ou échec ; la méthode classique prend alors le relais). Le temps passé va au journal de l'effacement. */
+    private fun aiFill(px: IntArray, w: Int, h: Int, hole: BooleanArray): IntArray? {
+        val m = inpainter?.takeIf { it.ready() } ?: return null
+        val t0 = System.nanoTime()
+        val r = try { AiFill.fill(px, w, h, hole, m) } catch (_: Throwable) { null }
+        trace?.invoke(if (r != null) "retouche par IA : ${hole.count { it }} px reconstruits en ${(System.nanoTime() - t0) / 1_000_000} ms (région ${w}x$h)" else "retouche par IA : sans résultat (région ${w}x$h), reconstruction classique")
+        return r
+    }
 
     enum class Mode { FLAT, SMOOTH, ART }
 
@@ -707,7 +718,8 @@ object Erasure {
                 if (wide != null) rec = wide
             }
             if (rec != null) {
-                val smooth = TextErase.periodicFill(px, w, h, rec.safe, rec.fill) ?: ArtFill.addGrain(rec.fill, rec.mask, rec.sigma)
+                // retouche par IA (si disponible) : le modèle prolonge le dessin (traits, texture) là où la reconstruction lisse laissait une tache floue ; en cas d'échec, la méthode classique
+                val smooth = aiFill(px, w, h, rec.mask) ?: TextErase.periodicFill(px, w, h, rec.safe, rec.fill) ?: ArtFill.addGrain(rec.fill, rec.mask, rec.sigma)
                 val layerN = IntArray(w * h) { if (rec.alpha[it] > 0) (rec.alpha[it] shl 24) or (smooth[it] and 0xFFFFFF) else 0 }
                 val inkN = TextErase.artMask(px, w, h, zoneArt, fillColor, 0, Int.MAX_VALUE, tightLines, reachCap, nearLines = nearLines, inner = thinInner)
                 val ciN = coreOf(px, w, h, inkN, a.bg, fillColor)
@@ -715,9 +727,12 @@ object Erasure {
             }
         }
         // texte sur dessin : couleur du plus proche voisin plutôt que diffusion (la diffusion mélange le blanc d'une bulle et le fond sombre en un gris voilé)
-        val diffused = TextErase.inpaintNearest(px, w, h, mask)
-        // trame de points ou motif répété autour du trou : on recopie le motif plutôt que de le lisser en un voile gris
-        val fill = TextErase.periodicFill(px, w, h, mask, diffused) ?: TextErase.addGrain(TextErase.inpaintClone(px, w, h, mask, diffused), px, w, h, mask)
+        // retouche par IA d'abord (si disponible, et sauf sur un fond blanc uni, où la méthode classique rend le blanc exact) ; sinon trame de points ou motif répété autour du trou
+        // recopié plutôt que lissé en un voile gris
+        val fill = (if (plainWhite) null else aiFill(px, w, h, mask)) ?: run {
+            val diffused = TextErase.inpaintNearest(px, w, h, mask)
+            TextErase.periodicFill(px, w, h, mask, diffused) ?: TextErase.addGrain(TextErase.inpaintClone(px, w, h, mask, diffused), px, w, h, mask)
+        }
         val alpha = TextErase.featherAlpha(mask, w, h)
         // blanc franc tout autour : un remplissage qui n'en diffère que par du bruit de compression est ramené au blanc exact (sinon des stries d'un blanc légèrement gris restent visibles)
         val bgPure = a.bg and 0xFFFFFF
