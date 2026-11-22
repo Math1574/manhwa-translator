@@ -15,9 +15,11 @@ jobs:
         with:
           python-version: '3.11'
       - name: Dépendances
-        run: pip install onnxruntime huggingface_hub pillow numpy
+        run: |
+          pip install onnxruntime huggingface_hub pillow numpy
+          pip install torch --index-url https://download.pytorch.org/whl/cpu || true
       - name: Essai
-        run: python lab/inpaint/run.py lab/inpaint/pairs /tmp/out
+        run: python lab/inpaint/run2.py lab/inpaint/pairs /tmp/out
       - name: Résultats (branche lab-inpaint-out)
         if: always()
         run: |
@@ -25,7 +27,7 @@ jobs:
           git init -q
           git config user.name "lab"
           git config user.email "lab@users.noreply.github.com"
-          git checkout -q -b lab-inpaint-out
+          git checkout -q -b lab-inpaint-out2
           git add -A
           git commit -qm "résultats lab-inpaint ${{ github.sha }}" || true
-          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" lab-inpaint-out
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" lab-inpaint-out2
