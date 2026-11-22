@@ -376,6 +376,9 @@ if [ -n "$rtx" ] && [ -n "$rty" ]; then
   chk "appui long réel : 1,4 s sur une traduction propose de la corriger ou de la supprimer" $([ "$(has rp1 'Corriger cette traduction')" = 1 ] && [ "$(has rp1 'Supprimer cette traduction')" = 1 ] && echo 1 || echo 0)
   adb shell input swipe 540 1500 540 1000 300; sleep 1; uidump rp2; appstate
   chk "appui long réel : faire défiler l'écran referme aussitôt la proposition" $([ "$(hasnot rp2 'Corriger cette traduction')" = 1 ] && [ "$(stv peekT)" = False ] && echo 1 || echo 0)
+  # saccades : la page annonce son défilement à l'application, et les traductions partent vers la page par la file (par morceaux espacés, après la fin d'un défilement)
+  chk "défilement : la page annonce son défilement à l'application (traductions posées en douceur)" $([ "$(stv scrollStarts)" -ge 1 ] 2>/dev/null && echo 1 || echo 0)
+  chk "pose des traductions : les morceaux de calque sont partis vers la page par la file d'envoi" $([ "$(stv ovSent)" -ge 1 ] 2>/dev/null && echo 1 || echo 0)
 else
   chk "appui long réel : 0,45 s (l'ancienne durée) sur une traduction ne propose plus rien (il en faut 0,75)" 0
   chk "appui long réel : 1,4 s sur une traduction propose de la corriger ou de la supprimer" 0

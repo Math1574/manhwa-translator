@@ -254,6 +254,24 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     @Volatile private var watchedEdit: String? = null
     /** Numéro de l'envoi de calque en cours : une partie de calque arrivée en retard d'un envoi plus ancien est ignorée par la page (voir PageScript.apply). */
     private val overlayGen = java.util.concurrent.atomic.AtomicLong(0)
+    /** La page défile en ce moment (début signalé par la page, fin 0,18 s après le dernier mouvement) : les traductions arrivées entre-temps attendent la fin du mouvement. */
+    @Volatile var scrolling = false
+        private set
+    /** Instant du dernier envoi d'un morceau de calque à la page (mesures de fluidité). */
+    @Volatile private var lastOverlayAt = 0L
+    /** Tests automatiques : défilements annoncés par la page, morceaux de calque envoyés, attentes d'une fin de défilement. */
+    val testScrollStarts = java.util.concurrent.atomic.AtomicInteger(0)
+    val testOverlaySent = java.util.concurrent.atomic.AtomicInteger(0)
+    val testOverlayWaits = java.util.concurrent.atomic.AtomicInteger(0)
+    /** Morceaux de calque prêts à partir vers la page, dans l'ordre : une chaîne JavaScript déjà fabriquée, valable pour la page [epoch] seulement. */
+    private class OverlayScript(val epoch: Int, val js: String)
+    private val overlayQueue = java.util.concurrent.ConcurrentLinkedQueue<OverlayScript>()
+    /** Envoi des morceaux en cours (fil principal seulement) et début de l'attente de la fin d'un défilement. */
+    private var overlayRunning = false
+    private var overlayWaitFrom = 0L
+    /** Un seul recalcul de l'ordre des pages à la fois quand la page signale sa position (il se fait hors du fil de la page). */
+    private val pumpPending = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val pumpThread by lazy { java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "mt-pump").also { it.isDaemon = true } } }
     /** Mode « textes écartés » : chaque texte lu mais laissé de côté (onomatopée, débris, lecture peu sûre) est entouré, un appui simple le traduit. Se coupe en changeant de page. */
     var discardMode by mutableStateOf(false)
     /** Textes écartés de chaque page (identifiant d'image → liste, coordonnées de la fenêtre traitée) : établis à la lecture complète de la page, sinon relus à la demande. */
@@ -613,6 +631,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                 graph.gemma.seriesTitle = if (url.startsWith("http")) app.manhwa.core.SeriesHint.fromUrl(url) else null
                 loading = true
                 nearBottom = false
+                scrolling = false; graph.jank.onScroll(false)      // nouvelle page : un défilement de l'ancienne ne retient rien
                 barsHidden = false; pageProgress = 0; showReaderBar(false); resumeOffer = 0; peekTarget = null; undoBanner = null
                 pageError = null
                 if (testing) android.util.Log.i("MT", "page : début $url (translateOn=$translateOn active=$active total=$total)")
@@ -1398,6 +1417,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     }
 
     fun clearOverlays() {
+        overlayQueue.clear()      // les morceaux pas encore partis ne doivent pas reparaître après l'effacement
         webView?.evaluateJavascript("window.__mt&&window.__mt.clear()", null)
     }
 
@@ -1513,6 +1533,12 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         }
         pump()
         if (added == 0) maybeLatch()      // rien de nouveau à traduire : le chapitre est peut-être terminé
+    }
+
+    /** [pump] hors du fil appelant, une seule fois même si la page signale sa position plusieurs fois de suite. */
+    private fun pumpSoon() {
+        if (!pumpPending.compareAndSet(false, true)) return
+        try { pumpThread.execute { pumpPending.set(false); try { pump() } catch (_: Throwable) {} } } catch (_: Throwable) { pumpPending.set(false) }
     }
 
     private fun pump() {
@@ -2178,7 +2204,11 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
     fun dismissEdit() { editTarget = null }
 
-    /** Envoie l'overlay à la page par morceaux d'environ 1,2 Mo : évite une énorme chaîne JavaScript d'un seul bloc. */
+    /**
+     * Envoie l'overlay à la page par morceaux d'environ 450 Ko (voir [OVERLAY_CHUNK_CHARS]) : pas d'énorme chaîne JavaScript d'un seul bloc.
+     * Les chaînes sont fabriquées ici, sur le fil de travail (en parcourir plusieurs Mo sur le fil principal retardait des images de l'écran), puis mises en file ;
+     * [drainOverlay] les envoie une à une, espacées, et attend la fin d'un défilement en cours (voir [OVERLAY_SCROLL_WAIT_MS]).
+     */
     private fun sendOverlay(id: String, json: JSONObject, target: String? = null) {
         val patches = json.optJSONArray("patches") ?: JSONArray()
         val gen = overlayGen.incrementAndGet()      // tous les morceaux d'un même envoi portent son numéro : la page écarte ceux d'un envoi plus ancien arrivés après un plus récent
@@ -2187,16 +2217,50 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         for (i in 0 until patches.length()) {
             val p = patches.getJSONObject(i)
             val len = p.optString("png").length
-            if (size > 0 && size + len > 1_200_000) { chunks.add(JSONObject().put("w", json.get("w")).put("h", json.get("h")).put("patches", cur).put("gen", gen).also { if (target != null) it.put("target", target) }); cur = JSONArray(); size = 0 }
+            if (size > 0 && size + len > OVERLAY_CHUNK_CHARS) { chunks.add(JSONObject().put("w", json.get("w")).put("h", json.get("h")).put("patches", cur).put("gen", gen).also { if (target != null) it.put("target", target) }); cur = JSONArray(); size = 0 }
             cur.put(p); size += len
         }
         val first = JSONObject().put("w", json.get("w")).put("h", json.get("h")).put("patches", cur).put("gen", gen).also { if (target != null) it.put("target", target) }
         json.optJSONArray("dbg")?.let { first.put("dbg", it) }
         chunks.add(first)
+        val epoch = pageEpoch
         chunks.forEachIndexed { i, ch ->
             if (i > 0) ch.put("append", true)
-            main.post { webView?.evaluateJavascript("window.__mt&&window.__mt.apply('$id', $ch)", null) }
+            overlayQueue.add(OverlayScript(epoch, "window.__mt&&window.__mt.apply('$id', $ch)"))
         }
+        main.post { if (!overlayRunning) { overlayRunning = true; drainOverlay() } }
+    }
+
+    private val overlayStep = Runnable { drainOverlay() }
+
+    /** Envoie le prochain morceau de calque à la page (fil principal) : un seul à la fois, espacé du suivant, et pas pendant un défilement (au plus [OVERLAY_SCROLL_WAIT_MS], pour ne jamais bloquer). */
+    private fun drainOverlay() {
+        var next = overlayQueue.peek()
+        while (next != null && next.epoch != pageEpoch) { overlayQueue.poll(); next = overlayQueue.peek() }     // morceau d'une page quittée depuis : abandonné
+        if (next == null) { overlayRunning = false; overlayWaitFrom = 0L; return }
+        val now = SystemClock.uptimeMillis()
+        if (scrolling) {
+            if (overlayWaitFrom == 0L) { overlayWaitFrom = now; testOverlayWaits.incrementAndGet() }
+            if (now - overlayWaitFrom < OVERLAY_SCROLL_WAIT_MS) { main.postDelayed(overlayStep, OVERLAY_POLL_MS); return }
+        }
+        overlayWaitFrom = 0L
+        overlayQueue.poll()
+        lastOverlayAt = now; testOverlaySent.incrementAndGet()
+        try { webView?.evaluateJavascript(next.js, null) } catch (_: Throwable) {}      // (une page détruite ne doit pas arrêter l'envoi des suivants)
+        main.postDelayed(overlayStep, OVERLAY_GAP_MS)
+    }
+
+    /** Étapes qui travaillent à cet instant (bits de [JankMeter]) : sert aux mesures de fluidité. */
+    fun jankActivity(): Int {
+        var bits = 0
+        for (s in runStage.values) when (s) {
+            "téléchargement", "préparation", "assemblage avec l'image du dessus" -> bits = bits or JankMeter.FETCH
+            "lecture du texte" -> bits = bits or JankMeter.OCR
+            "affichage" -> bits = bits or JankMeter.DRAW
+        }
+        if (graph.gemma.generating.get() > 0) bits = bits or JankMeter.LLM
+        if (SystemClock.uptimeMillis() - lastOverlayAt < 400) bits = bits or JankMeter.APPLY
+        return bits
     }
 
     private fun logForTest(c: Candidate, out: PageOutcome, debug: DebugInfo?, overlay: JSONObject?, ms: Long, dims: Pair<Int, Int>? = null, overlayUp: JSONObject? = null) {
@@ -2384,7 +2448,10 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         // chapitre terminé : une image qui apparaît (commentaire, bannière) ne relance rien, elle est seulement comptée pour le bouton discret
         @JavascriptInterface fun onImagesChanged() { main.post { if (active) { if (chapterDone) refreshLate() else start(false) } } }
         // le lecteur a défilé : les pages en attente sont reclassées (celles qu'il regarde maintenant prennent la place des plus lointaines)
-        @JavascriptInterface fun onViewport(y: Double, h: Double) { viewportY = y; if (h > 0) viewportH = h; if (active) pump() }
+        // le recalcul de l'ordre des pages se fait hors du fil de la page : l'appel ne la fait plus attendre
+        @JavascriptInterface fun onViewport(y: Double, h: Double) { viewportY = y; if (h > 0) viewportH = h; if (active) pumpSoon() }
+        // la page défile (début, puis fin 0,18 s après le dernier mouvement) : les traductions arrivées entre-temps attendent la fin du mouvement
+        @JavascriptInterface fun onScrolling(on: Boolean) { scrolling = on; if (on) testScrollStarts.incrementAndGet(); graph.jank.onScroll(on) }
         @JavascriptInterface fun onB64(id: String, data: String) { b64Waiters[id]?.complete(data) }
         @JavascriptInterface fun onEdit(id: String, bid: String, src: String, tr: String) { main.post { openEdit(EditTarget(id, bid.toIntOrNull() ?: -1, src, tr)) } }
         // script de garde du bloqueur
@@ -2545,5 +2612,10 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         const val LATCH_SETTLE_MS = 2000L
         /** Suivi de la traduction par chapitre : au plus un enregistrement dans la bibliothèque toutes les 2,5 s. */
         const val TRACK_EVERY_MS = 2500L
+        /** Pose des traductions dans la page : taille d'un morceau (caractères d'images en base 64), pause entre deux morceaux, attente maximale d'un défilement et fréquence de son contrôle. */
+        const val OVERLAY_CHUNK_CHARS = 450_000
+        const val OVERLAY_GAP_MS = 35L
+        const val OVERLAY_SCROLL_WAIT_MS = 2500L
+        const val OVERLAY_POLL_MS = 40L
     }
 }

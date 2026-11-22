@@ -192,6 +192,7 @@ object TestHooks {
         lagDone.await(30, java.util.concurrent.TimeUnit.SECONDS)
         val mainLag = SystemClock.uptimeMillis() - lagT
         val o = JSONObject().put("t", System.currentTimeMillis()).put("mainLag", mainLag).put("url", c.currentUrl).put("prog", "${c.done}/${c.total}").put("epoch", c.testPageEpoch()).put("gen", c.testGenerating()).put("navGen", c.testNavGen).put("navMaxLag", c.testNavMaxLag).put("rendererLost", c.rendererLost).put("curDone", graph.library.library.progressOf(c.currentUrl)?.done ?: false)
+            .put("scrollStarts", c.testScrollStarts.get()).put("ovSent", c.testOverlaySent.get()).put("ovWaits", c.testOverlayWaits.get())
             .put("undo", c.undoBanner != null).put("peek", c.peekTarget != null)
             .put("works", ids.size).put("blocks", blocks).put("hidden", hidden).put("edits", edits).put("editTr", editTr)
             .put("ign", graph.ignored.rules.texts.size).put("ignImg", graph.ignored.rules.images.size).put("skipped", c.testSkippedCount()).put("banner", c.undoBanner?.message ?: "").put("eraser", c.eraser)

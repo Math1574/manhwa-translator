@@ -30,6 +30,7 @@ object PageScript {
   if (window.__mt) return;
   var S = {entries:{}, seen:{}, first:{}, seq:0, visible:true, timer:null, gen:{}};
   var ER = {on:false, t:0, x:0, y:0};      // gomme : active, instant et position du dernier toucher qui a supprimé une traduction
+  var scrOn = false;                       // la page défile en ce moment (mis à jour plus bas, à chaque mouvement)
   function mark(el, on){ el.style.outline = on ? '2px dashed rgba(255,70,70,0.95)' : ''; el.style.outlineOffset = '-2px'; }
   var MIN = 150;
   function idOf(im){ if(!im.__mtid){ im.__mtid = 'i' + (++S.seq); } return im.__mtid; }
@@ -179,29 +180,21 @@ object PageScript {
     var im = findImg(data.target || id); if (!im) return false;     // « target » : superposition rattachée à l'image du dessus (partie d'un texte coupé par la jonction)
     // numéro d'envoi : un morceau d'un envoi plus ancien, arrivé après un envoi plus récent, ne se pose pas par-dessus (il remettrait l'ancien texte)
     if (data.gen !== undefined) { var g0 = S.gen[id] || 0; if (data.append ? data.gen !== g0 : data.gen < g0) return false; S.gen[id] = data.gen; }
-    var old = S.entries[id];
+    var old = S.entries[id], d, e;
     if (data.append && old && old.div) {
-      var d = old.div;
+      d = old.div; e = old;
     } else {
       if (old && old.div) old.div.remove();
-      var d = document.createElement('div');
+      d = document.createElement('div');
       d.setAttribute('data-mt-overlay', '1');
       d.style.cssText = 'position:absolute;pointer-events:none;z-index:2147483000;overflow:hidden;margin:0;padding:0;';
       if (data.target) d.style.zIndex = 2147483001;     // la partie posée sur l'image du dessus recouvre toujours une éventuelle traduction partielle de cette image
       document.documentElement.appendChild(d);
+      e = {id:id, img:im, div:d, w:data.w, h:data.h, key:'', q:[], busy:false, t0:0, go:false};
     }
+    // les morceaux de traduction ne sont pas posés tout de suite : ils vont dans la file du calque et se posent par petites tranches (voir slice)
     var ps = data.patches || [];
-    for (var i=0;i<ps.length;i++){
-      var q0 = ps[i], im2 = document.createElement('img');
-      im2.src = q0.png; im2.setAttribute('data-mt-img', '1'); im2.draggable = false;
-      if (q0.bid !== undefined) { im2.setAttribute('data-bid', q0.bid); im2.setAttribute('data-src', q0.src || ''); im2.setAttribute('data-tr', q0.tr || ''); }
-      if (q0.inert) im2.setAttribute('data-inert', '1');       // emplacement d'une traduction supprimée ou ignorée : on peut la retrouver d'un appui long, mais il n'y a rien à effacer
-      im2.style.cssText = 'position:absolute;margin:0;padding:0;border:0;max-width:none;pointer-events:none;';
-      if (ER.on && q0.bid !== undefined && !q0.inert) mark(im2, true);
-      im2.style.left = (q0.x / data.w * 100) + '%'; im2.style.top = (q0.y / data.h * 100) + '%';
-      im2.style.width = (q0.w / data.w * 100) + '%'; im2.style.height = (q0.h / data.h * 100) + '%';
-      d.appendChild(im2);
-    }
+    for (var i=0;i<ps.length;i++) e.q.push(ps[i]);
     if (data.dbg) {
       for (var j=0;j<data.dbg.length;j++){
         var q = data.dbg[j], bx = document.createElement('div'), lb = document.createElement('div');
@@ -215,7 +208,43 @@ object PageScript {
         d.appendChild(bx); d.appendChild(lb);
       }
     }
-    var e = (data.append && old) ? old : {img:im, div:d, w:data.w, h:data.h, key:''}; e.key = ''; S.entries[id] = e; place(e); return true;
+    e.key = ''; S.entries[id] = e; place(e);
+    if (e.q.length) slice(e);
+    return true;
+  }
+  // un morceau de traduction : une image posée dans le calque, en pourcentages de l'image d'origine
+  function addPatch(e, q0){
+    var im2 = document.createElement('img');
+    im2.src = q0.png; im2.setAttribute('data-mt-img', '1'); im2.draggable = false;
+    if (q0.bid !== undefined) { im2.setAttribute('data-bid', q0.bid); im2.setAttribute('data-src', q0.src || ''); im2.setAttribute('data-tr', q0.tr || ''); }
+    if (q0.inert) im2.setAttribute('data-inert', '1');       // emplacement d'une traduction supprimée ou ignorée : on peut la retrouver d'un appui long, mais il n'y a rien à effacer
+    im2.style.cssText = 'position:absolute;margin:0;padding:0;border:0;max-width:none;pointer-events:none;';
+    if (ER.on && q0.bid !== undefined && !q0.inert) mark(im2, true);
+    im2.style.left = (q0.x / e.w * 100) + '%'; im2.style.top = (q0.y / e.h * 100) + '%';
+    im2.style.width = (q0.w / e.w * 100) + '%'; im2.style.height = (q0.h / e.h * 100) + '%';
+    e.div.appendChild(im2);
+  }
+  // Poser des dizaines de morceaux d'un coup (décodage des images, mise en page) occupait la page pendant des dizaines de millisecondes, en plein défilement : ils se posent par tranches de
+  // quelques millisecondes, quand la page est au repos, et tant que le lecteur fait défiler ils attendent (2 s au plus). Une file remplacée ou retirée entre-temps s'arrête d'elle-même.
+  function later(f){
+    if (window.requestIdleCallback) { try { window.requestIdleCallback(f, {timeout:150}); return; } catch(x) {} }
+    setTimeout(function(){ f(null); }, 24);
+  }
+  function slice(e){
+    if (e.busy) return; e.busy = true;
+    function run(dl){
+      if (S.entries[e.id] !== e || !e.div.parentNode) { e.busy = false; e.q = []; return; }
+      if (scrOn && !e.go) {
+        var now = Date.now(); if (!e.t0) e.t0 = now;
+        if (now - e.t0 < 2000) { setTimeout(function(){ run(null); }, 80); return; }
+        e.go = true;
+      }
+      var budget = (dl && !dl.didTimeout && dl.timeRemaining) ? Math.max(2, Math.min(8, dl.timeRemaining() - 1)) : 6, t = performance.now();
+      try { do { addPatch(e, e.q.shift()); } while (e.q.length && performance.now() - t < budget); } catch (x) { e.q = []; }
+      if (e.q.length) { later(run); return; }
+      e.busy = false; e.go = false; e.t0 = 0; place(e);
+    }
+    later(run);
   }
   function setVisible(v){ S.visible = v; for (var id in S.entries){ S.entries[id].key = ''; place(S.entries[id]); } }
   function clear(){ for (var id in S.entries){ if (S.entries[id].div) S.entries[id].div.remove(); } S.entries = {}; S.seen = {}; }
@@ -256,7 +285,7 @@ object PageScript {
   function nbCheck(){ nbTick = false; var nb = (window.innerHeight + window.scrollY) >= (document.documentElement.scrollHeight - 900); if (nb !== nbState) { nbState = nb; try { AndroidMT.onBottom(nb); } catch(e) {} } }
   window.addEventListener('scroll', function(){ if (!nbTick) { nbTick = true; setTimeout(nbCheck, 300); } }, {passive:true});
   // défilement en cours : l'application le sait (début et fin, 0,18 s après le dernier mouvement) et attend qu'il s'arrête pour poser les traductions arrivées entre-temps
-  var scrTimer = null, scrOn = false;
+  var scrTimer = null;
   window.addEventListener('scroll', function(){
     if (!scrOn) { scrOn = true; try { AndroidMT.onScrolling(true); } catch(e) {} }
     clearTimeout(scrTimer);

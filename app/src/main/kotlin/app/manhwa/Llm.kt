@@ -288,6 +288,7 @@ class GemmaTranslator(
         val timer = java.util.Timer("mt-llm-watchdog", true)
         timer.schedule(object : java.util.TimerTask() { override fun run() { try { conv.cancelProcess() } catch (_: Throwable) {} } }, generationTimeoutMs)
         val guarded = engineIsGpu && gpuUnproven() // première génération sur le GPU avec cette version : sous garde (voir plus haut)
+        generating.incrementAndGet()
         try {
             if (guarded) gpuMark(GpuGuard.running(BuildConfig.BUILD_NUMBER))
             val r = block()
@@ -296,8 +297,11 @@ class GemmaTranslator(
         } catch (t: Throwable) {
             if (guarded) gpuMark(null) // une exception n'est pas un plantage : rien n'est prouvé, la garde reprendra
             throw t
-        } finally { timer.cancel() }
+        } finally { timer.cancel(); generating.decrementAndGet() }
     }
+
+    /** Générations en cours dans le moteur (0 ou 1) : les mesures de fluidité s'en servent pour savoir si le modèle travaille pendant que la page défile. */
+    val generating = java.util.concurrent.atomic.AtomicInteger(0)
 
     private fun textOf(m: Message): String =
         m.contents.contents.filterIsInstance<Content.Text>().joinToString("") { it.text }.ifEmpty { m.toString() }
