@@ -34,6 +34,7 @@ object Erasure {
     /** Reconstruction par IA de [hole] dans la région (null : pas de modèle, région trop grande ou échec ; la méthode classique prend alors le relais). Le temps passé va au journal de l'effacement. */
     private fun aiFill(px: IntArray, w: Int, h: Int, hole: BooleanArray): IntArray? {
         val m = inpainter?.takeIf { it.ready() } ?: return null
+        if (AiFill.flatAround(px, w, h, hole)) { trace?.invoke("retouche par IA : fond uni autour du texte, reconstruction classique (région ${w}x$h)"); return null }
         val t0 = System.nanoTime()
         val r = try { AiFill.fill(px, w, h, hole, m) } catch (_: Throwable) { null }
         trace?.invoke(if (r != null) "retouche par IA : ${hole.count { it }} px reconstruits en ${(System.nanoTime() - t0) / 1_000_000} ms (région ${w}x$h)" else "retouche par IA : sans résultat (région ${w}x$h), reconstruction classique")

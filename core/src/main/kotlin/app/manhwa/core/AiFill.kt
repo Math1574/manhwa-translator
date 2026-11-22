@@ -94,6 +94,43 @@ object AiFill {
         return res
     }
 
+    /**
+     * Vrai si le dessin autour du trou est uni (noir, blanc, aplat, dégradé doux) : 90 % des pixels connus à moins de [reach] px du trou ont une pente de luminosité de moins
+     * de [maxSlope] niveaux par pixel. La reconstruction classique y suffit, et l'IA y coûterait une à deux secondes pour rien (encadrés noirs de narration, par exemple).
+     * Faux s'il y a trop peu de pixels autour pour juger.
+     */
+    fun flatAround(px: IntArray, w: Int, h: Int, hole: BooleanArray, reach: Int = 10, maxSlope: Float = 1.5f): Boolean {
+        val n = w * h
+        if (w < 3 || h < 3 || px.size < n || hole.size < n) return false
+        // distance au trou (pas de 4 voisins), jusqu'à [reach]
+        val dist = IntArray(n) { if (hole[it]) 0 else -1 }
+        val queue = IntArray(n); var qh = 0; var qt = 0
+        for (i in 0 until n) if (hole[i]) queue[qt++] = i
+        while (qh < qt) {
+            val i = queue[qh++]; val d = dist[i]; if (d >= reach) continue
+            val x = i % w; val y = i / w
+            if (x > 0 && dist[i - 1] < 0) { dist[i - 1] = d + 1; queue[qt++] = i - 1 }
+            if (x < w - 1 && dist[i + 1] < 0) { dist[i + 1] = d + 1; queue[qt++] = i + 1 }
+            if (y > 0 && dist[i - w] < 0) { dist[i - w] = d + 1; queue[qt++] = i - w }
+            if (y < h - 1 && dist[i + w] < 0) { dist[i + w] = d + 1; queue[qt++] = i + w }
+        }
+        fun lum(i: Int): Int { val c = px[i]; return (((c shr 16) and 0xFF) * 77 + ((c shr 8) and 0xFF) * 150 + (c and 0xFF) * 29) shr 8 }
+        // pente (Sobel / 8) des pixels de l'anneau, en quarts de niveau
+        val hist = IntArray(1024); var count = 0
+        for (y in 1 until h - 1) for (x in 1 until w - 1) {
+            val i = y * w + x
+            if (dist[i] <= 0) continue
+            val gx = (lum(i - w + 1) + 2 * lum(i + 1) + lum(i + w + 1)) - (lum(i - w - 1) + 2 * lum(i - 1) + lum(i + w - 1))
+            val gy = (lum(i + w - 1) + 2 * lum(i + w) + lum(i + w + 1)) - (lum(i - w - 1) + 2 * lum(i - w) + lum(i - w + 1))
+            val g = kotlin.math.sqrt((gx * gx + gy * gy).toFloat()) / 8f
+            hist[(g * 4f).toInt().coerceIn(0, 1023)]++; count++
+        }
+        if (count < 50) return false
+        var acc = 0; var k = 0
+        while (k < 1024) { acc += hist[k]; if (acc * 10 >= count * 9) break; k++ }
+        return k / 4f < maxSlope
+    }
+
     internal fun pad8(n: Int): Int = (n + 7) / 8 * 8
 
     /** Indice réfléchi dans [0, n) (…2 1 0 1 2… n−2 n−1 n−2…), pour compléter l'entrée au multiple de 8 sans bord artificiel. */

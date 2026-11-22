@@ -112,8 +112,35 @@ fun aiFillTests() {
             px[i] = (0xFF shl 24) or (mix(16) shl 16) or (mix(8) shl 8) or mix(0)
         }
     }
-    T.test("plan ART avec retouche par IA : le remplissage du texte effacé vient du modèle ; sans modèle, la reconstruction classique") {
+    /** Dégradé strié de traits sombres en diagonale (un décor dessiné, pas un aplat). */
+    fun textured(): IntArray {
+        val px = gradient()
+        for (i in px.indices) { val x = i % W; val y = i / W; if ((x + y) % 9 < 2) { val c = px[i]; px[i] = (0xFF shl 24) or ((((c shr 16) and 0xFF) / 3) shl 16) or ((((c shr 8) and 0xFF) / 3) shl 8) or ((c and 0xFF) / 3) } }
+        return px
+    }
+    T.test("AiFill: fond uni autour du trou (noir, dégradé doux) reconnu ; un décor strié ou bruité ne l'est pas") {
+        val w = 120; val h = 80
+        val hole = BooleanArray(w * h) { i -> val x = i % w; val y = i / w; x in 40..80 && y in 25..55 }
+        T.ok(AiFill.flatAround(IntArray(w * h) { 0xFF000000.toInt() }, w, h, hole), "noir")
+        T.ok(AiFill.flatAround(IntArray(w * h) { i -> val x = i % w; (0xFF shl 24) or ((40 + x / 2) shl 16) or ((90 + x / 3) shl 8) or 150 }, w, h, hole), "dégradé doux")
+        val rnd = java.util.Random(7)
+        T.ok(!AiFill.flatAround(IntArray(w * h) { val v = 100 + rnd.nextInt(60); (0xFF shl 24) or (v shl 16) or (v shl 8) or v }, w, h, hole), "bruit")
+        T.ok(!AiFill.flatAround(IntArray(w * h) { i -> val x = i % w; val y = i / w; if ((x + y) % 9 < 2) 0xFF202020.toInt() else 0xFFC0C0C0.toInt() }, w, h, hole), "traits")
+        T.ok(!AiFill.flatAround(IntArray(w * h) { 0xFF000000.toInt() }, w, h, BooleanArray(w * h) { true }), "rien autour pour juger")
+    }
+    T.test("plan ART sur fond uni (dégradé) : pas de retouche par IA, la reconstruction classique suffit") {
         val px = gradient(); whiteLetters(px)
+        val m = Fake(0f, 1f, 0f)
+        val before = Erasure.inpainter
+        try {
+            Erasure.inpainter = m
+            val plan = Erasure.plan(ArraySource(W, H, px), 1f, listOf(RectF(50f, 60f, 210f, 90f)), 28f, W.toFloat(), H.toFloat())!!
+            T.eq(Erasure.Mode.ART, plan.mode, "mode")
+            T.eq(0, m.calls.size, "appels du modèle")
+        } finally { Erasure.inpainter = before }
+    }
+    T.test("plan ART avec retouche par IA : le remplissage du texte effacé vient du modèle ; sans modèle, la reconstruction classique") {
+        val px = textured(); whiteLetters(px)
         val src = ArraySource(W, H, px)
         val lines = listOf(RectF(50f, 60f, 210f, 90f))
         val m = Fake(0f, 1f, 0f)
@@ -133,7 +160,7 @@ fun aiFillTests() {
         } finally { Erasure.inpainter = before }
     }
     T.test("modèle pas prêt (module absent, réglage coupé) : jamais appelé, reconstruction classique ; réglage « effacement par IA » retenu") {
-        val px = gradient(); whiteLetters(px)
+        val px = textured(); whiteLetters(px)
         var calls = 0
         val before = Erasure.inpainter
         try {
