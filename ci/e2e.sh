@@ -367,6 +367,13 @@ waitge hidden 1 25 >/dev/null
 # appuis longs réels sur la page (doigt posé sur l'écran, sans commande) : il en faut 0,75 s (les 0,45 s d'avant + 0,3 s) ; un défilement referme aussitôt la proposition
 say "=== appuis longs réels"
 appcmd probe; appstate
+# les traductions se posent dans la page par morceaux espacés (après un redessin, par exemple après « ignorer ce texte ») : on attend que le calque soit complet (rien en attente dans la page ni dans l'application)
+# avant de choisir où poser le doigt ; les textes que l'application tient pour supprimés ou ignorés ne sont pas choisis, la page pouvant les montrer encore un instant
+for k in 1 2 3 4 5 6 7 8 9 10; do
+  { [ "$(stv pend)" = 0 ] && [ "$(stv ovq)" = 0 ]; } && break
+  sleep 1.5; appcmd probe; appstate
+done
+say "appuis longs : calque complet au relevé n° $k (en attente : page $(stv pend), envoi $(stv ovq))"
 rtx=$(stv tx); rty=$(stv ty); rex=$(stv ex); rey=$(stv ey)
 say "appuis longs : doigt posé en ($rtx,$rty) sur une traduction, en ($rex,$rey) sur une zone sans traduction"
 if [ -n "$rtx" ] && [ -n "$rty" ]; then

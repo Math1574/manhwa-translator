@@ -936,7 +936,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         graph.edits.upsert(info.imageKey, edit)
         graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "correction").put("url", currentUrl).put("src", shown.source).put("before", shown.translated).put("edit", "supprimé"))
         // le patch disparaît tout de suite ; la page est ensuite redessinée sans lui (résultat en cache)
-        webView?.evaluateJavascript("window.__mt&&window.__mt.dropPatch(${JSONObject.quote(t.imageId)},${t.bid})", null)
+        webView?.evaluateJavascript("window.__mt&&window.__mt.dropPatch(${JSONObject.quote(t.imageId)},${t.bid},${overlayGen.get()})", null)
         if (soon) reprocessSoon(id) else reprocess(id)
         // la suppression reste annulable quelques secondes : un bandeau « Annuler » est proposé, puis il disparaît et la suppression est définitive
         showUndo("Traduction supprimée") {
@@ -1060,7 +1060,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val scope = if (everywhere) IgnoredText.EVERYWHERE else (info.series ?: IgnoredText.EVERYWHERE)
         if (src.isEmpty() || !graph.ignored.addText(scope, src)) return
         graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "correction").put("url", currentUrl).put("src", src).put("edit", if (scope == IgnoredText.EVERYWHERE) "texte ignoré partout" else "texte ignoré dans l'œuvre"))
-        webView?.evaluateJavascript("window.__mt&&window.__mt.dropPatch(${JSONObject.quote(t.imageId)},${t.bid})", null)
+        webView?.evaluateJavascript("window.__mt&&window.__mt.dropPatch(${JSONObject.quote(t.imageId)},${t.bid},${overlayGen.get()})", null)
         reprocessForText(src)
         showUndo("Texte ignoré") { graph.ignored.removeText(scope, src); reprocessForText(src) }
     }
@@ -1152,12 +1152,23 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     @Volatile var testNavGen = false
     @Volatile var testNavMaxLag = -1L
 
-    /** Tests automatiques : où poser un vrai doigt (pixels de l'écran) — au centre d'une traduction affichée (tx, ty) et sur une zone d'image sans traduction (ex, ey). */
+    /**
+     * Tests automatiques : où poser un vrai doigt (pixels de l'écran) — au centre d'une traduction affichée (tx, ty) et sur une zone d'image sans traduction (ex, ey) ; plus pend (morceaux pas encore posés dans
+     * la page) et ovq (morceaux pas encore envoyés à la page) : le calque n'est complet que lorsque les deux sont nuls. Les textes que l'application tient pour supprimés ou ignorés sont écartés du choix :
+     * la page peut les montrer encore un instant, le temps d'être redessinée.
+     */
     @Volatile var testProbeJson: JSONObject? = null
     fun testProbe() {
         val wv = webView ?: return
         testProbeJson = null
-        wv.evaluateJavascript("window.__mt&&window.__mt.probe()") { raw ->
+        val bad = JSONObject()
+        for (id in testWorkIds()) {
+            val info = workInfo(id) ?: continue
+            val hidden = JSONArray()
+            for (b in info.applied.page.blocks) if (info.applied.editByBlock[b.id]?.hidden == true) hidden.put(b.id)
+            if (hidden.length() > 0) bad.put(id, hidden)
+        }
+        wv.evaluateJavascript("window.__mt&&window.__mt.probe($bad)") { raw ->
             try {
                 val str = org.json.JSONTokener(raw).nextValue() as? String ?: return@evaluateJavascript
                 val o = JSONObject(str)
@@ -1165,6 +1176,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                 val out = JSONObject()
                 for (k in listOf("tx", "ex")) if (o.has(k)) out.put(k, o.getInt(k) + loc[0])
                 for (k in listOf("ty", "ey")) if (o.has(k)) out.put(k, o.getInt(k) + loc[1])
+                out.put("pend", o.optInt("pend", -1)).put("ovq", overlayQueue.size)
                 testProbeJson = out
             } catch (_: Throwable) {}
         }

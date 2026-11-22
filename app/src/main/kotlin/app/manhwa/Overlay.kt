@@ -28,7 +28,7 @@ object PageScript {
     val INJECT = """
 (function(){
   if (window.__mt) return;
-  var S = {entries:{}, seen:{}, first:{}, seq:0, visible:true, timer:null, gen:{}};
+  var S = {entries:{}, seen:{}, first:{}, seq:0, visible:true, timer:null, gen:{}, drops:{}};
   var ER = {on:false, t:0, x:0, y:0};      // gomme : active, instant et position du dernier toucher qui a supprimé une traduction
   var scrOn = false;                       // la page défile en ce moment (mis à jour plus bas, à chaque mouvement)
   function mark(el, on){ el.style.outline = on ? '2px dashed rgba(255,70,70,0.95)' : ''; el.style.outlineOffset = '-2px'; }
@@ -190,7 +190,7 @@ object PageScript {
       d.style.cssText = 'position:absolute;pointer-events:none;z-index:2147483000;overflow:hidden;margin:0;padding:0;';
       if (data.target) d.style.zIndex = 2147483001;     // la partie posée sur l'image du dessus recouvre toujours une éventuelle traduction partielle de cette image
       document.documentElement.appendChild(d);
-      e = {id:id, img:im, div:d, w:data.w, h:data.h, key:'', q:[], busy:false, t0:0, go:false};
+      e = {id:id, img:im, div:d, w:data.w, h:data.h, key:'', q:[], busy:false, t0:0, go:false, gen:data.gen};
     }
     // les morceaux de traduction ne sont pas posés tout de suite : ils vont dans la file du calque et se posent par petites tranches (voir slice)
     var ps = data.patches || [];
@@ -212,8 +212,11 @@ object PageScript {
     if (e.q.length) slice(e);
     return true;
   }
+  // un texte supprimé ou ignoré par l'utilisateur (voir dropPatch) ne revient pas par un morceau d'un envoi antérieur à la suppression, même s'il n'était pas encore posé dans la page
+  function dropped(e, bid){ var m = S.drops[e.id], g = (m && bid !== undefined) ? m[bid] : undefined; return g !== undefined && (e.gen === undefined || e.gen <= g); }
   // un morceau de traduction : une image posée dans le calque, en pourcentages de l'image d'origine
   function addPatch(e, q0){
+    if (dropped(e, q0.bid)) return;
     var im2 = document.createElement('img');
     im2.src = q0.png; im2.setAttribute('data-mt-img', '1'); im2.draggable = false;
     if (q0.bid !== undefined) { im2.setAttribute('data-bid', q0.bid); im2.setAttribute('data-src', q0.src || ''); im2.setAttribute('data-tr', q0.tr || ''); }
@@ -247,7 +250,7 @@ object PageScript {
     later(run);
   }
   function setVisible(v){ S.visible = v; for (var id in S.entries){ S.entries[id].key = ''; place(S.entries[id]); } }
-  function clear(){ for (var id in S.entries){ if (S.entries[id].div) S.entries[id].div.remove(); } S.entries = {}; S.seen = {}; }
+  function clear(){ for (var id in S.entries){ if (S.entries[id].div) S.entries[id].div.remove(); } S.entries = {}; S.seen = {}; S.drops = {}; }
   function getB64(id){
     var im = findImg(id);
     if (!im) { AndroidMT.onB64(id, ''); return; }
@@ -332,8 +335,11 @@ object PageScript {
     }
   }
   function unpeek(){ if (PK.el) { PK.el.style.visibility = ''; PK.el = null; } }
-  // suppression demandée par l'application : le patch disparaît tout de suite (la page est ensuite redessinée sans lui)
-  function dropPatch(id, bid){
+  // suppression demandée par l'application : le patch disparaît tout de suite (la page est ensuite redessinée sans lui). gen : numéro du dernier envoi de calque au moment de la suppression ; les morceaux
+  // de ce texte portés par un envoi de ce numéro ou d'un plus ancien, pas encore posés (file de la page) ou arrivés plus tard, ne sont jamais posés ; ceux d'un envoi plus récent (page redessinée) le sont.
+  function dropPatch(id, bid, gen){
+    var m = S.drops[id] || (S.drops[id] = {}), g = (gen !== undefined) ? gen : (S.gen[id] || 0);
+    m[bid] = Math.max(m[bid] || 0, g);
     var e = S.entries[id]; if (!e) return;
     var kids = e.div.children;
     for (var i=0;i<kids.length;i++){ var k = kids[i]; if (k.getAttribute && k.getAttribute('data-bid') === String(bid)) k.style.display = 'none'; }
@@ -544,17 +550,20 @@ object PageScript {
     return true;
   }
 
-  // tests automatiques : où poser un vrai doigt (pixels de la vue) — au centre de la première traduction affichée, et sur une zone d'image sans traduction
-  function probe(){
-    var dpr = window.devicePixelRatio || 1, out = {}, patches = [], first = null;
+  // tests automatiques : où poser un vrai doigt (pixels de la vue) — au centre de la première traduction affichée, et sur une zone d'image sans traduction.
+  // bad : textes que l'application tient pour supprimés ou ignorés ({identifiant d'image : [numéros de blocs]}), que la page peut montrer encore un instant ; pend : morceaux pas encore posés (file de la page)
+  function probe(bad){
+    var dpr = window.devicePixelRatio || 1, out = {}, patches = [], first = null, pend = 0;
     for (var id in S.entries){
-      var kids = S.entries[id].div.children;
+      var en = S.entries[id], kids = en.div.children, skip = (bad && bad[id.split('~')[0]]) || [];
+      pend += en.q.length;
       for (var i=0;i<kids.length;i++){
         var k = kids[i]; if (!k.getAttribute || !k.getAttribute('data-bid')) continue;
         patches.push(k.getBoundingClientRect());
-        if (!first && !k.getAttribute('data-inert') && k.style.display !== 'none') first = k;
+        if (!first && !k.getAttribute('data-inert') && k.style.display !== 'none' && skip.indexOf(Number(k.getAttribute('data-bid'))) < 0) first = k;
       }
     }
+    out.pend = pend;
     if (first) {
       var r = first.getBoundingClientRect();
       if (r.top < 0 || r.bottom > window.innerHeight) { window.scrollBy(0, r.top + r.height / 2 - window.innerHeight / 2); r = first.getBoundingClientRect(); patches = []; for (var id3 in S.entries){ var kk = S.entries[id3].div.children; for (var i3=0;i3<kk.length;i3++){ if (kk[i3].getAttribute && kk[i3].getAttribute('data-bid')) patches.push(kk[i3].getBoundingClientRect()); } } }
