@@ -123,6 +123,7 @@ private val searchIndex: List<Pair<SearchEntry, Target>> = listOf(
     SearchEntry("filters", "Listes de filtres", "Avancé › Bloqueur de publicités", "ublock easylist hagezi mise à jour règles") to Target(SettingsPage.ADVANCED, "bloqueur"),
     SearchEntry("blocklog", "Journal du bloqueur", "Avancé › Bloqueur de publicités", "règles bloquées image n'apparaît pas pop-up") to Target(SettingsPage.ADVANCED, "bloqueur"),
     SearchEntry("models", "Modèles de traduction", "Traduction › Modèles", "télécharger supprimer gemma ml kit langues japonais vertical manga-ocr module") to Target(SettingsPage.MODELS, null),
+    SearchEntry("aierase", "Effacement par IA (dessin sous le texte)", "Traduction › Modèles", "effacement ia lama dessin sous le texte gommer retouche nettoyage propre flou tache module") to Target(SettingsPage.MODELS, null),
     SearchEntry("glossary", "Glossaire", "Traduction › Glossaire", "noms personnages termes œuvre remplacer") to Target(SettingsPage.GLOSSARY, null),
     SearchEntry("ignored", "Textes et images ignorés", "Texte et modèles › Textes et images ignorés", "ignorer bandeau filigrane crédit scan publicité ne pas traduire laisser tel quel retirer rétablir règle") to Target(SettingsPage.IGNORED, null),
     SearchEntry("corrections", "Centre de corrections", "Texte et modèles › Centre de corrections", "défaire annuler retirer rétablir corrections ignorés glossaire termes chapitre traductions écrites supprimées") to Target(SettingsPage.CORRECTIONS, null),

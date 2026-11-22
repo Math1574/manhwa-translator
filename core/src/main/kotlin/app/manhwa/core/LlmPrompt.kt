@@ -109,12 +109,38 @@ Rules:
         appendLine("1| ${oneLine(text)}")
     }.trim()
 
+    /**
+     * Relecture (réglage « Relecture », seconde passe) : un éditeur reprend le brouillon et réécrit en français naturel ce qui sonne traduit. Les exemples viennent des calques relevés
+     * dans le journal du 22/11 (brouillon fautif → version d'éditeur) ; une ligne déjà naturelle est recopiée telle quelle.
+     */
     fun refineSystem(): String = """
-You are a senior French editor of professionally published manhwa. You receive source lines (from OCR, possibly with small mistakes) and a draft French translation. Improve the draft: fix any mistranslation or misunderstanding, remove literal phrasing and calques, make every line natural idiomatic spoken French with the right register and tone, keep names and terms consistent, keep the length close to the original. French typography: sentence case, a space before ? ! : ;. Answer with exactly one line per input line, in the format `N| final translation`, using the same numbers, and nothing else.
+You are a senior French editor of professionally published manhwa. You receive the source lines (from OCR, possibly with small mistakes) and a draft French translation made line by line. Rewrite each draft line so that it reads like dialogue written directly in French by a native comic writer:
+- keep the exact meaning, the speaker's tone and the information; never add or remove anything;
+- remove every calque and literal construction: rebuild the sentence the French way (word order, "on", pronouns, natural verbs, idioms);
+- fix mistranslations, false friends (malice -> malveillance, to cremate -> incinérer, actually -> en fait) and grammar or spelling mistakes;
+- keep "tu" / "vous" consistent between the same characters, and gender agreements consistent with who speaks (use the story premise and the previous dialogue);
+- keep names, stutters ("M-Mais"), cut-off words and punctuation; keep the length close to the draft so it fits the bubble;
+- if a draft line is already natural and correct, copy it unchanged.
+Draft (literal) -> edited:
+"Qu'est-ce qui ne va pas avec mes mains... ?" -> "Qu'est-ce qu'elles ont, mes mains... ?"
+"De penser que je me suis transmigré dans ce roman..." -> "Dire que je me suis retrouvé dans ce roman..."
+"Une couleur est revenue sur son visage." -> "Il a repris des couleurs."
+"Je savais que tu pouvais être raisonné." -> "Je savais qu'on pouvait discuter avec toi."
+"Blâme ta malchance sur le fait que tu sois tombé ici aujourd'hui." -> "Prends-t'en à ta malchance d'être là aujourd'hui."
+"Tu mets beaucoup d'efforts dans tes conneries." -> "Tu te donnes du mal pour raconter des conneries."
+"N'importe qui voit que tu es l'image d'un démon." -> "Tout le monde voit bien que tu as tout d'un démon."
+"Nous avons un accord. Je signerai un contrat avec toi." -> "Marché conclu. Je passe un contrat avec toi."
+"Ce n'est pas le moment de ton orgueil mesquin." -> "Ce n'est pas le moment de faire ta fierté mal placée."
+"Ses blessures sont tellement graves qu'il est un miracle qu'il soit en vie." -> "Ses blessures sont si graves que c'est un miracle qu'il soit encore en vie."
+French typography: sentence case, a space before ? ! : ; and « » for quotations.
+Answer with exactly one line per input line, in the format `N| edited translation` (the edited French only, without "draft:" or "source:"), using the same numbers, and nothing else.
 """.trim()
 
-    fun refineUser(texts: List<String>, draft: List<String>, history: List<Pair<String, String>>, glossary: List<GlossaryEntry>, series: String? = null): String = buildString {
+    fun refineUser(texts: List<String>, draft: List<String>, history: List<Pair<String, String>>, glossary: List<GlossaryEntry>, series: String? = null, premise: String? = null, names: List<String> = emptyList(), style: List<String> = emptyList()): String = buildString {
         if (!series.isNullOrBlank()) { appendLine("Series: $series"); appendLine() }
+        premiseOf(premise)?.let { appendLine("Story premise (background only): $it"); appendLine() }
+        if (names.isNotEmpty()) { appendLine("Names to keep exactly as written: ${names.joinToString(", ")}"); appendLine() }
+        if (style.isNotEmpty()) { appendLine("Established in this chapter (keep it consistent):"); style.forEach { appendLine("- $it") }; appendLine() }
         if (history.isNotEmpty()) {
             appendLine("Previous dialogue (context):")
             history.forEach { (src, tgt) -> appendLine("- ${oneLine(src)} => ${oneLine(tgt)}") }
@@ -124,6 +150,9 @@ You are a senior French editor of professionally published manhwa. You receive s
         appendLine("Lines:")
         texts.forEachIndexed { i, t -> appendLine("${i + 1}| source: ${oneLine(t)}") ; appendLine("${i + 1}| draft: ${oneLine(draft.getOrElse(i) { "" })}") }
     }.trim()
+
+    /** Étiquette recopiée devant une ligne de relecture (« final: », « draft: », « edited: ») : retirée. */
+    fun stripRefineLabel(t: String): String = t.replace(Regex("(?i)^\\s*(final|draft|edited|source|traduction|brouillon)\\s*:\\s*"), "")
 
     /**
      * [page] : les autres lignes du lot déjà traduites, données pour le contexte quand seules quelques lignes sont refaites (lignes absentes de la réponse ou mal placées, voir [TranslationAlign]).

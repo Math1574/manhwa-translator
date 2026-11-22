@@ -134,6 +134,8 @@ fun ModelsScreen(graph: AppGraph) {
             Text("Prête : coréen, chinois, latin et japonais horizontal intégrés. Le japonais vertical est un module à part, ci-dessous.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         }
         JapanesePackCard(graph)
+        SectionLabel("Effacement par IA")
+        InpaintPackCard(graph)
         m.languages.forEach { (code, name) ->
             val st = m.status[code] ?: "absent"
             GlassCard(Modifier.fillMaxWidth(), contentPadding = 14.dp) {
@@ -239,6 +241,60 @@ private fun JapanesePackCard(graph: AppGraph) {
                 pack.busy -> GhostButton("Annuler", { pack.cancel() })
                 pack.ready -> GhostButton("Supprimer", { try { graph.paddleModels.manga.close() } catch (_: Throwable) {}; pack.delete() })
                 else -> GradientButton(if (pack.error != null) "Reprendre" else "Télécharger", { confirm = true })
+            }
+        }
+    }
+}
+
+@Composable
+private fun InpaintPackCard(graph: AppGraph) {
+    val pack = graph.inpaintPack
+    val store = graph.settingsStore
+    val s = store.settings
+    var confirm by remember { mutableStateOf(false) }
+    val size = String.format(Locale.FRANCE, "%.0f", pack.totalBytes / 1_048_576.0)
+    if (confirm) {
+        AlertDialog(
+            onDismissRequest = { confirm = false },
+            title = { Text("Télécharger l'effacement par IA ?") },
+            text = { Text("Le module pèse environ $size Mo. Utilisez le Wi-Fi et gardez l'application ouverte ; le téléchargement reprend s'il est interrompu. Ensuite tout reste sur le téléphone.") },
+            confirmButton = { Button(onClick = { pack.download(); confirm = false }) { Text("Télécharger") } },
+            dismissButton = { TextButton(onClick = { confirm = false }) { Text("Annuler") } },
+        )
+    }
+    GlassCard(Modifier.fillMaxWidth(), contentPadding = 14.dp) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f).padding(end = 8.dp)) {
+                Text("Dessin sous le texte (LaMa manga)", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Quand un texte est posé sur un dessin, l'IA redessine ce qu'il cachait (cheveux, contours, textures) au lieu d'une tache floue. Les bulles blanches ne changent pas. " +
+                        "Facultatif (module de $size Mo) ; compte 1 à 3 secondes de plus par texte concerné.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
+                )
+                Text(
+                    when {
+                        pack.busy -> "Téléchargement : ${String.format(Locale.FRANCE, "%.1f", pack.progress * 100)} %"
+                        pack.ready && graph.lama.lastError != null -> "Prêt, mais le modèle a échoué : ${graph.lama.lastError}"
+                        pack.ready -> if (s.aiErase) "Prêt, utilisé" else "Prêt, coupé"
+                        pack.error != null -> "Erreur : ${pack.error}"
+                        !pack.offered -> "Indisponible dans cette version"
+                        else -> "Non téléchargé"
+                    },
+                    color = if (pack.error != null && !pack.busy) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                )
+                if (pack.busy) LinearProgressIndicator(progress = { pack.progress }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+            }
+            when {
+                !pack.offered -> {}
+                pack.busy -> GhostButton("Annuler", { pack.cancel() })
+                pack.ready -> GhostButton("Supprimer", { graph.lama.close(); pack.delete() })
+                else -> GradientButton(if (pack.error != null) "Reprendre" else "Télécharger", { confirm = true })
+            }
+        }
+        if (pack.ready) {
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Utiliser l'effacement par IA", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                Switch(checked = s.aiErase, onCheckedChange = { v -> store.update { it.copy(aiErase = v) }; if (!v) graph.lama.close() })
             }
         }
     }

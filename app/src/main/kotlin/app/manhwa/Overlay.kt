@@ -522,14 +522,15 @@ object PageScript {
   }
 
   // tests automatiques : où poser un vrai doigt (pixels de la vue) — au centre de la première traduction affichée, et sur une zone d'image sans traduction
-  function probe(){
+  // bad : textes que l'application tient pour supprimés ou ignorés ({image: [numéros]}) ; la page peut les montrer encore un instant, le temps d'être redessinée
+  function probe(bad){
     var dpr = window.devicePixelRatio || 1, out = {}, patches = [], first = null;
     for (var id in S.entries){
-      var kids = S.entries[id].div.children;
+      var kids = S.entries[id].div.children, skip = bad ? (bad[id] || bad[String(id).replace('~up', '')] || []) : [];
       for (var i=0;i<kids.length;i++){
         var k = kids[i]; if (!k.getAttribute || !k.getAttribute('data-bid')) continue;
         patches.push(k.getBoundingClientRect());
-        if (!first && !k.getAttribute('data-inert') && k.style.display !== 'none') first = k;
+        if (!first && !k.getAttribute('data-inert') && k.style.display !== 'none' && skip.indexOf(+k.getAttribute('data-bid')) < 0) first = k;
       }
     }
     if (first) {

@@ -122,6 +122,10 @@ class AppGraph(ctx: Context) {
     val llm = LlmModelsManager(ctx)
     /** Module optionnel de lecture du japonais vertical (téléchargé à la demande). */
     val jaPack = JapanesePack(ctx)
+    /** Module optionnel d'effacement par IA (LaMa entraîné sur des mangas, téléchargé à la demande) et son exécution, branchée dans l'effacement des textes posés sur un dessin. */
+    val inpaintPack = InpaintPack(ctx)
+    val lama = LamaInpainter({ inpaintPack.modelIfReady() }, { settingsStore.settings.aiErase })
+    init { app.manhwa.core.Erasure.inpainter = lama }
     /** Mise à jour intégrée de l'application (vérification des publications, nouveautés, téléchargement, installation). */
     val updater = UpdateManager(ctx)
     val paddleModels = PaddleModels(ctx, jaPack)
