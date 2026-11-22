@@ -1,5 +1,5 @@
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/BlockLayout.kt:68:39 Unnecessary safe call on a non-null receiver of type 'Erasure.Plan'.
-w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/Erasure.kt:186:31 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Erasure.Plan'.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/Erasure.kt:187:31 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Erasure.Plan'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/FrenchAgreement.kt:125:142 Unnecessary non-null assertion (!!) on a non-null receiver of type 'String'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/OrderedTurn.kt:21:24 This class is not recommended for use in Kotlin. Use 'kotlin.Any' instead.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/PageQueue.kt:37:24 This class is not recommended for use in Kotlin. Use 'kotlin.Any' instead.
@@ -26,10 +26,10 @@ w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kot
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/SettingsScreens.kt:257:27 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/SettingsScreens.kt:388:35 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/SettingsScreens.kt:408:31 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
-BUILD SUCCESSFUL in 1m 50s
-BUILD SUCCESSFUL in 14s
+BUILD SUCCESSFUL in 1m 30s
+BUILD SUCCESSFUL in 10s
 total 161976
-drwxr-xr-x 2 runner runner      4096 Nov 22 20:27 .
-drwxr-xr-x 3 runner runner      4096 Nov 22 20:27 ..
--rw-r--r-- 1 runner runner 165849786 Nov 22 20:27 app-debug.apk
--rw-r--r-- 1 runner runner       405 Nov 22 20:27 output-metadata.json
+drwxr-xr-x 2 runner runner      4096 Nov 22 21:24 .
+drwxr-xr-x 3 runner runner      4096 Nov 22 21:23 ..
+-rw-r--r-- 1 runner runner 165849786 Nov 22 21:24 app-debug.apk
+-rw-r--r-- 1 runner runner       405 Nov 22 21:24 output-metadata.json
