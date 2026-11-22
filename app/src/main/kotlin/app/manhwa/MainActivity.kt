@@ -58,17 +58,10 @@ class MainActivity : ComponentActivity() {
         (application as App).graph.controller.openFromShortcut(url, pct)
     }
 
-    /** Les saccades du défilement sont mesurées tant que l'application est à l'écran (voir JankMeter). */
-    override fun onStart() {
-        super.onStart()
-        (application as App).graph.jank.attach(window)
-    }
-
     /** L'avancement de lecture n'est écrit qu'à intervalles espacés : on le range quand l'application quitte l'écran. */
     override fun onStop() {
         super.onStop()
         (application as App).graph.library.flush()
-        (application as App).graph.jank.detach()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

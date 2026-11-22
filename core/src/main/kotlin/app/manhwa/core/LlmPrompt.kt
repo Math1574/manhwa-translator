@@ -169,8 +169,19 @@ You are a senior French editor of professionally published manhwa. You receive s
     private val thinkRe = Regex("(?s)<think>.*?</think>")
     private val lineRe = Regex("^\\s*[\\[(]?(\\d+)[\\])]?\\s*[|:.)\\-–]\\s?(.*)$")
 
-    /** Renvoie une traduction par ligne d'entrée (null si absente). Tolère le Markdown, les guillemets et les lignes multiples. */
-    fun parse(reply: String, count: Int): List<String?> {
+    /**
+     * Renvoie une traduction par ligne d'entrée (null si absente). Tolère le Markdown, les guillemets et les lignes multiples.
+     * [sources] : les lignes envoyées au modèle, dans l'ordre ; quand elles sont données, la ligne d'origine que le modèle a recopiée devant sa traduction en est retirée (voir [TranslationEcho]).
+     */
+    fun parse(reply: String, count: Int, sources: List<String>? = null): List<String?> {
+        val parsed = parseLines(reply, count)
+        if (sources == null) return parsed
+        return parsed.mapIndexed { i, t ->
+            if (t == null) null else sources.getOrNull(i)?.let { s -> TranslationEcho.strip(s, t).takeIf { it.isNotBlank() } } ?: t
+        }
+    }
+
+    private fun parseLines(reply: String, count: Int): List<String?> {
         val cleaned = thinkRe.replace(reply, "").replace("**", "").replace("`", "")
         val found = HashMap<Int, StringBuilder>()
         var current: StringBuilder? = null

@@ -210,7 +210,7 @@ class GemmaTranslator(
                 withWatchdog(conv) { val u = LlmPrompt.refineUser(texts, draft, recentDialogue(), glossary, seriesTitle); inLen += u.length; textOf(conv.sendMessage(u)) }
             }
             outLen = reply.length
-            LlmPrompt.parse(reply, texts.size).mapIndexed { i, t -> t ?: draft[i] }
+            LlmPrompt.parse(reply, texts.size, texts).mapIndexed { i, t -> t ?: draft[i] }
         } catch (e: Throwable) {
             draft
         } finally { note("refine", t0, createMs, inLen, outLen) }
@@ -259,7 +259,7 @@ class GemmaTranslator(
                 withWatchdog(conv) { val u = LlmPrompt.fixUser(text, previous, problems, recentDialogue(), glossary, names, hints, styleHints); inLen += u.length; textOf(conv.sendMessage(u)) }
             }
             outLen = reply.length
-            return LlmPrompt.parse(reply, 1).firstOrNull()
+            return LlmPrompt.parse(reply, 1, listOf(text)).firstOrNull()
         } finally { note("fix", t0, createMs, inLen, outLen) }
     }
 
@@ -279,7 +279,12 @@ class GemmaTranslator(
                 withWatchdog(conv) { val u = LlmPrompt.user(texts, recentDialogue(), glossary, series, keptNames(), hints, styleNotes(target)); inLen += u.length; textOf(conv.sendMessage(u)) }
             }
             outLen = reply.length
-            return LlmPrompt.parse(reply, texts.size).toMutableList()
+            // le modèle recopie parfois la ligne d'origine devant sa traduction (« SOURCE| TRADUCTION ») : la recopie est retirée, et comptée au journal (détail des appels : « echo:2/3 »)
+            val raw = LlmPrompt.parse(reply, texts.size)
+            val lines = LlmPrompt.parse(reply, texts.size, texts)
+            val echoes = raw.indices.count { raw[it] != lines[it] }
+            if (echoes > 0) try { callLog.get()?.add("echo:$echoes/${texts.size}") } catch (_: Throwable) {}
+            return lines.toMutableList()
         } finally { note(kind, t0, createMs, inLen, outLen) }
     }
 
@@ -288,7 +293,6 @@ class GemmaTranslator(
         val timer = java.util.Timer("mt-llm-watchdog", true)
         timer.schedule(object : java.util.TimerTask() { override fun run() { try { conv.cancelProcess() } catch (_: Throwable) {} } }, generationTimeoutMs)
         val guarded = engineIsGpu && gpuUnproven() // première génération sur le GPU avec cette version : sous garde (voir plus haut)
-        generating.incrementAndGet()
         try {
             if (guarded) gpuMark(GpuGuard.running(BuildConfig.BUILD_NUMBER))
             val r = block()
@@ -297,11 +301,8 @@ class GemmaTranslator(
         } catch (t: Throwable) {
             if (guarded) gpuMark(null) // une exception n'est pas un plantage : rien n'est prouvé, la garde reprendra
             throw t
-        } finally { timer.cancel(); generating.decrementAndGet() }
+        } finally { timer.cancel() }
     }
-
-    /** Générations en cours dans le moteur (0 ou 1) : les mesures de fluidité s'en servent pour savoir si le modèle travaille pendant que la page défile. */
-    val generating = java.util.concurrent.atomic.AtomicInteger(0)
 
     private fun textOf(m: Message): String =
         m.contents.contents.filterIsInstance<Content.Text>().joinToString("") { it.text }.ifEmpty { m.toString() }
@@ -421,7 +422,7 @@ class GemmaTranslator(
     /**
      * Traduit en français le synopsis d'une œuvre : une conversation neuve avec sa propre consigne ([SynopsisPrompt]), sans rien lire ni écrire de la mémoire du chapitre ni du dialogue récent.
      * Même moteur que la lecture, donc même verrou : si un chapitre se traduit en même temps, l'un attend l'autre. Null si le modèle n'est pas prêt ou si la réponse n'est pas une traduction entière
-     * ([Synopsis.cleanFrench]).
+     * ([Synopsis.cleanFrench]). Le moteur est déchargé à la fin (une fois par œuvre, la fiche étant ouverte) : la traduction d'un chapitre le recharge à neuf.
      */
     @Synchronized fun translateSynopsis(text: String): String? {
         val s = settings()
@@ -442,7 +443,8 @@ class GemmaTranslator(
         } catch (t: Throwable) {
             return null
         } finally {
-            scheduleRelease()
+            // le moteur est déchargé tout de suite : une traduction de chapitre ne repart jamais d'un moteur qui vient de traduire autre chose (la page suivante le recharge à neuf)
+            try { release() } catch (_: Throwable) {}
         }
     }
 
