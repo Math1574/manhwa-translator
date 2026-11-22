@@ -699,6 +699,11 @@ private fun DataSettings(graph: AppGraph, focus: String?) {
                 "Les illustrations et les synopsis de la bibliothèque viennent d'abord de la page de l'œuvre sur le site lu. Quand elle n'en donne pas, ils sont cherchés sur AniList (annuaire public d'œuvres) : seul le titre de l'œuvre lui est envoyé, et le résultat n'est gardé que si le titre est exactement le même.",
                 s.coversOnline,
             ) { v -> store.update { it.copy(coversOnline = v) } }
+            SwitchRow(
+                "Synopsis en français",
+                "Le résumé d'une œuvre est traduit en français sur le téléphone, avec le moteur de traduction choisi pour la lecture : une seule fois par œuvre, à l'ouverture de sa fiche, et seulement quand aucun chapitre ne se traduit. L'original reste lisible d'un appui (« Voir l'original »).",
+                s.synopsisFr,
+            ) { v -> store.update { it.copy(synopsisFr = v) } }
             GhostButton("Chercher les illustrations et synopsis manquants", {
                 graph.coverFetcher.retry(graph.library.library.series())
                 Toast.makeText(ctx, "Recherche lancée : les images arrivent une à une dans la bibliothèque", Toast.LENGTH_LONG).show()

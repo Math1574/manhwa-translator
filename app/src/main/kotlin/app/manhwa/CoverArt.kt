@@ -88,6 +88,19 @@ class CoverStore(private val dir: File) {
     /** Faut-il le chercher (jamais essayé, ou essai raté il y a assez longtemps) ? */
     fun synopsisWanted(key: String): Boolean = synopsis.wanted(key, System.currentTimeMillis())
 
+    /** Le synopsis en français, s'il a été traduit. */
+    fun synopsisFrench(key: String): String? = synopsis.frenchOf(key)
+
+    /** Le synopsis est trouvé, pas encore traduit, et pas déjà en français. */
+    fun synopsisNeedsFrench(key: String): Boolean = synopsis.needsFrench(key)
+
+    /** Range la traduction faite pour [text] (sans effet si le synopsis a changé entre-temps). Fil principal. */
+    fun saveFrench(key: String, text: String, fr: String) {
+        val next = synopsis.withFrench(key, text, fr)
+        if (next === synopsis) return
+        synopsis = next; writeSynopsis()
+    }
+
     /** Range le synopsis trouvé ; faux s'il est refusé parce que c'est le texte du site (le même pour une autre œuvre). Fil principal. */
     fun saveSynopsis(key: String, text: String, source: String): Boolean {
         val r = synopsis.saved(key, text, source, System.currentTimeMillis())

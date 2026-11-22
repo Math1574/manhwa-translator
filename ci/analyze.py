@@ -166,8 +166,17 @@ for path in sorted(glob.glob(f"{OUT}/reports/*.json")):
                 if not up: problems.append(f"{name}: paire {g['pair']} : rien n'est posé sur l'image du dessus")
         P(f"- textes coupés lus en entier : {whole}/{len(gt)} ({'avec' if on else 'sans'} la jonction)")
     if name.startswith("chapter_end"):
-        P(f"- fin de chapitre : {c.get('total')} image(s) repérée(s) (2 pages attendues, les vignettes en dessous ne comptent pas)")
-        if c.get("total") != 2: problems.append(f"{name}: {c.get('total')} images repérées au lieu de 2 : ce qui est sous le chapitre (vignettes, commentaires) est donné à la traduction, ou une page manque")
+        eoc = r.get("endOfChapter")
+        n_ch = (eoc or {}).get("totalBefore", c.get("total"))       # avant le bouton « Traduire », qui ajoute volontairement les images de dessous
+        P(f"- fin de chapitre : {n_ch} image(s) repérée(s) (2 pages attendues, les vignettes et l'image de commentaire en dessous ne comptent pas)")
+        if n_ch != 2: problems.append(f"{name}: {n_ch} images repérées au lieu de 2 : ce qui est sous le chapitre (vignettes, commentaires) est donné à la traduction, ou une page manque")
+        if eoc is not None:
+            P(f"- arrêt de fin de chapitre : {eoc}")
+            tb = eoc.get("totalBefore") or 0
+            if not eoc.get("latched"): problems.append(f"{name}: le chapitre ne se déclare pas terminé une fois en bas de page")
+            if eoc.get("totalAfterLate") != eoc.get("totalBefore"): problems.append(f"{name}: une image apparue après la fin du chapitre est repartie toute seule en traduction ({tb} → {eoc.get('totalAfterLate')})")
+            if not eoc.get("stillLatched") or not eoc.get("offer") or (eoc.get("lateImages") or 0) < 1: problems.append(f"{name}: le bouton « Traduire » n'est pas proposé ({eoc.get('lateImages')} image(s), proposé : {eoc.get('offer')})")
+            if (eoc.get("totalAfterButton") or 0) <= tb or (eoc.get("doneAfterButton") or 0) < (eoc.get("totalAfterButton") or 1): problems.append(f"{name}: le bouton « Traduire » ne traduit pas les images de dessous ({eoc.get('doneAfterButton')}/{eoc.get('totalAfterButton')} après {eoc.get('buttonMs')} ms)")
     if name.startswith("pc_en_toggle"):
         done_n = sum(1 for im in imgs if im.get("outcome", "").startswith("done"))
         tot_n = c.get("total") or 0

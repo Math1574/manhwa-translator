@@ -1653,6 +1653,42 @@ fun artEraseTests() {
         val o = BrowsingLibrary.parse(old); T.eq(1, o.history.size); T.eq(1, o.favorites.size); T.eq(0, o.progress.size)
     }
 
+    T.test("bibliothèque : part traduite d'un chapitre (arrondie vers le bas, 100 seulement si tout est traité, meilleur résultat gardé)") {
+        var l = libTwoWorks(); val key = BrowsingLibrary.seriesKey(w1 + "8")!!
+        T.eq(0, l.translationOf(w1 + "8"), "rien noté")
+        T.ok(l.chapters(key).all { it.translated == 0 }, "aucun chapitre noté")
+        T.ok(l.setTranslation(w1 + "8", 0, 10, 10) === l, "aucune page traitée : rien à noter")
+        T.ok(l.setTranslation(w1 + "8", 3, 0, 10) === l, "chapitre sans page connue : rien à noter")
+        T.ok(l.setTranslation("about:blank", 3, 10, 10) === l, "page qui n'est pas web : ignorée")
+        l = l.setTranslation(w1 + "8", 3, 7, 100); T.eq(42, l.translationOf(w1 + "8"), "3 sur 7")
+        l = l.setTranslation(w1 + "8", 199, 200, 200); T.eq(99, l.translationOf(w1 + "8"), "jamais 100 tant qu'il reste une page")
+        l = l.setTranslation(w1 + "8", 1, 5000, 300); T.eq(99, l.translationOf(w1 + "8"), "un moins bon résultat ne remplace pas le meilleur")
+        l = l.setTranslation(w1 + "8#c3", 12, 12, 400); T.eq(100, l.translationOf(w1 + "8"), "tout traité : 100 (le fragment de l'adresse est ignoré)")
+        val l2 = l.setTranslation(w1 + "8", 5, 12, 500); T.ok(l2 === l, "déjà à 100 : inchangé")
+        T.eq(1, l.translations.size, "une seule ligne par page")
+        l = BrowsingLibrary().setTranslation("https://a.org/x", 1, 100000, 1); T.eq(1, l.translationOf("https://a.org/x"), "au moins 1 dès qu'une page est traitée")
+    }
+    T.test("bibliothèque : la part traduite figure dans la liste des chapitres, une page par chapitre (la meilleure), et suit l'oubli d'une œuvre") {
+        var l = libTwoWorks(); val key = BrowsingLibrary.seriesKey(w1 + "8")!!
+        l = l.visit(w1 + "8?page=2", "Chapter 8", 3500)            // même chapitre, autre adresse
+        l = l.setTranslation(w1 + "8", 4, 8, 10).setTranslation(w1 + "8?page=2", 6, 8, 11).setTranslation(w1 + "7", 9, 9, 12)
+        val c = l.chapters(key)
+        T.eq(listOf(75, 100, 0), c.map { it.translated }, "chapitres 8 (la meilleure des deux pages), 7 et 6")
+        T.eq(listOf(0), l.chapters(BrowsingLibrary.seriesKey(w2 + "1")!!).map { it.translated }, "l'autre œuvre n'est pas touchée")
+        val gone = l.removeSeries(key)
+        T.ok(gone.translations.isEmpty() && gone.translationOf(w1 + "7") == 0, "traductions notées oubliées avec l'œuvre")
+        val kept = libTwoWorks().setTranslation(w2 + "1", 1, 2, 5).removeSeries(key)
+        T.eq(50, kept.translationOf(w2 + "1"), "celles de l'autre œuvre restent")
+    }
+    T.test("bibliothèque : la part traduite survit à la sérialisation ; un ancien fichier sans elle se lit toujours") {
+        val l = libTwoWorks().setTranslation(w1 + "8", 3, 4, 5).setTranslation(w1 + "7", 4, 4, 6)
+        val r = BrowsingLibrary.parse(l.serialize())
+        T.eq(l, r); T.eq(75, r.translationOf(w1 + "8")); T.eq(100, r.translationOf(w1 + "7"))
+        val old = BrowsingLibrary.parse(libTwoWorks().serialize()); T.ok(old.translations.isEmpty(), "ancien fichier : rien noté")
+        val odd = BrowsingLibrary.parse("T\thttps://a.org/x\t55\t3\nT\thttps://a.org/y\tabc\t3\nT\thttps://a.org/z\t0\t3\nT\thttps://a.org/w\t250\t3\n")
+        T.eq(listOf("https://a.org/x" to 55, "https://a.org/w" to 100), odd.translations.map { it.url to it.percent }, "ligne illisible ignorée, 0 sans objet, plafond à 100")
+    }
+
     // ---------- glossaire par œuvre et noms récurrents ----------
     T.test("glossaire par œuvre : les termes de l'œuvre s'ajoutent aux termes communs et les remplacent") {
         val g = Glossary(); g.addTerm("Cheon", "Cheon"); g.addTerm("Master", "Maître")

@@ -108,7 +108,11 @@ class AppGraph(ctx: Context) {
     /** Illustrations des œuvres de la bibliothèque (l'image que la page de l'œuvre annonce), et leur recherche en arrière-plan. */
     val covers = CoverStore(File(ctx.filesDir, "covers"))
     val coverFetcher = CoverFetcher(ctx, covers, { library.library }, { controller.translating }, { settingsStore.settings.coversOnline }, { journal.add(it) })
+    /** Synopsis des œuvres traduits en français, une fois par œuvre, en tâche de fond quand aucun chapitre ne se traduit (voir [SynopsisFrench]). */
+    val synopsisFrench = SynopsisFrench(covers, { settingsStore.settings.synopsisFr }, { controller.translating || controller.thermalHot }, { text -> translateSynopsis(text) }, { journal.add(it) })
     val journal = TranslationJournal(File(ctx.filesDir, "journal.jsonl"))
+    /** Mesure de la fluidité du défilement pendant la traduction (voir [JankMeter]) : un résumé au journal tous les 30 s de défilement. */
+    val jank = JankMeter({ controller.translating }, { controller.jankActivity() }, { gemma.backendLabel }, { journal.add(it) })
     /** Corrections manuelles des textes (zone, texte, position, taille, police), par image. */
     val edits = EditStore(File(ctx.filesDir, "edits.txt"), originsFile = File(ctx.filesDir, "edit_origins.txt"))
     /** Textes (dans une œuvre ou partout) et images (bandeaux de début ou de fin de chapitre) que l'utilisateur ne veut plus voir traduits. */
@@ -160,6 +164,21 @@ class AppGraph(ctx: Context) {
         // le chapitre ouvert est retenu avec chaque correction (centre de corrections : corrections par chapitre)
         edits.originProvider = { controller.editOrigin() }
     }
+
+    /**
+     * Traduit un synopsis en français avec le moteur choisi pour la lecture : Gemma s'il est prêt, sinon ML Kit (paragraphe par paragraphe) si ses modèles sont téléchargés. Null si aucun des deux
+     * ne peut le faire, ou si la réponse n'est pas une traduction entière. Appelé hors du fil principal.
+     */
+    private fun translateSynopsis(text: String): String? {
+        val spec = app.manhwa.core.LlmModels.specFor(settingsStore.settings.engine)
+        if (spec != null && llm.isReady(spec)) return gemma.translateSynopsis(text)
+        return try {
+            val lines = text.split('\n').map { it.trim() }
+            val out = MlKitTranslation(models).translate(lines.filter { it.isNotEmpty() }, "auto", "fr")
+            var i = 0
+            app.manhwa.core.Synopsis.cleanFrench(lines.joinToString("\n") { if (it.isEmpty()) "" else out[i++] }, text)
+        } catch (_: Throwable) { null }
+    }
 }
 
 /** Historique de lecture, avancement par chapitre et favoris, conservés sur le téléphone (fichier texte). */
@@ -203,6 +222,8 @@ class LibraryStore(private val file: File) {
             for (i in 1..3) l = l.visit(zulu + i, "", now - 3 * hour - (3 - i) * 1000L)
             for (i in 1..5) l = l.visit(alpha + i, "Alpha Saga - Chapter $i | Super Scans", now - 3 * day + i).markDone(alpha + i, true, now - 3 * day)
             l = l.visit(mid + 1, "", now - day)
+            // traduction déjà faite : le chapitre 5 d'Alpha Saga en entier, le 4 aux trois cinquièmes
+            l = l.setTranslation(alpha + 5, 12, 12, now).setTranslation(alpha + 4, 3, 5, now)
             l.markDone(zulu + 1, true, now).markDone(zulu + 2, true, now)
         }
     }
@@ -210,6 +231,17 @@ class LibraryStore(private val file: File) {
     /** Avancement de la page ouverte : l'état est mis à jour tout de suite, le fichier au plus toutes les 4 s ([flush] à la fermeture). */
     fun progress(url: String, percent: Int) {
         val next = library.setProgress(url, percent, System.currentTimeMillis())
+        if (next === library) return
+        library = next; dirty = true
+        if (System.currentTimeMillis() - lastWrite > 4000) write()
+    }
+
+    /**
+     * Où en est la traduction de la page ouverte : [done] pages traitées sur [total] pages du chapitre. Même cadence que l'avancement de lecture : l'état est mis à jour tout de suite,
+     * le fichier au plus toutes les 4 s ([flush] à la fermeture). Seul un meilleur résultat est retenu (voir [BrowsingLibrary.setTranslation]).
+     */
+    fun translation(url: String, done: Int, total: Int) {
+        val next = library.setTranslation(url, done, total, System.currentTimeMillis())
         if (next === library) return
         library = next; dirty = true
         if (System.currentTimeMillis() - lastWrite > 4000) write()

@@ -35,6 +35,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -57,10 +58,17 @@ class MainActivity : ComponentActivity() {
         (application as App).graph.controller.openFromShortcut(url, pct)
     }
 
+    /** Les saccades du défilement sont mesurées tant que l'application est à l'écran (voir JankMeter). */
+    override fun onStart() {
+        super.onStart()
+        (application as App).graph.jank.attach(window)
+    }
+
     /** L'avancement de lecture n'est écrit qu'à intervalles espacés : on le range quand l'application quitte l'écran. */
     override fun onStop() {
         super.onStop()
         (application as App).graph.library.flush()
+        (application as App).graph.jank.detach()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -87,6 +95,18 @@ private fun Root(graph: AppGraph) {
 
     // ouverture par le raccourci de l'icône : retour sur l'onglet Lecture
     LaunchedEffect(c.readingTick) { if (c.readingTick > 0) tab = 0 }
+
+    // Un nouvel appui sur l'onglet déjà ouvert ramène à sa page de base : l'accueil pour Lecture, la liste des œuvres pour Bibliothèque, l'accueil des réglages pour Réglages.
+    // Les deux derniers sont reconstruits à neuf (la clé change) : la page ouverte, la recherche et le défilement repartent de zéro.
+    var libraryReset by remember { mutableIntStateOf(0) }
+    var settingsReset by remember { mutableIntStateOf(0) }
+    val reselect: (Int) -> Unit = { i ->
+        when (i) {
+            0 -> { if (c.currentUrl.isNotEmpty()) c.goHome() }
+            1 -> { libraryReset++ }
+            else -> { settingsReset++ }
+        }
+    }
 
     // couleur des barres système : celle du fond choisi dans les réglages d'apparence
     val look = LocalLook.current
@@ -125,7 +145,7 @@ private fun Root(graph: AppGraph) {
         containerColor = Color.Transparent, contentColor = MaterialTheme.colorScheme.onBackground,
         bottomBar = {
             AnimatedVisibility(visible = !c.fullscreen && !readingFree, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-                GlowNavBar(tabs, tab) { tab = it }
+                GlowNavBar(tabs, tab, onReselect = reselect) { tab = it }
             }
         },
     ) { pad ->
@@ -139,8 +159,8 @@ private fun Root(graph: AppGraph) {
             ) {
                 AppBackground(Modifier.fillMaxSize()) {
                     when (shownTab) {
-                        1 -> LibraryScreen(graph) { url, resumeAt -> c.load(url, resumeAt); tab = 0 }
-                        else -> SettingsRoot(graph)
+                        1 -> key(libraryReset) { LibraryScreen(graph) { url, resumeAt -> c.load(url, resumeAt); tab = 0 } }
+                        else -> key(settingsReset) { SettingsRoot(graph) }
                     }
                 }
             }

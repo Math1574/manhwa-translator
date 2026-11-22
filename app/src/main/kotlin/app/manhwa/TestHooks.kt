@@ -41,7 +41,7 @@ object TestHooks {
      * libseed (trois œuvres de démonstration dans la bibliothèque : Zulu Quest, Mid Tale, Alpha Saga), libsort <recent|title|read> (tri de la bibliothèque), home (retour à l'accueil), termconfirm, termcancel (boutons de l'aperçu),
      evict (vide la mémoire des pages traitées), probe (relève où poser un doigt : tx, ty sur une traduction, ex, ey sur une zone sans traduction),
      edit (ouvre l'éditeur sur la première traduction), pinch <facteur> (deux doigts qui s'écartent ou se rapprochent au centre de l'image de l'éditeur : vrais événements tactiles), twopan <dx> <dy> (deux doigts qui glissent ensemble, en pixels), holdgemma <ms> (le moteur de langage reste occupé ce temps, comme une traduction en cours), goto <adresse> (ouvre la page, comme « Chapitre suivant »), gotogen <adresse> (idem, mais à l'instant où le moteur de langage se met à traduire ; relève ensuite 20 s durant le plus long retard du fil principal),
-     * crashrenderer (le processus qui dessine la page disparaît, comme un manque de mémoire), coverretry (cherche de nouveau les illustrations manquantes), coversonline <on|off> (réglage « annuaire AniList »), state (écrit seulement l'état).
+     * crashrenderer (le processus qui dessine la page disparaît, comme un manque de mémoire), coverretry (cherche de nouveau les illustrations manquantes), coversonline <on|off> (réglage « annuaire AniList »), synfr <off|fake|on> (synopsis en français : coupé, traduction fixe, moteur réel), state (écrit seulement l'état).
      */
     private fun startWatcher(ctx: Context, graph: AppGraph) {
         if (watching) return
@@ -90,6 +90,12 @@ object TestHooks {
                         "crashrenderer" -> main.post { c.testCrashRenderer() }
                         "coverretry" -> main.post { graph.coverFetcher.retry(graph.library.library.series()) }
                         "coversonline" -> main.post { graph.settingsStore.update { it.copy(coversOnline = arg.trim() != "off") } }
+                        "synfr" -> main.post {
+                            // off : synopsis laissés en anglais (les vérifications de la bibliothèque comparent le texte du site) ; fake : le moteur est remplacé par une traduction fixe ; on : moteur réel
+                            val mode = arg.trim()
+                            graph.settingsStore.update { it.copy(synopsisFr = mode != "off") }
+                            graph.synopsisFrench.testTranslate = if (mode == "fake") { _ -> "Résumé de démonstration traduit en français pour le test automatique, avec assez de mots pour une fiche d'œuvre." } else null
+                        }
                         "twopan" -> { val p = arg.trim().split(' ').mapNotNull { it.toFloatOrNull() }; if (p.size >= 2) main.post { twoFingers(main, 240f, 240f, p[0], p[1]) } }
                     }
                     Thread.sleep(300)   // laisse les gestes lancés sur le fil principal s'appliquer avant de relever l'état
@@ -186,6 +192,7 @@ object TestHooks {
         lagDone.await(30, java.util.concurrent.TimeUnit.SECONDS)
         val mainLag = SystemClock.uptimeMillis() - lagT
         val o = JSONObject().put("t", System.currentTimeMillis()).put("mainLag", mainLag).put("url", c.currentUrl).put("prog", "${c.done}/${c.total}").put("epoch", c.testPageEpoch()).put("gen", c.testGenerating()).put("navGen", c.testNavGen).put("navMaxLag", c.testNavMaxLag).put("rendererLost", c.rendererLost).put("curDone", graph.library.library.progressOf(c.currentUrl)?.done ?: false)
+            .put("scrollStarts", c.testScrollStarts.get()).put("ovSent", c.testOverlaySent.get()).put("ovWaits", c.testOverlayWaits.get())
             .put("undo", c.undoBanner != null).put("peek", c.peekTarget != null)
             .put("works", ids.size).put("blocks", blocks).put("hidden", hidden).put("edits", edits).put("editTr", editTr)
             .put("ign", graph.ignored.rules.texts.size).put("ignImg", graph.ignored.rules.images.size).put("skipped", c.testSkippedCount()).put("banner", c.undoBanner?.message ?: "").put("eraser", c.eraser)
@@ -243,6 +250,7 @@ object TestHooks {
             val t0 = System.currentTimeMillis()
             val notes = JSONArray()
             var timedOut = false
+            var endOfChapter: JSONObject? = null
             try {
                 // 1) modèles de traduction ML Kit demandés
                 for (lang in models) {
@@ -286,6 +294,27 @@ object TestHooks {
                     if (now - tLoad >= timeoutMs) timedOut = true
                 }
                 if (System.currentTimeMillis() - tLoad >= timeoutMs) timedOut = true
+
+                // 4) fin de chapitre (mt_bottom) : on descend en bas de la page, le chapitre doit se déclarer terminé ; une image tardive apparaît alors sous lui (fonction __lateAdd de la page de test) :
+                //    elle ne doit pas être traduite toute seule, elle est proposée par le bouton « Traduire », et ce bouton la traduit
+                if (s("mt_bottom") == "true" && !timedOut) {
+                    val eoc = JSONObject()
+                    main.post { c.evalForTest("window.scrollTo(0, document.documentElement.scrollHeight)") {} }
+                    val tB = System.currentTimeMillis()
+                    while (!c.chapterDone && System.currentTimeMillis() - tB < 40_000) Thread.sleep(500)
+                    eoc.put("latched", c.chapterDone).put("latchedAfterMs", System.currentTimeMillis() - tB).put("totalBefore", c.total)
+                    main.post { c.evalForTest("window.__lateAdd&&window.__lateAdd()") {} }
+                    Thread.sleep(9000)
+                    eoc.put("totalAfterLate", c.total).put("stillLatched", c.chapterDone).put("lateImages", c.lateImages).put("offer", c.lateOffer).put("running", c.translating)
+                    val totalBefore = c.total
+                    main.post { c.translateLate() }
+                    val tT = System.currentTimeMillis()
+                    Thread.sleep(3000)
+                    while (c.total <= totalBefore || c.done + c.failed < c.total) { if (System.currentTimeMillis() - tT > 150_000) break; Thread.sleep(1000) }
+                    eoc.put("totalAfterButton", c.total).put("doneAfterButton", c.done + c.failed).put("buttonMs", System.currentTimeMillis() - tT)
+                    notes.put("fin de chapitre : $eoc")
+                    endOfChapter = eoc
+                }
             } catch (e: Throwable) {
                 notes.put("exception : $e")
             }
@@ -294,6 +323,7 @@ object TestHooks {
                 .put("url", url).put("elapsedMs", System.currentTimeMillis() - t0).put("timeout", timedOut)
                 .put("settings", JSONObject().put("source", settings.source.name).put("target", settings.target.name).put("engine", settings.engine.name).put("textScale", settings.textScale.toDouble()).put("enhancedOcr", settings.enhancedOcr && graph.paddleModels.available))
                 .put("counters", JSONObject().put("total", c.total).put("done", c.done).put("failed", c.failed).put("noText", c.noText).put("lastError", c.lastError ?: ""))
+                .apply { endOfChapter?.let { put("endOfChapter", it) } }
                 .put("blocked", graph.adFilters.log.total()).put("finalUrl", c.currentUrl).put("backend", graph.gemma.backendLabel).put("ocrNote", OcrDebug.note)
                 .put("notes", notes)
                 .put("images", JSONArray(c.testLog.toList()))

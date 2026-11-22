@@ -19,6 +19,8 @@ import app.manhwa.core.LlmPrompt
 import app.manhwa.core.ModelSpec
 import app.manhwa.core.ModelStatus
 import app.manhwa.core.ModelStore
+import app.manhwa.core.Synopsis
+import app.manhwa.core.SynopsisPrompt
 import app.manhwa.core.TranslationEngine
 import app.manhwa.core.VisionPrompt
 import com.google.ai.edge.litertlm.Backend
@@ -286,6 +288,7 @@ class GemmaTranslator(
         val timer = java.util.Timer("mt-llm-watchdog", true)
         timer.schedule(object : java.util.TimerTask() { override fun run() { try { conv.cancelProcess() } catch (_: Throwable) {} } }, generationTimeoutMs)
         val guarded = engineIsGpu && gpuUnproven() // première génération sur le GPU avec cette version : sous garde (voir plus haut)
+        generating.incrementAndGet()
         try {
             if (guarded) gpuMark(GpuGuard.running(BuildConfig.BUILD_NUMBER))
             val r = block()
@@ -294,8 +297,11 @@ class GemmaTranslator(
         } catch (t: Throwable) {
             if (guarded) gpuMark(null) // une exception n'est pas un plantage : rien n'est prouvé, la garde reprendra
             throw t
-        } finally { timer.cancel() }
+        } finally { timer.cancel(); generating.decrementAndGet() }
     }
+
+    /** Générations en cours dans le moteur (0 ou 1) : les mesures de fluidité s'en servent pour savoir si le modèle travaille pendant que la page défile. */
+    val generating = java.util.concurrent.atomic.AtomicInteger(0)
 
     private fun textOf(m: Message): String =
         m.contents.contents.filterIsInstance<Content.Text>().joinToString("") { it.text }.ifEmpty { m.toString() }
@@ -410,6 +416,34 @@ class GemmaTranslator(
         visionReady = ok
         visionStatus = if (ok) "Validée : les textes douteux sont relus automatiquement." else "Indisponible : $note"
         try { visionFile.writeText(if (ok) "ok" else "failed|$note") } catch (_: Throwable) {}
+    }
+
+    /**
+     * Traduit en français le synopsis d'une œuvre : une conversation neuve avec sa propre consigne ([SynopsisPrompt]), sans rien lire ni écrire de la mémoire du chapitre ni du dialogue récent.
+     * Même moteur que la lecture, donc même verrou : si un chapitre se traduit en même temps, l'un attend l'autre. Null si le modèle n'est pas prêt ou si la réponse n'est pas une traduction entière
+     * ([Synopsis.cleanFrench]).
+     */
+    @Synchronized fun translateSynopsis(text: String): String? {
+        val s = settings()
+        val spec = LlmModels.specFor(s.engine) ?: return null
+        if (!models.isReady(spec)) return null
+        main.removeCallbacks(releaseTask)
+        try {
+            val eng = ensureEngine(spec, s.useGpu, vision = visionReady && s.autoReread)
+            val config = ConversationConfig(
+                systemInstruction = Contents.of(SynopsisPrompt.system()),
+                samplerConfig = SamplerConfig(topK = 20, topP = 0.9, temperature = 0.2),
+                maxOutputToken = SynopsisPrompt.maxOutputTokens(text),
+            )
+            val reply = eng.createConversation(config).use { conv ->
+                withWatchdog(conv) { textOf(conv.sendMessage(SynopsisPrompt.user(text))) }
+            }
+            return Synopsis.cleanFrench(reply, text)
+        } catch (t: Throwable) {
+            return null
+        } finally {
+            scheduleRelease()
+        }
     }
 
     /** Lit une image avec une consigne (texte transcrit) ; null en cas d'échec. Une conversation neuve par image (pas de contexte partagé). */

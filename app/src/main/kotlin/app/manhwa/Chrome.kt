@@ -63,10 +63,10 @@ class NavTab(val label: String, val icon: ImageVector, val badge: Boolean = fals
 
 /**
  * Barre d'onglets flottante : une pastille de verre arrondie ; l'onglet choisi s'élargit en douceur (ressort) et affiche son nom sur une pastille à dégradé d'accent.
- * Petit retour haptique au changement d'onglet.
+ * Petit retour haptique au changement d'onglet. Un nouvel appui sur l'onglet déjà ouvert appelle [onReselect] : l'onglet revient à sa page de base.
  */
 @Composable
-fun GlowNavBar(tabs: List<NavTab>, selected: Int, onSelect: (Int) -> Unit) {
+fun GlowNavBar(tabs: List<NavTab>, selected: Int, onReselect: (Int) -> Unit = {}, onSelect: (Int) -> Unit) {
     val haptic = LocalHapticFeedback.current
     val cs = MaterialTheme.colorScheme
     val look = LocalLook.current
@@ -89,7 +89,7 @@ fun GlowNavBar(tabs: List<NavTab>, selected: Int, onSelect: (Int) -> Unit) {
                 Row(
                     Modifier.weight(weight).height(50.dp).graphicsLayer { scaleX = scale; scaleY = scale }.clip(CircleShape)
                         .background(if (sel) Brush.horizontalGradient(listOf(cs.primaryContainer, cs.secondaryContainer)) else SolidColor(Color.Transparent))
-                        .clickable(interactionSource = src, indication = null) { if (!sel) { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onSelect(i) } },
+                        .clickable(interactionSource = src, indication = null) { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); if (!sel) onSelect(i) else onReselect(i) },
                     horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box {

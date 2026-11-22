@@ -166,6 +166,31 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     var currentUrl by mutableStateOf("")
     /** Vrai quand la page est lue presque jusqu'en bas (bouton « Chapitre suivant »). */
     var nearBottom by mutableStateOf(false)
+    /**
+     * Chapitre terminé : tout ce qui a été repéré est traduit, toutes les images de la colonne du chapitre sont chargées et le lecteur est en bas de la page depuis un moment.
+     * Plus rien ne repart tout seul (commentaires qui se chargent, bannières) ; ce qui apparaît ensuite est proposé par un bouton discret ([lateOffer]).
+     */
+    var chapterDone by mutableStateOf(false)
+        private set
+    /** Images apparues après la fin du chapitre et pas traduites (commentaires, bannières) ; [lateDismissed] : nombre déjà écarté d'un geste par l'utilisateur. */
+    var lateImages by mutableIntStateOf(0)
+        private set
+    private var lateDismissed by mutableIntStateOf(0)
+    /** Le bouton discret « Traduire » est proposé : le chapitre est terminé et des images attendent sous lui. */
+    val lateOffer: Boolean get() = active && chapterDone && lateImages > lateDismissed
+    fun dismissLate() { lateDismissed = lateImages }
+    private val latchCheck = Runnable { checkLatch() }
+    /**
+     * Suivi de la traduction par chapitre (bibliothèque : « Traduit à N % »). [countersUrl] : page dont [total] et [done] racontent la traduction, retenue au départ car l'adresse affichée change avant que les
+     * compteurs soient remis à zéro ; [baseDone] et [baseTotal] : ce que les compteurs valaient quand le site a changé de page sans la recharger (le chapitre suivant compte à partir de là) ;
+     * [trackPending] : images encore vides dans la colonne du chapitre à la dernière mesure (chargement différé), des pages à venir qui comptent dans le total.
+     */
+    private var countersUrl = ""
+    private var baseDone = 0
+    private var baseTotal = 0
+    private var trackPending = 0
+    private var trackedAt = 0L
+    private val trackRun = Runnable { trackTranslation() }
     /** Titre de la page affichée (pour les favoris). */
     val pageTitle: String get() = webView?.title ?: ""
     /** Dernier titre de page relevé quand elle a fini de charger : lisible depuis n'importe quel fil (celui de la WebView ne l'est que du fil principal). */
@@ -229,6 +254,24 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     @Volatile private var watchedEdit: String? = null
     /** Numéro de l'envoi de calque en cours : une partie de calque arrivée en retard d'un envoi plus ancien est ignorée par la page (voir PageScript.apply). */
     private val overlayGen = java.util.concurrent.atomic.AtomicLong(0)
+    /** La page défile en ce moment (début signalé par la page, fin 0,18 s après le dernier mouvement) : les traductions arrivées entre-temps attendent la fin du mouvement. */
+    @Volatile var scrolling = false
+        private set
+    /** Instant du dernier envoi d'un morceau de calque à la page (mesures de fluidité). */
+    @Volatile private var lastOverlayAt = 0L
+    /** Tests automatiques : défilements annoncés par la page, morceaux de calque envoyés, attentes d'une fin de défilement. */
+    val testScrollStarts = java.util.concurrent.atomic.AtomicInteger(0)
+    val testOverlaySent = java.util.concurrent.atomic.AtomicInteger(0)
+    val testOverlayWaits = java.util.concurrent.atomic.AtomicInteger(0)
+    /** Morceaux de calque prêts à partir vers la page, dans l'ordre : une chaîne JavaScript déjà fabriquée, valable pour la page [epoch] seulement. */
+    private class OverlayScript(val epoch: Int, val js: String)
+    private val overlayQueue = java.util.concurrent.ConcurrentLinkedQueue<OverlayScript>()
+    /** Envoi des morceaux en cours (fil principal seulement) et début de l'attente de la fin d'un défilement. */
+    private var overlayRunning = false
+    private var overlayWaitFrom = 0L
+    /** Un seul recalcul de l'ordre des pages à la fois quand la page signale sa position (il se fait hors du fil de la page). */
+    private val pumpPending = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val pumpThread by lazy { java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "mt-pump").also { it.isDaemon = true } } }
     /** Mode « textes écartés » : chaque texte lu mais laissé de côté (onomatopée, débris, lecture peu sûre) est entouré, un appui simple le traduit. Se coupe en changeant de page. */
     var discardMode by mutableStateOf(false)
     /** Textes écartés de chaque page (identifiant d'image → liste, coordonnées de la fenêtre traitée) : établis à la lecture complète de la page, sinon relus à la demande. */
@@ -455,6 +498,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                         }
                     }
                 }
+                maybeLatch()      // la dernière page du chapitre vient peut-être de finir
+                trackTranslation()
             }
             pump()
         }
@@ -586,6 +631,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                 graph.gemma.seriesTitle = if (url.startsWith("http")) app.manhwa.core.SeriesHint.fromUrl(url) else null
                 loading = true
                 nearBottom = false
+                scrolling = false; graph.jank.onScroll(false)      // nouvelle page : un défilement de l'ancienne ne retient rien
                 barsHidden = false; pageProgress = 0; showReaderBar(false); resumeOffer = 0; peekTarget = null; undoBanner = null
                 pageError = null
                 if (testing) android.util.Log.i("MT", "page : début $url (translateOn=$translateOn active=$active total=$total)")
@@ -616,7 +662,11 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
             override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
                 canGoBack = view.canGoBack(); canGoForward = view.canGoForward()
-                if (url.startsWith("http")) currentUrl = url
+                if (url.startsWith("http")) {
+                    val before = currentUrl
+                    currentUrl = url
+                    if (!isReload && !loading && before.startsWith("http") && pagePath(before) != pagePath(url)) internalNavigation()
+                }
             }
 
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
@@ -886,7 +936,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         graph.edits.upsert(info.imageKey, edit)
         graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "correction").put("url", currentUrl).put("src", shown.source).put("before", shown.translated).put("edit", "supprimé"))
         // le patch disparaît tout de suite ; la page est ensuite redessinée sans lui (résultat en cache)
-        webView?.evaluateJavascript("window.__mt&&window.__mt.dropPatch(${JSONObject.quote(t.imageId)},${t.bid})", null)
+        webView?.evaluateJavascript("window.__mt&&window.__mt.dropPatch(${JSONObject.quote(t.imageId)},${t.bid},${overlayGen.get()})", null)
         if (soon) reprocessSoon(id) else reprocess(id)
         // la suppression reste annulable quelques secondes : un bandeau « Annuler » est proposé, puis il disparaît et la suppression est définitive
         showUndo("Traduction supprimée") {
@@ -1010,7 +1060,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val scope = if (everywhere) IgnoredText.EVERYWHERE else (info.series ?: IgnoredText.EVERYWHERE)
         if (src.isEmpty() || !graph.ignored.addText(scope, src)) return
         graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "correction").put("url", currentUrl).put("src", src).put("edit", if (scope == IgnoredText.EVERYWHERE) "texte ignoré partout" else "texte ignoré dans l'œuvre"))
-        webView?.evaluateJavascript("window.__mt&&window.__mt.dropPatch(${JSONObject.quote(t.imageId)},${t.bid})", null)
+        webView?.evaluateJavascript("window.__mt&&window.__mt.dropPatch(${JSONObject.quote(t.imageId)},${t.bid},${overlayGen.get()})", null)
         reprocessForText(src)
         showUndo("Texte ignoré") { graph.ignored.removeText(scope, src); reprocessForText(src) }
     }
@@ -1102,12 +1152,23 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     @Volatile var testNavGen = false
     @Volatile var testNavMaxLag = -1L
 
-    /** Tests automatiques : où poser un vrai doigt (pixels de l'écran) — au centre d'une traduction affichée (tx, ty) et sur une zone d'image sans traduction (ex, ey). */
+    /**
+     * Tests automatiques : où poser un vrai doigt (pixels de l'écran) — au centre d'une traduction affichée (tx, ty) et sur une zone d'image sans traduction (ex, ey) ; plus pend (morceaux pas encore posés dans
+     * la page) et ovq (morceaux pas encore envoyés à la page) : le calque n'est complet que lorsque les deux sont nuls. Les textes que l'application tient pour supprimés ou ignorés sont écartés du choix :
+     * la page peut les montrer encore un instant, le temps d'être redessinée.
+     */
     @Volatile var testProbeJson: JSONObject? = null
     fun testProbe() {
         val wv = webView ?: return
         testProbeJson = null
-        wv.evaluateJavascript("window.__mt&&window.__mt.probe()") { raw ->
+        val bad = JSONObject()
+        for (id in testWorkIds()) {
+            val info = workInfo(id) ?: continue
+            val hidden = JSONArray()
+            for (b in info.applied.page.blocks) if (info.applied.editByBlock[b.id]?.hidden == true) hidden.put(b.id)
+            if (hidden.length() > 0) bad.put(id, hidden)
+        }
+        wv.evaluateJavascript("window.__mt&&window.__mt.probe($bad)") { raw ->
             try {
                 val str = org.json.JSONTokener(raw).nextValue() as? String ?: return@evaluateJavascript
                 val o = JSONObject(str)
@@ -1115,6 +1176,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                 val out = JSONObject()
                 for (k in listOf("tx", "ex")) if (o.has(k)) out.put(k, o.getInt(k) + loc[0])
                 for (k in listOf("ty", "ey")) if (o.has(k)) out.put(k, o.getInt(k) + loc[1])
+                out.put("pend", o.optInt("pend", -1)).put("ovq", overlayQueue.size)
                 testProbeJson = out
             } catch (_: Throwable) {}
         }
@@ -1237,19 +1299,108 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
     // ---------- traduction ----------
 
-    /** Lance la traduction des images de la page ; force = retraiter aussi les images déjà vues (réglages modifiés). */
-    fun start(force: Boolean) {
+    /**
+     * Lance la traduction des images de la page ; force = retraiter aussi les images déjà vues (réglages modifiés) ; all = donner aussi ce qui est sous le chapitre
+     * (commentaires, bannières : bouton « Traduire » de [lateOffer]). Tout départ lève l'arrêt de fin de chapitre ([chapterDone]) : il est rétabli plus tard si le chapitre est de nouveau terminé.
+     */
+    fun start(force: Boolean, all: Boolean = false) {
         val wv = webView ?: return
         if (currentUrl.isEmpty()) return
-        if (testing) android.util.Log.i("MT", "départ : force=$force url=$currentUrl total=$total")
+        if (testing) android.util.Log.i("MT", "départ : force=$force all=$all url=$currentUrl total=$total")
         if (force) { stopWork(); resetCounters() }
+        main.removeCallbacks(latchCheck); chapterDone = false; lateImages = 0; lateDismissed = 0
+        if (countersUrl.isEmpty()) countersUrl = currentUrl
         active = true
         warmUp()
         wv.evaluateJavascript(PageScript.INJECT, null)
         // page de chapitre : seules les images de la colonne du chapitre sont données (pas les commentaires, vignettes et bandeaux du site sous le dernier chapitre) ;
         // page où la traduction a été demandée à la main : toutes les images assez grandes
         val strict = BrowsingLibrary.looksLikeChapter(currentUrl)
-        wv.evaluateJavascript("window.__mt.collect($force, $strict)") { r -> onCandidates(r) }
+        wv.evaluateJavascript("window.__mt.collect($force, $strict, $all)") { r -> onCandidates(r) }
+    }
+
+    /** Bouton discret « Traduire » du bas de chapitre : traduit aussi les images qui sont apparues sous le chapitre. */
+    fun translateLate() { start(false, all = true) }
+
+    /** Images en attente sous le chapitre (voir [lateImages]) : relevées quand la page change après la fin du chapitre. */
+    private fun refreshLate() {
+        val strict = BrowsingLibrary.looksLikeChapter(currentUrl)
+        webView?.evaluateJavascript("window.__mt?window.__mt.waiting($strict):0") { r -> if (chapterDone) lateImages = r?.trim()?.toIntOrNull() ?: 0 }
+    }
+
+    /**
+     * Le chapitre semble terminé : tout ce qui a été repéré est traité (rien en attente ni en cours) et le lecteur est en bas de la page. Si cela dure [LATCH_SETTLE_MS] sans rien de nouveau,
+     * [checkLatch] arrête les reprises automatiques.
+     */
+    private fun maybeLatch() {
+        main.removeCallbacks(latchCheck)
+        if (chapterDone || !active || total <= 0 || !nearBottom || loading || done + failed < total) return
+        main.postDelayed(latchCheck, LATCH_SETTLE_MS)
+    }
+
+    private fun checkLatch() {
+        val wv = webView ?: return
+        if (chapterDone || !active || total <= 0 || !nearBottom || loading || done + failed < total) return
+        val busy = synchronized(backlog) { backlog.isNotEmpty() } || queue.snapshot().let { it.running > 0 || it.pending > 0 }
+        if (busy) return
+        val strict = BrowsingLibrary.looksLikeChapter(currentUrl)
+        val epoch = pageEpoch
+        // images de la colonne encore vides (chargement différé) : le chapitre n'est pas complet, ce que l'on lit en remontant sera encore à traduire
+        wv.evaluateJavascript("window.__mt?window.__mt.chainPending($strict):-1") { r ->
+            // jugé à nouveau au retour : la page a pu changer, une image arriver ou le lecteur remonter pendant l'appel
+            if (epoch == pageEpoch && r?.trim() == "0" && !chapterDone && active && nearBottom && total > 0 && done + failed >= total) {
+                chapterDone = true
+                if (testing) android.util.Log.i("MT", "chapitre terminé : plus de reprise automatique (total=$total)")
+                refreshLate()
+                trackPending = 0
+                trackTranslation(now = true)
+            }
+        }
+    }
+
+    /** Lève l'arrêt de fin de chapitre (voir [chapterDone]) : la traduction automatique peut reprendre. */
+    private fun releaseLatch() { main.removeCallbacks(latchCheck); chapterDone = false; lateImages = 0; lateDismissed = 0 }
+
+    /**
+     * Note dans la bibliothèque où en est la traduction du chapitre ouvert : pages traitées sur pages du chapitre (celles qui ont été repérées, plus les places encore vides de la colonne, des pages à venir).
+     * Au plus toutes les [TRACK_EVERY_MS] (un seul rappel attend) ; [now] : tout de suite (fin du chapitre) ; [leaving] : page quittée, sans relire la page web (la dernière mesure des places vides sert).
+     * Un chapitre n'est suivi que si une traduction l'a vraiment commencé : sans page traitée, rien n'est noté.
+     */
+    private fun trackTranslation(now: Boolean = false, leaving: Boolean = false) {
+        main.removeCallbacks(trackRun)
+        val url = countersUrl
+        if (url.isEmpty() || total - baseTotal <= 0 || done - baseDone <= 0) return
+        if (leaving) { graph.library.translation(url, done - baseDone, total - baseTotal + trackPending); return }
+        val t = SystemClock.uptimeMillis()
+        if (!now && t - trackedAt < TRACK_EVERY_MS) { main.postDelayed(trackRun, TRACK_EVERY_MS - (t - trackedAt)); return }
+        trackedAt = t
+        val wv = webView
+        if (wv == null || loading) { graph.library.translation(url, done - baseDone, total - baseTotal + trackPending); return }
+        val epoch = pageEpoch
+        val strict = BrowsingLibrary.looksLikeChapter(url)
+        wv.evaluateJavascript("window.__mt?window.__mt.chainPending($strict):-1") { r ->
+            if (epoch != pageEpoch || url != countersUrl) return@evaluateJavascript
+            trackPending = if (chapterDone) 0 else (r?.trim()?.toIntOrNull() ?: 0).coerceAtLeast(0)
+            graph.library.translation(url, done - baseDone, total - baseTotal + trackPending)
+        }
+    }
+
+    /** Chemin d'une adresse (sans requête ni fragment) : ce qui distingue une page d'une autre pour le site. */
+    private fun pagePath(url: String): String = url.substringBefore('#').substringBefore('?')
+
+    /**
+     * Le site a changé de page sans la recharger (navigation interne : le chemin de l'adresse change, aucun début de page n'est annoncé). Pour la traduction c'est une nouvelle page : le chapitre
+     * quitté est noté tel qu'il est, ce qui lui restait à traduire est abandonné, l'arrêt de fin de chapitre est levé et les images du nouveau chapitre sont repérées tout de suite (comme après
+     * un chargement, la traduction ne reprend que sur une page de chapitre).
+     */
+    private fun internalNavigation() {
+        trackTranslation(leaving = true)
+        if (active) stopWork()
+        baseDone = done; baseTotal = total; countersUrl = ""
+        pageEpoch++
+        releaseLatch()
+        if (!active) return
+        if (translateOn && BrowsingLibrary.looksLikeChapter(currentUrl)) start(false) else active = false
     }
 
     fun stop() { stopWork(); active = false }
@@ -1278,17 +1429,23 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     }
 
     fun clearOverlays() {
+        overlayQueue.clear()      // les morceaux pas encore partis ne doivent pas reparaître après l'effacement
         webView?.evaluateJavascript("window.__mt&&window.__mt.clear()", null)
     }
 
     private fun resetSession() {
+        trackTranslation(leaving = true)      // le chapitre quitté est noté tel qu'il est, avant que les compteurs repartent de zéro
         stopWork(); resetCounters(); skipped.clear(); active = false; overlaysVisible = true
         discardMode = false; discardedById.clear(); scanning.clear(); busyDisc.clear()
         eraser = false; fixRuns.clear(); refreshSoon.values.forEach { main.removeCallbacks(it) }; refreshSoon.clear()      // nouvelle page : la gomme se coupe, les redessins en attente de l'ancienne n'ont plus d'objet
         graph.gemma.resetContext()
     }
 
-    private fun resetCounters() { total = 0; done = 0; failed = 0; noText = 0; lastError = null; finishedIds.clear() }
+    private fun resetCounters() {
+        total = 0; done = 0; failed = 0; noText = 0; lastError = null; finishedIds.clear()
+        main.removeCallbacks(latchCheck); chapterDone = false; lateImages = 0; lateDismissed = 0
+        main.removeCallbacks(trackRun); countersUrl = ""; baseDone = 0; baseTotal = 0; trackPending = 0; trackedAt = 0L
+    }
 
     private fun stopWork() {
         queue.cancelAll()
@@ -1387,6 +1544,13 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             android.util.Log.i("MT", "ordre : repérage$lots ; vue ${viewportY.toInt()}/${viewportH.toInt()} ; ajoutées $added")
         }
         pump()
+        if (added == 0) maybeLatch()      // rien de nouveau à traduire : le chapitre est peut-être terminé
+    }
+
+    /** [pump] hors du fil appelant, une seule fois même si la page signale sa position plusieurs fois de suite. */
+    private fun pumpSoon() {
+        if (!pumpPending.compareAndSet(false, true)) return
+        try { pumpThread.execute { pumpPending.set(false); try { pump() } catch (_: Throwable) {} } } catch (_: Throwable) { pumpPending.set(false) }
     }
 
     private fun pump() {
@@ -2052,7 +2216,11 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
     fun dismissEdit() { editTarget = null }
 
-    /** Envoie l'overlay à la page par morceaux d'environ 1,2 Mo : évite une énorme chaîne JavaScript d'un seul bloc. */
+    /**
+     * Envoie l'overlay à la page par morceaux d'environ 450 Ko (voir [OVERLAY_CHUNK_CHARS]) : pas d'énorme chaîne JavaScript d'un seul bloc.
+     * Les chaînes sont fabriquées ici, sur le fil de travail (en parcourir plusieurs Mo sur le fil principal retardait des images de l'écran), puis mises en file ;
+     * [drainOverlay] les envoie une à une, espacées, et attend la fin d'un défilement en cours (voir [OVERLAY_SCROLL_WAIT_MS]).
+     */
     private fun sendOverlay(id: String, json: JSONObject, target: String? = null) {
         val patches = json.optJSONArray("patches") ?: JSONArray()
         val gen = overlayGen.incrementAndGet()      // tous les morceaux d'un même envoi portent son numéro : la page écarte ceux d'un envoi plus ancien arrivés après un plus récent
@@ -2061,16 +2229,50 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         for (i in 0 until patches.length()) {
             val p = patches.getJSONObject(i)
             val len = p.optString("png").length
-            if (size > 0 && size + len > 1_200_000) { chunks.add(JSONObject().put("w", json.get("w")).put("h", json.get("h")).put("patches", cur).put("gen", gen).also { if (target != null) it.put("target", target) }); cur = JSONArray(); size = 0 }
+            if (size > 0 && size + len > OVERLAY_CHUNK_CHARS) { chunks.add(JSONObject().put("w", json.get("w")).put("h", json.get("h")).put("patches", cur).put("gen", gen).also { if (target != null) it.put("target", target) }); cur = JSONArray(); size = 0 }
             cur.put(p); size += len
         }
         val first = JSONObject().put("w", json.get("w")).put("h", json.get("h")).put("patches", cur).put("gen", gen).also { if (target != null) it.put("target", target) }
         json.optJSONArray("dbg")?.let { first.put("dbg", it) }
         chunks.add(first)
+        val epoch = pageEpoch
         chunks.forEachIndexed { i, ch ->
             if (i > 0) ch.put("append", true)
-            main.post { webView?.evaluateJavascript("window.__mt&&window.__mt.apply('$id', $ch)", null) }
+            overlayQueue.add(OverlayScript(epoch, "window.__mt&&window.__mt.apply('$id', $ch)"))
         }
+        main.post { if (!overlayRunning) { overlayRunning = true; drainOverlay() } }
+    }
+
+    private val overlayStep = Runnable { drainOverlay() }
+
+    /** Envoie le prochain morceau de calque à la page (fil principal) : un seul à la fois, espacé du suivant, et pas pendant un défilement (au plus [OVERLAY_SCROLL_WAIT_MS], pour ne jamais bloquer). */
+    private fun drainOverlay() {
+        var next = overlayQueue.peek()
+        while (next != null && next.epoch != pageEpoch) { overlayQueue.poll(); next = overlayQueue.peek() }     // morceau d'une page quittée depuis : abandonné
+        if (next == null) { overlayRunning = false; overlayWaitFrom = 0L; return }
+        val now = SystemClock.uptimeMillis()
+        if (scrolling) {
+            if (overlayWaitFrom == 0L) { overlayWaitFrom = now; testOverlayWaits.incrementAndGet() }
+            if (now - overlayWaitFrom < OVERLAY_SCROLL_WAIT_MS) { main.postDelayed(overlayStep, OVERLAY_POLL_MS); return }
+        }
+        overlayWaitFrom = 0L
+        overlayQueue.poll()
+        lastOverlayAt = now; testOverlaySent.incrementAndGet()
+        try { webView?.evaluateJavascript(next.js, null) } catch (_: Throwable) {}      // (une page détruite ne doit pas arrêter l'envoi des suivants)
+        main.postDelayed(overlayStep, OVERLAY_GAP_MS)
+    }
+
+    /** Étapes qui travaillent à cet instant (bits de [JankMeter]) : sert aux mesures de fluidité. */
+    fun jankActivity(): Int {
+        var bits = 0
+        for (s in runStage.values) when (s) {
+            "téléchargement", "préparation", "assemblage avec l'image du dessus" -> bits = bits or JankMeter.FETCH
+            "lecture du texte" -> bits = bits or JankMeter.OCR
+            "affichage" -> bits = bits or JankMeter.DRAW
+        }
+        if (graph.gemma.generating.get() > 0) bits = bits or JankMeter.LLM
+        if (SystemClock.uptimeMillis() - lastOverlayAt < 400) bits = bits or JankMeter.APPLY
+        return bits
     }
 
     private fun logForTest(c: Candidate, out: PageOutcome, debug: DebugInfo?, overlay: JSONObject?, ms: Long, dims: Pair<Int, Int>? = null, overlayUp: JSONObject? = null) {
@@ -2224,7 +2426,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     }
 
     private inner class Bridge {
-        @JavascriptInterface fun onBottom(nb: Boolean) { main.post { nearBottom = nb } }
+        @JavascriptInterface fun onBottom(nb: Boolean) { main.post { nearBottom = nb; if (nb) maybeLatch() else main.removeCallbacks(latchCheck) } }
         @JavascriptInterface fun onScrollDir(down: Boolean) { main.post { onScrollDirection(down) } }
         @JavascriptInterface fun onProgress(percent: Int) { main.post { onProgressReported(percent) } }
         @JavascriptInterface fun onTap() { main.post { onPageTap() } }
@@ -2255,9 +2457,13 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         @JavascriptInterface fun onDiscard(id: String, did: String) {
             main.post { if (discardMode) translateDiscarded(id, did.toIntOrNull() ?: return@post) }
         }
-        @JavascriptInterface fun onImagesChanged() { main.post { if (active) start(false) } }
+        // chapitre terminé : une image qui apparaît (commentaire, bannière) ne relance rien, elle est seulement comptée pour le bouton discret
+        @JavascriptInterface fun onImagesChanged() { main.post { if (active) { if (chapterDone) refreshLate() else start(false) } } }
         // le lecteur a défilé : les pages en attente sont reclassées (celles qu'il regarde maintenant prennent la place des plus lointaines)
-        @JavascriptInterface fun onViewport(y: Double, h: Double) { viewportY = y; if (h > 0) viewportH = h; if (active) pump() }
+        // le recalcul de l'ordre des pages se fait hors du fil de la page : l'appel ne la fait plus attendre
+        @JavascriptInterface fun onViewport(y: Double, h: Double) { viewportY = y; if (h > 0) viewportH = h; if (active) pumpSoon() }
+        // la page défile (début, puis fin 0,18 s après le dernier mouvement) : les traductions arrivées entre-temps attendent la fin du mouvement
+        @JavascriptInterface fun onScrolling(on: Boolean) { scrolling = on; if (on) testScrollStarts.incrementAndGet(); graph.jank.onScroll(on) }
         @JavascriptInterface fun onB64(id: String, data: String) { b64Waiters[id]?.complete(data) }
         @JavascriptInterface fun onEdit(id: String, bid: String, src: String, tr: String) { main.post { openEdit(EditTarget(id, bid.toIntOrNull() ?: -1, src, tr)) } }
         // script de garde du bloqueur
@@ -2414,5 +2620,14 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         /** Une page bloquée depuis 1 min est signalée au journal ; depuis 4 min, son fil est abandonné et remplacé. */
         const val STALL_REPORT_MS = 60_000L
         const val STALL_ABANDON_MS = 240_000L
+        /** Fin de chapitre : durée pendant laquelle tout doit rester calme (traduction finie, lecteur en bas de la page) avant d'arrêter les reprises automatiques. */
+        const val LATCH_SETTLE_MS = 2000L
+        /** Suivi de la traduction par chapitre : au plus un enregistrement dans la bibliothèque toutes les 2,5 s. */
+        const val TRACK_EVERY_MS = 2500L
+        /** Pose des traductions dans la page : taille d'un morceau (caractères d'images en base 64), pause entre deux morceaux, attente maximale d'un défilement et fréquence de son contrôle. */
+        const val OVERLAY_CHUNK_CHARS = 450_000
+        const val OVERLAY_GAP_MS = 35L
+        const val OVERLAY_SCROLL_WAIT_MS = 2500L
+        const val OVERLAY_POLL_MS = 40L
     }
 }

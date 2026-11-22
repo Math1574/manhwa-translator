@@ -103,4 +103,67 @@ fun synopsisTests() {
         T.eq(null, book.forget(a).textOf(a), "œuvre oubliée")
         T.ok(SynopsisBook.parse("ligne illisible\nS\tincomplet").records.isEmpty(), "ligne illisible ignorée")
     }
+
+    // ---------- version française ----------
+    val en1 = "Ten years ago, the Gate appeared and connected the real world with the monster world. Sung Jinwoo, the weakest of all hunters, gets a second chance through a mysterious system."
+    val fr1 = "Il y a dix ans, la Porte est apparue et a relié le monde réel au monde des monstres. Sung Jinwoo, le plus faible de tous les chasseurs, reçoit une seconde chance grâce à un mystérieux système."
+
+    T.test("synopsis : on reconnaît un texte déjà en français, sans prendre l'anglais, les noms ni le japonais pour du français") {
+        T.ok(Synopsis.isFrench(fr1), "français")
+        T.ok(!Synopsis.isFrench(en1), "anglais")
+        T.ok(!Synopsis.isFrench("Le Seigneur Demon Sword Master of the Heavenly Cult returns after ten years to take his revenge on the sect that betrayed him."), "titre français dans un texte anglais")
+        T.ok(Synopsis.isFrench("Un jeune homme sans talent entre dans la Tour pour retrouver son seul ami, et il découvre que tout est plus dangereux que prévu."), "français")
+        T.ok(!Synopsis.isFrench("나 혼자만 레벨업 최약체 헌터 성진우는 시스템의 선택을 받아 강해진다"), "coréen")
+        T.ok(!Synopsis.isFrench("L is the world's greatest detective and a master of disguise who hunts Kira."), "un personnage nommé L dans un texte anglais")
+    }
+
+    T.test("synopsis : la réponse du modèle est mise au propre, ou refusée si ce n'est pas une traduction entière") {
+        T.eq(fr1, Synopsis.cleanFrench(fr1, en1), "traduction propre : inchangée")
+        T.eq(fr1, Synopsis.cleanFrench("Voici la traduction :\n\n$fr1", en1), "phrase d'introduction retirée")
+        T.eq(fr1, Synopsis.cleanFrench("Here is the translation:\n$fr1\n", en1), "introduction anglaise retirée")
+        T.eq(fr1, Synopsis.cleanFrench("**Synopsis**\n$fr1", en1), "titre de section et gras retirés")
+        T.eq(fr1, Synopsis.cleanFrench("« $fr1 »", en1), "guillemets autour du tout retirés")
+        T.eq(fr1, Synopsis.cleanFrench("\"$fr1\"", en1), "guillemets droits retirés")
+        T.eq("Un.\n\nDeux.".let { fr1.substring(0, 20) + "\n\n" + fr1.substring(20) }, Synopsis.cleanFrench(fr1.substring(0, 20) + "\n\n\n\n" + fr1.substring(20), en1), "paragraphes gardés, lignes vides compactées")
+        T.eq(null, Synopsis.cleanFrench("", en1), "réponse vide")
+        T.eq(null, Synopsis.cleanFrench("Désolé.", en1), "trop court")
+        T.eq(null, Synopsis.cleanFrench(en1, en1), "texte recopié tel quel")
+        T.eq(null, Synopsis.cleanFrench("Ten years ago, the Gate appeared and linked the real world to the world of monsters. Sung Jinwoo, the weakest hunter, is given a second chance by a strange system.", en1), "anglais reformulé : pas du français")
+        T.eq(null, Synopsis.cleanFrench(fr1.dropLast(30), en1), "coupée en pleine phrase alors que l'original est fini")
+        T.eq(null, Synopsis.cleanFrench(fr1 + " " + fr1 + " " + fr1 + " " + fr1, en1), "quatre fois plus longue : invraisemblable")
+        T.eq(null, Synopsis.cleanFrench("Il y a dix ans, la Porte est apparue.", en1 + " " + en1), "deux fois trop courte")
+        T.ok(Synopsis.cleanFrench(fr1.dropLast(30), en1.dropLast(30)) != null, "original lui-même coupé (sans ponctuation finale) : la traduction coupée est admise")
+        T.ok(Synopsis.cleanFrench("Un jeune chasseur reçoit un pouvoir qui lui permet de devenir de plus en plus fort, et il part à la conquête du monde des donjons.", "나 혼자만 레벨업 최약체 헌터 성진우는 시스템의 선택을 받아 강해진다") != null, "source coréenne : pas de rapport de longueur")
+    }
+
+    T.test("synopsis : la consigne ne mélange rien à la mémoire du chapitre et la réponse a un plafond raisonnable") {
+        T.ok(SynopsisPrompt.system().contains("French") && SynopsisPrompt.system().contains("proper names"), "consigne : français, noms propres")
+        T.ok(SynopsisPrompt.user("  Un texte.  ").endsWith("\n\nUn texte."), "le texte est donné tel quel")
+        T.eq(160, SynopsisPrompt.maxOutputTokens("Court."), "plancher")
+        T.ok(SynopsisPrompt.maxOutputTokens(en1) in 120..400, "synopsis ordinaire : ${SynopsisPrompt.maxOutputTokens(en1)}")
+        T.eq(1100, SynopsisPrompt.maxOutputTokens("x ".repeat(2500)), "plafond")
+        T.ok(SynopsisPrompt.maxOutputTokens("나 혼자만 레벨업 ".repeat(30)) > SynopsisPrompt.maxOutputTokens("a ".repeat(120)), "le coréen a besoin de plus de place que le même nombre de caractères latins")
+    }
+
+    T.test("synopsis : la traduction française est gardée avec le synopsis, jamais pour un autre texte, et survit à l'enregistrement") {
+        val a = "asura|Solo Leveling"; val b = "asura|Autre"
+        var book = SynopsisBook().saved(a, en1, "head", 100).book
+        T.ok(book.needsFrench(a) && book.frenchOf(a) == null, "trouvé en anglais : à traduire")
+        T.ok(!book.needsFrench(b), "œuvre inconnue : rien à traduire")
+        T.ok(book.withFrench(a, "un autre texte", fr1) === book, "le synopsis a changé : traduction ignorée")
+        T.ok(book.withFrench(a, en1, "   ") === book, "traduction vide ignorée")
+        book = book.withFrench(a, en1, fr1)
+        T.eq(fr1, book.frenchOf(a)); T.ok(!book.needsFrench(a), "déjà traduit"); T.eq(en1, book.textOf(a), "l'original reste")
+        val back = SynopsisBook.parse(book.serialize())
+        T.eq(fr1, back.frenchOf(a), "aller-retour"); T.eq(en1, back.textOf(a))
+        val multi = SynopsisBook().saved(a, "One.\nTwo\twith tab, a \\ slash and enough words to count as a synopsis here.", "head", 1).book.withFrench(a, "One.\nTwo\twith tab, a \\ slash and enough words to count as a synopsis here.", "Un.\nDeux\tavec tabulation, une \\ barre.")
+        T.eq("Un.\nDeux\tavec tabulation, une \\ barre.", SynopsisBook.parse(multi.serialize()).frenchOf(a), "sauts de ligne, tabulations et barres")
+        val old = SynopsisBook.parse("S\t" + a + "\t" + en1 + "\thead\t1\t0\t5\n")
+        T.ok(old.has(a) && old.frenchOf(a) == null && old.needsFrench(a), "ancien fichier (sans traduction) : à traduire")
+        val again = book.saved(a, en1 + " More.", "head", 200).book
+        T.ok(again.frenchOf(a) == null && again.needsFrench(a), "un nouveau texte efface l'ancienne traduction")
+        T.eq(null, book.forget(a).frenchOf(a), "œuvre oubliée : traduction aussi")
+        T.ok(!SynopsisBook().saved(a, fr1, "head", 1).book.needsFrench(a), "déjà en français : rien à traduire")
+        T.eq(null, book.failed(a, 5).frenchOf(a), "synopsis redevenu introuvable : pas de traduction")
+    }
 }
