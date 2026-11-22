@@ -125,13 +125,22 @@ You are a senior French editor of professionally published manhwa. You receive s
         texts.forEachIndexed { i, t -> appendLine("${i + 1}| source: ${oneLine(t)}") ; appendLine("${i + 1}| draft: ${oneLine(draft.getOrElse(i) { "" })}") }
     }.trim()
 
-    fun user(texts: List<String>, history: List<Pair<String, String>>, glossary: List<GlossaryEntry>, series: String? = null, names: List<String> = emptyList(), hints: List<IdiomHints.Hit> = emptyList(), style: List<String> = emptyList()): String = buildString {
+    /**
+     * [page] : les autres lignes du lot déjà traduites, données pour le contexte quand seules quelques lignes sont refaites (lignes absentes de la réponse ou mal placées, voir [TranslationAlign]).
+     */
+    fun user(texts: List<String>, history: List<Pair<String, String>>, glossary: List<GlossaryEntry>, series: String? = null, names: List<String> = emptyList(), hints: List<IdiomHints.Hit> = emptyList(), style: List<String> = emptyList(), page: List<Pair<String, String>> = emptyList(), premise: String? = null): String = buildString {
         if (names.isNotEmpty()) { appendLine("Names and terms of this chapter to keep exactly as written (never translate them): ${names.joinToString(", ")}"); appendLine() }
         if (style.isNotEmpty()) { appendLine("Established in this chapter (keep it consistent):"); style.forEach { appendLine("- $it") }; appendLine() }
         if (!series.isNullOrBlank()) { appendLine("Series: $series (background only: never put the series title or its words in a translation unless the source line itself contains them)"); appendLine() }
+        premiseOf(premise)?.let { appendLine("Story premise (background only, to know who the characters are, their gender and relationships; never add its content to a translation): $it"); appendLine() }
         if (history.isNotEmpty()) {
             appendLine("Previous dialogue of this chapter (context only, do not translate again):")
             history.forEach { (src, tgt) -> appendLine("- ${oneLine(src)} => ${oneLine(tgt)}") }
+            appendLine()
+        }
+        if (page.isNotEmpty()) {
+            appendLine("Other lines of these pages, already translated (context only, do not translate them again):")
+            page.forEach { (src, tgt) -> appendLine("- ${oneLine(src)} => ${oneLine(tgt)}") }
             appendLine()
         }
         if (glossary.isNotEmpty()) {
@@ -147,6 +156,20 @@ You are a senior French editor of professionally published manhwa. You receive s
         appendLine("Lines to translate:")
         texts.forEachIndexed { i, t -> appendLine("${i + 1}| ${oneLine(t)}") }
     }.trim()
+
+    /**
+     * Le synopsis de l'œuvre, raccourci pour le prompt : il dit qui sont les personnages (le héros réincarné en demi-démon est un homme : « je suis à moitié humain », pas « humaine »).
+     * Coupé à la fin d'une phrase avant [PREMISE_MAX] caractères ; null s'il est vide.
+     */
+    fun premiseOf(text: String?): String? {
+        val t = text?.replace(Regex("\\s+"), " ")?.trim().orEmpty()
+        if (t.length < 20) return null
+        if (t.length <= PREMISE_MAX) return t
+        val cut = t.take(PREMISE_MAX)
+        val end = cut.lastIndexOfAny(charArrayOf('.', '!', '?', '…'))
+        return if (end >= PREMISE_MAX / 2) cut.take(end + 1) else cut.substringBeforeLast(' ') + "…"
+    }
+    const val PREMISE_MAX = 450
 
     /** Nombre maximal de jetons de sortie pour une page : ~ (caractères / 3) × 1,6 de marge + 64 ; borné pour éviter toute génération sans fin. */
     fun maxOutputTokens(texts: List<String>): Int = (((texts.sumOf { it.length } * 1.3 / 3.0) + 12 * texts.size) * 1.6 + 64).toInt().coerceIn(96, 1500)

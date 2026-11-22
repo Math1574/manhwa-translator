@@ -13,6 +13,7 @@ import app.manhwa.core.IdiomHints
 import app.manhwa.core.InsufficientSpace
 import app.manhwa.core.ChapterMemory
 import app.manhwa.core.LlmModels
+import app.manhwa.core.TranslationAlign
 import app.manhwa.core.TranslationChecks
 import app.manhwa.core.TranslationPost
 import app.manhwa.core.LlmPrompt
@@ -112,6 +113,8 @@ class GemmaTranslator(
     @Volatile var generationTimeoutMs: Long = GENERATION_TIMEOUT_MS
     /** Titre de la série (déduit de l'adresse) : aide le modèle à comprendre le genre et les noms. */
     @Volatile var seriesTitle: String? = null
+    /** Synopsis de l'œuvre (en français s'il a été traduit) : donné au modèle comme contexte (qui sont les personnages). */
+    @Volatile var seriesPremise: String? = null
     /** Noms et termes du chapitre en cours (mémoire) et rapport des contrôles de la dernière page. */
     private val memory = ChapterMemory(isCommonWord = { w -> Lexicon.peek()?.isCommon(w) == true })
     @Volatile var lastReport: List<LineReport> = emptyList()
@@ -170,8 +173,7 @@ class GemmaTranslator(
             val loadMs = SystemClock.uptimeMillis() - tLoad
             if (loadMs > 300L) try { callLog.get()?.add("load:$loadMs") } catch (_: Throwable) {}
             var out = ask(eng, texts, source, target, glossary)
-            // lignes manquantes dans la réponse : une seconde tentative, ligne par ligne
-            for (i in out.indices) if (out[i] == null) out[i] = ask(eng, listOf(texts[i]), source, target, glossary, kind = "miss").firstOrNull()
+            out = realign(eng, texts, out, source, target, glossary)
             var final = out.mapIndexed { i, t -> t ?: throw IllegalStateException("Réponse du modèle incomplète (ligne ${i + 1})") }
             if (refine || s.refinePass) final = refineDraft(eng, texts, final, glossary)
             final = checkAndFix(eng, texts, final, target, source, glossary)
@@ -182,6 +184,31 @@ class GemmaTranslator(
         } finally {
             scheduleRelease() // libère la mémoire (plusieurs Go) quand on ne traduit plus
         }
+    }
+
+    /**
+     * Lignes absentes de la réponse ou mal placées (le modèle a sauté une ligne et décalé les suivantes, ou mis la traduction d'une ligne sous le numéro d'une autre : voir
+     * [TranslationAlign]) : elles sont refaites ensemble, avec les autres lignes du lot comme contexte ; ce qui reste absent ou suspect est refait seul. La réponse brute fautive va au journal.
+     */
+    private fun realign(eng: Engine, texts: List<String>, first: MutableList<String?>, source: String, target: String, glossary: List<GlossaryEntry>): MutableList<String?> {
+        val out = first
+        val lex = try { Lexicon.get(ctx) } catch (_: Throwable) { null }
+        val names = chapterNames()
+        fun bad(within: Set<Int>? = null): java.util.SortedSet<Int> {
+            val s = (out.indices.filter { out[it] == null } + try { TranslationAlign.suspects(texts, out, lex, names) } catch (_: Throwable) { emptySet() }).toSortedSet()
+            return if (within == null) s else s.filter { it in within }.toSortedSet()
+        }
+        val redo = bad()
+        if (redo.isEmpty()) return out
+        try {
+            callLog.get()?.add("realign:${redo.size}/${texts.size}")
+            callLog.get()?.add("raw:" + lastReply.take(600).replace('\n', '⏎').replace(';', ','))
+        } catch (_: Throwable) {}
+        val context = texts.indices.filter { it !in redo && out[it] != null }.map { texts[it] to out[it]!! }
+        val again = try { ask(eng, redo.map { texts[it] }, source, target, glossary, kind = "realign", page = context) } catch (e: Throwable) { null }
+        redo.forEachIndexed { k, i -> out[i] = again?.getOrNull(k) }
+        for (i in bad(redo)) out[i] = try { ask(eng, listOf(texts[i]), source, target, glossary, kind = "miss").firstOrNull() } catch (e: Throwable) { null }
+        return out
     }
 
     /** Charge le moteur à l'avance (tâche de fond) : la première traduction ne paie plus les 10 à 30 s de chargement du modèle. */
@@ -263,7 +290,10 @@ class GemmaTranslator(
         } finally { note("fix", t0, createMs, inLen, outLen) }
     }
 
-    private fun ask(eng: Engine, texts: List<String>, source: String, target: String, glossary: List<GlossaryEntry>, series: String? = seriesTitle, kind: String = "ask"): MutableList<String?> {
+    /** Dernière réponse brute du modèle (journal des réponses fautives). */
+    private var lastReply = ""
+
+    private fun ask(eng: Engine, texts: List<String>, source: String, target: String, glossary: List<GlossaryEntry>, series: String? = seriesTitle, kind: String = "ask", page: List<Pair<String, String>> = emptyList()): MutableList<String?> {
         val t0 = SystemClock.uptimeMillis(); var createMs = 0L; var outLen = -1
         val system = LlmPrompt.system(source, target, promptVariant)
         var inLen = system.length
@@ -276,9 +306,10 @@ class GemmaTranslator(
             val reply = eng.createConversation(config).use { conv ->
                 createMs = SystemClock.uptimeMillis() - t0
                 val hints = if (promptVariant >= 4 && target == "fr") IdiomHints.find(texts) else emptyList()
-                withWatchdog(conv) { val u = LlmPrompt.user(texts, recentDialogue(), glossary, series, keptNames(), hints, styleNotes(target)); inLen += u.length; textOf(conv.sendMessage(u)) }
+                withWatchdog(conv) { val u = LlmPrompt.user(texts, recentDialogue(), glossary, series, keptNames(), hints, styleNotes(target), page, if (target == "fr") seriesPremise else null); inLen += u.length; textOf(conv.sendMessage(u)) }
             }
             outLen = reply.length
+            lastReply = reply
             // le modèle recopie parfois la ligne d'origine devant sa traduction (« SOURCE| TRADUCTION ») : la recopie est retirée, et comptée au journal (détail des appels : « echo:2/3 »)
             val raw = LlmPrompt.parse(reply, texts.size)
             val lines = LlmPrompt.parse(reply, texts.size, texts)

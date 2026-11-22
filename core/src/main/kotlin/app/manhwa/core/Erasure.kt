@@ -615,10 +615,12 @@ object Erasure {
                     // Presque aucun pixel de référence dans la « bulle » (texte posé sur un décor, la forme trouvée ne couvre que quelques pixels de la zone) et intérieur non lisse : l'ancienne diffusion
                     // n'a rien d'où partir et remplit toute la zone d'un gris plat (un carré visible, ou les lettres restent en fantômes dessous). Le texte est alors traité comme un texte sur dessin :
                     // seules les lettres sont reconstruites (branche suivante).
-                    val noReference = !smoothInterior && knownN < max(64, zone.count { it } / 20)
-                    if (noReference) trace?.invoke("lissé : presque aucun pixel de référence ($knownN) -> texte sur dessin (reconstruction des lettres)")
+                    // Intérieur ni uni ni en dégradé (tache d'encre au pinceau, trame, dessin dans une fausse bulle) : la diffusion de toute la zone en faisait un carré gris bien visible
+                    // (journal du 22/11 : « 71 a l'air délicieux » sur une tache d'encre texturée). Seules les lettres sont alors effacées et reconstruites, comme pour un texte sur dessin (branche
+                    // suivante) ; c'était déjà le cas quand presque aucun pixel ne servait de référence.
+                    if (!smoothInterior) trace?.invoke("lissé : intérieur texturé ($knownN pixels de référence) -> texte sur dessin (reconstruction des lettres)")
                     else {
-                        val fill = if (!smoothInterior) TextErase.inpaint(px, w, h, unknownS) else TextErase.inpaintSmooth(px, w, h, unknownS, sources)
+                        val fill = TextErase.inpaintSmooth(px, w, h, unknownS, sources)
                         val alpha = TextErase.featherAlpha(mask, w, h)
                         val layer = IntArray(w * h) { if (mask[it]) (alpha[it] shl 24) or (fill[it] and 0xFFFFFF) else 0 }
                         val fc = TextErase.extremeTextColor(px, zone)

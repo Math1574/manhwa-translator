@@ -611,6 +611,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                 try { view.settings.setSupportMultipleWindows(blockerOn(url)) } catch (_: Throwable) {}   // bloqueur éteint : comportement normal du navigateur
                 if (!guardAtDocumentStart) view.evaluateJavascript(AdGuardScript.JS, null)
                 graph.gemma.seriesTitle = if (url.startsWith("http")) app.manhwa.core.SeriesHint.fromUrl(url) else null
+                graph.gemma.seriesPremise = try { BrowsingLibrary.seriesKey(url)?.let { k -> graph.covers.synopsisFrench(k) ?: graph.covers.synopsisOf(k) } } catch (_: Throwable) { null }
                 loading = true
                 nearBottom = false
                 barsHidden = false; pageProgress = 0; showReaderBar(false); resumeOffer = 0; peekTarget = null; undoBanner = null
@@ -769,7 +770,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
     /** Texte à écarter d'une page (filigrane, débris de lecture, texte qui revient de page en page) : mêmes règles pour la lecture complète et pour la relecture des textes écartés. */
     private fun junkRule(c: Candidate, s: AppSettings, lexicon: EnglishLexicon): (String, Float, Boolean) -> Boolean = { t, rel, anchored ->
-        s.source.code != "ja" && s.source.code != "ko" && s.source.code != "zh" && (JunkFilter.isWatermark(t) || ((rel < 1.6f || !anchored) && JunkFilter.isDebris(t, lexicon)) ||
+        s.source.code != "ja" && s.source.code != "ko" && s.source.code != "zh" && (JunkFilter.isWatermark(t) || JunkFilter.isGibberish(t, lexicon) || ((rel < 1.6f || !anchored) && JunkFilter.isDebris(t, lexicon)) ||
             // un seul petit mot inconnu (« IE », « TE », « SA ») : reste de décor lu comme du texte, laissé de côté quelle que soit sa taille ; les noms du chapitre et les cris sont épargnés
             (try { JunkFilter.isTinyDebris(t, lexicon, graph.gemma.chapterNames()) } catch (_: Throwable) { false }) || repeatedAcrossPages(t, keysById[c.id]?.imageHash ?: c.id))
     }

@@ -2,6 +2,11 @@ package app.manhwa.core
 
 /** Contrôles automatiques d'une traduction ligne par ligne : mots non traduits, contenu perdu, noms modifiés, chiffres perdus, répétitions. */
 object TranslationChecks {
+    /** Une syllabe répétée de part et d'autre d'un trait d'union (« EST-EST », « A-A », « B-BUT » côté anglais). */
+    /** Bégaiement de l'original, trait d'union suivi ou non d'une espace (« B-BUT », « WH- WHAT ») : la traduction peut alors bégayer aussi. */
+    private val srcStutter = Regex("(?i)(?<![\\p{L}])(\\p{L}{1,4})-\\s?\\1")
+    private val stutteredSyllable = Regex("(?i)(?<![\\p{L}])(\\p{L}{1,4})-\\1(?![\\p{L}])|(?i)(?<![\\p{L}])(\\p{L}{1,4})-\\2\\p{L}")
+
     data class Problem(val code: String, val detail: String)
 
     /** Mots anglais courants qui n'existent pas en français : leur présence dans une traduction signale du texte non traduit. */
@@ -53,6 +58,8 @@ object TranslationChecks {
         for (i in 2 until words.size) if (words[i] == words[i - 1] && words[i] == words[i - 2] && words[i].length > 1) { out.add(Problem("répétition", "mot répété : ${words[i]}")); break }
         // verbosité excessive
         if (sLetters >= 10 && t.count { it.isLetter() } > 3.2f * sLetters) out.add(Problem("long", "beaucoup plus long que l'original"))
+        // syllabe doublée par un trait d'union alors que l'original ne bégaie pas (« QU'EST-EST-CE QUE C'EST ? Y A-A-T-IL UN PROBLÈME ? » pour « WHAT IS IT? IS SOMETHING WRONG? », journal du 22/11)
+        if (!srcStutter.containsMatchIn(src)) stutteredSyllable.find(t)?.let { out.add(Problem("répétition", "syllabe doublée : ${it.value}")) }
         // reste de format
         if (Regex("^\\s*\\d+\\s*\\|").containsMatchIn(t) || t.contains("**") || t.startsWith("```")) out.add(Problem("format", "résidu de mise en forme"))
         // l'original recopié devant la traduction (« SOURCE| TRADUCTION »), ou un « | » resté dans le texte alors que l'original n'en a pas

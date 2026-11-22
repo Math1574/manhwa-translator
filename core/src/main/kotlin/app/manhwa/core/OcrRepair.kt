@@ -576,7 +576,9 @@ internal object OcrFragments {
 
 /** Filtre des lignes lues qui ne sont pas du dialogue : filigranes, logos, débris de lecture sur le dessin. */
 object JunkFilter {
-    private val watermark = Regex("(?i)(asura|\\.com\\b|\\.net\\b|\\.org\\b|\\.io\\b|\\.co\\.[a-z]{2}\\b|\\.kr\\b|https?:|www\\.|discord|scanlat|scans\\b|read (it )?(at|on)\\b|join (us|our)|(^|\\s)@\\s?[\\w.]{3,})")
+    private val watermark = Regex("(?i)(asura|\\.com\\b|\\.net\\b|\\.org\\b|\\.io\\b|\\.co\\.[a-z]{2}\\b|\\.kr\\b|https?:|www\\.|discord|scanlat|scans\\b|read (it )?(at|on)\\b|join (us|our)|(^|\\s)@\\s?[\\w.]{3,}" +
+        // crédits de fin de chapitre (« ORIGINAL: … STORY: … ART: … », « THE GRIMM ENTERTAINMENT ») et bandeau du site (« for the fastest releases ») : des noms, rien à traduire
+        "|\\b(fastest|latest) releases\\b|\\bentertainment\\b|(^|[\\s.,;|])(original|story|art|artist|author|writer|illustrator|translat\\w*|proofread\\w*|typeset\\w*|clean\\w*|redraw\\w*|qc|editor|publisher)\\s*:)")
     private val interjection = Regex("(?i)^(?:[a-z]*([a-z])\\1{2,}[a-z]*|a+r*g+h+|u+g+h+|g+a+g+h*|h+m+p*h*|h+a+h+a*|k+y+a+|t+s+k+|a+h+|o+h+|u+h+|e+h+|h+u+h+|w+h+a+t+|n+o+|y+e+s+)$")
     /** Rires et cris faits d'une syllabe répétée (« HEHEHE », « KUKUKU », « PWAHAHA ») : jamais coupés en mots ni corrigés. */
     private val stretched = Regex("(?i)^(?:(?:h[aeiou]){2,}h?|(?:k[aeiou]){2,}k?|(?:m[uo]){2,}|p+w+a+(?:h+a+)+h*|(?:b[aeiou]){3,})$")
@@ -601,11 +603,27 @@ object JunkFilter {
     }
     private val dialogueTwo = setOf("ah", "aw", "an", "am", "as", "at", "be", "by", "do", "eh", "go", "ha", "he", "hi", "hm", "ho", "if", "in", "is", "it", "me", "mm", "my", "no", "of", "oh", "ok", "on", "or", "ow", "so", "to", "ty", "uh", "um", "up", "us", "we", "yo")
 
+    /**
+     * Charabia : un bruitage ou un dessin lu comme une longue suite de signes (« #<M sQN <1r √I > U8S W>Y8 XI JV1>U8S W>xX 8<M SQn<1MF JJ1 UXS LX », journal du 22/11) — aucun mot anglais
+     * de trois lettres ou plus, des chiffres mêlés aux lettres et des signes qu'aucune réplique n'emploie. Envoyé au modèle, il le faisait sauter une ligne et décaler toutes les suivantes.
+     */
+    fun isGibberish(text: String, lex: EnglishLexicon): Boolean {
+        val toks = Regex("[A-Za-z0-9'’]+").findAll(text).map { it.value }.toList()
+        if (toks.size < 4) return false
+        val nonSpace = text.count { !it.isWhitespace() }
+        val signs = text.count { it in "<>√#|\\/^~=_+*&%@{}[]¬°§¤" }
+        val mixed = toks.count { t -> t.any { it.isDigit() } && t.any { it.isLetter() } }
+        val known = toks.count { t -> t.length >= 3 && t.none { it.isDigit() } && lex.known(t.trim('\'', '’')) }
+        if (known * 5 > toks.size) return false   // plus d'un mot sur cinq est de l'anglais : une vraie phrase mal lue, pas du charabia
+        return signs * 10 >= nonSpace || mixed >= 3
+    }
+
     /** Débris : aucun mot anglais reconnu, texte court et qui ne ressemble pas à une interjection. Texte non anglais : jamais un débris. */
     fun isDebris(text: String, lex: EnglishLexicon): Boolean {
         if (ScriptDetector.dominant(text) != "en") return false
         val toks = Regex("[A-Za-z0-9'’]+").findAll(text).map { it.value }.toList()
         if (toks.isEmpty()) return false
+        if (isGibberish(text, lex)) return true
         val letters = text.count { it.isLetter() }
         if (letters > 16) return false
         if (toks.any { it.any { c -> c.isLetter() } && it.length >= 3 && lex.known(it) && it.none { c -> c.isDigit() } }) return false
