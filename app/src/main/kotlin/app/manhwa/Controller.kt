@@ -1291,6 +1291,22 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     /** Bouton discret « Traduire » du bas de chapitre : traduit aussi les images qui sont apparues sous le chapitre. */
     fun translateLate() { start(false, all = true) }
 
+    /**
+     * La page a changé après la fin du chapitre : les pages du chapitre chargées en retard (empilées sous la dernière page traduite, même sorte qu'elles) sont traduites tout de suite,
+     * sans lever l'arrêt de fin de chapitre ; le reste (commentaires, bannières) est seulement compté pour le bouton « Traduire ».
+     */
+    private fun continueTail() {
+        val wv = webView ?: return
+        val strict = BrowsingLibrary.looksLikeChapter(currentUrl)
+        val epoch = pageEpoch
+        wv.evaluateJavascript("window.__mt?window.__mt.collectTail($strict):null") { r ->
+            if (epoch != pageEpoch) return@evaluateJavascript
+            if (testing && r != null && r != "null" && r != "[]") android.util.Log.i("MT", "fin de chapitre : page du chapitre arrivée en retard, traduite")
+            onCandidates(r)
+            if (chapterDone) refreshLate()
+        }
+    }
+
     /** Images en attente sous le chapitre (voir [lateImages]) : relevées quand la page change après la fin du chapitre. */
     private fun refreshLate() {
         val strict = BrowsingLibrary.looksLikeChapter(currentUrl)
@@ -2382,7 +2398,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             main.post { if (discardMode) translateDiscarded(id, did.toIntOrNull() ?: return@post) }
         }
         // chapitre terminé : une image qui apparaît (commentaire, bannière) ne relance rien, elle est seulement comptée pour le bouton discret
-        @JavascriptInterface fun onImagesChanged() { main.post { if (active) { if (chapterDone) refreshLate() else start(false) } } }
+        @JavascriptInterface fun onImagesChanged() { main.post { if (active) { if (chapterDone) continueTail() else start(false) } } }
         // le lecteur a défilé : les pages en attente sont reclassées (celles qu'il regarde maintenant prennent la place des plus lointaines)
         @JavascriptInterface fun onViewport(y: Double, h: Double) { viewportY = y; if (h > 0) viewportH = h; if (active) pump() }
         @JavascriptInterface fun onB64(id: String, data: String) { b64Waiters[id]?.complete(data) }

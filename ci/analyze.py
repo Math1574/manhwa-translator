@@ -174,9 +174,12 @@ for path in sorted(glob.glob(f"{OUT}/reports/*.json")):
             P(f"- arrêt de fin de chapitre : {eoc}")
             tb = eoc.get("totalBefore") or 0
             if not eoc.get("latched"): problems.append(f"{name}: le chapitre ne se déclare pas terminé une fois en bas de page")
-            if eoc.get("totalAfterLate") != eoc.get("totalBefore"): problems.append(f"{name}: une image apparue après la fin du chapitre est repartie toute seule en traduction ({tb} → {eoc.get('totalAfterLate')})")
+            ts = eoc.get("totalAfterStack", tb)
+            if ts != tb + 1 or (eoc.get("doneAfterStack") or 0) < ts: problems.append(f"{name}: une page du chapitre chargée après la fin du chapitre (empilée sous la dernière) n'est pas traduite ({tb} → {ts}, traitées {eoc.get('doneAfterStack')})")
+            if not eoc.get("latchedAfterStack", True): problems.append(f"{name}: la page chargée en retard a levé l'arrêt de fin de chapitre")
+            if eoc.get("totalAfterLate") != ts: problems.append(f"{name}: une image apparue sous les commentaires après la fin du chapitre est repartie toute seule en traduction ({ts} → {eoc.get('totalAfterLate')})")
             if not eoc.get("stillLatched") or not eoc.get("offer") or (eoc.get("lateImages") or 0) < 1: problems.append(f"{name}: le bouton « Traduire » n'est pas proposé ({eoc.get('lateImages')} image(s), proposé : {eoc.get('offer')})")
-            if (eoc.get("totalAfterButton") or 0) <= tb or (eoc.get("doneAfterButton") or 0) < (eoc.get("totalAfterButton") or 1): problems.append(f"{name}: le bouton « Traduire » ne traduit pas les images de dessous ({eoc.get('doneAfterButton')}/{eoc.get('totalAfterButton')} après {eoc.get('buttonMs')} ms)")
+            if (eoc.get("totalAfterButton") or 0) <= (eoc.get("totalAfterLate") or tb) or (eoc.get("doneAfterButton") or 0) < (eoc.get("totalAfterButton") or 1): problems.append(f"{name}: le bouton « Traduire » ne traduit pas les images de dessous ({eoc.get('doneAfterButton')}/{eoc.get('totalAfterButton')} après {eoc.get('buttonMs')} ms)")
     if name.startswith("pc_en_toggle"):
         done_n = sum(1 for im in imgs if im.get("outcome", "").startswith("done"))
         tot_n = c.get("total") or 0

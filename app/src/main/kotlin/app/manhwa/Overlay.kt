@@ -97,7 +97,8 @@ object PageScript {
   }
   // « strict » : on ne donne que les images de la colonne du chapitre (pages de lecture) ; sinon (page où l'on a demandé la traduction à la main) toutes les images assez grandes ;
   // « all » : tout ce qui est assez grand, colonne ou non (l'utilisateur demande les images de dessous le chapitre)
-  function collect(force, strict, all){
+  // « only » : ne donner que ces images (ensemble d'identifiants, voir tail)
+  function collect(force, strict, all, only){
     if (force) { S.seen = {}; }
     var out = [], l = document.images, now = Date.now();
     // images empilées : l'image collée juste au-dessus (son bord bas touche le bord haut de celle-ci, même colonne, même largeur) apporte le contexte
@@ -112,6 +113,7 @@ object PageScript {
       if (r.width < MIN*0.8 || r.height < MIN*0.8) continue;
       var s = srcOf(im); if (!s) continue;
       var id = idOf(im); if (S.seen[id] === s) continue;
+      if (only && !only[id]) continue;
       var top = r.top + window.scrollY, left = r.left + window.scrollX, prev = null, next = null;
       // hors du chapitre : ailleurs que dans la colonne des pages (une image plus étroite au milieu des pages, elle, reste), et soit nettement plus étroite qu'elles,
       // soit sous la colonne sans être de la même sorte (largeur d'origine et dossier) : commentaire, bannière, vignette
@@ -154,6 +156,31 @@ object PageScript {
     }
     return n;
   }
+  // Fin de chapitre déjà déclarée : une page arrivée depuis qui prolonge le chapitre — empilée juste sous une page déjà donnée (48 px au plus, même bord gauche, même largeur
+  // affichée) et de la même sorte que les pages — est une page du chapitre chargée en retard (chargement différé : vide et sans hauteur au moment de l'arrêt), pas un commentaire :
+  // elle est donnée tout de suite. Les pages prises s'enchaînent (la suivante peut s'empiler sous une page prise au même passage). Le reste attend le bouton « Traduire ».
+  function tail(strict){
+    var geo = geoList(), col = strict ? column(geo) : null, ends = [], cand = [], took = {}, i, k;
+    for (i=0;i<geo.length;i++){ var g = geo[i]; if (g.im.__mtid && S.seen[g.im.__mtid]) ends.push(g); else cand.push(g); }
+    if (!ends.length) return took;
+    cand.sort(function(a, b){ return a.top - b.top; });
+    var more = true;
+    while (more) {
+      more = false;
+      for (i=0;i<cand.length;i++){
+        var c = cand[i], im = c.im; if (took[idOf(im)]) continue;
+        if (!im.complete || im.naturalWidth < MIN || im.naturalHeight < MIN) continue;
+        var s = srcOf(im); if (!s) continue;
+        if (col && !sameKind(im, s, col)) continue;
+        for (k=0;k<ends.length;k++){
+          var e = ends[k];
+          if (c.top >= e.bottom - 4 && c.top - e.bottom <= 48 && Math.abs(c.left - e.left) <= 8 && Math.abs(c.width - e.width) <= Math.max(8, e.width * 0.03)) { took[idOf(im)] = 1; ends.push(c); more = true; break; }
+        }
+      }
+    }
+    return took;
+  }
+  function collectTail(strict){ var t = tail(strict); for (var x in t) return collect(false, strict, true, t); return []; }
   // images du chapitre pas encore chargées (affichées en grand mais encore vides : chargement différé) : tant qu'il en reste, le chapitre n'est pas complet
   function chainPending(strict){
     var geo = geoList(), col = strict ? column(geo) : null, n = 0;
@@ -540,7 +567,7 @@ object PageScript {
       setTimeout(tick, 400);
     })();
   }
-  window.__mt = {probe:probe, collect:collect, waiting:waiting, chainPending:chainPending, apply:apply, setVisible:setVisible, clear:clear, getB64:getB64, resumeTo:resumeTo, forget:forget, dropPatch:dropPatch, setErase:setErase, testErase:testErase, setDisc:setDisc, setDiscs:setDiscs, testDisc:testDisc};
+  window.__mt = {probe:probe, collect:collect, collectTail:collectTail, waiting:waiting, chainPending:chainPending, apply:apply, setVisible:setVisible, clear:clear, getB64:getB64, resumeTo:resumeTo, forget:forget, dropPatch:dropPatch, setErase:setErase, testErase:testErase, setDisc:setDisc, setDiscs:setDiscs, testDisc:testDisc};
 })();
 """
 }
