@@ -111,8 +111,6 @@ class AppGraph(ctx: Context) {
     /** Synopsis des œuvres traduits en français, une fois par œuvre, en tâche de fond quand aucun chapitre ne se traduit (voir [SynopsisFrench]). */
     val synopsisFrench = SynopsisFrench(covers, { settingsStore.settings.synopsisFr }, { controller.translating || controller.thermalHot }, { text -> translateSynopsis(text) }, { journal.add(it) })
     val journal = TranslationJournal(File(ctx.filesDir, "journal.jsonl"))
-    /** Mesure de la fluidité du défilement pendant la traduction (voir [JankMeter]) : un résumé au journal tous les 30 s de défilement. */
-    val jank = JankMeter({ controller.translating }, { controller.jankActivity() }, { gemma.backendLabel }, { journal.add(it) })
     /** Corrections manuelles des textes (zone, texte, position, taille, police), par image. */
     val edits = EditStore(File(ctx.filesDir, "edits.txt"), originsFile = File(ctx.filesDir, "edit_origins.txt"))
     /** Textes (dans une œuvre ou partout) et images (bandeaux de début ou de fin de chapitre) que l'utilisateur ne veut plus voir traduits. */

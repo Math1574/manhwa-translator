@@ -55,6 +55,9 @@ object TranslationChecks {
         if (sLetters >= 10 && t.count { it.isLetter() } > 3.2f * sLetters) out.add(Problem("long", "beaucoup plus long que l'original"))
         // reste de format
         if (Regex("^\\s*\\d+\\s*\\|").containsMatchIn(t) || t.contains("**") || t.startsWith("```")) out.add(Problem("format", "résidu de mise en forme"))
+        // l'original recopié devant la traduction (« SOURCE| TRADUCTION »), ou un « | » resté dans le texte alors que l'original n'en a pas
+        if (TranslationEcho.strip(src, t) != t) out.add(Problem("recopie", "l'original est recopié devant la traduction"))
+        else if (t.contains('|') && !src.contains('|')) out.add(Problem("format", "« | » dans la traduction"))
         return out
     }
 

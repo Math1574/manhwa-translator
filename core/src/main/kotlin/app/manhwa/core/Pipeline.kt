@@ -182,7 +182,12 @@ class PagePipeline(
 
     fun process(imageBytes: ByteArray, source: String, target: String): PageOutcome {
         val key = CacheKey(sha256Hex(imageBytes), source, target, engineId)
-        if (useCache) cache.get(key)?.let { return refreshFromCache(key, it, source, target) }
+        if (useCache) cache.get(key)?.let { cached ->
+            // page gardée avant le filtre de la recopie : l'original recopié devant la traduction en est retiré, et la page est rangée nettoyée
+            val page = TranslationEcho.cleanPage(cached)
+            if (page !== cached) cache.put(key, page, cache.revisionOf(key))
+            return refreshFromCache(key, page, source, target)
+        }
 
         val ocrResult = try { ocr.recognize(imageBytes) } catch (e: Exception) {
             return PageOutcome.Failed("ocr", e.message ?: e.javaClass.simpleName)
@@ -238,7 +243,7 @@ class PagePipeline(
 
         val out = blocks.mapIndexedNotNull { i, b ->
             val bt = withoutJunkTail(b, junkTail(b.text))
-            translated[i]?.let { TranslatedBlock(b.id, bt.box, b.text, it, b.vertical, medianLineHeight(b), bt.lines.map { l -> l.box }, bt.lines.map { l -> l.text }, if (clean[i] != b.text) clean[i] else "", b.kind.name.takeIf { b.kind != BlockKind.UNKNOWN } ?: "", b.container, b.zone) }
+            translated[i]?.let { TranslatedBlock(b.id, bt.box, b.text, TranslationEcho.strip(clean[i], it, b.text), b.vertical, medianLineHeight(b), bt.lines.map { l -> l.box }, bt.lines.map { l -> l.text }, if (clean[i] != b.text) clean[i] else "", b.kind.name.takeIf { b.kind != BlockKind.UNKNOWN } ?: "", b.container, b.zone) }
         }
         val result = PageResult(ocrResult.imageWidth, ocrResult.imageHeight, out)
         if (errors == 0) cache.put(key, result, g.revision) // une page partielle n'est pas mise en cache ; elle garde la version du glossaire avec laquelle elle a été traduite
