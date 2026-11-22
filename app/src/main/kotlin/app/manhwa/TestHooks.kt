@@ -302,6 +302,14 @@ object TestHooks {
                     val tB = System.currentTimeMillis()
                     while (!c.chapterDone && System.currentTimeMillis() - tB < 40_000) Thread.sleep(500)
                     eoc.put("latched", c.chapterDone).put("latchedAfterMs", System.currentTimeMillis() - tB).put("totalBefore", c.total)
+                    // page du chapitre chargée en retard, empilée sous la dernière : traduite toute seule, l'arrêt de fin de chapitre reste
+                    val beforeStack = c.total
+                    main.post { c.evalForTest("window.__stackAdd&&window.__stackAdd()") {} }
+                    val tS = System.currentTimeMillis()
+                    while ((c.total <= beforeStack || c.done + c.failed < c.total) && System.currentTimeMillis() - tS < 60_000) Thread.sleep(500)
+                    eoc.put("totalAfterStack", c.total).put("doneAfterStack", c.done + c.failed).put("latchedAfterStack", c.chapterDone)
+                    main.post { c.evalForTest("window.scrollTo(0, document.documentElement.scrollHeight)") {} }
+                    Thread.sleep(1500)
                     main.post { c.evalForTest("window.__lateAdd&&window.__lateAdd()") {} }
                     Thread.sleep(9000)
                     eoc.put("totalAfterLate", c.total).put("stillLatched", c.chapterDone).put("lateImages", c.lateImages).put("offer", c.lateOffer).put("running", c.translating)

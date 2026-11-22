@@ -64,7 +64,9 @@ if os.path.exists(f"{S}/synth/en_mixed.png"):
         # commentaires : une image d'un autre dossier, presque aussi large que les pages (mise en page mobile) ; le filtre de la colonne l'écarte. Une image du même dossier et de la même largeur que les pages
         # arrive plus tard (__lateAdd, appelée par le test une fois en bas de page) : le filtre ne peut pas la distinguer d'une page, c'est l'arrêt de fin de chapitre qui la retient
         + '<h4 style="padding:8px">Commentaires</h4><img src="/comments/c1.png" style="display:block;width:80%;margin:12px auto"><div id="late"></div>'
-        + '<script>window.__lateAdd=function(){var i=new Image();i.src="/synth/en_mixed.png";i.style.cssText="display:block;width:80%;margin:12px auto";document.getElementById("late").appendChild(i)}</script></body></html>')
+        + '<script>window.__lateAdd=function(){var i=new Image();i.src="/synth/en_mixed.png";i.style.cssText="display:block;width:80%;margin:12px auto";document.getElementById("late").appendChild(i)}'
+        # dernière page du chapitre chargée en retard (chargement différé) : elle s'empile juste sous la page 2, après l'arrêt de fin de chapitre ; elle doit être traduite toute seule
+        + ';window.__stackAdd=function(){var p=document.querySelectorAll("img")[1],i=new Image();i.src="/synth/en_mixed.png";i.style.cssText="display:block;width:100%;margin:0";p.parentNode.insertBefore(i,p.nextSibling)}</script></body></html>')
     os.makedirs(f"{S}/comments", exist_ok=True)
     import shutil as _sh
     if os.path.exists(f"{S}/synth/en_caps.png"): _sh.copy(f"{S}/synth/en_caps.png", f"{S}/comments/c1.png")

@@ -229,4 +229,14 @@ fun ocrQualityTests() {
         T.eq("WHO ARE YOU?", fix("WHO ARE YOU? ["))
         same("[COMMANDER OF THE RANDEYA MERCENARY COMPANY", "(HE SAID IT)", "[SYSTEM] YOU HAVE LEVELED UP", "]")
     }
+
+    T.test("lecture : lettrage au pinceau — « IT » lu « 71 » devant un verbe, cri d'un mot à deux lettres fausses (« MJOTHEK ! » pour « MOTHER ») ; noms et vrais nombres intacts") {
+        cases(
+            "71 LOOKS POSITIVELY DELICIOUS..." to "IT LOOKS POSITIVELY DELICIOUS...",
+            "WELL. 71 WAS FUN" to "WELL. IT WAS FUN",
+            "MJOTHEK !" to "MOTHER !",
+        )
+        same("7 IS LUCKY", "AND 71 IS THE NUMBER", "71 SOLDIERS DIED", "SEOYEON!", "JAEHYUK!", "CHAERIN", "KANDEYA!", "IT LOOKS GOOD")
+        T.eq("KANDEYA!", fix("KANDEYA!", setOf("kandeya")), "nom du chapitre")
+    }
 }

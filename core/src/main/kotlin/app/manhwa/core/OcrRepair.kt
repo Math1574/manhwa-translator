@@ -53,6 +53,10 @@ object OcrRepair {
     private const val ALPHA = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     private val possessiveRe = Regex("(.+)['’][sS]")
     private val legitMixedRe = Regex("(?i)^(\\d+(st|nd|rd|th)|[23]d|\\d+[kmgx]|\\d+p)$")
+    private val itAsDigits = Regex(
+        "(^|[.!?…] )(?=\\S*[17])(?:[17Il|][17Tt]|[7Tt][1Il|])(?= +((?i:LOOKS|SEEMS|SOUNDS|FEELS|SMELLS|TASTES|APPEARS|IS|ISN'T|WAS|WASN'T|HAS|HASN'T|DOES|DOESN'T|DIDN'T|WON'T|CAN'T|" +
+            "HURTS|MEANS|MAKES|TAKES|GOES|WORKS|BECOMES|BELONGS|HAPPENED|MUST|MIGHT|SHOULD|WOULD|COULD|WILL|CAN))\\b)"
+    )
 
     /** Jeton fait de chiffres et de lettres qui est écrit ainsi pour de bon : ordinal (« 2ND », « 10TH »), « 3D », « 50K », « 5X », « 1080P ». Jamais une faute de lecture. */
     internal fun isLegitMixed(token: String): Boolean = legitMixedRe.matches(token)
@@ -70,6 +74,9 @@ object OcrRepair {
         // « P WILL SWALLOW UP… » : le « I » d'un lettrage stylisé lu « P » devant un auxiliaire ou un verbe d'état (la traduction donnait « P VA ENGLOUTIR »). Un « P » isolé n'est pas un mot
         // anglais ; seulement en majuscules, en tête de texte ou de phrase, et jamais si « P » est un nom du chapitre.
         if ("p" !in protect) s = s.replace(Regex("(^|[.!?…] )P (?=(WILL|AM|HAVE|HAD|CAN|CAN'T|COULD|WOULD|SHALL|SHOULD|MUST|DON'T|DIDN'T|WON'T|WAS|WANT|NEED|KNOW|THINK|SWEAR|PROMISE)\\b)"), "$1I ")
+        // « 71 LOOKS POSITIVELY DELICIOUS » : le « IT » d'un lettrage au pinceau lu comme un nombre (« 71 », « 17 », « 1T ») devant un verbe qui attend « IT » (la traduction donnait
+        // « 71 A L'AIR D'ÊTRE DÉLICIEUX »). Seulement en tête de texte ou de phrase, et seulement des chiffres qui ressemblent à I et T.
+        s = itAsDigits.replace(s) { m -> m.groupValues[1] + (if (m.groupValues[2].any { it.isLowerCase() }) "It" else "IT") }
         s = s.replace(Regex("(?<![A-Za-z0-9])[Oo](?=[.,]\\d)"), "0")      // « SET TO O.1% » → « SET TO 0.1% » : un O collé à une décimale est un zéro
         val letters = s.filter { it.isLetter() }
         val caps = letters.length >= 4 && letters.count { it.isUpperCase() }.toFloat() / letters.length >= 0.5f
@@ -162,6 +169,8 @@ object OcrRepair {
             if (pick != null) return recase(tok, pick, caps)
             // deux lettres fausses dans un long mot courant (« DALIGHTER » → « DAUGHTER ») : seulement s'il n'y a qu'un mot possible
             if (core.length >= 8) editTwo(lower, lex)?.let { return recase(tok, it, caps) }
+            // cri d'un seul mot de sept lettres au lettrage stylisé (« MJOTHEK ! » pour « MOTHER?! ») : deux lettres fausses, le seul mot très courant possible, même première lettre
+            if (core.length == 7 && alphaTokens == 1 && !hasDigit) editTwo(lower, lex, sameStart = true)?.takeIf { lex.rank(it) < 3_000 }?.let { return recase(tok, it, caps) }
         } else if (core.length >= 6) {
             editOne(lower, lex)?.let { return recase(tok, it, caps) }
         }
@@ -247,10 +256,10 @@ object OcrRepair {
     }
 
     /** Deux lettres fausses dans un long mot (8 lettres ou plus) : le seul mot courant à deux modifications près ; null s'il y en a plusieurs ou aucun. */
-    private fun editTwo(w: String, lex: EnglishLexicon): String? {
+    private fun editTwo(w: String, lex: EnglishLexicon, sameStart: Boolean = false): String? {
         var found: String? = null
         for (c in lex.commonWords(w.length - 1, w.length + 1)) {
-            if (c[0] != w[0] && c[c.length - 1] != w[w.length - 1]) continue      // ni début ni fin en commun : trop éloigné
+            if (c[0] != w[0] && (sameStart || c[c.length - 1] != w[w.length - 1])) continue      // ni début ni fin en commun : trop éloigné
             if (w.contains(c) || c.contains(w)) continue                          // un mot contenu dans l'autre : des lettres collées ou perdues, pas une faute de lecture (« TRENERGY » ne devient pas « ENERGY »)
             if (distanceAtMost2(w, c)) { if (found != null) return null; found = c }
         }
