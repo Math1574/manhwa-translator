@@ -18,7 +18,7 @@ jobs:
         run: |
           pip install onnxruntime==1.20.0 onnx huggingface_hub pillow numpy
       - name: Essai
-        run: python lab/inpaint/run3.py lab/inpaint/pairs /tmp/out
+        run: python lab/inpaint/run4.py lab/inpaint/pairs /tmp/out
       - name: Résultats (branche lab-inpaint-out)
         if: always()
         run: |
@@ -26,7 +26,7 @@ jobs:
           git init -q
           git config user.name "lab"
           git config user.email "lab@users.noreply.github.com"
-          git checkout -q -b lab-inpaint-out3
+          git checkout -q -b lab-inpaint-out4
           git add -A
           git commit -qm "résultats lab-inpaint ${{ github.sha }}" || true
-          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" lab-inpaint-out3
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" lab-inpaint-out4
