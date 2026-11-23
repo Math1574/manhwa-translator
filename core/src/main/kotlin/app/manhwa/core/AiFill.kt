@@ -25,12 +25,15 @@ fun interface AiInpainter {
  *
  * Une seule passe du modèle par texte, pour borner le temps (une passe de 512 × 512 prend environ 2 s sur le processeur) et la mémoire :
  * - le modèle voit le rectangle du trou élargi de [CONTEXT] px de dessin (pas toute la région d'effacement, plus large) ;
- * - jusqu'à [SIDE] px de côté, à la résolution d'origine (pas de flou) ; au-delà (grand lettrage), réduit à [SIDE] px sur le grand côté, puis agrandi ;
+ * - jusqu'à [AREA] pixels, à la résolution d'origine ; au-delà, réduit à [AREA] pixels (et [SIDE] px sur le grand côté), puis agrandi : à pleine résolution, sans cette limite, le
+ *   calcul était quatre fois plus long qu'avant et faisait chauffer le téléphone (banc à vérité terrain : même travail que l'ancienne échelle, écart au dessin 22,2 au lieu de 20,9) ;
  * - complété au multiple de 8 par réflexion ; seuls les pixels du trou changent.
  */
 object AiFill {
     const val SIDE = 640
     const val CONTEXT = 48
+    /** Surface (pixels) au-delà de laquelle le rectangle vu par le modèle est réduit (coût du calcul, chauffe du téléphone). */
+    const val AREA = 15_000
     /** Au-delà (en pixels de la région), la retouche par IA est laissée de côté : la reconstruction classique sert. */
     const val MAX_AREA = 4_000_000
 
@@ -43,7 +46,9 @@ object AiFill {
         // rectangle vu par le modèle : le trou et un peu de dessin autour
         val cx0 = max(0, hx0 - CONTEXT); val cy0 = max(0, hy0 - CONTEXT)
         val cw = min(w - 1, hx1 + CONTEXT) - cx0 + 1; val ch = min(h - 1, hy1 + CONTEXT) - cy0 + 1
-        val scale = min(1.0, SIDE.toDouble() / max(cw, ch))
+        // au-delà de [AREA] pixels, le rectangle est réduit : le calcul du modèle (sur le processeur du téléphone) croît comme la surface ; à pleine résolution il quadruplait et faisait
+        // chauffer le téléphone, pour un gain faible dans un trou que la traduction recouvre en grande partie
+        val scale = min(min(1.0, SIDE.toDouble() / max(cw, ch)), kotlin.math.sqrt(AREA.toDouble() / (cw.toDouble() * ch)))
         val sw = max(2, min(cw, ceil(cw * scale - 1e-9).toInt())); val sh = max(2, min(ch, ceil(ch * scale - 1e-9).toInt()))
         // version réduite (ou copie) : moyenne des pixels connus de chaque case ; une case qui touche le trou est un trou
         val small = IntArray(sw * sh); val smallHole = BooleanArray(sw * sh)
@@ -73,7 +78,9 @@ object AiFill {
                 image[o] = ((c shr 16) and 0xFF) / 255f; image[pp + o] = ((c shr 8) and 0xFF) / 255f; image[2 * pp + o] = (c and 0xFF) / 255f
             }
         }
-        val out = try { model.run(image, mask, pw, ph) } catch (_: Throwable) { null } ?: return null
+        // même entrée déjà calculée (page redessinée : retour sur une page, correction d'un autre bloc, réglage) : résultat repris, sans refaire tourner le modèle
+        val key = System.identityHashCode(model).toString() + "/" + cacheKey(image, mask, pw, ph)
+        val out = cached(key) ?: (try { model.run(image, mask, pw, ph) } catch (_: Throwable) { null } ?: return null).also { if (it.size >= 3 * pp) remember(key, it) }
         if (out.size < 3 * pp) return null
         fun at(c: Int, x: Int, y: Int): Float = out[c * pp + y.coerceIn(0, sh - 1) * pw + x.coerceIn(0, sw - 1)]
         val res = px.copyOf(w * h)
@@ -139,6 +146,31 @@ object AiFill {
     }
 
     internal fun pad8(n: Int): Int = (n + 7) / 8 * 8
+
+    /** Résultats récents du modèle, par entrée (taille et contenu) : au plus [CACHE_FLOATS] valeurs gardées (24 Mo), les plus anciennes oubliées d'abord. */
+    private val cache = LinkedHashMap<String, FloatArray>(32, 0.75f, true)
+    private var cacheFloats = 0L
+    private const val CACHE_FLOATS = 6_000_000L
+
+    private fun cacheKey(image: FloatArray, mask: FloatArray, w: Int, h: Int): String {
+        var a = 1125899906842597L; var b = 7L
+        for (v in image) { val bits = v.toRawBits().toLong(); a = 31 * a + bits; b = b * 1000003L xor bits }
+        for (v in mask) { val bits = v.toRawBits().toLong(); a = 31 * a + bits; b = b * 1000003L xor bits }
+        return "${w}x$h:$a:$b"
+    }
+
+    @Synchronized private fun cached(key: String): FloatArray? = cache[key]
+
+    @Synchronized private fun remember(key: String, out: FloatArray) {
+        if (out.size > CACHE_FLOATS / 4) return
+        cache.put(key, out)?.let { cacheFloats -= it.size }
+        cacheFloats += out.size
+        val it = cache.entries.iterator()
+        while (cacheFloats > CACHE_FLOATS && it.hasNext()) { val e = it.next(); if (e.key == key) continue; cacheFloats -= e.value.size; it.remove() }
+    }
+
+    /** Oublie les résultats gardés (tests). */
+    @Synchronized internal fun clearCache() { cache.clear(); cacheFloats = 0 }
 
     /** Indice réfléchi dans [0, n) (…2 1 0 1 2… n−2 n−1 n−2…), pour compléter l'entrée au multiple de 8 sans bord artificiel. */
     internal fun mirror(i: Int, n: Int): Int {
