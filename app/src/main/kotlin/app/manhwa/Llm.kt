@@ -208,6 +208,10 @@ class GemmaTranslator(
         val again = try { ask(eng, redo.map { texts[it] }, source, target, glossary, kind = "realign", page = context) } catch (e: Throwable) { null }
         redo.forEachIndexed { k, i -> out[i] = again?.getOrNull(k) }
         for (i in bad(redo)) out[i] = try { ask(eng, listOf(texts[i]), source, target, glossary, kind = "miss").firstOrNull() } catch (e: Throwable) { null }
+        // contrôle final de toute la page : une ligne laissée telle quelle peut maintenant se révéler mal placée (même traduction qu'une ligne refaite) ; refaite seule (quatre au plus)
+        val late = bad().filter { it !in redo }.take(4)
+        if (late.isNotEmpty()) try { callLog.get()?.add("late:${late.size}") } catch (_: Throwable) {}
+        for (i in late) out[i] = (try { ask(eng, listOf(texts[i]), source, target, glossary, kind = "miss").firstOrNull() } catch (e: Throwable) { null }) ?: out[i]
         return out
     }
 
@@ -316,10 +320,13 @@ class GemmaTranslator(
             lastReply = reply
             // le modèle recopie parfois la ligne d'origine devant sa traduction (« SOURCE| TRADUCTION ») : la recopie est retirée, et comptée au journal (détail des appels : « echo:2/3 »)
             val raw = LlmPrompt.parse(reply, texts.size)
-            val lines = LlmPrompt.parse(reply, texts.size, texts)
-            val echoes = raw.indices.count { raw[it] != lines[it] }
+            val parsed = LlmPrompt.parse(reply, texts.size, texts)
+            val echoes = raw.indices.count { raw[it] != parsed[it] }
             if (echoes > 0) try { callLog.get()?.add("echo:$echoes/${texts.size}") } catch (_: Throwable) {}
-            return lines.toMutableList()
+            // ligne sautée (fragment incompris) et suivantes renumérotées : replacées, la ligne sautée sera traduite à part (voir TranslationAlign.repairSkip)
+            val repaired = try { TranslationAlign.repairSkip(texts, parsed, Lexicon.get(ctx), chapterNames()) } catch (_: Throwable) { null }
+            if (repaired != null) try { callLog.get()?.add("skip:" + (repaired.indexOfFirst { it == null } + 1) + "/" + texts.size) } catch (_: Throwable) {}
+            return (repaired ?: parsed).toMutableList()
         } finally { note(kind, t0, createMs, inLen, outLen) }
     }
 

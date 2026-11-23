@@ -88,6 +88,61 @@ object TranslationAlign {
         return a + s
     }
 
+    /** Ponctuation finale d'une réplique : question, exclamation, points de suspension, point, ou rien (tiret, tilde, mot coupé). */
+    internal fun endClass(t: String): Char {
+        val e = t.trimEnd().trimEnd('"', '»', '”', ')', ']', '~', ' ', '\u00a0')
+        return when {
+            e.endsWith("?!") || e.endsWith("!?") || e.endsWith("?") -> '?'
+            e.endsWith("!") -> '!'
+            e.endsWith("..") || e.endsWith("…") -> '…'
+            e.endsWith(".") -> '.'
+            else -> ' '
+        }
+    }
+
+    /**
+     * Ressemblance d'une traduction avec un texte d'origine, pour choisir entre deux placements : noms et nombres en commun (forts), racines communes, ponctuation finale (une question reste
+     * une question, des points de suspension restent des points de suspension), et longueur (le français fait 1 à 1,3 fois l'anglais ; une réplique de deux mots ne devient pas une phrase).
+     */
+    internal fun placementFit(src: String, tr: String, lex: EnglishLexicon?, names: Set<String>): Float {
+        var f = fit(src, tr, lex, names).toFloat()
+        val a = endClass(src); val b = endClass(tr)
+        if (a != ' ' && b != ' ') f += if (a == b) 1f else if (a == '.' && b == '…' || a == '…' && b == '.') -0.3f else -1f
+        val sl = src.count { it.isLetter() }; val tl = tr.count { it.isLetter() }
+        val lr = kotlin.math.ln((tl + 3f) / (sl + 3f))
+        f -= 2f * maxOf(0f, kotlin.math.abs(lr - 0.15f) - 0.25f)
+        return f
+    }
+
+    /**
+     * Ligne sautée : la réponse a une ligne de moins que le lot (la dernière manque) parce que le modèle a sauté une ligne qu'il ne comprenait pas (« IN » seul, fragment lu par l'OCR) et
+     * a renuméroté les suivantes ; chaque bulle après elle affichait la traduction de la suivante (journal du 23/11 : « THIS WOULD BE IT. » traduit « Je vivais une vie ordinaire… »).
+     * Si décaler d'un cran les traductions à partir d'une ligne va nettement mieux avec les textes (ponctuation, longueur, noms, racines), elles sont replacées et la ligne sautée reste
+     * absente (elle sera traduite à part). Rend null si rien n'est à replacer.
+     */
+    fun repairSkip(sources: List<String>, translations: List<String?>, lex: EnglishLexicon?, names: Set<String> = emptySet()): List<String?>? {
+        val n = minOf(sources.size, translations.size)
+        if (n < 3) return null
+        // réponse contiguë 1..m, la dernière ligne seule manque
+        val m = translations.indexOfFirst { it == null }.let { if (it < 0) n else it }
+        if (m != n - 1 || (m until n).any { translations[it] != null }) return null
+        var bestK = -1; var bestGain = 0f; var bestVotes = 0
+        for (k in 0 until m) {
+            var gain = 0f; var votes = 0
+            for (j in k until m) {
+                val t = translations[j]!!
+                val d = placementFit(sources[j + 1], t, lex, names) - placementFit(sources[j], t, lex, names)
+                gain += d; if (d > 0f) votes++
+            }
+            if (gain > bestGain) { bestGain = gain; bestK = k; bestVotes = votes }
+        }
+        if (bestK < 0) return null
+        val moved = m - bestK
+        // net : un gain réel, et la plupart des lignes déplacées vont mieux avec le texte suivant
+        if (bestGain < (if (moved == 1) 2.5f else 2f) || bestVotes * 10 < moved * 6) return null
+        return List(n) { i -> when { i < bestK -> translations[i]; i == bestK -> null; else -> translations[i - 1] } }
+    }
+
     /**
      * Lignes dont la traduction ne correspond vraisemblablement pas à leur texte d'origine. [translations] : null pour une ligne absente de la réponse (ignorée ici).
      * [names] : noms du chapitre, en minuscules.
@@ -110,6 +165,17 @@ object TranslationAlign {
             if (iWrong) out.add(i)
             if (jWrong) out.add(j)
             if (!iWrong && !jWrong) { out.add(i); out.add(j) }   // impossible de départager : les deux sont refaites
+        }
+        // 1 bis. la même traduction mot pour mot pour deux textes différents (réplique courte que la règle précédente ne voit pas : « C'est fini maintenant ! » sous « JUST NOW?! » et sous
+        //    « THAT'S OVER NOW! ») : celle qui va le moins bien avec son texte est refaite, les deux si rien ne les départage
+        val norm = (0 until n).map { translations[it]?.let { t -> words(t).joinToString(" ") }?.takeIf { it.length >= 12 } }
+        val srcNorm = (0 until n).map { words(sources[it]).joinToString(" ") }
+        for (i in 0 until n) for (j in i + 1 until n) {
+            val a = norm[i] ?: continue
+            if (a != norm[j] || srcNorm[i] == srcNorm[j] || jaccard(en[i], en[j]) > 0.3f) continue
+            if (srcNorm[i].contains(srcNorm[j]) || srcNorm[j].contains(srcNorm[i])) continue   // reprise d'une réplique (« ENFIN... » / « ENFIN~! ») : même traduction normale
+            val fi = placementFit(sources[i], translations[i]!!, lex, names); val fj = placementFit(sources[j], translations[j]!!, lex, names)
+            if (fi + 0.5f < fj) out.add(i) else if (fj + 0.5f < fi) out.add(j) else { out.add(i); out.add(j) }
         }
         // 2. un nom propre d'une autre ligne du lot, absent de son propre texte (une variante de lecture du même nom, « KANDEA » pour « KANDEYA », n'en est pas une preuve) ;
         //    quand ce nom vient de la ligne suivante, la réponse a sauté une ligne : les suivantes sont décalées d'un cran jusqu'à une ligne qui va clairement avec son texte

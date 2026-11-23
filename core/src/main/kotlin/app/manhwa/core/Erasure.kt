@@ -72,7 +72,11 @@ object Erasure {
         val letterColor: Int = 0, val haloColor: Int = 0,
         /** Épaisseur du halo en pixels échantillonnés (0 si aucun). */
         val haloPx: Float = 0f,
-    )
+    ) {
+        /** [ink] et [core] sans ce qui traverse la région de part en part (bord de case, ligne du décor) : l'angle, la taille et la police se mesurent sur les seules lettres. */
+        val letterInk: BooleanArray? by lazy { ink?.let { BlockLayout.lettersOnly(it, w, h) } }
+        val letterCore: BooleanArray? by lazy { core?.let { BlockLayout.lettersOnly(it, w, h) } }
+    }
 
     /** Couleur moyenne (RGB opaque) des pixels effectivement remplacés ; 0 s'il n'y en a pas. */
     private fun meanFill(layer: IntArray): Int {

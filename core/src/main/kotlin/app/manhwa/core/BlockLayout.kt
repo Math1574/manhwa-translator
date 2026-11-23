@@ -74,7 +74,8 @@ object BlockLayout {
         val container = container0 ?: ovalZone
         // rotation du texte d'origine (hors bulle seulement : un texte dans une bulle reste droit)
         val boxesPlan = if (plan != null) lineBoxes.map { r -> intArrayOf((r.left * s).toInt() - plan.x0, (r.top * s).toInt() - plan.y0, (r.right * s).toInt() - plan.x0, (r.bottom * s).toInt() - plan.y0) } else emptyList()
-        val tiltDeg = if (plan != null && plan.ink != null && !b.vertical && bubble == null && container == null && plan.shape == null && edit?.manual != true) try { TextTilt.estimate(plan.ink, plan.w, plan.h, boxesPlan)?.degrees ?: 0f } catch (e: Throwable) { 0f } else 0f
+        val tiltDeg = if (plan != null && plan.ink != null && !b.vertical && bubble == null && container == null && plan.shape == null && edit?.manual != true) try { TextTilt.estimate(plan.letterInk ?: plan.ink, plan.w, plan.h, boxesPlan)?.degrees ?: 0f } catch (e: Throwable) { 0f } else 0f
+        Erasure.trace?.invoke("angle du bloc ${b.id} : ${"%.1f".format(tiltDeg)}° (encre ${plan?.ink?.count { it } ?: 0} px, lettres seules ${plan?.letterInk?.count { it } ?: 0} px, cœur ${plan?.core?.count { it } ?: 0} px dont ${plan?.letterCore?.count { it } ?: 0} fermés, bulle=${bubble != null} cadre=${container != null} forme=${plan?.shape != null})")
         val drop = if (tiltDeg == 0f) 0f else lineBoxes.map { it.width }.sorted().let { it[it.size / 2] } * abs(Math.tan(Math.toRadians(tiltDeg.toDouble()))).toFloat()
         // hauteur de ligne pour le choix du style : mesurée sur les lettres (les boîtes d'une ligne inclinée sont gonflées de largeur × tan(angle))
         val inkH = lessTilt(measuredInkHeight(plan, b, s), drop)
@@ -146,6 +147,18 @@ object BlockLayout {
     private fun inkHeightOf(p: BlockPrep, s: Float): Float {
         val inks = lineInks(p, s); val b = p.block
         return if (inks.isEmpty()) 0f else (if (b.vertical) inks.map { it.w } else inks.map { it.letterHeight }).sorted().let { it[it.size / 2] } / s
+    }
+
+    /**
+     * Encre des seules lettres : les formes fermées de la région (le bord d'une case, une ligne du décor ou une marge qui traversent la zone du texte de part en part en sont retirés).
+     * Texte penché posé à cheval sur le bord noir d'une case (journal du 23/11) : la longue ligne droite du bord, dans l'encre, l'emportait sur les lettres et l'angle mesuré était nul.
+     * L'encre entière quand il ne reste presque rien (texte coupé par le bord de l'image).
+     */
+    internal fun lettersOnly(ink: BooleanArray, w: Int, h: Int): BooleanArray {
+        val closed = TextErase.enclosedIn(ink, BooleanArray(w * h) { true }, w, h)
+        var n = 0; for (v in closed) if (v) n++
+        var all = 0; for (v in ink) if (v) all++
+        return if (n >= TextTilt.MIN_INK && n >= all / 3) closed else ink
     }
 
     /** Hauteur (pixels de l'image) dont la rotation du texte gonfle la hauteur mesurée d'une ligne : largeur de ligne × tan(angle). 0 pour un texte droit. */

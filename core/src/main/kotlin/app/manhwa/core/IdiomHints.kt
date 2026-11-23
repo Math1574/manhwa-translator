@@ -354,6 +354,15 @@ stealth | discrétion, furtivité (nom féminin : « ma furtivité »)
 why should that concern me | en quoi ça me regarde ?
 ~have no choice but to | n'avoir d'autre choix que de | pas le choix que de
 @be bound to | forcément, sans doute (« someone is bound to screen it » = quelqu'un va forcément la lire)
+# ===== journal du 23/11 : calques relevés dans les traductions =====
+@be one $ | ne faire qu'un (« body and sword are one » = le corps et l'épée ne font qu'un ; « we are one » = nous ne faisons qu'un ; jamais « sont un ») | \bsont un\b|\bsommes un\b
+my sword @be me | mon épée, c'est moi (jamais « mon épée suis moi ») | épée suis moi
+retard | débile, abruti (insulte ; jamais « retardataire ») | retardataire
+no you don't | mais non, n'importe quoi (on dément ; jamais « non, tu ne … pas ») | ^\W*non, tu ne
+at your place | chez toi (jamais « à ton endroit ») | (à|a) (ton|votre) endroit
+at my place | chez moi (jamais « à mon endroit ») | (à|a) mon endroit
+just by looking | rien qu'en regardant, d'un simple coup d'œil
+with smithing | par la forge, grâce à la forge (jamais « avec le forgeron ») | avec le forgeron
 # ===== titres, rangs et termes d'arts martiaux =====
 eldest young master | jeune maître aîné (le fils aîné) | plus jeune maître|plus âgé des jeunes
 young lady | jeune demoiselle, mademoiselle

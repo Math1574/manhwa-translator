@@ -112,6 +112,15 @@ fun alignTests() {
         T.ok(IdiomHints.calques("SOME COLOR HAS RETURNED TO HIS FACE.", "Une couleur est revenue sur son visage.").isNotEmpty(), "couleurs")
         T.ok(IdiomHints.calques("IF THE ORDER LEARNS OF THIS, YOU'LL BURN.", "Si l'Ordre en apprend, vous brûlerez.").isNotEmpty(), "learn of")
         T.ok(IdiomHints.calques("MAKE NO MISTAKE. YOU'RE THE ONES WHO NEED THIS, NOT ME.", "Ne te méprends pas. C'est toi qui en as besoin, pas moi.").isNotEmpty(), "you're the ones")
+        // journal du 23/11
+        T.ok(hint("BODY AND SWORD ARE ONE").contains("ne faire qu'un"), "are one")
+        T.ok(IdiomHints.calques("BODY AND SWORD ARE ONE", "Le corps et l'épée sont un.").isNotEmpty(), "calque are one")
+        T.ok(IdiomHints.calques("BODY AND SWORD ARE ONE", "Le corps et l'épée ne font qu'un.").isEmpty(), "ne font qu'un juste")
+        T.ok(IdiomHints.calques("I AM MY SWORD AND MY SWORD IS ME", "Je suis mon épée et mon épée suis moi.").isNotEmpty(), "my sword is me")
+        T.ok(IdiomHints.calques("IT'S A MIRACLE THAT WE WERE ABLE TO ARRIVE BACK AT YOUR PLACE WITHOUT ISSUES~", "C'est un miracle qu'on soit parvenu à ton endroit sans problème~").isNotEmpty(), "at your place")
+        T.ok(hint("No you don't, retard~!").let { it.contains("débile") && it.contains("mais non") }, "retard / no you don't")
+        T.ok(IdiomHints.calques("No you don't, retard~!", "Non, tu ne connais pas, retardataire~!").size == 2, "deux calques")
+        T.ok(hint("THIS ONE IS MINE").isEmpty() && hint("IS THIS THE ONE?").isEmpty(), "« one » ordinaire : rien")
     }
 
     T.test("prompt : le synopsis de l'œuvre est donné comme contexte (qui sont les personnages), raccourci à une fin de phrase") {
@@ -138,5 +147,60 @@ fun alignTests() {
         T.ok(u.contains("Story premise") && u.contains("Names to keep exactly as written: Gaf") && u.contains("narrateur masculin") && u.contains("1| draft: Qu'est-ce qui ne va pas"), u)
         T.eq("Qu'est-ce qu'elles ont, mes mains... ?", LlmPrompt.stripRefineLabel("final: Qu'est-ce qu'elles ont, mes mains... ?"))
         T.eq("Bon, d'accord.", LlmPrompt.stripRefineLabel("Bon, d'accord."))
+    }
+
+    T.test("réponse : dizaine perdue (« 12| … 3| … 4| ») — lue comme 13 et 14, sans écraser les lignes 3 et 4 ; un numéro en double n'écrase pas la première réponse") {
+        val reply = (1..12).joinToString("\n") { "$it| L$it" } + "\n3| L13\n4| L14\n15| L15"
+        val r = LlmPrompt.parse(reply, 15)
+        T.eq((1..15).map { "L$it" }, r)
+        val r2 = LlmPrompt.parse((1..21).joinToString("\n") { "$it| L$it" } + "\n12| L22", 22)
+        T.eq("L22", r2[21]); T.eq("L12", r2[11])
+        T.eq(listOf("A", "B"), LlmPrompt.parse("1| A\n2| B\n2| C", 2), "double : la première réponse reste")
+        T.eq(listOf("A", null, "C"), LlmPrompt.parse("1| A\n3| C", 3), "petite page : rien ne change")
+        val r3 = LlmPrompt.parse((1..10).joinToString("\n") { "$it| L$it" } + "\n21| L11\n12| L12", 12)
+        T.eq("L11", r3[10], "bond de dix en avant : « 21| » pour 11")
+    }
+
+    T.test("alignement : ligne sautée (« IN » seul) et suivantes renumérotées, la dernière manque — replacées d'un cran, la ligne sautée reste à traduire") {
+        val src = listOf("GLOBAL DROP", "THE", "LONG-AWAITED DEBUT", "EARLY PREVIEW", "EPISODE 0", "IF I HAD TO SUM UP MY LIFE..", "IN", "THIS WOULD BE IT.",
+            "I WAS LIVING AN ORDINARY LIFE...", "WHEN A MAN WHO LOOKED LIKE A NOBLE APPEARED BEFORE ME.", "SHEPHERD, HOW OLD ARE YOU?", "I DON'T KNOW WHEN I WAS BORN...",
+            "BUT I'VE BEEN A SHEPHERD FOR OVER TEN YEARS.", "ARE YOU MARRIED?")
+        val got = listOf("Sortie mondiale", "Le", "Début tant attendu", "Aperçu anticipé", "Épisode 0", "Si je devais résumer ma vie...", "C'est ça.", "Je vivais une vie ordinaire...",
+            "Quand un homme ressemblant à un noble est apparu devant moi.", "Berger, quel âge avez-vous ?", "Je ne sais pas quand je suis né...", "Mais je suis berger depuis plus de dix ans.",
+            "Êtes-vous marié ?", null)
+        val fixed = TranslationAlign.repairSkip(src, got, alignLexicon)
+        T.ok(fixed != null, "décalage repéré")
+        T.eq(null, fixed!![6], "la ligne sautée reste à traduire")
+        T.eq("C'est ça.", fixed[7]); T.eq("Je vivais une vie ordinaire...", fixed[8]); T.eq("Êtes-vous marié ?", fixed[13])
+        T.eq(got.take(6), fixed.take(6), "les lignes d'avant ne bougent pas")
+        // une réponse juste dont seule la dernière ligne manque : rien n'est déplacé
+        val ok = listOf("Sortie mondiale", "Le", "Début tant attendu", "Aperçu anticipé", "Épisode 0", "Si je devais résumer ma vie...", "Dans", "Ce serait ça.",
+            "Je vivais une vie ordinaire...", "Quand un homme ressemblant à un noble est apparu devant moi.", "Berger, quel âge as-tu ?", "Je ne sais pas quand je suis né...",
+            "Mais je suis berger depuis plus de dix ans.", null)
+        T.eq(null, TranslationAlign.repairSkip(src, ok, alignLexicon), "réponse juste, dernière ligne absente")
+        T.eq(null, TranslationAlign.repairSkip(src, got.take(13) + "Tu es marié ?", alignLexicon), "réponse complète : rien")
+    }
+
+    T.test("alignement : la même réplique courte sous deux textes différents (« C'est fini maintenant ! » sous « JUST NOW?! ») — la mal placée est refaite") {
+        val src = listOf("GWAK, WHAT HAPPENED JUST NOW? I SWEAR I SIMPLY...", "JUST NOW?!", "ANYWAY~!", "THAT'S OVER NOW!", "ANYWAY...")
+        val tr = listOf("Gwak, qu'est-ce qui s'est passé à l'instant ? Je jure que j'ai juste...", "C'est fini maintenant !", "Enfin~!", "C'est fini maintenant !", "Enfin...")
+        val s = TranslationAlign.suspects(src, tr, alignLexicon)
+        T.ok(1 in s, "la mal placée : $s")
+        T.ok(0 !in s && 2 !in s && 4 !in s, "reprise d'une réplique (« ENFIN » deux fois) : normale : $s")
+    }
+
+    T.test("phrase coupée en deux bulles éloignées (« SOMEDAY, WILL I ALSO.. » … « BE A PHYSICIAN ON HIS LEVEL? ») — signalée au modèle ; une page ordinaire ne l'est pas") {
+        val page = listOf("HIS ACUPUNCTURE SKILLS ARE AMAZING.", "HE'S AS GENTLE AS A BUTTERFLY LANDING ON YOUR SKIN.", "SOMEDAY, WILL I ALSO..", "FATHER!",
+            "I'LL BE BACK WITH THE HERBS.", "BE A PHYSICIAN ON HIS LEVEL?", "Are you taking your medicine, mister?", "Oho, of course")
+        T.eq(listOf(SplitSentences.Pair(3, 6)), SplitSentences.find(page, minGap = 2))
+        val u = LlmPrompt.user(page, emptyList(), emptyList())
+        T.ok(u.contains("Sentences cut in two") && u.contains("line 3 \"SOMEDAY, WILL I ALSO..\" continues in line 6 \"BE A PHYSICIAN ON HIS LEVEL?\""), u)
+        val ode = listOf("GLOBAL DROP", "THE", "LONG-AWAITED DEBUT", "EARLY PREVIEW", "EPISODE 0", "IF I HAD TO SUM UP MY LIFE..", "IN", "THIS WOULD BE IT.",
+            "I WAS LIVING AN ORDINARY LIFE...", "WHEN A MAN WHO LOOKED LIKE A NOBLE APPEARED BEFORE ME.", "SHEPHERD, HOW OLD ARE YOU?", "I DON'T KNOW WHEN I WAS BORN...",
+            "BUT I'VE BEEN A SHEPHERD FOR OVER TEN YEARS.", "ARE YOU MARRIED?")
+        T.eq(emptyList<SplitSentences.Pair>(), SplitSentences.find(ode, minGap = 2), "page ordinaire")
+        T.ok(!LlmPrompt.user(ode, emptyList(), emptyList()).contains("Sentences cut in two"), "pas de section")
+        // casse normale : une suite en minuscule après une ligne en suspens
+        T.eq(listOf(SplitSentences.Pair(1, 3)), SplitSentences.find(listOf("If you had told me earlier,", "Huh?", "we wouldn't be in this mess."), minGap = 2))
     }
 }

@@ -89,7 +89,7 @@ Rules:
 10. A sentence cut across two bubbles is translated as one coherent sentence, but keep one output line per input line.
 11. French typography: normal sentence case with correct accents, a space before ? ! : ; and « » for quotations. Do not write in capital letters even if the source is in capitals.
 12. Never add notes, explanations or quotation marks around lines.
-13. Answer with exactly one line per input line, in the format `N| translation`, using the same numbers, and nothing else.
+13. Answer with exactly one line per input line, in the format `N| translation`, using the same numbers, and nothing else. Every number gets its own answer, even a single word, a fragment or a recognition mistake (copy it unchanged if it means nothing): never skip a line or merge two lines.
 """.trim()
     }
 
@@ -182,6 +182,13 @@ Answer with exactly one line per input line, in the format `N| edited translatio
             hints.forEach { appendLine("- line ${it.line}, \"${it.matched}\": ${it.french}") }
             appendLine()
         }
+        // phrase coupée en deux bulles éloignées (d'autres répliques entre les deux) : la seconde moitié continue la première (voir SplitSentences)
+        val splits = try { SplitSentences.find(texts, minGap = 2) } catch (_: Throwable) { emptyList() }
+        if (splits.isNotEmpty()) {
+            appendLine("Sentences cut in two, with other lines in between: the second part continues the first one. Translate the second part so that it reads as the end of that same French sentence (not as a new sentence, never word for word), and keep each part on its own numbered line:")
+            splits.forEach { appendLine("- line ${it.first} \"${oneLine(texts[it.first - 1])}\" continues in line ${it.second} \"${oneLine(texts[it.second - 1])}\"") }
+            appendLine()
+        }
         appendLine("Lines to translate:")
         texts.forEachIndexed { i, t -> appendLine("${i + 1}| ${oneLine(t)}") }
     }.trim()
@@ -233,20 +240,29 @@ Answer with exactly one line per input line, in the format `N| edited translatio
         }
     }
 
+    /**
+     * Lecture des lignes numérotées, dans l'ordre de la réponse. Le modèle (E4B sur GPU, journal du 23/11) perd parfois la dizaine d'un numéro dans les longues pages : « 12| …, 3| …, 4| … »
+     * pour 13 et 14. Lu tel quel, « 3| » écrasait la ligne 3 déjà traduite : deux bulles affichaient la traduction d'une autre. Un numéro qui recule alors que le suivant attendu (ou l'un des
+     * deux d'après, si une ligne a été sautée) a le même chiffre des unités est ce numéro-là ; un numéro déjà lu n'écrase jamais la première réponse (la ligne en double est ignorée).
+     */
     private fun parseLines(reply: String, count: Int): List<String?> {
         val cleaned = thinkRe.replace(reply, "").replace("**", "").replace("`", "")
         val found = HashMap<Int, StringBuilder>()
         var current: StringBuilder? = null
         val plain = ArrayList<String>()
+        var last = 0
         for (raw in cleaned.lines()) {
             val line = raw.trimEnd()
             if (line.isBlank()) continue
             val m = lineRe.matchEntire(line)
             if (m != null) {
-                val n = m.groupValues[1].toInt()
-                if (n in 1..count) {
+                var n = m.groupValues[1].toIntOrNull() ?: -1
+                // dizaine perdue ou fausse : en arrière (« 3| » pour 13), ou d'un bond de dix en avant (« 21| » pour 11 ; jamais dix lignes sautées d'un coup)
+                if ((n in 0..last || n >= last + 10) && count >= 10) (last + 1..minOf(count, last + 3)).firstOrNull { it % 10 == n % 10 && found[it] == null }?.let { n = it }
+                if (n in 1..count && found[n] == null) {
                     current = StringBuilder(clean(m.groupValues[2])).also { found[n] = it }
-                } else current = null // numéro hors plage : ligne ignorée, sans la rattacher à la précédente
+                    if (n > last) last = n
+                } else current = null // numéro hors plage ou déjà lu : ligne ignorée, sans la rattacher à la précédente
                 continue
             }
             plain.add(line.trim())

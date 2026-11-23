@@ -40,6 +40,21 @@ object ArtFill {
 
     private fun ch(c: Int, sh: Int) = (c shr sh) and 0xFF
 
+    /** Part de lueur au-delà de laquelle un pixel en fait partie (12 à 15 % : là où l'œil ne la voit plus sur un fond dessiné). */
+    private const val GLOW_MIN_FRACTION = 0.15f
+
+    /**
+     * Position de [c] entre [bg] (0) et [glow] (1), projetée sur la droite qui les relie (négative : de l'autre côté du fond). NaN si les deux couleurs sont trop proches
+     * (moins de [minSpan] niveaux) pour en juger.
+     */
+    internal fun glowFraction(c: Int, bg: Int, glow: Int, minSpan: Int): Float {
+        val ur = ch(glow, 16) - ch(bg, 16); val ug = ch(glow, 8) - ch(bg, 8); val ub = ch(glow, 0) - ch(bg, 0)
+        val uu = ur * ur + ug * ug + ub * ub
+        if (uu < minSpan * minSpan) return Float.NaN
+        val vr = ch(c, 16) - ch(bg, 16); val vg = ch(c, 8) - ch(bg, 8); val vb = ch(c, 0) - ch(bg, 0)
+        return (vr * ur + vg * ug + vb * ub).toFloat() / uu
+    }
+
     /**
      * Bruit du fond : écart type estimé à partir du 40e centile de l'écart absolu entre l'image et sa version floutée 5×5, sur les pixels [where]. Un quantile bas ignore les bords du dessin et
      * les textes voisins (qui gonflaient la médiane et donnaient un grain de « neige » beaucoup trop fort) ; 0 si trop peu de pixels.
@@ -184,6 +199,55 @@ object ArtFill {
                 d++
             }
         }
+        // 3 bis) une lueur a une couleur (blanche, rose, sombre) : près des lettres, ses pixels ressemblent plus à cette couleur qu'au fond propre, et ce n'est plus le cas où elle finit.
+        //    Le profil seul ne la distingue pas d'un décor : sur un treillis, des hachures, une fleur ou une cape collée aux lettres, l'écart au fond interpolé reste élevé sur toute la bande
+        //    (il ne retombe qu'au bord de la bande, où l'interpolation est ancrée) ; la lueur mesurée saturait, la recherche était élargie, et tout le décor proche était effacé puis
+        //    redessiné en tache (journal du 23/11 : « Oho, of course » sur un treillis, la cape sous « EPISODE 0 », la fleur de « PARADISE »). L'épaisseur retenue est celle où la couleur de la
+        //    lueur domine encore l'anneau ; les pixels ajoutés doivent aussi avoir cette couleur (un trait sombre du décor dans une lueur blanche n'est pas de la lueur).
+        var glowColor = 0; var colorLimited = false; var minFrac = GLOW_MIN_FRACTION
+        if (thick > 0) {
+            val near12 = ArrayList<Int>(); val clean12 = ArrayList<Int>()
+            for (i in 0 until n) { val d = dcore[i]; if ((d == 1 || d == 2) && (avoid == null || !avoid[i]) && (hatch == null || !hatch[i])) { near12.add(px[i]); clean12.add(clean[i]) } }
+            if (near12.size >= 16) {
+                glowColor = ColorMath.median(near12.toIntArray())
+                val cleanNear = ColorMath.median(clean12.toIntArray())
+                if (TextErase.dist(glowColor, cleanNear) > 2 * tau) {
+                    // part de lueur de chaque pixel : sa position entre le fond propre (0) et la couleur de la lueur (1). Un décor s'écarte du fond dans tous les sens (médiane proche
+                    // de 0) ; une cape sombre sous une lueur claire part dans l'autre sens (négative) ; la lueur, elle, s'estompe de 1 vers 0.
+                    colorLimited = true
+                    val buckets = 150
+                    val hist = IntArray((thick + 1) * buckets); val cnt = IntArray(thick + 1)
+                    for (i in 0 until n) {
+                        val d = dcore[i]; if (d < 1 || d > thick || (avoid != null && avoid[i]) || (hatch != null && hatch[i])) continue
+                        val f = glowFraction(px[i], clean[i], glowColor, tau); if (f.isNaN()) continue
+                        hist[d * buckets + ((f + 1f) * 50f).toInt().coerceIn(0, buckets - 1)]++; cnt[d]++
+                    }
+                    fun medFrac(d: Int): Float { val tot = cnt[d]; if (tot < 8) return Float.NaN; var acc = 0; for (k in 0 until buckets) { acc += hist[d * buckets + k]; if (acc * 2 >= tot) return k / 50f - 1f }; return 2f }
+                    var dc = 0
+                    while (dc < thick) { val f = medFrac(dc + 1); if (f.isNaN() || f < GLOW_MIN_FRACTION) break; dc++ }
+                    // vraie lueur : sa part décroît régulièrement, sans saut, sur plusieurs pixels (lueur rouge diffuse autour de lettres blanches sur un fond sombre). Son épaisseur
+                    // mesurée est gardée (la recherche élargie d'un halo diffus reste possible) et sa traîne pâle est effacée aussi. Un contour net suivi de décor, lui, chute d'un coup
+                    // ou remonte : seule la partie qui a la couleur de la lueur est retenue.
+                    var gradual = medFrac(1) >= 0.4f && dc >= 4
+                    if (gradual) for (d in 1 until min(thick, 12)) {
+                        val a = medFrac(d); val b = medFrac(d + 1)
+                        if (a.isNaN() || b.isNaN()) break
+                        if (b > a + 0.06f || a - b > 0.35f) { gradual = false; break }
+                    }
+                    val parts = (1..min(thick, 12)).joinToString(" ") { "%.2f".format(medFrac(it)) }
+                    if (gradual) { minFrac = 0.05f; trace?.invoke("ArtFill : lueur %06X dégradée : épaisseur $thick gardée (parts : %s)".format(glowColor and 0xFFFFFF, parts)) }
+                    else {
+                        val capped = max(min(thick, 2), dc)
+                        if (capped < thick) { trace?.invoke("ArtFill : lueur %06X limitée à sa couleur : épaisseur $thick -> $capped (parts : %s)".format(glowColor and 0xFFFFFF, parts)); thick = capped }
+                    }
+                } else if (thick > 2 && med(1).let { a -> val b = med(min(6, thick)); a >= 0 && b >= 0 && b * 5 >= a * 4 }) {
+                    // au ras des lettres, la couleur est celle du fond et l'écart ne décroît pas en s'éloignant (treillis, trame, texture) : pas de lueur, seulement la frange
+                    // d'anticrénelage (2 px au plus). Une ombre douce de couleur proche du fond (bleu sombre autour d'un texte blanc sur un écran bleu), elle, s'estompe : gardée.
+                    trace?.invoke("ArtFill : pas de lueur d'une couleur à elle (%06X contre fond %06X) : épaisseur $thick -> 2 (écarts : %s)".format(glowColor and 0xFFFFFF, cleanNear and 0xFFFFFF, (1..min(grow, 20)).joinToString(" ") { med(it).toString() }))
+                    thick = 2
+                }
+            }
+        }
         // 4) la lueur gagne, dans cette épaisseur, les pixels qui s'écartent encore du fond propre (moyenne locale hors lettres : la texture fine n'en est pas)
         val ref = IntArray(n) { if (core[it] || (hatch != null && hatch[it])) 0 else 1 }
         val integ = Array(4) { IntArray((w + 1) * (h + 1)) }
@@ -204,7 +268,7 @@ object ArtFill {
             fun box(k: Int) = integ[k][yb * (w + 1) + xb] - integ[k][ya * (w + 1) + xb] - integ[k][yb * (w + 1) + xa] + integ[k][ya * (w + 1) + xa]
             val cnt = box(0)
             val c = if (cnt >= 6) (0xFF shl 24) or ((box(1) / cnt) shl 16) or ((box(2) / cnt) shl 8) or (box(3) / cnt) else px[i]
-            if (TextErase.dist(c, clean[i]) > lowTau) { m[i] = true; added++ }
+            if (TextErase.dist(c, clean[i]) > lowTau && (!colorLimited || d <= 2 || glowFraction(px[i], clean[i], glowColor, tau) >= minFrac)) { m[i] = true; added++ }
         }
         // 5) fermeture (trous de 1 à 2 pixels dans le masque), puis marge de sécurité
         val closed = TextErase.erode(TextErase.dilate(m, w, h, 2), w, h, 2)
