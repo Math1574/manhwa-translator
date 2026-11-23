@@ -167,8 +167,11 @@ object PageRenderer {
 
     fun render(fonts: Typefaces, imageBytes: ByteArray, result: PageResult, settings: AppSettings, debug: DebugInfo?, fontMemory: StyleMatcher.Memory? = null, series: String? = null,
                edits: Map<Int, RenderEdit> = emptyMap(), only: Int? = null, sink: LayerSink? = null): JSONObject {
-        val bmp = decodeSampled(imageBytes, result.imageWidth, result.imageHeight)
+        val bmp = decodeForErase(imageBytes, result.imageWidth, result.imageHeight)
         val s = if (bmp == null) 1f else bmp.width.toFloat() / result.imageWidth
+        // densité des patches : celle d'avant le décodage à pleine résolution (pages de plus de 4 millions de pixels réduites par 2) ; le texte traduit garde le même dessin et les patches le
+        // même poids, et la couche d'effacement, calculée à pleine résolution, s'y pose pixel pour pixel
+        val sPatch = min(s, legacyScale(result.imageWidth, result.imageHeight))
         val iw = result.imageWidth.toFloat(); val ih = result.imageHeight.toFloat()
         val blocks = result.blocks.filter { it.translated.isNotBlank() || edits[it.id]?.hidden == true || edits[it.id]?.wipe == true }            // carré d'effacement : zone effacée sans traduction
         val lineHs = blocks.map { BlockLayout.lineHeightOf(it) }.sorted()
@@ -256,7 +259,7 @@ object PageRenderer {
                 val laid = laids[i] ?: continue
                 // textes traduits des autres blocs : dessinés par-dessus l'effacement de ce bloc quand ils recouvrent son patch (voir paintBlock)
                 val neighbours: List<Pair<Prep, Laid>> = if (sink != null) emptyList() else preps.indices.filter { it != i }.mapNotNull { j -> laids[j]?.let { preps[j] to it } }
-                val rendered = try { paintBlock(s, preps[i], laid, iw, ih, neighbours, sink) } catch (e: Throwable) { null } ?: continue
+                val rendered = try { paintBlock(s, preps[i], laid, iw, ih, neighbours, sink, sPatch) } catch (e: Throwable) { null } ?: continue
                 editNotes[preps[i].block.id]?.let { rendered.second.put("edit", it) }
                 patches.put(rendered.first); report.put(rendered.second)
             }
@@ -444,7 +447,7 @@ object PageRenderer {
         return fg
     }
 
-    private fun paintBlock(s: Float, p: Prep, laid: Laid, iw: Float, ih: Float, neighbours: List<Pair<Prep, Laid>> = emptyList(), sink: LayerSink? = null): Pair<JSONObject, JSONObject>? {
+    private fun paintBlock(s: Float, p: Prep, laid: Laid, iw: Float, ih: Float, neighbours: List<Pair<Prep, Laid>> = emptyList(), sink: LayerSink? = null, sPatch: Float = s): Pair<JSONObject, JSONObject>? {
         val b = p.block; val plan = p.plan
         val font = laid.font; val fit = laid.fit; val em = laid.em; val stepRatio = laid.stepRatio; val lay = laid.lay
 
@@ -457,10 +460,11 @@ object PageRenderer {
         val planRect: RectF? = plan?.let { RectF(it.x0 / s, it.y0 / s, (it.x0 + it.w) / s, (it.y0 + it.h) / s) }
         var rect = textRect?.let { tr -> planRect?.union(tr) ?: tr } ?: planRect ?: return null
         if (fit.lines.isEmpty()) { l = 0f; t = 0f; r = 0f; bt = 0f }
-        rect = RectF(max(0f, rect.left), max(0f, rect.top), min(iw, rect.right), min(ih, rect.bottom))
+        // bords calés sur les pixels de l'image : la couche d'effacement (calculée pixel pour pixel) se pose exactement sur la page, sans décalage d'un demi-pixel ni flou de rééchantillonnage
+        rect = RectF(kotlin.math.floor(max(0f, rect.left)), kotlin.math.floor(max(0f, rect.top)), kotlin.math.ceil(min(iw, rect.right)), kotlin.math.ceil(min(ih, rect.bottom)))
         // double résolution pour les patches de taille normale ; réduite pour les très grands blocs afin de limiter mémoire et poids de l'envoi
         val areaImg = (rect.right - rect.left) * (rect.bottom - rect.top)
-        val ss = min(SUPERSAMPLE * s, max(s, kotlin.math.sqrt(1_600_000f / max(1f, areaImg))))
+        val ss = min(SUPERSAMPLE * sPatch, max(sPatch, kotlin.math.sqrt(1_600_000f / max(1f, areaImg))))
         val pw = max(1, ((rect.right - rect.left) * ss).toInt()); val ph = max(1, ((rect.bottom - rect.top) * ss).toInt())
         if (pw.toLong() * ph > 12_000_000L) return null
         val patch = Bitmap.createBitmap(pw, ph, Bitmap.Config.ARGB_8888)
@@ -514,12 +518,34 @@ object PageRenderer {
         }
     }
 
-    /** Image réduite à environ 4 millions de pixels ; null si la mémoire manque. */
-    private fun decodeSampled(bytes: ByteArray, w: Int, h: Int): Bitmap? = try {
+    /**
+     * Image sur laquelle l'effacement est calculé : à pleine résolution jusqu'à [FULL_RES_MAX] pixels (une bande de 900 × 16 000 en compte 14,4 millions), réduite par 2, 4… au-delà.
+     * Avant, toute page de plus de 4 millions de pixels était réduite par 2 : masque grossi d'un pixel sur deux autour des lettres, remplissage flou puis agrandi, petits traits du dessin
+     * perdus ; sur le banc d'essai à vérité terrain (fonds réels, texte connu), l'écart au dessin d'origine baissait d'un quart et les dégâts autour du texte des trois quarts à pleine
+     * résolution. Le décodage est séquentiel (un seul rendu à la fois). Si la mémoire manque, on retente plus petit ; null si rien ne passe.
+     */
+    private fun decodeForErase(bytes: ByteArray, w: Int, h: Int): Bitmap? {
+        var sample = 1
+        while ((w.toLong() / sample) * (h.toLong() / sample) > FULL_RES_MAX) sample *= 2
+        while (sample <= 16) {
+            try {
+                return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample; inPreferredConfig = Bitmap.Config.ARGB_8888 })
+            } catch (e: OutOfMemoryError) {
+                sample *= 2
+            } catch (e: Throwable) {
+                return null
+            }
+        }
+        return null
+    }
+
+    /** Pixels au-delà desquels l'image de l'effacement est réduite (80 Mo en mémoire, le temps d'un rendu). */
+    private const val FULL_RES_MAX = 20_000_000L
+
+    /** Échelle de l'ancienne image réduite (≤ 4 millions de pixels) : densité des patches, inchangée. */
+    private fun legacyScale(w: Int, h: Int): Float {
         var sample = 1
         while ((w.toLong() / sample) * (h.toLong() / sample) > 4_000_000L) sample *= 2
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
-    } catch (e: Throwable) {
-        null
+        return 1f / sample
     }
 }

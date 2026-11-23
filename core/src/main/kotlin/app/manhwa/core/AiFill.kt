@@ -128,7 +128,14 @@ object AiFill {
         if (count < 50) return false
         var acc = 0; var k = 0
         while (k < 1024) { acc += hist[k]; if (acc * 10 >= count * 9) break; k++ }
-        return k / 4f < maxSlope
+        if (k / 4f >= maxSlope) return false
+        // pentes faibles, mais deux aplats différents autour du trou (une joue et la page blanche sous la dernière ligne) : la reconstruction classique, qui interpole depuis le pourtour,
+        // mélangeait les deux et laissait des taches blanches sur la peau. À pleine résolution les pentes mesurées par pixel sont deux fois plus faibles et ce cas devenait fréquent.
+        // Le pourtour doit aussi être d'une seule teinte (5 % à 95 % des luminosités dans 60 niveaux).
+        val lh = IntArray(256); var ln = 0
+        for (i in 0 until n) if (dist[i] > 0) { lh[lum(i).coerceIn(0, 255)]++; ln++ }
+        fun pct(p: Float): Int { var a = 0; for (v in 0 until 256) { a += lh[v]; if (a >= p * ln) return v }; return 255 }
+        return pct(0.95f) - pct(0.05f) <= 60
     }
 
     internal fun pad8(n: Int): Int = (n + 7) / 8 * 8
