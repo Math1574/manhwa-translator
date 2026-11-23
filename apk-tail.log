@@ -24,8 +24,8 @@ Solution: Please update the Gradle version to at least Gradle 8.14.4.
 > Task :app:generateDebugResources
 > Task :app:packageDebugResources
 > Task :app:createDebugCompatibleScreenManifests
-> Task :app:extractDeepLinksDebug
 > Task :app:mergeDebugResources
+> Task :app:extractDeepLinksDebug
 > Task :app:parseDebugLocalResources
 > Task :app:processDebugMainManifest
 > Task :app:processDebugManifest
@@ -40,12 +40,10 @@ Solution: Please update the Gradle version to at least Gradle 8.14.4.
 > Task :app:mergeDebugJniLibFolders
 > Task :app:validateSigningDebug
 > Task :app:writeDebugAppMetadata
-> Task :app:writeDebugSigningConfigVersions
 > Task :app:checkDebugDuplicateClasses
+> Task :app:writeDebugSigningConfigVersions
 > Task :app:compressDebugAssets
-> Task :core:compileKotlin
 > Task :app:mergeExtDexDebug
-
 > Task :core:compileKotlin
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/BlockLayout.kt:68:39 Unnecessary safe call on a non-null receiver of type 'Erasure.Plan'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/Erasure.kt:191:31 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Erasure.Plan'.
@@ -64,6 +62,3 @@ w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/ko
 
 > Task :app:stripDebugDebugSymbols
 Unable to strip the following libraries, packaging them as they are: libandroidx.graphics.path.so, liblitertlm_jni.so, libmlkit_google_ocr_pipeline.so, libonnxruntime.so, libonnxruntime4j_jni.so, libtranslate_jni.so.
-
-> Task :app:mergeLibDexDebug
-> Task :app:compileDebugKotlin
