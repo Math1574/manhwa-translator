@@ -70,6 +70,21 @@ fun erasure24Tests() {
         T.ok(n > 500 && white < n / 10, "lettres blanches restées sur la joue : $white / $n")
     }
 
+    T.test("retouche par IA : la même entrée redessinée (page revue) ne refait pas tourner le modèle ; une autre entrée, si") {
+        val w = 120; val h = 80
+        val px = IntArray(w * h) { i -> rgb(100 + (i % w), 80 + (i / w), 60) }
+        val hole = TextErase.rectMask(w, h, listOf(intArrayOf(40, 30, 80, 50)), 0)
+        var calls = 0
+        val m = AiInpainter { _, _, tw, th -> calls++; FloatArray(3 * tw * th) { 0.5f } }
+        val a = AiFill.fill(px, w, h, hole, m)
+        val b = AiFill.fill(px, w, h, hole, m)
+        T.ok(a != null && b != null && a.contentEquals(b), "résultats différents")
+        T.ok(calls == 1, "modèle appelé $calls fois pour la même entrée")
+        val hole2 = TextErase.rectMask(w, h, listOf(intArrayOf(20, 30, 60, 50)), 0)
+        AiFill.fill(px, w, h, hole2, m)
+        T.ok(calls == 2, "autre trou : modèle appelé $calls fois en tout")
+    }
+
     T.test("retouche par IA : un seul aplat autour du trou → reconstruction classique ; une joue et une page blanche autour du trou → IA (pas de mélange en taches)") {
         val w = 160; val h = 100
         val hole = TextErase.rectMask(w, h, listOf(intArrayOf(40, 30, 120, 70)), 0)

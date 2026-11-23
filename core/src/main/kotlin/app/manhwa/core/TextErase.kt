@@ -158,17 +158,37 @@ object TextErase {
     }
 
     fun dilate(src: BooleanArray, w: Int, h: Int, times: Int, limit: BooleanArray? = null): BooleanArray {
-        var cur = src
-        repeat(times) {
-            val nx = cur.copyOf()
-            for (y in 0 until h) for (x in 0 until w) {
-                val i = y * w + x
-                if (cur[i] || (limit != null && !limit[i])) continue
-                if ((x > 0 && cur[i - 1]) || (x < w - 1 && cur[i + 1]) || (y > 0 && cur[i - w]) || (y < h - 1 && cur[i + w])) nx[i] = true
+        if (times <= 0) return src
+        // parcours en largeur, couche par couche (même résultat que [times] dilatations successives de 4 voisins, sans repasser sur toute la région à chaque pas : à pleine
+        // résolution les rayons doublent et ce calcul pesait lourd)
+        val n = w * h
+        val out = src.copyOf(n)
+        var cur = IntArray(64); var cn = 0
+        for (i in 0 until n) if (src[i]) {
+            val x = i % w
+            // seuls les pixels au bord de la forme peuvent la faire grandir
+            if ((x > 0 && !src[i - 1]) || (x < w - 1 && !src[i + 1]) || (i >= w && !src[i - w]) || (i + w < n && !src[i + w])) {
+                if (cn == cur.size) cur = cur.copyOf(cn * 2)
+                cur[cn++] = i
             }
-            cur = nx
         }
-        return cur
+        var nxt = IntArray(64)
+        for (step in 0 until times) {
+            if (cn == 0) break
+            var nn = 0
+            for (k in 0 until cn) {
+                val i = cur[k]; val x = i % w
+                for (d in 0..3) {
+                    val j = when (d) { 0 -> if (x > 0) i - 1 else -1; 1 -> if (x < w - 1) i + 1 else -1; 2 -> if (i >= w) i - w else -1; else -> if (i + w < n) i + w else -1 }
+                    if (j < 0 || out[j] || (limit != null && !limit[j])) continue
+                    out[j] = true
+                    if (nn == nxt.size) nxt = nxt.copyOf(nn * 2)
+                    nxt[nn++] = j
+                }
+            }
+            val t = cur; cur = nxt; nxt = t; cn = nn
+        }
+        return out
     }
 
     /**

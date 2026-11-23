@@ -55,7 +55,7 @@ fun aiFillTests() {
         T.eq(0, changed, "pixels hors du trou modifiés")
     }
 
-    T.test("AiFill: grand lettrage réduit à 640 px pour une seule passe, puis agrandi sans saut") {
+    T.test("AiFill: grand lettrage réduit (15 000 pixels au plus) pour une seule passe, puis agrandi sans saut") {
         val w = 1100; val h = 300
         val px = region(w, h)
         val hole = BooleanArray(w * h) { i -> val x = i % w; val y = i / w; y in 100..140 && (x in 30..80 || x in 350..700) }
@@ -63,7 +63,7 @@ fun aiFillTests() {
         // faux modèle : rouge croissant de gauche à droite de l'entrée réduite
         val m = AiInpainter { _, _, tw, th -> seen.add(tw to th); FloatArray(3 * tw * th) { i -> if (i < tw * th) (i % tw) / (tw - 1f) else 0.5f } }
         val out = AiFill.fill(px, w, h, hole, m)!!
-        T.eq(listOf(640 to 120), seen, "une passe de 640 px de large (rectangle 749x137 réduit en 640x118, complété en 640x120)")
+        T.eq(listOf(288 to 56), seen, "une passe réduite à 15 000 pixels (rectangle 749x137 réduit en 287x53, complété en 288x56)")
         var maxJump = 0; var prev = -1; var down = 0
         for (x in 350..700) { val r = (out[120 * w + x] shr 16) and 0xFF; if (prev >= 0) { maxJump = maxOf(maxJump, abs(r - prev)); if (r < prev) down++ }; prev = r }
         T.ok(maxJump <= 2 && down == 0, "rouge le long de la ligne : saut maximal $maxJump, $down baisses")

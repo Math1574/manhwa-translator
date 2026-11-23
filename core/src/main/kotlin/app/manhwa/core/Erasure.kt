@@ -667,6 +667,9 @@ object Erasure {
             }
         }
         // texte sur dessin : seules les lettres (remplissage + contour) sont effacées et reconstruites, pas un rectangle entier
+        // texte sur dessin : région élargie pour trouver de la vraie texture à copier à côté du trou (second passage). Essayé d'abord : son résultat remplace celui de ce passage, dont
+        // l'analyse des lettres (couleur, masque, traits fixes) était calculée pour rien, en double, sur chaque texte posé sur un dessin
+        if (padOverride == 0f) planUnclipped(src, s, lineBoxes, lineH, imageW, imageH, max(40f, lineH * 1.6f), container, protect, free, outlines, extra, protectRound, confine, confineRect, exclude)?.let { if (it.mode == Mode.ART) return it }
         val zoneArt = TextErase.rectMask(w, h, rects(), min(if (a.outlined) 30 else 18, max(4, (lh * (if (a.outlined) 0.35f else 0.25f)).toInt())))
         val lineRectsPx = lineBoxes.map { l -> intArrayOf((l.left * s).toInt() - x0, (l.top * s).toInt() - y0, (l.right * s).toInt() - x0, (l.bottom * s).toInt() - y0) }
         val tightForColor = TextErase.rectMask(w, h, lineRectsPx, 0)
@@ -721,8 +724,6 @@ object Erasure {
         // fond blanc : le halo clair collé aux lettres (compression, lueur) est effacé avec elles, sans quoi il reste un fantôme de leur forme
         val plainWhite = haloClean && TextErase.ringIsPlainWhite(px, w, h, artInfo.mask, a.bg, frameIgnore)
         val mask = if (plainWhite) TextErase.lightHalo(px, w, h, artInfo.mask, a.bg, max(6, (lh * 0.12f).toInt()), frameIgnore) else artInfo.mask
-        // texte sur dessin : région élargie pour trouver de la vraie texture à copier à côté du trou (second passage)
-        if (padOverride == 0f) planUnclipped(src, s, lineBoxes, lineH, imageW, imageH, max(40f, lineH * 1.6f), container, protect, free, outlines, extra, protectRound, confine, confineRect, exclude)?.let { if (it.mode == Mode.ART) return it }
         // texte sur dessin (fond non blanc uni) : fond propre estimé par interpolation lisse, lueur et frange absorbées, raccord continu (voir ArtFill)
         if (ArtFill.enabled && !plainWhite) {
             val maxGrow = (lh * 0.3f).toInt().coerceIn(6, 24)
