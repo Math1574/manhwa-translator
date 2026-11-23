@@ -1617,7 +1617,10 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val skipSfx = !s.translateSfx && s.source.code != "ja" && s.source.code != "ko" && s.source.code != "zh"
         // relecture (seconde passe de Gemma) : une page traduite sans elle n'est pas reprise du cache quand on l'active, et inversement
         val refineTag = if (spec != null && s.refinePass) "+rl1" else ""
-        val engineId = (if (spec == null) MlKitTranslation.ID else GemmaTranslator.engineId(spec)) + (if (enhanced) "+pp6" else "") + (if (rereadOn) "+rr1" else "") + (if (skipSfx) "+sfx0" else "") + refineTag + seamTag
+        // « al2 » : réponses de Gemma relues dans l'ordre (dizaine perdue, ligne sautée replacée), phrases coupées signalées (23/11) : clé distincte, pour ne pas reprendre d'anciennes
+        // traductions décalées d'une bulle
+        val alignTag = if (spec != null) "+al2" else ""
+        val engineId = (if (spec == null) MlKitTranslation.ID else GemmaTranslator.engineId(spec)) + (if (enhanced) "+pp6" else "") + (if (rereadOn) "+rr1" else "") + (if (skipSfx) "+sfx0" else "") + refineTag + alignTag + seamTag
         var debug: DebugInfo? = null
         val lexicon = Lexicon.get(ctx)
         candidatesById[c.id] = c

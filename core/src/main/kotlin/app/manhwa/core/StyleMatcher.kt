@@ -138,9 +138,16 @@ object StyleMatcher {
     }
 
     /** Décrit un bloc ; null si l'encre est trop pauvre ou trop brouillée pour être mesurée. */
-    fun describe(lines: List<LineInk>, regime: Regime = Regime.FLAT, ident: String = ""): Block? {
-        // mesure peu fiable (masque d'encre brouillé par le fond ou le halo) : hauteurs de lettres très incohérentes entre les lignes
-        if (lines.size >= 3) { val hs = lines.map { it.letterHeight }.sorted(); if (hs.last() > 2.2f * max(1, hs[hs.size / 2]) || hs.first() < 0.45f * hs[hs.size / 2]) return null }
+    fun describe(all: List<LineInk>, regime: Regime = Regime.FLAT, ident: String = ""): Block? {
+        // mesure peu fiable (masque d'encre brouillé par le fond ou le halo) : hauteurs de lettres très incohérentes entre les lignes. Une seule ligne aberrante parmi quatre ou plus
+        // (le bouton de l'appli lu comme une ligne « 文A », un fragment) est écartée au lieu de faire renoncer à toute la mesure.
+        var lines = all
+        if (all.size >= 3) {
+            val hs = all.map { it.letterHeight }.sorted(); val med = max(1, hs[hs.size / 2])
+            val ok = all.filter { it.letterHeight <= 2.2f * med && it.letterHeight >= 0.45f * med }
+            if (ok.size < 2 || ok.size * 4 < all.size * 3) return null
+            lines = ok
+        }
         val vs = lines.mapNotNull { StyleFeatures.of(it) }
         val m = StyleFeatures.mean(vs) ?: return null
         // graisse impossible (au-delà de 0,32 de la hauteur de lettre, un trait ne laisse plus de place aux contreformes) : c'est un masque brouillé, pas un lettrage
@@ -159,8 +166,8 @@ object StyleMatcher {
      */
     fun lineInk(plan: Erasure.Plan, s: Float, b: RectF, text: String): LineInk? {
         val x0 = (b.left * s).toInt() - plan.x0; val y0 = (b.top * s).toInt() - plan.y0; val x1 = (b.right * s).toInt() - plan.x0; val y1 = (b.bottom * s).toInt() - plan.y0
-        val full = plan.ink?.let { FontMatcher.lineInk(it, plan.w, plan.h, x0, y0, x1, y1, text) }
-        val core = plan.core?.let { FontMatcher.lineInk(it, plan.w, plan.h, x0, y0, x1, y1, text) }
+        val full = plan.letterInk?.let { FontMatcher.lineInk(it, plan.w, plan.h, x0, y0, x1, y1, text) }
+        val core = plan.letterCore?.let { FontMatcher.lineInk(it, plan.w, plan.h, x0, y0, x1, y1, text) }
         // un « cœur » qui remplit presque toute la ligne est une plaque (contours de lettres qui se touchent, espaces et contreformes comblés), pas un lettrage
         val coreOk = core != null && boxFill(core) <= 0.72f
         return when {

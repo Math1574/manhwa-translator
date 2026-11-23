@@ -27,7 +27,7 @@ private fun tmp(): File = Files.createTempDirectory("mt").toFile()
 
 fun runAll(): Boolean {
     T.results.clear()
-    groupingTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); queueBatchTests(); readingOrderTests(); eraseWhiteBandTests(); fontPolicyTests(); blockEditTests(); seamTests(); modelTests(); settingsTests(); utilTests(); textTests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests(); openBubbleTests(); barrierShapeTests(); safetyTests(); artEraseTests(); updateTests(); settingsSearchTests(); ignoredTests(); termRefreshTests(); discardedTests(); correctionsTests(); libraryViewTests(); homeViewTests(); editorViewTests(); coverTests(); crashTraceTests(); gpuGuardTests(); artFillTests(); blockLayoutTests(); textPaintTests(); textTiltTests(); tiltedResultTests(); tiltedReadingTests(); detectionTilesTests(); translationOrderTests(); ocrQualityTests(); idiomHintsTests(); agreementTests(); positionEditTests(); editApplyTests(); synopsisTests(); formatTests(); styledFontsTests(); echoTests(); alignTests(); aiFillTests()
+    groupingTests(); glossaryTests(); cacheTests(); pipelineTests(); queueTests(); queueBatchTests(); readingOrderTests(); eraseWhiteBandTests(); fontPolicyTests(); blockEditTests(); seamTests(); modelTests(); settingsTests(); utilTests(); textTests(); llmTests(); maskTests(); eraseTests(); erasureTests(); paddleTests(); shapeTests(); fontMatchTests(); checkTests(); repairTests(); adBlockTests(); libraryTests(); mangaOcrTests(); chapterNavTests(); anchoredGroupTests(); inkTests(); layoutAreaTests(); verticalColumnsTests(); ocrPlausibilityTests(); halftoneTests(); avoidTests(); orientedBoxTests(); readingCheckTests(); rereadPipelineTests(); openBubbleTests(); barrierShapeTests(); safetyTests(); artEraseTests(); updateTests(); settingsSearchTests(); ignoredTests(); termRefreshTests(); discardedTests(); correctionsTests(); libraryViewTests(); homeViewTests(); editorViewTests(); coverTests(); crashTraceTests(); gpuGuardTests(); artFillTests(); blockLayoutTests(); textPaintTests(); textTiltTests(); tiltedResultTests(); tiltedReadingTests(); detectionTilesTests(); translationOrderTests(); ocrQualityTests(); idiomHintsTests(); agreementTests(); positionEditTests(); editApplyTests(); synopsisTests(); formatTests(); styledFontsTests(); echoTests(); alignTests(); aiFillTests(); erasure23Tests()
     val failed = T.results.filter { !it.second }
     T.results.forEach { println((if (it.second) "PASS " else "FAIL ") + it.first + (if (it.second) "" else "  -> " + it.third)) }
     println("\n${T.results.size - failed.size}/${T.results.size} tests réussis")
@@ -804,6 +804,8 @@ fun repairTests() {
         // un débris lu avec la dernière ligne (texte voisin sur un décor) est retiré ; une vraie fin de phrase ne l'est jamais
         T.eq("A NORMAL PERSON'S TOTAL IS SO HIGH AS 36?!", OcrRepair.dropJunkTail(q("A NORMAL PERSON'S TOTAL IS SO HIGH AS 36?! Taay sr4: In )"), lx))
         for (keep in listOf("STOP IT! HAHA", "YOU KNOW? OK", "IT IS A QUIET LIFE. (SIGH)", "I'M LEVEL 100. I'M")) T.eq(keep, OcrRepair.dropJunkTail(q(keep), lx))
+        // journal du 23/11 : « 8 BEEE » lu dans les caractères coréens du décor
+        T.eq("I COULD UNDOUBTEDLY BECOME THE MASTER OF SWORDS!!!", OcrRepair.dropJunkTail("I COULD UNDOUBTEDLY BECOME THE MASTER OF SWORDS!!! 8 BEEE", lx))
         // les corrections voulues restent faites
         T.eq("IT STINGS SO BADLY", r("IT STINGS 50 BADLY"))
     }
@@ -2376,6 +2378,9 @@ fun fontPolicyTests() {
         T.eq(null, StyleMatcher.describe(listOf(line(0.1f), line(0.1f, h = 260), line(0.1f)), StyleMatcher.Regime.FLAT), "hauteurs incohérentes")
         T.eq(null, StyleMatcher.describe(List(3) { LineInk("X", BooleanArray(600 * 100) { true }, 600, 100) }, StyleMatcher.Regime.FLAT), "plaque pleine")
         T.ok(block(0.1f) != null, "lettrage correct")
+        // une seule ligne aberrante parmi quatre (le bouton de l'appli lu comme une ligne « 文A ») est écartée, la mesure reste
+        val withStray = listOf(line(0.1f), LineInk("文A", stripes(40, 23, 0.1f), 40, 23), line(0.1f), line(0.1f))
+        T.ok(StyleMatcher.describe(withStray, StyleMatcher.Regime.FLAT)?.let { it.lines.size == 3 } == true, "ligne aberrante écartée")
     }
     T.test("style : la police choisie suit la graisse de l'original, sans jamais être plus fine que la plus légère des polices robustes ni démesurément plus grasse") {
         val autoWeights = FontLibrary.specs.filter { it.auto }.map { StyleMatcher.weightOf(it.id) }

@@ -628,6 +628,8 @@ object JunkFilter {
         if (letters > 16) return false
         if (toks.any { it.any { c -> c.isLetter() } && it.length >= 3 && lex.known(it) && it.none { c -> c.isDigit() } }) return false
         if (toks.any { it.any { c -> c.isDigit() } && it.any { c -> c.isLetter() } } && letters <= 10) return true
+        // un chiffre isolé suivi d'un mot inconnu (« 8 BEEE » lu dans les caractères coréens du décor, collé à « …MASTER OF SWORDS!!! ») : débris, même si le mot ressemble à un cri étiré
+        if (toks.size >= 2 && toks.first().all { it.isDigit() } && toks.drop(1).all { t -> t.any { it.isLetter() } && !lex.known(t) } && letters <= 6) return true
         if (toks.any { interjection.matches(it.trim('\'', '’')) }) return false
         if (toks.all { t -> t.length <= 2 && lex.known(t) }) return false      // « OK », « NO », « I »
         return toks.none { lex.known(it) && it.length >= 3 }

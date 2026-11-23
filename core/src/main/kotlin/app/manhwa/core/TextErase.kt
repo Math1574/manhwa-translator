@@ -587,6 +587,46 @@ object TextErase {
         return best
     }
 
+    /** Épaisseur typique des surfaces pleines d'un masque : 90e centile de la profondeur (distance 4-voisinage au bord) de ses pixels. Une surface isolée ne la fait pas, contrairement au maximum. */
+    internal fun depthP90(sel: BooleanArray, w: Int, h: Int): Int {
+        val d = IntArray(w * h) { if (sel[it]) 1 shl 20 else 0 }
+        for (y in 0 until h) for (x in 0 until w) { val i = y * w + x; if (!sel[i]) continue; d[i] = minOf(d[i], if (x == 0) 1 else d[i - 1] + 1, if (y == 0) 1 else d[i - w] + 1) }
+        val hist = IntArray(256); var tot = 0
+        for (y in h - 1 downTo 0) for (x in w - 1 downTo 0) { val i = y * w + x; if (!sel[i]) continue; d[i] = minOf(d[i], if (x == w - 1) 1 else d[i + 1] + 1, if (y == h - 1) 1 else d[i + w] + 1); hist[min(255, d[i])]++; tot++ }
+        if (tot == 0) return 0
+        var acc = 0; for (k in 0 until 256) { acc += hist[k]; if (acc * 10 >= tot * 9) return k }
+        return 255
+    }
+
+    /**
+     * Pixels de [mask] qui appartiennent à une forme fermée : composante connexe (8 voisins) qui ne touche ni le bord de [allowed] (la zone du texte élargie) ni le bord de l'image.
+     * Les lettres sont des formes fermées dans la zone du texte ; le fond, une marge blanche, un contour de case, une cape ou une fleur qui passent derrière s'étendent au-delà.
+     */
+    internal fun enclosedIn(mask: BooleanArray, allowed: BooleanArray, w: Int, h: Int): BooleanArray {
+        val n = w * h
+        val out = BooleanArray(n); val seen = BooleanArray(n); val stack = IntArray(n); val comp = IntArray(n)
+        for (st in 0 until n) {
+            if (!mask[st] || seen[st]) continue
+            var sp = 0; var cn = 0; var open = false
+            stack[sp++] = st; seen[st] = true
+            while (sp > 0) {
+                val i = stack[--sp]; comp[cn++] = i
+                val x = i % w; val y = i / w
+                if (x == 0 || y == 0 || x == w - 1 || y == h - 1) open = true
+                for (dy in -1..1) for (dx in -1..1) {
+                    if (dx == 0 && dy == 0) continue
+                    val nx = x + dx; val ny = y + dy
+                    if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
+                    val j = ny * w + nx
+                    if (!allowed[j]) { open = true; continue }
+                    if (mask[j] && !seen[j]) { seen[j] = true; stack[sp++] = j }
+                }
+            }
+            if (!open) for (k in 0 until cn) out[comp[k]] = true
+        }
+        return out
+    }
+
     /** (expérience) Composantes connexes d'un masque ayant la taille d'une lettre : nombre et part de la surface du masque qu'elles couvrent. */
     fun letterLike(mask: BooleanArray, w: Int, h: Int, lh: Int): Pair<Int, Float> {
         val seen = BooleanArray(w * h); val stack = IntArray(w * h); var total = 0; var letterArea = 0; var count = 0
@@ -613,8 +653,10 @@ object TextErase {
     }
 
     /** Arbitrage par l'épaisseur : le masque dont les surfaces pleines sont les plus épaisses (d'au moins 30 %, et 4 px) est celui des lettres ; sinon [current]. */
-    private fun depthPick(dMask: BooleanArray, bMask: BooleanArray, w: Int, h: Int, dd: Float, db: Float, current: Boolean): Boolean {
-        val dDeep = maxDepth(dMask, w, h); val bDeep = maxDepth(bMask, w, h)
+    private fun depthPick(dMask: BooleanArray, bMask: BooleanArray, w: Int, h: Int, dd: Float, db: Float, current: Boolean, allowed: BooleanArray? = null): Boolean {
+        // seulement les formes fermées quand il y en a : une marge ou un fond qui traverse la boîte n'est pas une surface de lettre, même épaisse
+        fun closed(m: BooleanArray): BooleanArray = if (allowed == null) m else enclosedIn(m, allowed, w, h).let { c -> if (c.count { it } >= 40) c else m }
+        val dDeep = maxDepth(closed(dMask), w, h); val bDeep = maxDepth(closed(bMask), w, h)
         Erasure.trace?.invoke("couleur du texte : sombre ${"%.2f".format(dd)} (épaisseur $dDeep px) / clair ${"%.2f".format(db)} (épaisseur $bDeep px)")
         return if (dDeep >= 1.3f * bDeep && dDeep >= 4) false else if (bDeep >= 1.3f * dDeep && bDeep >= 4) true else current
     }
@@ -634,10 +676,98 @@ object TextErase {
         val med = lum(pixels[sorted[sorted.size / 2]])
         val dd = med - dark.map { lum(it) }.average().toFloat(); val db = bright.map { lum(it) }.average().toFloat() - med
         var pickBright = db >= dd
+        var decided = false
+        // 0) formes fermées (journal du 23/11) : les lettres sont des formes fermées dans la zone du texte, le fond s'étend au-delà. Lettres blanches à lueur rose sur un mur clair : la
+        //    médiane est claire, l'extrême clair à peine plus clair (le blanc passait pour le fond, toute la boîte était effacée, fleur comprise) ; texte noir à contour blanc qui déborde sur la
+        //    marge blanche au-dessus d'une case : la marge épaisse passait pour les lettres (le bord de la case était effacé, le texte ni penché ni dans sa police). La part des pixels de chaque
+        //    extrême, dans les boîtes de lecture, qui appartiennent à une forme fermée départage quand l'écart est net.
+        if (tight != null && w > 0 && h > 0 && pixels.size == w * h && dd >= 0.08f && db >= 0.08f) {
+            val darkRef = (med - dd); val brightRef = (med + db)
+            val dAll = BooleanArray(w * h); val bAll = BooleanArray(w * h)
+            val dWin = min(0.12f, 0.5f * dd); val bWin = min(0.12f, 0.5f * db)
+            for (i in idx) { val l = lum(pixels[i]); if (l <= darkRef + dWin) dAll[i] = true; if (l >= brightRef - bWin) bAll[i] = true }
+            val dIn = enclosedIn(dAll, allowed, w, h); val bIn = enclosedIn(bAll, allowed, w, h)
+            var dT = 0; var dE = 0; var bT = 0; var bE = 0
+            for (i in idx) if (tight[i]) { if (dAll[i]) { dT++; if (dIn[i]) dE++ }; if (bAll[i]) { bT++; if (bIn[i]) bE++ } }
+            if (dT >= 40 && bT >= 40) {
+                val cd = dE.toFloat() / dT; val cb = bE.toFloat() / bT
+                Erasure.trace?.invoke("couleur du texte : part dans des formes fermées : sombre ${"%.2f".format(cd)} / clair ${"%.2f".format(cb)}")
+                if (cd >= 0.45f && cd - cb >= 0.30f) { pickBright = false; decided = true }
+                else if (cb >= 0.45f && cb - cd >= 0.30f) { pickBright = true; decided = true }
+                else if (cd >= 0.45f && cb >= 0.45f) {
+                    // les deux forment des formes fermées : les lettres et leur contour (ou leur lueur). Les lettres sont entourées par l'autre extrême (texte noir dans son contour blanc,
+                    // lettres blanches dans leur lueur rose) : en partant de leur bord vers l'extérieur, on rencontre l'autre extrême en quelques pixels, dans toutes les directions.
+                    // Le contour, lui, ne l'est qu'à moitié : son bord extérieur donne sur le fond. Part des départs (bord, direction vers l'extérieur) qui atteignent l'autre extrême.
+                    val n = w * h
+                    val reach = (lineH / 6).coerceIn(4, 12)
+                    fun surround(x: BooleanArray, y: BooleanArray): Float {
+                        var rays = 0; var hits = 0
+                        for (i in 0 until n) {
+                            if (!x[i]) continue
+                            val x0 = i % w; val y0 = i / w
+                            for (k in 0..3) {
+                                val dx = if (k == 0) 1 else if (k == 1) -1 else 0; val dy = if (k == 2) 1 else if (k == 3) -1 else 0
+                                var cx = x0 + dx; var cy = y0 + dy
+                                if (cx < 0 || cy < 0 || cx >= w || cy >= h) continue
+                                if (x[cy * w + cx] || !allowed[cy * w + cx]) continue
+                                rays++
+                                var st = 1
+                                while (st <= reach && cx >= 0 && cy >= 0 && cx < w && cy < h) {
+                                    val q = cy * w + cx
+                                    if (!allowed[q] || x[q]) break
+                                    if (y[q]) { hits++; break }
+                                    cx += dx; cy += dy; st++
+                                }
+                            }
+                        }
+                        return if (rays < 40) -1f else hits.toFloat() / rays
+                    }
+                    // netteté du bord : une lettre a un bord net de tous les côtés ; une lueur n'en a un que du côté des lettres, elle s'estompe de l'autre (lettres blanches à lueur rose
+                    // sur un mur clair : la lueur est l'extrême sombre, et entre deux lettres elle les entoure autant qu'elle en est entourée)
+                    fun sharpness(x: BooleanArray): Float {
+                        val step = 3; val minJump = 0.5f * (brightRef - darkRef)
+                        var rays = 0; var sharp = 0
+                        for (i in 0 until n) {
+                            if (!x[i]) continue
+                            val x0 = i % w; val y0 = i / w
+                            for (k in 0..3) {
+                                val dx = if (k == 0) 1 else if (k == 1) -1 else 0; val dy = if (k == 2) 1 else if (k == 3) -1 else 0
+                                val nx = x0 + dx; val ny = y0 + dy
+                                if (nx < 0 || ny < 0 || nx >= w || ny >= h || x[ny * w + nx]) continue
+                                val fx = x0 + step * dx; val fy = y0 + step * dy
+                                if (fx < 0 || fy < 0 || fx >= w || fy >= h || !allowed[fy * w + fx]) continue
+                                rays++
+                                if (kotlin.math.abs(lum(pixels[fy * w + fx]) - lum(pixels[i])) >= minJump) sharp++
+                            }
+                        }
+                        return if (rays < 40) -1f else sharp.toFloat() / rays
+                    }
+                    // formes fermées entières (une lueur coupée par les boîtes de lecture paraîtrait entourée de lettres)
+                    val sd = surround(dIn, bAll); val sb = surround(bIn, dAll)
+                    val kd = sharpness(dIn); val kb = sharpness(bIn)
+                    Erasure.trace?.invoke("couleur du texte : entouré par l'autre extrême : sombre ${"%.2f".format(sd)} / clair ${"%.2f".format(sb)} ; bord net : sombre ${"%.2f".format(kd)} / clair ${"%.2f".format(kb)}")
+                    val xD = BooleanArray(n) { dIn[it] && tight[it] }; val xB = BooleanArray(n) { bIn[it] && tight[it] }
+                    // les deux mesures s'additionnent (chacune seule hésite sur une lueur large qui remplit l'espace entre les lettres)
+                    val scD = sd + kd; val scB = sb + kb
+                    if (sd >= 0f && kd >= 0f && scD >= 1.2f && scD - scB >= 0.3f) { pickBright = false; decided = true }
+                    else if (sb >= 0f && kb >= 0f && scB >= 1.2f && scB - scD >= 0.3f) { pickBright = true; decided = true }
+                    else if (lineH > 0 && letterLike(xD, w, h, lineH).second.let { ld -> letterLike(xB, w, h, lineH).second.let { lb ->
+                            Erasure.trace?.invoke("couleur du texte : formes de la taille d'une lettre : sombre ${"%.2f".format(ld)} / clair ${"%.2f".format(lb)}")
+                            if (ld >= 0.4f && ld - lb >= 0.25f) { pickBright = false; true } else if (lb >= 0.4f && lb - ld >= 0.25f) { pickBright = true; true } else false } }) decided = true
+                    else {
+                        // sinon le trait des lettres est plus épais que le liseré
+                        val pd = depthP90(xD, w, h); val pb = depthP90(xB, w, h)
+                        Erasure.trace?.invoke("couleur du texte : épaisseur des formes fermées : sombre $pd px / claire $pb px")
+                        if (pd >= 3 && pd * 2 >= pb * 3) { pickBright = false; decided = true }
+                        else if (pb >= 3 && pb * 2 >= pd * 3) { pickBright = true; decided = true }
+                    }
+                }
+            }
+        }
         // les deux extrêmes doivent être nettement distincts de la médiane pour qu'il y ait ambiguïté (un texte blanc sur fond sombre a un extrême sombre à peine plus sombre que le fond).
         // Cas à départager : lettres noires cernées d'une lueur blanche sur un ciel (la lueur est l'extrême le plus éloigné) ; texte blanc fin sur un panneau holographique bleu aux plages
         // sombres épaisses (ces plages passaient pour les lettres : le texte blanc n'était pas effacé du tout).
-        if (tight != null && w > 0 && h > 0 && pixels.size == w * h && dd >= 0.10f && db >= 0.25f) {
+        if (!decided && tight != null && w > 0 && h > 0 && pixels.size == w * h && dd >= 0.10f && db >= 0.25f) {
             // surfaces pleines de chaque extrême : tous les pixels des boîtes de lecture qui ont (à 0,12 près) la luminosité de cet extrême, pas seulement les 10 % les plus extrêmes
             val darkRef = (med - dd); val brightRef = (med + db)
             val dMask = BooleanArray(w * h); val bMask = BooleanArray(w * h)
@@ -648,8 +778,8 @@ object TextErase {
                 val sd = letterLike(dMask, w, h, lineH).second; val sb = letterLike(bMask, w, h, lineH).second
                 Erasure.trace?.invoke("couleur du texte : part de composantes de la taille d'une lettre : sombre ${"%.2f".format(sd)} / clair ${"%.2f".format(sb)}")
                 if (kotlin.math.abs(sd - sb) >= 0.15f) pickBright = sb > sd
-                else if (dd >= 0.24f) pickBright = depthPick(dMask, bMask, w, h, dd, db, pickBright)
-            } else if (dd >= 0.24f) pickBright = depthPick(dMask, bMask, w, h, dd, db, pickBright)
+                else if (dd >= 0.24f) pickBright = depthPick(dMask, bMask, w, h, dd, db, pickBright, allowed)
+            } else if (dd >= 0.24f) pickBright = depthPick(dMask, bMask, w, h, dd, db, pickBright, allowed)
         }
         val pick = if (pickBright) bright else dark
         return pack(pick.sumOf { r(it) } / pick.size, pick.sumOf { g(it) } / pick.size, pick.sumOf { b(it) } / pick.size)
@@ -766,7 +896,7 @@ object TextErase {
         // L'isolement se juge sur toute la région (et non sur la seule zone autorisée, dont le bord coupe ces grandes surfaces et les ferait paraître isolées),
         // puis on écarte toute composante plus grande qu'une lettre ([maxDim] : quelques hauteurs de ligne).
         val color = BooleanArray(w * h) { dist(pixels[it], textColor) <= 70 }
-        val fill0 = enclosedMostlyIn(color, allowed, w, h, 0.7f)
+        val fill0 = withoutThickBlobs(enclosedMostlyIn(color, allowed, w, h, 0.7f), pixels, textColor, w, h)
         val fill1 = if (nearLines != null) withoutHatch(fill0, w, h, nearLines) else fill0
         val fill = if (inner != null) withoutThinOutside(fill1, w, h, inner) else fill1
         // lettres dont le remplissage touche une grande surface de même couleur (texte posé sur le bord d'une bulle blanche) : écartées ci-dessus avec la bulle. On les
@@ -836,6 +966,53 @@ object TextErase {
             }
         }
         return ArtMask(dilate(grown, w, h, grow, allowed), outlined)
+    }
+
+    /**
+     * Sans les formes pleines bien plus épaisses que le trait des lettres : carreaux sombres d'une fenêtre sous un texte noir penché (journal du 23/11), tache d'encre, aplat. Ils ont la
+     * couleur du texte (à la tolérance près) et tiennent dans la zone du texte, mais leur épaisseur (profondeur maximale) dépasse 2,5 fois celle de la composante médiane, qui est une lettre,
+     * et leur teinte s'écarte nettement de celle du texte (un lettrage très gras, lui, en a la couleur exacte).
+     * Rien n'est retiré quand il y a moins de trois composantes (pas de référence fiable).
+     */
+    internal fun withoutThickBlobs(fill: BooleanArray, pixels: IntArray, textColor: Int, w: Int, h: Int): BooleanArray {
+        val n = w * h
+        val d = IntArray(n) { if (fill[it]) 1 shl 20 else 0 }
+        for (y in 0 until h) for (x in 0 until w) { val i = y * w + x; if (!fill[i]) continue; d[i] = minOf(d[i], if (x == 0) 1 else d[i - 1] + 1, if (y == 0) 1 else d[i - w] + 1) }
+        for (y in h - 1 downTo 0) for (x in w - 1 downTo 0) { val i = y * w + x; if (!fill[i]) continue; d[i] = minOf(d[i], if (x == w - 1) 1 else d[i + 1] + 1, if (y == h - 1) 1 else d[i + w] + 1) }
+        val label = IntArray(n) { -1 }; val stack = IntArray(n)
+        val depth = ArrayList<Int>(); val size = ArrayList<Int>(); val far = ArrayList<Int>()
+        val hist = IntArray(256)
+        for (st in 0 until n) {
+            if (!fill[st] || label[st] >= 0) continue
+            val id = depth.size; var sp = 0; var cnt = 0; var md = 0
+            java.util.Arrays.fill(hist, 0)
+            stack[sp++] = st; label[st] = id
+            while (sp > 0) {
+                val i = stack[--sp]; cnt++; if (d[i] > md) md = d[i]
+                hist[min(255, dist(pixels[i], textColor))]++
+                val x = i % w; val y = i / w
+                for (dy in -1..1) for (dx in -1..1) {
+                    if (dx == 0 && dy == 0) continue
+                    val nx = x + dx; val ny = y + dy
+                    if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
+                    val j = ny * w + nx
+                    if (fill[j] && label[j] < 0) { label[j] = id; stack[sp++] = j }
+                }
+            }
+            // écart médian à la couleur du texte : des lettres en ont la couleur exacte (aux bords près), un carreau brun sombre n'en est que proche
+            var acc = 0; var medDist = 255; for (k in 0 until 256) { acc += hist[k]; if (acc * 2 >= cnt) { medDist = k; break } }
+            depth.add(md); size.add(cnt); far.add(medDist)
+        }
+        val ref = depth.indices.filter { size[it] >= 20 }.map { depth[it] }.sorted()
+        if (ref.size < 3) return fill
+        val typical = ref[ref.size / 2]
+        val maxOk = max(4f, 2.5f * typical)
+        // épaisse ET d'une autre teinte que le texte (à 30 niveaux près) : un lettrage très gras (« WHAT THE HELL » soudé par ses traits) a la couleur exacte du texte, il reste
+        fun drop(k: Int) = depth[k] > maxOk && far[k] > 30
+        if (depth.indices.none { drop(it) }) return fill
+        Erasure.trace?.invoke("formes pleines écartées de l'encre : ${depth.indices.count { drop(it) }} (épaisseur > ${"%.1f".format(maxOk)} px ; trait des lettres $typical px ; " +
+            depth.indices.filter { drop(it) }.joinToString(", ") { k -> var x0 = w; var y0 = h; var x1 = 0; var y1 = 0; for (i in 0 until n) if (fill[i] && label[i] == k) { val x = i % w; val y = i / w; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y }; "${size[k]} px [$x0,$y0 – $x1,$y1], épaisseur ${depth[k]}, écart de teinte ${far[k]}" } + ")")
+        return BooleanArray(n) { fill[it] && !drop(label[it]) }
     }
 
     /**
