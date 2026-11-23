@@ -215,16 +215,32 @@ object TextErase {
         for (i in pixels.indices) if (allowed[i]) { val c = pixels[i]; val k = ((r(c) shr 4) shl 8) or ((g(c) shr 4) shl 4) or (b(c) shr 4); buckets[k] = (buckets[k] ?: 0) + 1 }
         val mode = buckets.maxByOrNull { it.value }?.key ?: 0
         val approx = pack(((mode shr 8) and 0xF) * 16 + 8, ((mode shr 4) and 0xF) * 16 + 8, (mode and 0xF) * 16 + 8)
-        val near = ArrayList<Int>()
+        var near = ArrayList<Int>()
         for (i in pixels.indices) if (allowed[i] && dist(pixels[i], approx) <= 24) near.add(pixels[i])
-        val bg = if (near.isEmpty()) approx else ColorMath.median(near.toIntArray())
+        var bg = if (near.isEmpty()) approx else ColorMath.median(near.toIntArray())
         val allowedCount = allowed.count { it }.coerceAtLeast(1)
-        val bgShare = near.size.toFloat() / allowedCount
 
         val frame = dilate(allowed, w, h, 6)
         var fc = 0; var fn = 0
         // le texte d'un bloc voisin (autre moitié du même paragraphe, par exemple) n'est pas du bruit de fond : il est ignoré dans la mesure
         for (i in pixels.indices) if (frame[i] && !allowed[i] && (ignoreFrame == null || !ignoreFrame[i])) { fc++; if (dist(pixels[i], bg) <= 14) fn++ }
+        // Très gros lettrage gras (noir épais sur une page blanche) : les lettres occupent plus de la moitié de la zone et leur couleur passait pour le fond ; l'effacement repeignait les
+        // lettres de leur propre couleur (fantômes gris ou taches). Le cadre autour de la zone n'a alors presque rien de cette couleur, mais il est uni d'une autre couleur, bien présente
+        // aussi entre les lettres : c'est le vrai fond. (Une plaque ajustée autour du texte, elle, ne laisse presque rien de la couleur du dehors dans la zone : pas de changement.)
+        if (fc >= 40 && fn < 0.08f * fc) {
+            val fpx = ArrayList<Int>(fc)
+            for (i in pixels.indices) if (frame[i] && !allowed[i] && (ignoreFrame == null || !ignoreFrame[i])) fpx.add(pixels[i])
+            val fm = ColorMath.median(fpx.toIntArray())
+            val frameNear = fpx.count { dist(it, fm) <= 24 }
+            val zoneNear = ArrayList<Int>()
+            for (i in pixels.indices) if (allowed[i] && dist(pixels[i], fm) <= 24) zoneNear.add(pixels[i])
+            if (dist(fm, bg) > 80 && frameNear >= 0.7f * fc && zoneNear.size >= 0.3f * allowedCount) {
+                near = zoneNear
+                bg = ColorMath.median(zoneNear.toIntArray())
+                fn = 0; for (c in fpx) if (dist(c, bg) <= 14) fn++
+            }
+        }
+        val bgShare = near.size.toFloat() / allowedCount
         val uniformity = if (fc == 0) 1f else fn.toFloat() / fc
 
         val hist = IntArray(256)

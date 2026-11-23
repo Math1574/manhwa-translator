@@ -355,6 +355,17 @@ object Erasure {
             val rr = ArrayList<Int>(); val gg = ArrayList<Int>(); val bb = ArrayList<Int>()
             for (i in 0 until w * h) if (outer[i] && !inner[i] && !prot[i]) { val c = px[i]; rr.add((c shr 16) and 0xFF); gg.add((c shr 8) and 0xFF); bb.add(c and 0xFF) }
             if (rr.size < 60) continue
+            // couronne coupée par le bord de l'image (gros titre près du bord) : les quelques pixels d'un coin ne disent rien de l'entourage. Un coin uni suffisait à faire remplacer
+            // toute la zone par sa couleur, un grand rectangle brun sur le dessin. La couronne doit garder au moins la moitié de sa surface.
+            run {
+                val w2 = w + 2 * ringRad; val h2 = h + 2 * ringRad
+                val shifted = rects.map { r -> intArrayOf(r[0] + ringRad, r[1] + ringRad, r[2] + ringRad, r[3] + ringRad) }
+                val in2 = TextErase.rectMask(w2, h2, shifted, zoneRad); val out2 = TextErase.rectMask(w2, h2, shifted, ringRad)
+                var expected = 0; for (i in 0 until w2 * h2) if (out2[i] && !in2[i]) expected++
+                var present = 0; for (i in 0 until w * h) if (outer[i] && !inner[i]) present++
+                if (present * 2 < expected) { trace?.invoke("abords unis : couronne coupée par le bord de l'image ($present px sur $expected), ignorée"); rr.clear() }
+            }
+            if (rr.isEmpty()) continue
             rr.sort(); gg.sort(); bb.sort()
             val mr = rr[rr.size / 2]; val mg = gg[gg.size / 2]; val mb = bb[bb.size / 2]
             var near = 0; var total = 0
@@ -684,7 +695,26 @@ object Erasure {
         val reachCap = max(4, (lh * 0.06f).toInt())
         // le rattrapage des lettres soudées (boîtes de lecture) ne prend jamais un trait fixe : le contour d'une bulle passe dans les coins de ces boîtes. Les traits sont repérés sur les
         // lettres déjà retenues, comme pour la protection plus bas
-        val structureAvoid: ((BooleanArray) -> BooleanArray?)? = if (protectStructure && a.bgShare >= 0.45f) { ink0 -> fixedStructure(px, w, h, a.bg, a.threshold, textRect, ink0)?.protect } else null
+        // Les pixels de la couleur du texte dans les lignes lues comptent comme du texte pour cette décision : des lettres soudées par un pont fin à un trait du décor de même couleur
+        // (contour noir de lettres blanches touchant une traînée sombre, à pleine résolution) ne sont pas retenues comme lettres ; leur composante, sans « encre », passait pour un trait fixe,
+        // et le rattrapage les évitait : la phrase restait presque entière sous la traduction.
+        // Seulement les traits fins de cette couleur : une grande plage de la couleur du texte qui entre dans une boîte de lecture (page blanche hors d'une fenêtre bleue, sous un texte
+        // blanc) n'est pas du texte, et la compter ainsi laissait l'effacement la repeindre.
+        // Seulement les traits reliés au milieu des lignes (bande de leur quart haut à leur quart bas, loin de leurs extrémités gauche et droite) : les lettres en partent, avec leurs
+        // hampes et leurs jambages ; un contour de bulle qui passe dans le bas ou le coin d'une boîte de lecture élargie n'y touche pas et reste un trait fixe.
+        val strokeIn: BooleanArray by lazy {
+            val colorIn = BooleanArray(w * h) { tightForColor[it] && TextErase.dist(px[it], maskColor) <= 40 }
+            val thick = TextErase.dilate(TextErase.erode(colorIn, w, h, 3), w, h, 3)
+            val strokes = BooleanArray(w * h) { colorIn[it] && !thick[it] }
+            val mid = TextErase.rectMask(w, h, lineRectsPx.map { r -> val bh = r[3] - r[1]; intArrayOf(r[0] + bh / 2, r[1] + bh / 4, r[2] - bh / 2, r[3] - bh / 4) }.filter { it[2] > it[0] && it[3] > it[1] }, 0)
+            val seeds = BooleanArray(w * h) { strokes[it] && mid[it] }
+            val reach = lineRectsPx.maxOfOrNull { it[3] - it[1] } ?: 0
+            TextErase.dilate(seeds, w, h, reach, strokes)
+        }
+        val structureAvoid: ((BooleanArray) -> BooleanArray?)? = if (protectStructure && a.bgShare >= 0.45f) { ink0 ->
+            val inkPlus = BooleanArray(w * h) { ink0[it] || strokeIn[it] }
+            fixedStructure(px, w, h, a.bg, a.threshold, textRect, inkPlus)?.protect
+        } else null
         // pointes d'un contour « étoile » et traits fins loin des lignes lues : jamais des lettres (ils passent dans les coins de la zone détectée)
         val nearLines = TextErase.rectMask(w, h, lineRectsPx, max(4, (lh * 0.35f).toInt()))
         val artInfo = TextErase.artMaskInfo(px, w, h, zoneArt, maskColor, 2, Int.MAX_VALUE, tightLines, reachCap, lineRectsPx, structureAvoid, nearLines, thinInner)
@@ -859,7 +889,7 @@ object Erasure {
      * Si les lettres n'en prennent presque rien (au plus 1 %, un angle de zone qui mord sur le contour), ces pixels sont retirés du masque (sinon un trou dans le contour) ;
      * sinon le masque reste tel quel mais la marge de sécurité ne grignote pas le trait. Élargis d'un pixel (lissage des bords). Rend null s'il n'y en a pas.
      */
-    internal fun fixedStructure(px: IntArray, w: Int, h: Int, bg: Int, thr: Int, textRect: IntArray, ink: BooleanArray): Fixed? {
+    internal fun fixedStructure(px: IntArray, w: Int, h: Int, bg: Int, thr: Int, textRect: IntArray, ink: BooleanArray, unprotect: BooleanArray? = null): Fixed? {
         val far = TextErase.farMask(px, bg, thr)
         val maxW = ((textRect[2] - textRect[0]) * 1.2f).toInt() + 4; val maxH = ((textRect[3] - textRect[1]) * 1.2f).toInt() + 4
         val seen = BooleanArray(w * h); val keepAll = BooleanArray(w * h); val keepClean = BooleanArray(w * h); val queue = IntArray(w * h)
@@ -891,8 +921,8 @@ object Erasure {
         if (!any) return null
         val protect = TextErase.dilate(keepAll, w, h, 1)
         val drop = if (anyClean) TextErase.dilate(keepClean, w, h, 1) else null
-        // les pixels de lettres des composantes non propres restent à effacer : ils ne sont pas protégés
-        for (i in protect.indices) if (ink[i] && !(drop != null && drop[i])) protect[i] = false
+        // les pixels de lettres des composantes non propres restent à effacer : ils ne sont pas protégés ([unprotect] : autres pixels de lettres possibles, laissés libres de même)
+        for (i in protect.indices) if ((ink[i] || (unprotect != null && unprotect[i])) && !(drop != null && drop[i])) protect[i] = false
         return Fixed(protect, drop)
     }
 

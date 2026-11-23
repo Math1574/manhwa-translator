@@ -70,6 +70,33 @@ fun erasure24Tests() {
         T.ok(n > 500 && white < n / 10, "lettres blanches restées sur la joue : $white / $n")
     }
 
+    T.test("retouche par IA : un seul aplat autour du trou → reconstruction classique ; une joue et une page blanche autour du trou → IA (pas de mélange en taches)") {
+        val w = 160; val h = 100
+        val hole = TextErase.rectMask(w, h, listOf(intArrayOf(40, 30, 120, 70)), 0)
+        val flat = IntArray(w * h) { rgb(201, 116, 87) }
+        T.ok(AiFill.flatAround(flat, w, h, hole), "aplat de peau : devrait être uni")
+        // peau en haut, page blanche sous le trou (bas de la case)
+        val two = IntArray(w * h) { i -> if (i / w < 66) rgb(201, 116, 87) else rgb(252, 252, 252) }
+        T.ok(!AiFill.flatAround(two, w, h, hole), "peau + blanc : ne doit pas passer pour uni")
+    }
+
+    T.test("fond : très gros lettrage noir qui remplit plus de la moitié de sa zone sur une page blanche → fond blanc (pas noir) ; plaque sombre ajustée autour d'un texte blanc → fond de la plaque") {
+        val w = 320; val h = 110
+        val px = IntArray(w * h) { rgb(253, 253, 252) }
+        // lettres épaisses : barres de 15 px, 6 px d'écart, plus une barre haute (70 % de la zone en noir)
+        for (g in 0 until 12) for (y in 24 until 86) for (x in 26 + g * 21 until 41 + g * 21) px[y * w + x] = rgb(10, 10, 12)
+        for (y in 24 until 38) for (x in 26 until 290) px[y * w + x] = rgb(10, 10, 12)
+        val allowed = TextErase.rectMask(w, h, listOf(intArrayOf(24, 22, 292, 88)), 3)
+        val a = TextErase.analyze(px, w, h, allowed)
+        T.ok(lumOf(a.bg) > 200, "fond retenu : ${"%06X".format(a.bg and 0xFFFFFF)}")
+        // plaque bleu nuit exactement ajustée à la zone sur une page blanche (le cadre autour de la zone est tout blanc), texte blanc fin dessus : la plaque reste le fond
+        val px2 = IntArray(w * h) { rgb(253, 253, 252) }
+        for (y in 19 until 91) for (x in 21 until 295) px2[y * w + x] = rgb(30, 36, 70)
+        for (g in 0 until 12) for (y in 30 until 80) for (x in 30 + g * 21 until 34 + g * 21) px2[y * w + x] = rgb(250, 250, 250)
+        val b = TextErase.analyze(px2, w, h, allowed)
+        T.ok(lumOf(b.bg) < 80, "fond de la plaque : ${"%06X".format(b.bg and 0xFFFFFF)}")
+    }
+
     T.test("lueur violette dominante autour de lettres blanches sur une nuit sombre → la lueur part avec les lettres (pas de tache violette)") {
         val w = 360; val h = 260; val rnd = java.util.Random(11)
         val px = IntArray(w * h) { rgb(34 + rnd.nextInt(4), 38 + rnd.nextInt(4), 48 + rnd.nextInt(4)) }
