@@ -243,7 +243,8 @@ Answer with exactly one line per input line, in the format `N| edited translatio
     /**
      * Lecture des lignes numérotées, dans l'ordre de la réponse. Le modèle (E4B sur GPU, journal du 23/11) perd parfois la dizaine d'un numéro dans les longues pages : « 12| …, 3| …, 4| … »
      * pour 13 et 14. Lu tel quel, « 3| » écrasait la ligne 3 déjà traduite : deux bulles affichaient la traduction d'une autre. Un numéro qui recule alors que le suivant attendu (ou l'un des
-     * deux d'après, si une ligne a été sautée) a le même chiffre des unités est ce numéro-là ; un numéro déjà lu n'écrase jamais la première réponse (la ligne en double est ignorée).
+     * deux d'après, si une ligne a été sautée) a le même chiffre des unités est ce numéro-là ; un numéro déjà lu plus haut n'écrase jamais sa première réponse (la ligne en double est
+     * ignorée), seule une reprise immédiate de la même ligne la remplace.
      */
     private fun parseLines(reply: String, count: Int): List<String?> {
         val cleaned = thinkRe.replace(reply, "").replace("**", "").replace("`", "")
@@ -259,7 +260,8 @@ Answer with exactly one line per input line, in the format `N| edited translatio
                 var n = m.groupValues[1].toIntOrNull() ?: -1
                 // dizaine perdue ou fausse : en arrière (« 3| » pour 13), ou d'un bond de dix en avant (« 21| » pour 11 ; jamais dix lignes sautées d'un coup)
                 if ((n in 0..last || n >= last + 10) && count >= 10) (last + 1..minOf(count, last + 3)).firstOrNull { it % 10 == n % 10 && found[it] == null }?.let { n = it }
-                if (n in 1..count && found[n] == null) {
+                // un numéro répété aussitôt (« 1| … » puis « 1| … ») est une reprise de la même ligne : la dernière version compte ; plus loin, c'est une erreur de numérotation
+                if (n in 1..count && (found[n] == null || n == last)) {
                     current = StringBuilder(clean(m.groupValues[2])).also { found[n] = it }
                     if (n > last) last = n
                 } else current = null // numéro hors plage ou déjà lu : ligne ignorée, sans la rattacher à la précédente
