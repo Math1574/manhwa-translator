@@ -514,7 +514,7 @@ object Erasure {
         val isolated = !forceArt && !flatBase && isolatedOnWhite(px, w, h, a, lineBoxes, s, x0, y0, zone)
         trace?.invoke("lettrage isolé sur blanc : $isolated")
         val flat = forceFlat || flatBase || isolated
-        if (flat) {
+        if (flat) run flatPlan@{
             val allowedZone = TextErase.rectMask(w, h, rects(), max(3, (lh * 0.2f).toInt()))
             val shrink = max(1, (lh * 0.2f).toInt())
             val core = TextErase.rectMask(w, h, rects().map { r -> intArrayOf(r[0], r[1] + shrink, r[2], r[3] - shrink) }.filter { r -> r[3] > r[1] }, 0)
@@ -551,6 +551,14 @@ object Erasure {
             val adaptiveFlat = if (uniformUnder) null else TextErase.zoneFill(px, w, h, mask, a.bg)
             val featherF = if (adaptiveFlat != null) TextErase.featherAlpha(mask, w, h) else null
             val layer = IntArray(w * h) { if (mask[it]) ((featherF?.get(it) ?: 0xFF) shl 24) or ((adaptiveFlat?.get(it) ?: a.bg) and 0xFFFFFF) else 0 }
+            // texte hors bulle : l'aplat doit se fondre dans ses abords. Une partie des lignes posée sur un dessin (lettres noires cernées de blanc à cheval sur une page blanche et une
+            // joue, dernière ligne qui descend sur la case suivante) recevait la couleur de la page : lettres en blanc sur la peau, contours restés autour. Quand le pourtour de l'aplat
+            // ne ressemble pas à l'aplat, le bloc est traité comme un texte sur dessin (lettres reconstruites d'après leur entourage).
+            if (free && container == null && !forceFlat && !isolated) {
+                val sm = seamMismatch(px, w, h, mask, layer, frameIgnore, rects(), max(3, (lh * 0.3f).toInt()))
+                trace?.invoke("aplat : pourtour différent de l'aplat sur %.0f %% du bord (ligne la plus mal raccordée : %.0f %%) ; dans les lignes %.0f %% (pire ligne %.0f %%)".format(sm[0] * 100f, sm[1] * 100f, sm[2] * 100f, sm[3] * 100f))
+                if (sm[2] > SEAM_MAX || sm[3] > SEAM_LINE_MAX) { trace?.invoke("aplat écarté : texte en partie sur un dessin -> texte sur dessin"); return@flatPlan }
+            }
             val shape = bubbleShape(src, s, textUnion, a.bg, imageW, imageH, container = container)
             val ci = coreOf(px, w, h, raw, a.bg, a.textColor)
             return Plan(Mode.FLAT, x0, y0, w, h, mask, layer, a.bg, a.textColor, a.outlined, bubble, shape, stroke, raw, meanFill(layer), 0, ci.mask, ci.color, ci.halo, ci.haloPx)
@@ -693,34 +701,45 @@ object Erasure {
             // références du remplissage : ni les textes voisins ni leur halo immédiat (un halo sombre collé au texte voisin assombrissait le fond reconstruit)
             val avoidN0 = if (neigh.isEmpty()) null else TextErase.rectMask(w, h, neigh, max(3, (lh * 0.12f).toInt()))
             // contour de bulle ou trait du décor qui traverse la zone, sur un fond dominant uni : jamais effacé (trou dans le contour) ni utilisé comme référence (tache grise le long du trait)
-            val fixed = if (protectStructure && a.bgShare >= 0.45f) fixedStructure(px, w, h, a.bg, a.threshold, textRect, mask) else null
-            ArtFill.trace?.invoke("structure fixe : ${fixed?.protect?.count { it } ?: 0} px dont ${fixed?.drop?.count { it } ?: 0} retirés du masque (part du fond ${a.bgShare}, texte ${textRect.toList()}, région ${w}x$h)")
-            val avoidN = if (fixed == null) avoidN0 else BooleanArray(w * h) { fixed.protect[it] || (avoidN0 != null && avoidN0[it]) }
-            // les quelques pixels de zone qui mordent sur le trait fixe ne sont pas du texte : on les laisse (sinon un trou dans le contour)
-            val dropped = fixed?.drop
-            val core0 = if (dropped == null) mask else BooleanArray(w * h) { mask[it] && !dropped[it] }
-            // zone où la lueur peut être effacée : les lignes de texte élargies, jamais les textes des blocs voisins
-            fun limitGlowFor(grow: Int): BooleanArray {
-                val lg = TextErase.rectMask(w, h, rects(), grow + 6)
-                for (i in lg.indices) if (zoneArt[i]) lg[i] = true
-                if (neighRaw != null) for (i in lg.indices) if (neighRaw[i]) lg[i] = false
-                if (fixed != null) for (i in lg.indices) if (fixed.protect[i]) lg[i] = false
-                return lg
-            }
+            val fixed0 = if (protectStructure && a.bgShare >= 0.45f) fixedStructure(px, w, h, a.bg, a.threshold, textRect, mask) else null
+            ArtFill.trace?.invoke("structure fixe : ${fixed0?.protect?.count { it } ?: 0} px dont ${fixed0?.drop?.count { it } ?: 0} retirés du masque (part du fond ${a.bgShare}, texte ${textRect.toList()}, région ${w}x$h)")
             // hachures, lignes de vitesse, pointes d'étoile : traits fins sombres sur fond clair. Ni références du remplissage (la moyenne des bords en faisait une tache grise), ni lueur
             // (un trait ne s'estompe pas avec la distance : l'épaisseur mesurée saturait, la recherche était élargie et le masque prenait la forme des lettres élargies, hachures comprises)
             // seulement pour un texte sombre sur fond clair : sur un lettrage clair à lueur, les creux sombres entre les lettres seraient pris pour des traits
             val hatch = if (darkOnLight) thinDarkOnLight(px, w, h, (lh * 0.06f).toInt().coerceIn(2, 4)) else BooleanArray(w * h)
-            val busy = busyRing(core0, hatch, fixed?.protect, w, h, maxGrow)
-            ArtFill.trace?.invoke("décor net autour du texte : ${if (busy) "oui (pas de recherche élargie)" else "non"}")
-            var rec = ArtFill.reconstruct(px, w, h, core0, limitGlowFor(maxGrow), avoidN, maxGrow, hatch = hatch)
-            // halo diffus (lueur épaisse, qui occupe au moins 60 % de la recherche) : le fond « propre » estimé depuis le bord de la bande restait trop clair, et le remplissage finissait en
-            // carré visible. La recherche est refaite plus large, avec un fondu extérieur plus doux. Un fond détaillé (cheveux, traits) ou une lueur mince ne donnent pas ce profil : jamais élargis.
-            val wideGrow = (lh * 0.6f).toInt().coerceIn(maxGrow, 40)
-            if (!busy && rec != null && rec.thick >= 6 && rec.thick * 10 >= maxGrow * 6 && wideGrow > maxGrow + 2) {
-                val wide = ArtFill.reconstruct(px, w, h, core0, limitGlowFor(wideGrow), avoidN, wideGrow, ring = (lh * 0.2f).toInt().coerceIn(6, 12), robust = (lh * 0.12f).toInt().coerceIn(4, 10), hatch = hatch)
-                ArtFill.trace?.invoke("halo diffus : épaisseur ${rec.thick} (limite $maxGrow) -> recherche élargie à $wideGrow : ${wide?.thick}")
-                if (wide != null) rec = wide
+            fun attempt(fixed: Fixed?): ArtFill.Result? {
+                val avoidN = if (fixed == null) avoidN0 else BooleanArray(w * h) { fixed.protect[it] || (avoidN0 != null && avoidN0[it]) }
+                // les quelques pixels de zone qui mordent sur le trait fixe ne sont pas du texte : on les laisse (sinon un trou dans le contour)
+                val dropped = fixed?.drop
+                val core0 = if (dropped == null) mask else BooleanArray(w * h) { mask[it] && !dropped[it] }
+                // zone où la lueur peut être effacée : les lignes de texte élargies, jamais les textes des blocs voisins
+                fun limitGlowFor(grow: Int): BooleanArray {
+                    val lg = TextErase.rectMask(w, h, rects(), grow + 6)
+                    for (i in lg.indices) if (zoneArt[i]) lg[i] = true
+                    if (neighRaw != null) for (i in lg.indices) if (neighRaw[i]) lg[i] = false
+                    if (fixed != null) for (i in lg.indices) if (fixed.protect[i]) lg[i] = false
+                    return lg
+                }
+                val busy = busyRing(core0, hatch, fixed?.protect, w, h, maxGrow)
+                ArtFill.trace?.invoke("décor net autour du texte : ${if (busy) "oui (pas de recherche élargie)" else "non"}")
+                var rec = ArtFill.reconstruct(px, w, h, core0, limitGlowFor(maxGrow), avoidN, maxGrow, hatch = hatch)
+                // halo diffus (lueur épaisse, qui occupe au moins 60 % de la recherche) : le fond « propre » estimé depuis le bord de la bande restait trop clair, et le remplissage finissait en
+                // carré visible. La recherche est refaite plus large, avec un fondu extérieur plus doux. Un fond détaillé (cheveux, traits) ou une lueur mince ne donnent pas ce profil : jamais élargis.
+                val wideGrow = (lh * 0.6f).toInt().coerceIn(maxGrow, 40)
+                if (!busy && rec != null && rec.thick >= 6 && rec.thick * 10 >= maxGrow * 6 && wideGrow > maxGrow + 2) {
+                    val wide = ArtFill.reconstruct(px, w, h, core0, limitGlowFor(wideGrow), avoidN, wideGrow, ring = (lh * 0.2f).toInt().coerceIn(6, 12), robust = (lh * 0.12f).toInt().coerceIn(4, 10), hatch = hatch)
+                    ArtFill.trace?.invoke("halo diffus : épaisseur ${rec.thick} (limite $maxGrow) -> recherche élargie à $wideGrow : ${wide?.thick}")
+                    if (wide != null) rec = wide
+                }
+                return rec
+            }
+            var rec = attempt(fixed0)
+            // Les traits fixes se repèrent contre la couleur dominante autour des lignes. Quand c'est une lueur (halo violet autour de lettres blanches sur une nuit sombre), le vrai fond qui
+            // l'entoure passe pour un « trait fixe » : jamais référence, il ne reste plus assez de fond propre pour reconstruire, seules les lettres étaient retouchées et la lueur restait en
+            // tache (selon l'échelle de l'image, un seuil sur la part du fond décidait du résultat). La reconstruction est alors refaite sans traits fixes.
+            if (rec == null && fixed0 != null) {
+                ArtFill.trace?.invoke("structure fixe : plus assez de fond propre autour du texte (couleur dominante = lueur ?) -> nouvel essai sans traits fixes")
+                rec = attempt(null)
             }
             if (rec != null) {
                 // retouche par IA (si disponible) : le modèle prolonge le dessin (traits, texture) là où la reconstruction lisse laissait une tache floue ; en cas d'échec, la méthode classique
@@ -782,6 +801,53 @@ object Erasure {
 
     /** Part de l'anneau de recherche occupée par du décor net à partir de laquelle la recherche élargie d'un halo diffus est écartée. */
     private const val BUSY_SHARE = 0.04f
+
+    /**
+     * Part du pourtour d'un aplat (pixels hors [mask] à 2 px au plus de lui, hors [ignore]) dont la couleur s'écarte de plus de [SEAM_DIFF] niveaux de celle de l'aplat voisin ([layer]).
+     * Près de 0 quand l'aplat continue le fond qui l'entoure ; élevée quand il recouvre des lettres posées sur un dessin (peau, décor) ou s'arrête sur leurs contours.
+     */
+    internal fun seamMismatch(px: IntArray, w: Int, h: Int, mask: BooleanArray, layer: IntArray, ignore: BooleanArray?, lines: List<IntArray> = emptyList(), reach: Int = 0): FloatArray {
+        var n = 0; var bad = 0
+        val ln = IntArray(lines.size); val lb = IntArray(lines.size)
+        // pourtour dans les lignes elles-mêmes (entre et autour des lettres) : un aplat qui s'arrête sur le bord franc d'une bande ou d'une case voisine (au-dessus ou à côté de la
+        // ligne) est invisible, un aplat qui laisse la forme des lettres sur un dessin ne l'est pas
+        val inN = IntArray(lines.size); val inB = IntArray(lines.size)
+        for (y in 0 until h) for (x in 0 until w) {
+            val i = y * w + x
+            if (mask[i] || (ignore != null && ignore[i])) continue
+            var fill = 0; var found = false
+            near@ for (dy in -2..2) for (dx in -2..2) {
+                val nx = x + dx; val ny = y + dy
+                if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
+                val j = ny * w + nx
+                if (mask[j] && (layer[j] ushr 24) >= 128) { fill = layer[j]; found = true; break@near }
+            }
+            if (!found) continue
+            val isBad = TextErase.dist(px[i], fill) > SEAM_DIFF
+            n++; if (isBad) bad++
+            for ((k, r) in lines.withIndex()) {
+                if (x >= r[0] - reach && x < r[2] + reach && y >= r[1] - reach && y < r[3] + reach) { ln[k]++; if (isBad) lb[k]++ }
+                if (x >= r[0] && x < r[2] && y >= r[1] && y < r[3]) { inN[k]++; if (isBad) inB[k]++ }
+            }
+        }
+        // [0] : tout le pourtour ; [1] : la ligne la plus mal raccordée (au moins 40 pixels de pourtour) ; [2], [3] : de même, pourtour pris dans les lignes seulement
+        var worst = 0f; var worstIn = 0f; var allIn = 0; var badIn = 0
+        for (k in lines.indices) {
+            if (ln[k] >= 40) worst = max(worst, lb[k].toFloat() / ln[k])
+            if (inN[k] >= 40) worstIn = max(worstIn, inB[k].toFloat() / inN[k])
+            allIn += inN[k]; badIn += inB[k]
+        }
+        return floatArrayOf(if (n < 50) 0f else bad.toFloat() / n, worst, if (allIn < 50) 0f else badIn.toFloat() / allIn, worstIn)
+    }
+
+    /** Écart (par canal) entre un pixel du pourtour et l'aplat voisin au-delà duquel le raccord se voit. */
+    private const val SEAM_DIFF = 60
+
+    /** Part du pourtour d'un aplat de texte hors bulle qui peut différer de l'aplat (bordure de case, trait du décor effleuré) ; au-delà, le texte est en partie sur un dessin. */
+    private const val SEAM_MAX = 0.25f
+
+    /** Même limite pour la ligne la plus mal raccordée : une ligne posée sur un dessin (dernière ligne qui descend sur la case suivante) suffit à écarter l'aplat. */
+    private const val SEAM_LINE_MAX = 0.40f
 
     /** Traits fixes d'une région : [protect] = pixels que l'effacement ne doit ni élargir ni prendre pour références ; [drop] = parmi eux, ceux que la zone de texte mordait par erreur (à retirer du masque). */
     internal class Fixed(val protect: BooleanArray, val drop: BooleanArray?)
