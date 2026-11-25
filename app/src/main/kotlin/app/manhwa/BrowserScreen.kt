@@ -354,8 +354,8 @@ private fun AddressBar(graph: AppGraph) {
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 if (c.currentUrl.isNotEmpty()) DropdownMenuItem(text = { Text(if (c.translateOn && c.active) "Revenir à l'original" else "Traduire cette page") }, onClick = { menu = false; c.onTranslateButton() })
                 if (c.translateOn && c.active) DropdownMenuItem(text = { Text("Retraduire la page") }, onClick = { menu = false; c.start(force = true) })
-                if (c.translateOn && c.active && !c.ninja) DropdownMenuItem(text = { Text(if (c.eraser) "Terminer la gomme" else "Gomme : supprimer des traductions") }, onClick = { menu = false; c.switchEraser(!c.eraser) })
-                if (c.translateOn && c.active && !c.ninja) DropdownMenuItem(text = { Text(if (c.discardMode) "Terminer les textes écartés" else "Textes écartés : les voir et les traduire") }, onClick = { menu = false; c.switchDiscard(!c.discardMode) })
+                if (c.translateOn && c.active) DropdownMenuItem(text = { Text(if (c.eraser) "Terminer la gomme" else "Gomme : supprimer des traductions") }, onClick = { menu = false; c.switchEraser(!c.eraser) })
+                if (c.translateOn && c.active) DropdownMenuItem(text = { Text(if (c.discardMode) "Terminer les textes écartés" else "Textes écartés : les voir et les traduire") }, onClick = { menu = false; c.switchDiscard(!c.discardMode) })
                 if (c.currentUrl.isNotEmpty()) DropdownMenuItem(text = { Text(if (c.loading) "Arrêter le chargement" else "Actualiser") }, onClick = { menu = false; if (c.loading) c.stopLoading() else c.reload() })
                 DropdownMenuItem(text = { Text("Page suivante") }, enabled = c.canGoForward, onClick = { menu = false; c.forward() })
                 DropdownMenuItem(text = { Text("Accueil") }, onClick = { menu = false; c.goHome() })
@@ -371,7 +371,7 @@ private fun AddressBar(graph: AppGraph) {
                     }
                 }
                 if (seriesUrl != null) DropdownMenuItem(text = { Text("Page de l'œuvre") }, onClick = { menu = false; c.load(seriesUrl) })
-                if (c.currentUrl.startsWith("http") && !c.ninja) {
+                if (c.currentUrl.startsWith("http")) {
                     val on = c.adsActiveHere()
                     DropdownMenuItem(
                         text = { Text(if (on) "Bloqueur actif ici · ${c.adCountOnPage()} bloqué${if (c.adCountOnPage() > 1) "s" else ""} (désactiver)" else "Bloqueur désactivé ici (réactiver)") },
@@ -435,7 +435,7 @@ private fun NinjaHome() {
         Text("Mode Ninja", style = MaterialTheme.typography.headlineSmall, color = Color(0xFF9B7BFF))
         Spacer(Modifier.height(10.dp))
         Text(
-            "Rien n'est enregistré : ni historique, ni progression de lecture, ni bibliothèque, ni journal, ni cache de traduction, ni correction. Cookies, cache et données des sites sont dans un navigateur à part, effacé à la sortie. Aucune donnée n'est collectée.",
+            "Rien n'est enregistré : ni historique, ni progression de lecture, ni bibliothèque, ni journal, ni cache de traduction. Corrections, textes écartés et réglage du bloqueur par site fonctionnent mais disparaissent à la sortie, sans toucher à vos données habituelles. Cookies, cache et données des sites sont dans un navigateur à part, effacé à la sortie. Aucune donnée n'est collectée.",
             textAlign = androidx.compose.ui.text.style.TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(10.dp))

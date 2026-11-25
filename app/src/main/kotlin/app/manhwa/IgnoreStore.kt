@@ -24,24 +24,26 @@ class IgnoreStore(private val file: File, private val thumbDir: File) {
     val images = mutableStateListOf<IgnoredImage>().apply { addAll(rules.images) }
 
     /** Vrai si la règle est nouvelle. */
+    /** Mode Ninja : les règles ajoutées pendant le mode restent en mémoire (ni fichier ni vignette écrits ou effacés) ; la sortie rétablit les règles d'avant. */
+    private var privateBackup: IgnoreRules? = null
+    @Synchronized fun beginPrivate() { privateBackup = rules }
+    @Synchronized fun endPrivate() { val b = privateBackup ?: return; privateBackup = null; commit(b) }
+
     @Synchronized fun addText(scope: String, text: String): Boolean {
-        if (Ninja.on) return false
         val next = rules.withText(scope, text)
         if (next === rules) return false
         commit(next); return true
     }
 
-    @Synchronized fun removeText(scope: String, text: String) { if (Ninja.on) return; commit(rules.withoutText(scope, text)) }
+    @Synchronized fun removeText(scope: String, text: String) { commit(rules.withoutText(scope, text)) }
 
     @Synchronized fun addImage(img: IgnoredImage, thumb: ByteArray?) {
-        if (Ninja.on) return
-        if (thumb != null) try { thumbDir.mkdirs(); File(thumbDir, img.id + ".jpg").writeBytes(thumb) } catch (_: Throwable) {}
+        if (thumb != null && privateBackup == null) try { thumbDir.mkdirs(); File(thumbDir, img.id + ".jpg").writeBytes(thumb) } catch (_: Throwable) {}
         commit(rules.withImage(img))
     }
 
     @Synchronized fun removeImage(id: String) {
-        if (Ninja.on) return
-        try { File(thumbDir, "$id.jpg").delete() } catch (_: Throwable) {}
+        if (privateBackup == null) try { File(thumbDir, "$id.jpg").delete() } catch (_: Throwable) {}
         commit(rules.withoutImage(id))
     }
 
@@ -49,7 +51,7 @@ class IgnoreStore(private val file: File, private val thumbDir: File) {
 
     private fun commit(next: IgnoreRules) {
         rules = next
-        try {
+        if (privateBackup == null) try {
             val tmp = File(file.path + ".tmp")
             tmp.writeText(next.serialize())
             if (!tmp.renameTo(file)) { file.writeText(tmp.readText()); tmp.delete() }

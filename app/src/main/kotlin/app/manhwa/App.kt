@@ -272,7 +272,22 @@ class SettingsStore(ctx: Context) {
 
     fun update(f: (AppSettings) -> AppSettings) {
         settings = f(settings).sanitized()
-        prefs.edit().putString("settings", settings.serialize()).apply()
+        persist()
+    }
+
+    /** Mode Ninja : les sites où le bloqueur est coupé et les destinations autorisées gardent leurs valeurs d'avant ; les changements faits pendant le mode ne vont pas dans les préférences. */
+    private var privateBase: Pair<String, String>? = null
+    fun beginPrivate() { privateBase = settings.adAllowSites to settings.adAllowTargets }
+    fun endPrivate() {
+        val b = privateBase ?: return
+        privateBase = null
+        settings = settings.copy(adAllowSites = b.first, adAllowTargets = b.second)
+        persist()
+    }
+    private fun persist() {
+        val b = privateBase
+        val s = if (b != null) settings.copy(adAllowSites = b.first, adAllowTargets = b.second) else settings
+        prefs.edit().putString("settings", s.serialize()).apply()
     }
 }
 
@@ -309,8 +324,21 @@ class EditStore(private val file: File, private val maxImages: Int = 400, privat
     /** Nombre de corrections enregistrées (toutes images). */
     @Synchronized fun count(): Int = images.values.sumOf { it.second.size }
 
+    /**
+     * Mode Ninja : les corrections faites pendant le mode vivent en mémoire seulement (aucun fichier n'est écrit) et disparaissent à la sortie, qui rétablit les corrections d'avant.
+     */
+    private var privateBackup: Pair<LinkedHashMap<String, Pair<Long, MutableList<BlockEdit>>>, LinkedHashMap<String, EditOrigin>>? = null
+    @Synchronized fun beginPrivate() {
+        privateBackup = LinkedHashMap(images.mapValues { it.value.first to it.value.second.toMutableList() }) to LinkedHashMap(origins)
+    }
+    @Synchronized fun endPrivate() {
+        val b = privateBackup ?: return
+        privateBackup = null
+        images.clear(); images.putAll(b.first); origins.clear(); origins.putAll(b.second)
+        version++
+    }
+
     @Synchronized fun upsert(key: String, edit: BlockEdit) {
-        if (Ninja.on) return
         val next = EditApplier.upsert(images[key]?.second ?: emptyList(), edit)
         images.remove(key)
         if (next.isNotEmpty()) {
@@ -323,7 +351,6 @@ class EditStore(private val file: File, private val maxImages: Int = 400, privat
     }
 
     @Synchronized fun remove(key: String, editId: String) {
-        if (Ninja.on) return
         val cur = images[key] ?: return
         val next = cur.second.filter { it.id != editId }
         images.remove(key)
@@ -332,6 +359,7 @@ class EditStore(private val file: File, private val maxImages: Int = 400, privat
     }
 
     private fun save() {
+        if (privateBackup != null) { version++; return }
         try {
             val tmp = File(file.path + ".tmp")
             tmp.writeText(EditsCodec.serialize(images))
@@ -370,20 +398,34 @@ class GlossaryStore(private val file: File) {
     /** Ce terme est-il déjà enregistré tel quel (pour cette œuvre si [series] est donnée, sinon pour toutes) ? */
     fun has(series: String?, source: String, target: String): Boolean = snapshot.hasTerm(series, source, target)
 
-    fun add(source: String, target: String) { if (Ninja.on) return; glossary.addTerm(source, target); commit() }
-    fun remove(source: String) { if (Ninja.on) return; glossary.removeTerm(source); commit() }
-    fun addForSeries(series: String, source: String, target: String) { if (Ninja.on) return; glossary.addSeriesTerm(series, source, target); commit() }
-    fun removeForSeries(series: String, source: String) { if (Ninja.on) return; glossary.removeSeriesTerm(series, source); commit() }
+    fun add(source: String, target: String) { glossary.addTerm(source, target); commit() }
+    fun remove(source: String) { glossary.removeTerm(source); commit() }
+    fun addForSeries(series: String, source: String, target: String) { glossary.addSeriesTerm(series, source, target); commit() }
+    fun removeForSeries(series: String, source: String) { glossary.removeSeriesTerm(series, source); commit() }
 
     /** Correction manuelle d'une bulle : cette traduction sera reprise telle quelle chaque fois que ce texte apparaît. */
-    fun addCorrection(sourceBlock: String, translation: String) { if (Ninja.on) return; glossary.addCorrection(sourceBlock, translation); commit() }
+    fun addCorrection(sourceBlock: String, translation: String) { glossary.addCorrection(sourceBlock, translation); commit() }
 
     /** Oublie la traduction retenue pour ce texte : il est de nouveau traduit comme les autres. */
-    fun removeCorrection(sourceBlock: String) { if (Ninja.on) return; if (glossary.removeCorrection(sourceBlock)) commit() }
+    fun removeCorrection(sourceBlock: String) { if (glossary.removeCorrection(sourceBlock)) commit() }
+
+    /** Mode Ninja : termes et corrections ajoutés pendant le mode restent en mémoire (aucun fichier écrit) ; la sortie rétablit le glossaire d'avant. */
+    private var privateBackup: String? = null
+    fun beginPrivate() { privateBackup = glossary.serialize() }
+    fun endPrivate() {
+        val t = privateBackup ?: return
+        privateBackup = null
+        glossary = Glossary.parse(t)
+        refresh(t)
+    }
 
     private fun commit() {
         val data = glossary.serialize()
-        file.writeText(data)
+        if (privateBackup == null) file.writeText(data)
+        refresh(data)
+    }
+
+    private fun refresh(data: String) {
         snapshot = Glossary.parse(data)
         terms.clear(); terms.addAll(glossary.terms())
         seriesTerms.clear(); seriesTerms.addAll(glossary.seriesTerms())
