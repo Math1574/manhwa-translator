@@ -661,6 +661,19 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             try { if (WebViewFeature.isFeatureSupported(WebViewFeature.SAFE_BROWSING_ENABLE)) WebSettingsCompat.setSafeBrowsingEnabled(wv.settings, false) } catch (_: Throwable) {}
         }
         cookieJar()?.setAcceptThirdPartyCookies(wv, ninjaProfile == null)
+        // double appui rapide : plein écran. Détecté sur les gestes du doigt eux-mêmes et non dans la page : certains sites (liseuses à superpositions, images dans des liens) l'auraient masqué
+        val slop = android.view.ViewConfiguration.get(c).scaledTouchSlop
+        var downX = 0f; var downY = 0f
+        val doubleTaps = android.view.GestureDetector(c, object : android.view.GestureDetector.SimpleOnGestureListener() {
+            override fun onDoubleTapEvent(e: android.view.MotionEvent): Boolean {
+                when (e.actionMasked) {
+                    android.view.MotionEvent.ACTION_DOWN -> { downX = e.x; downY = e.y }
+                    android.view.MotionEvent.ACTION_UP -> if (Math.abs(e.x - downX) <= slop && Math.abs(e.y - downY) <= slop) main.post { onPageDoubleTap() }
+                }
+                return false
+            }
+        })
+        wv.setOnTouchListener { _, ev -> try { doubleTaps.onTouchEvent(ev) } catch (_: Throwable) {}; false }
         wv.addJavascriptInterface(Bridge(), "AndroidMT")
         // script de garde (pop-ups, superpositions, masquage) : exécuté avant les scripts du site si la WebView le permet, sinon injecté au début de chaque page
         guardAtDocumentStart = try {
