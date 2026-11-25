@@ -110,7 +110,7 @@ class AppGraph(ctx: Context) {
     val coverFetcher = CoverFetcher(ctx, covers, { library.library }, { controller.translating }, { settingsStore.settings.coversOnline }, { journal.add(it) })
     /** Synopsis des œuvres traduits en français, une fois par œuvre, en tâche de fond quand aucun chapitre ne se traduit (voir [SynopsisFrench]). */
     val synopsisFrench = SynopsisFrench(covers, { settingsStore.settings.synopsisFr }, { controller.translating || controller.thermalHot }, { text -> translateSynopsis(text) }, { journal.add(it) })
-    val journal = TranslationJournal(File(ctx.filesDir, "journal.jsonl"))
+    val journal = TranslationJournal(File(ctx.filesDir, "journal.jsonl")).also { j -> j.limitBytes = { if (settingsStore.settings.collectOnly) 40L * 1024 * 1024 else 8L * 1024 * 1024 } }
     /** Corrections manuelles des textes (zone, texte, position, taille, police), par image. */
     val edits = EditStore(File(ctx.filesDir, "edits.txt"), originsFile = File(ctx.filesDir, "edit_origins.txt"))
     /** Textes (dans une œuvre ou partout) et images (bandeaux de début ou de fin de chapitre) que l'utilisateur ne veut plus voir traduits. */
