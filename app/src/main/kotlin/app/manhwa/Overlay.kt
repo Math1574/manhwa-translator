@@ -266,11 +266,11 @@ object PageScript {
   window.addEventListener('resize', function(){ for (var id in S.entries){ S.entries[id].key = ''; place(S.entries[id]); } });
   // fin de chapitre : prévient l'application quand on approche du bas de la page
   var nbState = false, nbTick = false;
-  function nbCheck(){ nbTick = false; var nb = (window.innerHeight + window.scrollY) >= (document.documentElement.scrollHeight - 900); if (nb !== nbState) { nbState = nb; try { AndroidMT.onBottom(nb); } catch(e) {} } }
+  function nbCheck(){ nbTick = false; if (S.sweeping) return; var nb = (window.innerHeight + window.scrollY) >= (document.documentElement.scrollHeight - 900); if (nb !== nbState) { nbState = nb; try { AndroidMT.onBottom(nb); } catch(e) {} } }
   window.addEventListener('scroll', function(){ if (!nbTick) { nbTick = true; setTimeout(nbCheck, 300); } }, {passive:true});
   // position de lecture : l'application traduit d'abord ce que l'on regarde à cet instant
   var vpTick = false;
-  function vpReport(){ vpTick = false; try { AndroidMT.onViewport(window.scrollY, window.innerHeight); } catch(e) {} }
+  function vpReport(){ vpTick = false; if (S.sweeping) return; try { AndroidMT.onViewport(window.scrollY, window.innerHeight); } catch(e) {} }
   window.addEventListener('scroll', function(){ if (!vpTick) { vpTick = true; setTimeout(vpReport, 250); } }, {passive:true});
   setTimeout(nbCheck, 800);
 
@@ -334,6 +334,7 @@ object PageScript {
   var sc = {y: window.scrollY, acc: 0, dir: 0, t: null, sent: -1};
   function onMove(){
     var y = window.scrollY, dy = y - sc.y; sc.y = y;
+    if (S.sweeping) return;      // balayage automatique de la page (voir wake) : ni sens de défilement ni avancement de lecture
     if (dy !== 0) {
       if ((dy > 0) !== (sc.acc > 0)) sc.acc = 0;
       sc.acc += dy;
@@ -557,6 +558,51 @@ object PageScript {
     return JSON.stringify(out);
   }
 
+  // chargement différé : beaucoup de sites ne chargent une image que lorsqu'on s'en approche, et seules les images chargées sont traduites.
+  // 1) tout de suite, sans rien changer à l'écran : les images à chargement différé du navigateur (loading="lazy") sont chargées, et l'adresse que le site garde en réserve (data-src…)
+  //    est donnée aux images encore vides ; 2) si des images de la colonne du chapitre restent vides après quelques secondes et que l'on n'a pas touché l'écran, la page est parcourue
+  //    d'un trait puis la position de lecture est rétablie (ni sens de défilement ni avancement de lecture ne sont signalés pendant ce parcours)
+  var WK = {epoch:0, touched:false};
+  document.addEventListener('touchstart', function(){ WK.touched = true; }, {passive:true, capture:true});
+  function sweep(){
+    if (S.sweeping) return;
+    S.sweeping = true;
+    var y0 = window.scrollY, n = 0, t0 = WK.epoch;
+    function jump(y){ try { window.scrollTo({top:y, left:0, behavior:'instant'}); } catch(e) { window.scrollTo(0, y); } }
+    function finish(restore){
+      if (restore) jump(y0);
+      S.sweeping = false; sc.y = window.scrollY; nbTick = false; vpTick = false;
+      setTimeout(nbCheck, 300); setTimeout(vpReport, 300);
+    }
+    (function tick(){
+      if (WK.touched || t0 !== WK.epoch) { finish(false); return; }
+      var h = document.documentElement.scrollHeight, y = window.scrollY, step = Math.max(300, Math.round(window.innerHeight * 0.8));
+      if (n++ > 120 || y + window.innerHeight >= h - 4) { finish(true); return; }
+      jump(Math.min(h, y + step));
+      setTimeout(tick, 160);
+    })();
+  }
+  function wake(strict){
+    WK.epoch++; WK.touched = false;
+    var l = document.images, promoted = 0, ATTRS = ['data-src','data-lazy-src','data-original','data-lazy','data-url'], IMG = /\.(jpe?g|png|webp|avif|gif)(\?|#|$)/i;
+    for (var i=0;i<l.length;i++){
+      var im = l[i];
+      if (im.complete && im.naturalWidth > 0) continue;
+      try { if (im.loading === 'lazy') { im.loading = 'eager'; promoted++; } } catch(e) {}
+      var cur = im.getAttribute('src') || '';
+      if (cur && cur.indexOf('data:') !== 0) continue;
+      for (var k=0;k<ATTRS.length;k++){
+        var v = im.getAttribute(ATTRS[k]);
+        if (v && (IMG.test(v) || /^https?:\/\//.test(v))) { im.setAttribute('src', v); var ss = im.getAttribute('data-srcset'); if (ss && !im.getAttribute('srcset')) im.setAttribute('srcset', ss); promoted++; break; }
+      }
+    }
+    if (strict) {
+      var ep = WK.epoch;
+      [2500, 7000].forEach(function(ms){ setTimeout(function(){ if (ep === WK.epoch && !WK.touched && !S.sweeping && chainPending(true) > 0) sweep(); }, ms); });
+    }
+    return promoted;
+  }
+
   // reprise de lecture : on attend que la hauteur de la page se stabilise (images qui se chargent), puis on se place ; un toucher de l'utilisateur annule
   function resumeTo(pct){
     var tries = 0, lastH = -1, stable = 0, stopped = false;
@@ -570,7 +616,7 @@ object PageScript {
       setTimeout(tick, 400);
     })();
   }
-  window.__mt = {probe:probe, collect:collect, collectTail:collectTail, waiting:waiting, chainPending:chainPending, apply:apply, setVisible:setVisible, clear:clear, getB64:getB64, resumeTo:resumeTo, forget:forget, dropPatch:dropPatch, setErase:setErase, testErase:testErase, setDisc:setDisc, setDiscs:setDiscs, testDisc:testDisc};
+  window.__mt = {wake:wake, probe:probe, collect:collect, collectTail:collectTail, waiting:waiting, chainPending:chainPending, apply:apply, setVisible:setVisible, clear:clear, getB64:getB64, resumeTo:resumeTo, forget:forget, dropPatch:dropPatch, setErase:setErase, testErase:testErase, setDisc:setDisc, setDiscs:setDiscs, testDisc:testDisc};
 })();
 """
 }
