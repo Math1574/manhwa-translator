@@ -23,17 +23,17 @@ Solution: Please update the Gradle version to at least Gradle 8.14.4.
 > Task :app:mapDebugSourceSetPaths
 > Task :app:generateDebugResources
 > Task :app:packageDebugResources
-> Task :app:parseDebugLocalResources
 > Task :app:createDebugCompatibleScreenManifests
-> Task :app:extractDeepLinksDebug
 > Task :app:mergeDebugResources
+> Task :app:extractDeepLinksDebug
+> Task :app:parseDebugLocalResources
 > Task :app:processDebugMainManifest
 > Task :app:processDebugManifest
 > Task :app:javaPreCompileDebug
 > Task :app:mergeDebugShaders
-> Task :app:processDebugManifestForPackage
 > Task :app:compileDebugShaders NO-SOURCE
 > Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:processDebugManifestForPackage
 > Task :app:processDebugResources
 > Task :app:mergeDebugAssets
 > Task :app:desugarDebugFileDependencies
@@ -68,11 +68,11 @@ Unable to strip the following libraries, packaging them as they are: libandroidx
 > Task :app:compileDebugKotlin
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/BlockReading.kt:51:94 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/ComicDetector.kt:43:94 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
-w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:1717:92 Unnecessary safe call on a non-null receiver of type 'String'.
-w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:1838:88 Unnecessary non-null assertion (!!) on a non-null receiver of type 'DebugInfo'.
-w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:2155:109 Unnecessary non-null assertion (!!) on a non-null receiver of type 'TranslationController.EditSession'.
-w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:2322:60 'static fun newInstance(p0: ByteArray, p1: Int, p2: Int, p3: Boolean): BitmapRegionDecoder' is deprecated. Deprecated in Java.
-w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:2322:101 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:1781:92 Unnecessary safe call on a non-null receiver of type 'String'.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:1902:88 Unnecessary non-null assertion (!!) on a non-null receiver of type 'DebugInfo'.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:2219:109 Unnecessary non-null assertion (!!) on a non-null receiver of type 'TranslationController.EditSession'.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:2386:60 'static fun newInstance(p0: ByteArray, p1: Int, p2: Int, p3: Boolean): BitmapRegionDecoder' is deprecated. Deprecated in Java.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:2386:101 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/CorrectionsScreen.kt:102:87 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Engines.kt:59:13 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/LibraryScreens.kt:377:39 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
@@ -95,9 +95,9 @@ w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kot
 > Task :app:packageDebug
 > Task :app:createDebugApkListingFileRedirect
 > Task :app:assembleDebug
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_5-1795632752923.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_5-1795636426046.json
 
-BUILD SUCCESSFUL in 1m 14s
+BUILD SUCCESSFUL in 1m 27s
 39 actionable tasks: 39 executed
 To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.10.2/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
 Daemon will be stopped at the end of the build 
@@ -162,7 +162,7 @@ Solution: Please update the Gradle version to at least Gradle 8.14.4.
 > Task :app:packageDebug
 > Task :app:createDebugApkListingFileRedirect UP-TO-DATE
 > Task :app:assembleDebug
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_6-1795632827994.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_6-1795636512658.json
 
 BUILD SUCCESSFUL in 9s
 39 actionable tasks: 3 executed, 36 up-to-date
