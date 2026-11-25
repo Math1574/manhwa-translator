@@ -25,19 +25,22 @@ class IgnoreStore(private val file: File, private val thumbDir: File) {
 
     /** Vrai si la règle est nouvelle. */
     @Synchronized fun addText(scope: String, text: String): Boolean {
+        if (Ninja.on) return false
         val next = rules.withText(scope, text)
         if (next === rules) return false
         commit(next); return true
     }
 
-    @Synchronized fun removeText(scope: String, text: String) { commit(rules.withoutText(scope, text)) }
+    @Synchronized fun removeText(scope: String, text: String) { if (Ninja.on) return; commit(rules.withoutText(scope, text)) }
 
     @Synchronized fun addImage(img: IgnoredImage, thumb: ByteArray?) {
+        if (Ninja.on) return
         if (thumb != null) try { thumbDir.mkdirs(); File(thumbDir, img.id + ".jpg").writeBytes(thumb) } catch (_: Throwable) {}
         commit(rules.withImage(img))
     }
 
     @Synchronized fun removeImage(id: String) {
+        if (Ninja.on) return
         try { File(thumbDir, "$id.jpg").delete() } catch (_: Throwable) {}
         commit(rules.withoutImage(id))
     }

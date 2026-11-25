@@ -23,7 +23,7 @@ class FaviconStore(private val dir: File) {
 
     /** Range l'icône d'un site, réduite à 96 px au plus ; une icône déjà rangée n'est remplacée que par une plus grande. Fil principal. */
     fun save(key: String, icon: Bitmap?) {
-        if (icon == null || icon.width < 16 || icon.height < 16) return
+        if (Ninja.on || icon == null || icon.width < 16 || icon.height < 16) return
         try {
             val f = file(key)
             val size = minOf(96, maxOf(icon.width, icon.height))
