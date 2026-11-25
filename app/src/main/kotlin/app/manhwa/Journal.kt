@@ -14,11 +14,13 @@ import java.util.Locale
  * Reste sur le téléphone ; l'utilisateur peut l'exporter pour signaler des erreurs. Taille limitée (les plus anciennes entrées sont supprimées).
  */
 class TranslationJournal(private val file: File) {
+    /** Taille au-delà de laquelle la moitié la plus ancienne est supprimée (agrandie pendant le mode collecte). */
+    @Volatile var limitBytes: () -> Long = { MAX_BYTES }
     @Synchronized fun add(entry: JSONObject) {
         if (Ninja.on) return      // mode Ninja : rien n'est noté
         try {
             file.appendText(entry.toString() + "\n")
-            if (file.length() > MAX_BYTES) trim()
+            if (file.length() > limitBytes()) trim()
         } catch (_: Throwable) {}
     }
 

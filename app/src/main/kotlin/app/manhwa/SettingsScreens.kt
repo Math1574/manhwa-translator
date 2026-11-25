@@ -747,6 +747,12 @@ private fun AdvancedSettings(graph: AppGraph, focus: String?) {
             val kb = remember(journalTick) { graph.journal.sizeBytes() / 1024 }
             SwitchRow("Diagnostic de la détection", "Encadre le texte repéré (vert : utilisé, rouge : rejeté, avec la confiance). Désactive le cache.", s.diagnostic) { v -> store.update { it.copy(diagnostic = v) } }
             HorizontalDivider()
+            SwitchRow(
+                "Mode collecte (provisoire)",
+                "Traduit les chapitres sans rien afficher ni effacer, uniquement pour remplir le journal : ouvrez un chapitre, la traduction démarre seule, une jauge montre l'avancement et le chapitre suivant s'ouvre tout seul jusqu'à « Arrêter » ou la fin de la série. Le cache est ignoré (chaque page est retraduite et notée) et le journal peut grossir jusqu'à 40 Mo. Exportez-le ensuite avec le bouton ci-dessous.",
+                s.collectOnly,
+            ) { v -> store.update { it.copy(collectOnly = v) }; graph.controller.resetCollect() }
+            HorizontalDivider()
             Text("Journal de traduction", style = MaterialTheme.typography.titleMedium)
             Hint("$entries entrée(s), $kb Ko : texte lu, traduction et problèmes repérés, page par page. Il reste sur le téléphone ; exportez-le pour signaler des erreurs.")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

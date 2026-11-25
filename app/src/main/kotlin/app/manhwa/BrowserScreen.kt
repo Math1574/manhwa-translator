@@ -143,9 +143,10 @@ fun BrowserScreen(graph: AppGraph, onLibrary: () -> Unit = {}) {
                     modifier = Modifier.fillMaxWidth().height(3.dp).align(Alignment.TopCenter),
                 )
             }
+            if (!c.fullscreen && c.collectMode && (c.collectActive || c.collectNote != null)) CollectBar(c, Modifier.align(Alignment.TopCenter))
             if (!c.fullscreen && c.currentUrl.isEmpty()) {
                 // accueil : pas de bouton de traduction, aucune page à traduire
-            } else if (!c.fullscreen) {
+            } else if (!c.fullscreen && !c.collectMode) {
                 // Bouton Original | Traduit : rond, déplaçable au doigt, rangé au bord de l'écran pour ne pas gêner les boutons des sites.
                 TranslateOrb(
                     translateOn = c.translateOn, active = c.active, running = running, progress = if (c.total > 0) (c.done + c.failed).toFloat() / c.total else 0f,
@@ -440,5 +441,29 @@ private fun NinjaHome() {
         )
         Spacer(Modifier.height(10.dp))
         Text("Saisissez une adresse en haut. Pour quitter : menu ⋮ → Quitter le mode Ninja.", textAlign = androidx.compose.ui.text.style.TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+/** Mode collecte : jauge du chapitre en cours, chapitres déjà faits, et bouton pour arrêter l'enchaînement. */
+@Composable
+private fun CollectBar(c: TranslationController, modifier: Modifier = Modifier) {
+    Column(modifier.fillMaxWidth().background(Color(0xE6101018)).padding(horizontal = 14.dp, vertical = 10.dp)) {
+        val note = c.collectNote
+        if (!c.collectActive && note != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(note, Modifier.weight(1f), color = Color.White, style = MaterialTheme.typography.bodyMedium)
+            }
+        } else {
+            val shown = c.done + c.failed
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Collecte : page $shown / ${c.total.coerceAtLeast(shown)} · ${c.collectChapters} chapitre(s) terminé(s)",
+                    Modifier.weight(1f), color = Color.White, style = MaterialTheme.typography.bodyMedium,
+                )
+                TextButton(onClick = { c.stopCollect("Collecte arrêtée : ${c.collectChapters} chapitre(s), ${c.collectPages} page(s).") }) { Text("Arrêter") }
+            }
+            Spacer(Modifier.height(6.dp))
+            LinearProgressIndicator(progress = { if (c.total > 0) shown.toFloat() / c.total else 0f }, modifier = Modifier.fillMaxWidth().height(6.dp))
+        }
     }
 }

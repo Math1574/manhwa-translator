@@ -48,6 +48,7 @@ import app.manhwa.core.RequestTypes
 import app.manhwa.core.ResType
 import app.manhwa.core.Sites
 import app.manhwa.core.BrowsingLibrary
+import app.manhwa.core.ChapterNav
 import app.manhwa.core.HomeView
 import app.manhwa.core.CacheKey
 import app.manhwa.core.DebugInfo
@@ -1409,6 +1410,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         main.removeCallbacks(latchCheck); chapterDone = false; lateImages = 0; lateDismissed = 0
         if (countersUrl.isEmpty()) countersUrl = currentUrl
         active = true
+        if (graph.settingsStore.settings.collectOnly) { collectActive = true; collectNote = null; main.removeCallbacks(collectRun); main.postDelayed(collectRun, COLLECT_TICK_MS) }
         warmUp()
         wv.evaluateJavascript(PageScript.INJECT, null)
         // page de chapitre : seules les images de la colonne du chapitre sont données (pas les commentaires, vignettes et bandeaux du site sous le dernier chapitre) ;
@@ -1419,6 +1421,68 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         wv.evaluateJavascript("window.__mt.collect($force, $strict, $all)") { r -> onCandidates(r) }
     }
     private var wokenEpoch = -1
+
+    // ---------- mode collecte (provisoire) ----------
+
+    /** Mode collecte : les chapitres se traduisent sans rien afficher ni effacer, l'un après l'autre, pour remplir le journal de traduction. */
+    val collectMode: Boolean get() = graph.settingsStore.settings.collectOnly
+    /** Une collecte est en cours (jauge affichée) ; chapitres terminés et pages traduites depuis son début ; message de fin. */
+    var collectActive by mutableStateOf(false)
+        private set
+    var collectChapters by mutableIntStateOf(0)
+        private set
+    var collectPages by mutableIntStateOf(0)
+        private set
+    var collectNote by mutableStateOf<String?>(null)
+        private set
+    private var collectCalm = 0
+    private var collectWait = 0
+    private val collectRun = object : Runnable { override fun run() { collectTick(); if (collectActive && collectMode) main.postDelayed(this, COLLECT_TICK_MS) } }
+
+    /** Arrête l'enchaînement des chapitres (et la traduction en cours) ; [note] s'affiche à la place de la jauge. */
+    fun stopCollect(note: String? = null) {
+        main.removeCallbacks(collectRun)
+        collectActive = false; collectNote = note; collectCalm = 0; collectWait = 0
+        stopWork(); active = false
+    }
+
+    /** Remet les compteurs de la collecte à zéro (réglage coupé puis rallumé). */
+    fun resetCollect() { stopCollect(null); collectChapters = 0; collectPages = 0 }
+
+    /**
+     * Toutes les 2 s : le chapitre est fini quand toutes ses pages sont traitées, que plus rien n'est en attente et qu'aucune image de la colonne n'est encore vide, deux contrôles de suite.
+     * Il est alors noté au journal et le chapitre suivant s'ouvre. Une page qui n'avance plus (images jamais chargées, aucune image) est abandonnée au bout d'une minute.
+     */
+    private fun collectTick() {
+        val wv = webView
+        if (wv == null || !collectMode || !collectActive) return
+        if (loading || currentUrl.isEmpty()) { collectCalm = 0; return }
+        val busy = synchronized(backlog) { backlog.isNotEmpty() } || queue.snapshot().let { it.running > 0 || it.pending > 0 }
+        val allDone = active && total > 0 && done + failed >= total
+        if (busy || (total > 0 && !allDone)) { collectCalm = 0; collectWait = 0; return }
+        val epoch = pageEpoch
+        val strict = BrowsingLibrary.looksLikeChapter(currentUrl)
+        wv.evaluateJavascript("window.__mt?window.__mt.chainPending($strict):-1") { r ->
+            if (epoch != pageEpoch || !collectMode || !collectActive) return@evaluateJavascript
+            val pending = r?.trim()?.toIntOrNull() ?: -1
+            if (allDone && pending == 0) collectCalm++ else { collectCalm = 0; collectWait++ }
+            if (collectCalm >= 2 || collectWait >= 30) collectChapterDone()
+        }
+    }
+
+    private fun collectChapterDone() {
+        collectCalm = 0; collectWait = 0
+        val url = currentUrl
+        collectChapters++; collectPages += done
+        graph.journal.add(JSONObject().put("t", System.currentTimeMillis()).put("type", "collect").put("url", url).put("pages", done).put("failed", failed).put("noText", noText).put("total", total))
+        if (total > 0 && failed * 2 > total) { stopCollect("Collecte arrêtée : trop d'erreurs sur ce chapitre ($failed sur $total pages). Voir le journal."); return }
+        val next = ChapterNav.next(url)
+        if (next == null) { stopCollect("Collecte terminée : $collectChapters chapitre(s), $collectPages page(s)."); return }
+        stopWork(); active = false
+        load(next)
+        // la page suivante n'est pas un chapitre (le site s'arrête là) : aucune traduction ne démarre
+        main.postDelayed({ if (collectActive && collectMode && !active && !loading && currentUrl == next) stopCollect("Collecte terminée : le site n'a plus de chapitre suivant ($collectChapters chapitre(s), $collectPages page(s)).") }, 45_000L)
+    }
 
     /** Bouton discret « Traduire » du bas de chapitre : traduit aussi les images qui sont apparues sous le chapitre. */
     fun translateLate() { start(false, all = true) }
@@ -1523,7 +1587,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     fun stop() { stopWork(); active = false }
 
     /** Traduire pendant la lecture (bouton Original | Traduit) : réglage mémorisé entre les lancements. */
-    val translateOn: Boolean get() = graph.settingsStore.settings.readTranslate
+    val translateOn: Boolean get() = graph.settingsStore.settings.readTranslate || graph.settingsStore.settings.collectOnly
 
     private fun showOverlays(visible: Boolean) {
         overlaysVisible = visible
@@ -1767,7 +1831,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val pipeline = PagePipeline(
             graph.cache, timedOcr, timedTr, engineId,
             glossary = { graph.glossary.current(pageSeries) },
-            useCache = !s.diagnostic && (!testing || testCache), // en diagnostic on veut voir la détection réelle, pas un résultat en cache
+            useCache = !s.diagnostic && !s.collectOnly && (!testing || testCache), // en diagnostic on veut voir la détection réelle, pas un résultat en cache
             debugSink = { debug = it },
             // l'anglais est lu par OCR avec beaucoup de bruit : on écarte filigranes et débris, puis on répare mots collés et chiffres parasites
             // un texte libre sans zone du détecteur est écarté s'il ne contient aucun mot reconnu, même en gros lettrage (décor lu comme du texte : « IC », « RIC », « PY »)
@@ -1819,7 +1883,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         BatchContext.lastDetail.get()?.let { batchDetail[c.id] = it }
         runStage[c.id] = "affichage"; finishing.add(c.id)
         if (out is PageOutcome.Done && !out.fromCache) journalPage(c, pageUrl, engineId, s.target.code, out, System.currentTimeMillis() - t0)
-        if (!cancelled() && !staleFix()) {
+        if (!cancelled() && !staleFix() && !s.collectOnly) {      // mode collecte : rien n'est dessiné ni effacé
             val tRender = SystemClock.uptimeMillis()
             val ai0 = graph.lama.runs.get(); val aiMs0 = graph.lama.busyMs.get(); val aiFail0 = graph.lama.fails.get()
             if (testing) android.util.Log.i("MT", "ordre : ${c.id} arrive à l'affichage (priorité ${c.priorityAt(viewportY, viewportH)})")
@@ -2702,5 +2766,6 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         const val LATCH_SETTLE_MS = 2000L
         /** Suivi de la traduction par chapitre : au plus un enregistrement dans la bibliothèque toutes les 2,5 s. */
         const val TRACK_EVERY_MS = 2500L
+        const val COLLECT_TICK_MS = 2000L
     }
 }
