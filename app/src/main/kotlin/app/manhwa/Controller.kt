@@ -1413,8 +1413,11 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         // page de chapitre : seules les images de la colonne du chapitre sont données (pas les commentaires, vignettes et bandeaux du site sous le dernier chapitre) ;
         // page où la traduction a été demandée à la main : toutes les images assez grandes
         val strict = BrowsingLibrary.looksLikeChapter(currentUrl)
+        // chargement différé des sites : une seule fois par page (les images encore vides sont chargées sans défiler, voir PageScript wake)
+        if (wokenEpoch != pageEpoch) { wokenEpoch = pageEpoch; wv.evaluateJavascript("window.__mt.wake($strict)", null) }
         wv.evaluateJavascript("window.__mt.collect($force, $strict, $all)") { r -> onCandidates(r) }
     }
+    private var wokenEpoch = -1
 
     /** Bouton discret « Traduire » du bas de chapitre : traduit aussi les images qui sont apparues sous le chapitre. */
     fun translateLate() { start(false, all = true) }
