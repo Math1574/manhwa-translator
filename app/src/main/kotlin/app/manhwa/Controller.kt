@@ -365,7 +365,6 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     fun adCountOnPage(): Int = graph.adFilters.log.pageCount.get()
     /** Active ou désactive le bloqueur pour le site affiché (puis recharge la page). */
     fun toggleAdsHere() {
-        if (Ninja.on) return      // le réglage par site se garderait dans les préférences
         val site = currentSite() ?: return
         graph.settingsStore.update { st ->
             val set = st.adAllowSiteSet.toMutableSet()
@@ -386,7 +385,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         dismissNavBlocked()
         if (nb.popup || nb.url.isEmpty()) return
         val site = siteOf(nb.url) ?: return
-        if (!Ninja.on) graph.settingsStore.update { it.copy(adAllowTargets = (it.adAllowTargetSet + site).joinToString(",")) }
+        graph.settingsStore.update { it.copy(adAllowTargets = (it.adAllowTargetSet + site).joinToString(",")) }
         webView?.loadUrl(nb.url)
     }
 
@@ -564,6 +563,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         exitFullscreen()
         dropWebView()
         graph.cache.beginIsolation()
+        graph.edits.beginPrivate(); graph.glossary.beginPrivate(); graph.ignored.beginPrivate(); graph.settingsStore.beginPrivate()
         graph.adFilters.log.silent = true
         ninjaBack = back
         ninjaIsolated = false
@@ -594,6 +594,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         ninjaProfile = null
         Ninja.on = false; ninja = false
         graph.cache.endIsolation()
+        graph.edits.endPrivate(); graph.glossary.endPrivate(); graph.ignored.endPrivate(); graph.settingsStore.endPrivate()
         graph.adFilters.log.silent = false
         exitFullscreen()
         currentUrl = ""; pageError = null; canGoBack = false; canGoForward = false; loading = false; pageProgress = 0
