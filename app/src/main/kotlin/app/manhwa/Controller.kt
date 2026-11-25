@@ -20,6 +20,8 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.webkit.ProfileStore
+import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import androidx.compose.runtime.getValue
@@ -144,6 +146,15 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     /** Change quand la page affichée est remplacée par une neuve (son processus d'affichage a disparu) : l'interface reconstruit alors la vue. */
     var webViewGeneration by mutableIntStateOf(0)
         private set
+    /** Mode Ninja actif (navigation privée : voir [Ninja]). */
+    var ninja by mutableStateOf(false)
+        private set
+    /** Profil isolé du navigateur pendant le mode Ninja ; page à rouvrir à la sortie (gardée en mémoire seulement). */
+    private var ninjaProfile: String? = null
+    private var ninjaBack: String? = null
+    /** Le navigateur du mode Ninja est bien dans son profil isolé (sinon on n'efface rien du profil habituel en sortant). */
+    private var ninjaIsolated = false
+    private var leftoversPurged = false
     /** Nombre de fois où le processus d'affichage de la page a disparu depuis le lancement (tests automatiques). */
     @Volatile var rendererLost = 0
         private set
@@ -354,6 +365,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     fun adCountOnPage(): Int = graph.adFilters.log.pageCount.get()
     /** Active ou désactive le bloqueur pour le site affiché (puis recharge la page). */
     fun toggleAdsHere() {
+        if (Ninja.on) return      // le réglage par site se garderait dans les préférences
         val site = currentSite() ?: return
         graph.settingsStore.update { st ->
             val set = st.adAllowSiteSet.toMutableSet()
@@ -374,7 +386,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         dismissNavBlocked()
         if (nb.popup || nb.url.isEmpty()) return
         val site = siteOf(nb.url) ?: return
-        graph.settingsStore.update { it.copy(adAllowTargets = (it.adAllowTargetSet + site).joinToString(",")) }
+        if (!Ninja.on) graph.settingsStore.update { it.copy(adAllowTargets = (it.adAllowTargetSet + site).joinToString(",")) }
         webView?.loadUrl(nb.url)
     }
 
@@ -516,6 +528,80 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         if (barsHidden != hide) { barsHidden = hide; lastBarChange = android.os.SystemClock.uptimeMillis() }
     }
 
+    /** Deux appuis rapides sur la page : entre dans le plein écran ou en sort (sauf pendant la gomme ou les textes écartés, où chaque appui a son rôle). */
+    private fun onPageDoubleTap() {
+        if (currentUrl.isEmpty() || eraser || discardMode) return
+        if (fullscreen) exitFullscreen() else enterFullscreen()
+    }
+
+    // ---------- mode Ninja ----------
+
+    /** Cookies du navigateur en cours : ceux du profil isolé en mode Ninja (null si indisponibles : aucun cookie n'est alors lu), sinon les habituels. */
+    private fun cookieJar(): CookieManager? =
+        ninjaProfile?.let { name -> try { ProfileStore.getInstance().getProfile(name)?.cookieManager } catch (_: Throwable) { null } } ?: if (ninjaProfile == null) CookieManager.getInstance() else null
+
+    private fun dropWebView() {
+        val wv = webView ?: return
+        webView = null
+        try { wv.stopLoading() } catch (_: Throwable) {}
+        try { (wv.parent as? ViewGroup)?.removeView(wv) } catch (_: Throwable) {}
+        try { wv.destroy() } catch (_: Throwable) {}
+    }
+
+    /**
+     * Entre dans le mode Ninja : le chapitre en cours est noté tel qu'il est, puis le navigateur est remplacé par un navigateur neuf, isolé. À partir de là, plus rien n'est écrit
+     * (voir [Ninja]) ; le cache des traductions vit en mémoire seulement.
+     */
+    fun enterNinja() {
+        if (ninja) return
+        if (!Ninja.supported()) {
+            android.widget.Toast.makeText(ctx, "Le mode Ninja demande un navigateur du téléphone plus récent (mettez à jour Android System WebView ou Chrome).", android.widget.Toast.LENGTH_LONG).show()
+            return
+        }
+        val back = currentUrl.takeIf { it.startsWith("http") }
+        resetSession()
+        graph.library.flush()
+        exitFullscreen()
+        dropWebView()
+        graph.cache.beginIsolation()
+        graph.adFilters.log.silent = true
+        ninjaBack = back
+        ninjaIsolated = false
+        ninjaProfile = Ninja.newProfileName()
+        Ninja.on = true; ninja = true
+        currentUrl = ""; pageError = null; canGoBack = false; canGoForward = false; loading = false; pageProgress = 0
+        webViewGeneration++
+        android.widget.Toast.makeText(ctx, "Mode Ninja : rien n'est enregistré. Tout est effacé à la sortie.", android.widget.Toast.LENGTH_LONG).show()
+    }
+
+    /** Quitte le mode Ninja : cookies, cache, stockage des sites et historique du navigateur isolé sont effacés, le profil détruit ; la page quittée est rouverte. */
+    fun exitNinja() {
+        if (!ninja) return
+        resetSession()
+        val name = ninjaProfile
+        if (ninjaIsolated) {
+            try { webView?.clearCache(true); webView?.clearHistory(); webView?.clearFormData() } catch (_: Throwable) {}
+            try {
+                name?.let { ProfileStore.getInstance().getProfile(it) }?.let { p ->
+                    p.cookieManager.removeAllCookies(null); p.cookieManager.flush(); p.webStorage.deleteAllData()
+                }
+            } catch (_: Throwable) {}
+        }
+        ninjaIsolated = false
+        dropWebView()
+        // refusé tant que le navigateur n'a pas relâché le profil : il est alors supprimé au prochain lancement (Ninja.purgeLeftovers)
+        try { name?.let { ProfileStore.getInstance().deleteProfile(it) } } catch (_: Throwable) {}
+        ninjaProfile = null
+        Ninja.on = false; ninja = false
+        graph.cache.endIsolation()
+        graph.adFilters.log.silent = false
+        exitFullscreen()
+        currentUrl = ""; pageError = null; canGoBack = false; canGoForward = false; loading = false; pageProgress = 0
+        val back = ninjaBack; ninjaBack = null
+        pendingOpen = back?.let { it to 0 }
+        webViewGeneration++
+    }
+
     /** Appui simple sur la page : en plein écran il ouvre ou ferme le menu de lecture, sinon il montre ou masque la barre d'adresse. */
     private fun onPageTap() {
         if (fullscreen) showReaderBar(!readerBar) else if (graph.settingsStore.settings.hideBarsWhileReading) changeBars(!barsHidden)
@@ -545,6 +631,17 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         // sert uniquement à relire les images que la page a chargées (prise locale réservée à cette application) ; voir CdpClient
         WebView.setWebContentsDebuggingEnabled(true)
         val wv = WebView(c)
+        // un profil Ninja laissé par une session interrompue est supprimé une fois par lancement
+        if (!leftoversPurged && ninjaProfile == null) { leftoversPurged = true; Ninja.purgeLeftovers() }
+        // mode Ninja : navigateur isolé (cookies, cache, stockage des sites, historique à part) ; à faire avant tout autre appel à la vue. Impossible : le mode est quitté, on ne navigue jamais dans le profil habituel
+        ninjaProfile?.let { name ->
+            try { WebViewCompat.setProfile(wv, name); ninjaIsolated = true } catch (_: Throwable) {
+                main.post {
+                    android.widget.Toast.makeText(ctx, "Le mode Ninja n'a pas pu isoler le navigateur : il est quitté.", android.widget.Toast.LENGTH_LONG).show()
+                    exitNinja()
+                }
+            }
+        }
         userAgent = wv.settings.userAgentString
         wv.settings.apply {
             javaScriptEnabled = true
@@ -558,7 +655,12 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             displayZoomControls = false
             mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
         }
-        CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
+        if (ninjaProfile != null) {
+            // rien ne part vers Google : ni vérification des adresses (navigation sécurisée), ni position
+            wv.settings.setGeolocationEnabled(false)
+            try { if (WebViewFeature.isFeatureSupported(WebViewFeature.SAFE_BROWSING_ENABLE)) WebSettingsCompat.setSafeBrowsingEnabled(wv.settings, false) } catch (_: Throwable) {}
+        }
+        cookieJar()?.setAcceptThirdPartyCookies(wv, ninjaProfile == null)
         wv.addJavascriptInterface(Bridge(), "AndroidMT")
         // script de garde (pop-ups, superpositions, masquage) : exécuté avant les scripts du site si la WebView le permet, sinon injecté au début de chaque page
         guardAtDocumentStart = try {
@@ -636,7 +738,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                     if (resumeTarget > 0 && BrowsingLibrary.normalize(url) == resumeUrl) {
                         view.evaluateJavascript("window.__mt&&window.__mt.resumeTo($resumeTarget)", null); resumeTarget = 0; resumeOffer = 0
                     } else {
-                        val p = graph.library.library.progressOf(url)
+                        val p = if (ninja) null else graph.library.library.progressOf(url)      // mode Ninja : l'historique habituel n'est pas consulté
                         resumeOffer = if (p != null && !p.done && p.percent in 5..93) p.percent else 0
                     }
                 }
@@ -672,6 +774,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
 
             /** Icône du site reçue avec la page : gardée pour la tuile de l'accueil. */
             override fun onReceivedIcon(view: WebView, icon: Bitmap?) {
+                if (ninja) return
                 try { HomeView.siteKey(view.url ?: return)?.let { graph.favicons.save(it, icon) } } catch (_: Throwable) {}
             }
 
@@ -1260,8 +1363,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
     var pinOnGo by mutableStateOf(false)
     fun requestAddress(pin: Boolean) { pinOnGo = pin; addressTick++ }
     /** Épingle à l'accueil le site d'une adresse (par défaut celui de la page ouverte) ; retire de l'accueil le site de la clé [key]. */
-    fun pinSite(url: String = currentUrl) { if (url.startsWith("http")) graph.settingsStore.update { HomeView.withPinned(it, url) } }
-    fun hideSite(key: String) { graph.settingsStore.update { HomeView.withHidden(it, key) } }
+    fun pinSite(url: String = currentUrl) { if (!Ninja.on && url.startsWith("http")) graph.settingsStore.update { HomeView.withPinned(it, url) } }
+    fun hideSite(key: String) { if (!Ninja.on) graph.settingsStore.update { HomeView.withHidden(it, key) } }
     fun restoreSites() { graph.settingsStore.update { HomeView.withoutHidden(it) } }
     /** Tests automatiques : évalue du JavaScript dans la page et rend le résultat. */
     fun evalForTest(js: String, cb: (String?) -> Unit) { webView?.evaluateJavascript(js, cb) }
@@ -1666,7 +1769,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         if (out is PageOutcome.Done && out.refreshed > 0) testRefreshed.addAndGet(out.refreshed)
         // noms qui reviennent d'une page à l'autre : proposés dans le glossaire de l'œuvre (anglais seulement, le lexique est anglais)
         if (out is PageOutcome.Done && s.source.code != "ja" && s.source.code != "ko" && s.source.code != "zh") {
-            try { synchronized(graph.names) { graph.names.observe(pageSeries, c.id, out.result.blocks.map { it.source }, lexicon) } } catch (_: Throwable) {}
+            if (!ninja) try { synchronized(graph.names) { graph.names.observe(pageSeries, c.id, out.result.blocks.map { it.source }, lexicon) } } catch (_: Throwable) {}
         }
         // corrections manuelles de l'utilisateur (zone, texte, position, taille, police) : réappliquées à chaque affichage, indépendamment du cache
         val imageKey = sha256Hex(bytes)
@@ -2312,7 +2415,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             conn.connectTimeout = 15_000
             conn.readTimeout = 30_000
             for ((k, v) in headers) conn.setRequestProperty(k, v)
-            CookieManager.getInstance().getCookie(src)?.let { conn.setRequestProperty("Cookie", it) }
+            cookieJar()?.getCookie(src)?.let { conn.setRequestProperty("Cookie", it) }
             val code = conn.responseCode
             if (code != 200) return code to null
             val out = ByteArrayOutputStream()
@@ -2390,6 +2493,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         @JavascriptInterface fun onScrollDir(down: Boolean) { main.post { onScrollDirection(down) } }
         @JavascriptInterface fun onProgress(percent: Int) { main.post { onProgressReported(percent) } }
         @JavascriptInterface fun onTap() { main.post { onPageTap() } }
+        @JavascriptInterface fun onDoubleTap() { main.post { onPageDoubleTap() } }
         @JavascriptInterface fun onPeek(id: String, bid: String, src: String, tr: String) {
             main.post {
                 peekHeld = false; peekEmpty = null; peekTarget = EditTarget(id, bid.toIntOrNull() ?: -1, src, tr); main.removeCallbacks(clearPeek); main.postDelayed(clearPeek, 7000)

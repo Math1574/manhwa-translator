@@ -351,6 +351,8 @@ object PageScript {
   window.addEventListener('scroll', onMove, {passive:true});
   setTimeout(onMove, 1500);
 
+  // double appui rapide : entre dans le plein écran ou en sort ; le zoom par double appui du navigateur est coupé (le pincement reste) pour ne pas se déclencher en même temps
+  try { var zs = document.createElement('style'); zs.textContent = 'html,body{touch-action:manipulation}'; (document.head || document.documentElement).appendChild(zs); } catch(e) {}
   // appui simple sur la page (ni défilement, ni lien, ni double appui) : ouvre le menu de lecture en plein écran, montre ou masque la barre d'adresse sinon
   var tp = {x:0, y:0, t:0, moved:false, timer:null, last:0};
   document.addEventListener('touchstart', function(e){
@@ -371,7 +373,7 @@ object PageScript {
     }
     var now = Date.now();
     clearTimeout(tp.timer);
-    if (now - tp.last < 320) { tp.last = 0; return; }
+    if (now - tp.last < 320) { tp.last = 0; try { AndroidMT.onDoubleTap(); } catch(e) {} return; }
     tp.last = now;
     tp.timer = setTimeout(function(){ tp.last = 0; try { AndroidMT.onTap(); } catch(e) {} }, 330);
   }, {passive:true, capture:true});

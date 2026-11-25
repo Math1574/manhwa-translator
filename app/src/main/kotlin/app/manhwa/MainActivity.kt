@@ -125,6 +125,12 @@ private fun Root(graph: AppGraph) {
         }
     }
 
+    // Mode Ninja : l'écran n'apparaît ni dans les applications récentes ni dans les captures d'écran
+    LaunchedEffect(c.ninja) {
+        val window = activity?.window ?: return@LaunchedEffect
+        if (c.ninja) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE) else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+    }
+
     // Quand on lit en descendant, la barre d'onglets se range avec la barre d'adresse (elles reviennent en remontant ou d'un appui sur la page).
     val readingFree = tab == 0 && c.barsHidden && graph.settingsStore.settings.hideBarsWhileReading
     // onglet affiché par-dessus la lecture : on garde le dernier pour que son contenu ne change pas pendant l'animation de sortie

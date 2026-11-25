@@ -25,12 +25,26 @@ class ResultCache(private val dir: File, private val maxEntries: Int = 64, priva
 
     init { dir.mkdirs() }
 
+    /**
+     * Mode privé (mode Ninja) : les pages ne sont ni lues ni écrites sur le disque ; elles vivent dans une mémoire à part, que [endIsolation] vide.
+     * Le cache habituel n'est ni consulté ni modifié (pas même la date de dernière lecture de ses fichiers).
+     */
+    @Volatile var isolated = false
+        private set
+    private val priv = object : LinkedHashMap<String, Entry>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Entry>?) = size > 256
+    }
+
+    @Synchronized fun beginIsolation() { priv.clear(); isolated = true }
+    @Synchronized fun endIsolation() { isolated = false; priv.clear() }
+
     @Synchronized fun get(key: CacheKey): PageResult? = entry(key)?.result
 
     /** Version du glossaire avec laquelle la page a été traduite ; 0 si on l'ignore (page enregistrée avant ce suivi) ou si la page n'est pas en cache. */
     @Synchronized fun revisionOf(key: CacheKey): Long = entry(key)?.rev ?: 0L
 
     private fun entry(key: CacheKey): Entry? {
+        if (isolated) return priv[key.id]
         memory[key.id]?.let { return it }
         val f = File(dir, key.id + ".page")
         if (!f.exists()) return null
@@ -42,6 +56,7 @@ class ResultCache(private val dir: File, private val maxEntries: Int = 64, priva
     }
 
     @Synchronized fun put(key: CacheKey, result: PageResult, rev: Long = 0L) {
+        if (isolated) { priv[key.id] = Entry(result, rev); return }
         memory[key.id] = Entry(result, rev)
         val tmp = File(dir, key.id + ".tmp")
         tmp.writeText(encode(result, rev))
@@ -51,6 +66,7 @@ class ResultCache(private val dir: File, private val maxEntries: Int = 64, priva
     }
 
     @Synchronized fun remove(key: CacheKey) {
+        if (isolated) { priv.remove(key.id); return }
         memory.remove(key.id)
         File(dir, key.id + ".page").delete()
     }

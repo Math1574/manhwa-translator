@@ -197,7 +197,7 @@ class LibraryStore(private val file: File) {
         try { onChanged?.invoke(library) } catch (_: Throwable) {}
     }
 
-    private fun commit(f: (BrowsingLibrary) -> BrowsingLibrary) { library = f(library); write() }
+    private fun commit(f: (BrowsingLibrary) -> BrowsingLibrary) { if (Ninja.on) return; library = f(library); write() }
 
     fun visit(url: String, title: String) = commit { it.visit(url, title, System.currentTimeMillis()) }
     fun toggleFavorite(url: String, title: String) = commit { it.toggleFavorite(url, title, System.currentTimeMillis()) }
@@ -232,6 +232,7 @@ class LibraryStore(private val file: File) {
 
     /** Avancement de la page ouverte : l'état est mis à jour tout de suite, le fichier au plus toutes les 4 s ([flush] à la fermeture). */
     fun progress(url: String, percent: Int) {
+        if (Ninja.on) return
         val next = library.setProgress(url, percent, System.currentTimeMillis())
         if (next === library) return
         library = next; dirty = true
@@ -243,6 +244,7 @@ class LibraryStore(private val file: File) {
      * le fichier au plus toutes les 4 s ([flush] à la fermeture). Seul un meilleur résultat est retenu (voir [BrowsingLibrary.setTranslation]).
      */
     fun translation(url: String, done: Int, total: Int) {
+        if (Ninja.on) return
         val next = library.setTranslation(url, done, total, System.currentTimeMillis())
         if (next === library) return
         library = next; dirty = true
@@ -308,6 +310,7 @@ class EditStore(private val file: File, private val maxImages: Int = 400, privat
     @Synchronized fun count(): Int = images.values.sumOf { it.second.size }
 
     @Synchronized fun upsert(key: String, edit: BlockEdit) {
+        if (Ninja.on) return
         val next = EditApplier.upsert(images[key]?.second ?: emptyList(), edit)
         images.remove(key)
         if (next.isNotEmpty()) {
@@ -320,6 +323,7 @@ class EditStore(private val file: File, private val maxImages: Int = 400, privat
     }
 
     @Synchronized fun remove(key: String, editId: String) {
+        if (Ninja.on) return
         val cur = images[key] ?: return
         val next = cur.second.filter { it.id != editId }
         images.remove(key)
@@ -366,16 +370,16 @@ class GlossaryStore(private val file: File) {
     /** Ce terme est-il déjà enregistré tel quel (pour cette œuvre si [series] est donnée, sinon pour toutes) ? */
     fun has(series: String?, source: String, target: String): Boolean = snapshot.hasTerm(series, source, target)
 
-    fun add(source: String, target: String) { glossary.addTerm(source, target); commit() }
-    fun remove(source: String) { glossary.removeTerm(source); commit() }
-    fun addForSeries(series: String, source: String, target: String) { glossary.addSeriesTerm(series, source, target); commit() }
-    fun removeForSeries(series: String, source: String) { glossary.removeSeriesTerm(series, source); commit() }
+    fun add(source: String, target: String) { if (Ninja.on) return; glossary.addTerm(source, target); commit() }
+    fun remove(source: String) { if (Ninja.on) return; glossary.removeTerm(source); commit() }
+    fun addForSeries(series: String, source: String, target: String) { if (Ninja.on) return; glossary.addSeriesTerm(series, source, target); commit() }
+    fun removeForSeries(series: String, source: String) { if (Ninja.on) return; glossary.removeSeriesTerm(series, source); commit() }
 
     /** Correction manuelle d'une bulle : cette traduction sera reprise telle quelle chaque fois que ce texte apparaît. */
-    fun addCorrection(sourceBlock: String, translation: String) { glossary.addCorrection(sourceBlock, translation); commit() }
+    fun addCorrection(sourceBlock: String, translation: String) { if (Ninja.on) return; glossary.addCorrection(sourceBlock, translation); commit() }
 
     /** Oublie la traduction retenue pour ce texte : il est de nouveau traduit comme les autres. */
-    fun removeCorrection(sourceBlock: String) { if (glossary.removeCorrection(sourceBlock)) commit() }
+    fun removeCorrection(sourceBlock: String) { if (Ninja.on) return; if (glossary.removeCorrection(sourceBlock)) commit() }
 
     private fun commit() {
         val data = glossary.serialize()

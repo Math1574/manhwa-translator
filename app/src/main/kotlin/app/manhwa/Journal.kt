@@ -15,6 +15,7 @@ import java.util.Locale
  */
 class TranslationJournal(private val file: File) {
     @Synchronized fun add(entry: JSONObject) {
+        if (Ninja.on) return      // mode Ninja : rien n'est noté
         try {
             file.appendText(entry.toString() + "\n")
             if (file.length() > MAX_BYTES) trim()

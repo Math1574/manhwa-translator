@@ -136,7 +136,7 @@ fun BrowserScreen(graph: AppGraph, onLibrary: () -> Unit = {}) {
                 )
             }
             // accueil : tant qu'aucune page n'est ouverte, il recouvre la page vide
-            if (c.currentUrl.isEmpty() && !c.fullscreen) HomeScreen(graph, onLibrary)
+            if (c.currentUrl.isEmpty() && !c.fullscreen) { if (c.ninja) NinjaHome() else HomeScreen(graph, onLibrary) }
             if (running && !c.fullscreen && c.total > 0) {
                 LinearProgressIndicator(
                     progress = { (c.done + c.failed).toFloat() / c.total }, trackColor = Color.Transparent,
@@ -299,7 +299,7 @@ private fun AddressBar(graph: AppGraph) {
     var field by remember { mutableStateOf(TextFieldValue("")) }
     val requester = remember { FocusRequester() }
     val heart = graph.library.isHeart(c.currentUrl)
-    val canHeart = c.currentUrl.startsWith("http")
+    val canHeart = c.currentUrl.startsWith("http") && !c.ninja
     val seriesUrl = BrowsingLibrary.seriesUrlOf(c.currentUrl)
     // la tuile « Ajouter » de l'accueil ouvre la saisie d'une adresse
     LaunchedEffect(c.addressTick) { if (c.addressTick > 0) { field = TextFieldValue(""); editing = true } }
@@ -307,12 +307,12 @@ private fun AddressBar(graph: AppGraph) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = { c.back() }, enabled = c.canGoBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Retour") }
         Box(
-            Modifier.weight(1f).height(42.dp).clip(RoundedCornerShape(21.dp)).background(Color.White.copy(alpha = 0.08f)).border(1.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(21.dp)).padding(horizontal = 16.dp),
+            Modifier.weight(1f).height(42.dp).clip(RoundedCornerShape(21.dp)).background(Color.White.copy(alpha = 0.08f)).border(1.dp, if (c.ninja) Color(0xFF9B7BFF) else Color.White.copy(alpha = 0.10f), RoundedCornerShape(21.dp)).padding(horizontal = 16.dp),
             contentAlignment = Alignment.CenterStart,
         ) {
             if (!editing) {
                 Text(
-                    if (c.currentUrl.isEmpty()) "Adresse ou recherche" else prettyAddress(c.currentUrl),
+                    (if (c.ninja) "🥷 " else "") + (if (c.currentUrl.isEmpty()) "Adresse ou recherche" else prettyAddress(c.currentUrl)),
                     modifier = Modifier.fillMaxWidth().clickable { field = TextFieldValue(c.currentUrl, TextRange(0, c.currentUrl.length)); editing = true },
                     maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 14.sp,
                     color = if (c.currentUrl.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
@@ -354,12 +354,16 @@ private fun AddressBar(graph: AppGraph) {
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 if (c.currentUrl.isNotEmpty()) DropdownMenuItem(text = { Text(if (c.translateOn && c.active) "Revenir à l'original" else "Traduire cette page") }, onClick = { menu = false; c.onTranslateButton() })
                 if (c.translateOn && c.active) DropdownMenuItem(text = { Text("Retraduire la page") }, onClick = { menu = false; c.start(force = true) })
-                if (c.translateOn && c.active) DropdownMenuItem(text = { Text(if (c.eraser) "Terminer la gomme" else "Gomme : supprimer des traductions") }, onClick = { menu = false; c.switchEraser(!c.eraser) })
-                if (c.translateOn && c.active) DropdownMenuItem(text = { Text(if (c.discardMode) "Terminer les textes écartés" else "Textes écartés : les voir et les traduire") }, onClick = { menu = false; c.switchDiscard(!c.discardMode) })
+                if (c.translateOn && c.active && !c.ninja) DropdownMenuItem(text = { Text(if (c.eraser) "Terminer la gomme" else "Gomme : supprimer des traductions") }, onClick = { menu = false; c.switchEraser(!c.eraser) })
+                if (c.translateOn && c.active && !c.ninja) DropdownMenuItem(text = { Text(if (c.discardMode) "Terminer les textes écartés" else "Textes écartés : les voir et les traduire") }, onClick = { menu = false; c.switchDiscard(!c.discardMode) })
                 if (c.currentUrl.isNotEmpty()) DropdownMenuItem(text = { Text(if (c.loading) "Arrêter le chargement" else "Actualiser") }, onClick = { menu = false; if (c.loading) c.stopLoading() else c.reload() })
                 DropdownMenuItem(text = { Text("Page suivante") }, enabled = c.canGoForward, onClick = { menu = false; c.forward() })
                 DropdownMenuItem(text = { Text("Accueil") }, onClick = { menu = false; c.goHome() })
-                if (c.currentUrl.startsWith("http")) {
+                DropdownMenuItem(
+                    text = { Text(if (c.ninja) "Quitter le mode Ninja (tout effacer)" else "Mode Ninja (navigation privée)") },
+                    onClick = { menu = false; if (c.ninja) c.exitNinja() else c.enterNinja() },
+                )
+                if (c.currentUrl.startsWith("http") && !c.ninja) {
                     val st = graph.settingsStore.settings
                     val key = HomeView.siteKey(c.currentUrl)
                     if (HomeView.sites(graph.library.library, HomeView.pinned(st), HomeView.hidden(st)).none { it.key == key }) {
@@ -367,7 +371,7 @@ private fun AddressBar(graph: AppGraph) {
                     }
                 }
                 if (seriesUrl != null) DropdownMenuItem(text = { Text("Page de l'œuvre") }, onClick = { menu = false; c.load(seriesUrl) })
-                if (c.currentUrl.startsWith("http")) {
+                if (c.currentUrl.startsWith("http") && !c.ninja) {
                     val on = c.adsActiveHere()
                     DropdownMenuItem(
                         text = { Text(if (on) "Bloqueur actif ici · ${c.adCountOnPage()} bloqué${if (c.adCountOnPage() > 1) "s" else ""} (désactiver)" else "Bloqueur désactivé ici (réactiver)") },
@@ -419,5 +423,22 @@ private fun androidx.compose.foundation.layout.BoxScope.ReaderOverlay(graph: App
                 contentAlignment = Alignment.Center,
             ) { Text("Chapitre suivant ›", color = Color.White) }
         }
+    }
+}
+
+/** Accueil du mode Ninja : à la place des tuiles et de la reprise de lecture, qui viennent de la bibliothèque habituelle. */
+@Composable
+private fun NinjaHome() {
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(horizontal = 28.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("🥷", fontSize = 56.sp)
+        Spacer(Modifier.height(12.dp))
+        Text("Mode Ninja", style = MaterialTheme.typography.headlineSmall, color = Color(0xFF9B7BFF))
+        Spacer(Modifier.height(10.dp))
+        Text(
+            "Rien n'est enregistré : ni historique, ni progression de lecture, ni bibliothèque, ni journal, ni cache de traduction, ni correction. Cookies, cache et données des sites sont dans un navigateur à part, effacé à la sortie. Aucune donnée n'est collectée.",
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(10.dp))
+        Text("Saisissez une adresse en haut. Pour quitter : menu ⋮ → Quitter le mode Ninja.", textAlign = androidx.compose.ui.text.style.TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
     }
 }

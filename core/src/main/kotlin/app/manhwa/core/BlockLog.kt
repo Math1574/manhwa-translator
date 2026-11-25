@@ -16,7 +16,11 @@ class BlockLog(private val capacity: Int = 400) {
     /** Nombre d'actions depuis l'ouverture de la page en cours. */
     val pageCount = AtomicInteger(0)
 
+    /** Mode Ninja : rien n'est noté (ni adresse, ni compteur). */
+    @Volatile var silent = false
+
     fun add(kind: String, url: String, rule: String?, page: String?) {
+        if (silent) return
         counts.getOrPut(kind) { AtomicInteger(0) }.incrementAndGet()
         pageCount.incrementAndGet()
         synchronized(entries) {
