@@ -1,0 +1,16 @@
+WARNING: Logging before InitGoogle() is written to STDERR
+W0000 00:00:1795822314.036709    2353 litert_lm_loader.cc:441] Section not found: SP_Tokenizer (tf_lite_prefill_decode)
+Traceback (most recent call last):
+  File "/home/runner/work/manhwa-translator/manhwa-translator/ci/tbench/server.py", line 15, in <module>
+    engine = lm.Engine(model, backend=backend, max_num_tokens=8192, cache_dir="/tmp/litert_cache")
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/hostedtoolcache/Python/3.12.16/x64/lib/python3.12/site-packages/litert_lm/engine.py", line 128, in __init__
+    self._engine_ptr = create_checked(
+                       ^^^^^^^^^^^^^^^
+  File "/opt/hostedtoolcache/Python/3.12.16/x64/lib/python3.12/site-packages/litert_lm/_ffi.py", line 1393, in create_checked
+    call_checked(lib, func_name, *args, ctypes.byref(out))
+  File "/opt/hostedtoolcache/Python/3.12.16/x64/lib/python3.12/site-packages/litert_lm/_ffi.py", line 1369, in call_checked
+    check_status(lib, func_name, getattr(lib, func_name)(*args))
+  File "/opt/hostedtoolcache/Python/3.12.16/x64/lib/python3.12/site-packages/litert_lm/_ffi.py", line 1353, in check_status
+    raise RuntimeError(
+RuntimeError: litert_lm_engine_create failed with status INVALID_ARGUMENT (3): INVALID_ARGUMENT: Cache directory does not exist or is not writable: /tmp/litert_cache
