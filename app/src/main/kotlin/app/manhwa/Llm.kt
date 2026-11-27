@@ -9,13 +9,12 @@ import app.manhwa.core.AppSettings
 import app.manhwa.core.ConfirmationRequired
 import app.manhwa.core.GlossaryEntry
 import app.manhwa.core.GpuGuard
-import app.manhwa.core.IdiomHints
 import app.manhwa.core.InsufficientSpace
-import app.manhwa.core.ChapterMemory
+import app.manhwa.core.LineReport
+import app.manhwa.core.LlmBackend
+import app.manhwa.core.LlmReply
+import app.manhwa.core.LlmTranslator
 import app.manhwa.core.LlmModels
-import app.manhwa.core.TranslationAlign
-import app.manhwa.core.TranslationChecks
-import app.manhwa.core.TranslationPost
 import app.manhwa.core.LlmPrompt
 import app.manhwa.core.ModelSpec
 import app.manhwa.core.ModelStatus
@@ -95,9 +94,6 @@ class LlmModelsManager(ctx: Context) {
  * Traduction par modèle de langage local (Gemma 4 via LiteRT-LM) : toute la page est traduite en une requête,
  * avec le dialogue précédent du chapitre et le glossaire comme contexte. Aucune donnée ne quitte le téléphone.
  */
-/** Résultat des contrôles d'une ligne traduite (pour le journal). */
-class LineReport(val src: String, val tr: String, val problems: List<String>, val retried: Boolean, val fixed: Boolean)
-
 class GemmaTranslator(
     private val ctx: Context,
     private val models: LlmModelsManager,
@@ -106,34 +102,51 @@ class GemmaTranslator(
 
     private var engine: Engine? = null
     private var engineKey = ""
+
+    /**
+     * Génération par le moteur chargé : une conversation neuve par appel, sous la garde du GPU et du délai maximal (voir [withWatchdog]).
+     * Appelée seulement depuis [translateWithGlossary], qui tient le verrou du moteur.
+     */
+    private val backend = LlmBackend { system, user, sampling, maxTokens ->
+        val eng = engine ?: throw IllegalStateException("moteur non chargé")
+        val t0 = SystemClock.uptimeMillis()
+        val config = ConversationConfig(
+            systemInstruction = Contents.of(system),
+            samplerConfig = SamplerConfig(topK = sampling.topK, topP = sampling.topP, temperature = sampling.temperature),
+            maxOutputToken = maxTokens,
+        )
+        var setup = 0L
+        val text = eng.createConversation(config).use { conv ->
+            setup = SystemClock.uptimeMillis() - t0
+            withWatchdog(conv) { textOf(conv.sendMessage(user)) }
+        }
+        LlmReply(text, setup)
+    }
+
+    /** Orchestration de la traduction (demande groupée, lignes refaites, contrôles, mémoire du chapitre et de l'œuvre) : dans le cœur, partagée avec le banc d'essai. */
+    val core = LlmTranslator(backend) { Lexicon.peek() ?: try { Lexicon.get(ctx) } catch (_: Throwable) { null } }
+
     /** Version du prompt et relecture : réglables par le banc d'essai de traduction. */
-    @Volatile var promptVariant: Int = LlmPrompt.CURRENT
-    @Volatile var refine: Boolean = false
+    var promptVariant: Int
+        get() = core.promptVariant
+        set(v) { core.promptVariant = v }
+    var refine: Boolean
+        get() = core.refine
+        set(v) { core.refine = v }
     /** Durée au-delà de laquelle une génération est interrompue. Seul le banc d'essai l'allonge : sur le processeur de l'émulateur de test le grand modèle met près d'une minute par page. */
     @Volatile var generationTimeoutMs: Long = GENERATION_TIMEOUT_MS
     /** Titre de la série (déduit de l'adresse) : aide le modèle à comprendre le genre et les noms. */
-    @Volatile var seriesTitle: String? = null
+    var seriesTitle: String?
+        get() = core.seriesTitle
+        set(v) { core.seriesTitle = v }
     /** Synopsis de l'œuvre (en français s'il a été traduit) : donné au modèle comme contexte (qui sont les personnages). */
-    @Volatile var seriesPremise: String? = null
-    /** Noms et termes du chapitre en cours (mémoire) et rapport des contrôles de la dernière page. */
-    private val memory = ChapterMemory(isCommonWord = { w -> Lexicon.peek()?.isCommon(w) == true })
-    @Volatile var lastReport: List<LineReport> = emptyList()
-
-    /**
-     * Mémoire du chapitre (dialogue récent, noms propres) : son propre verrou, tenu un instant seulement. Elle ne partage jamais celui de la traduction, qui reste pris pendant toute une génération
-     * (des dizaines de secondes) : l'appel qui l'oublie au changement de page vient du fil principal, qu'il ne doit pas figer (l'application « ne répondait plus » quand on changeait de chapitre pendant une traduction).
-     */
-    private val ctxLock = Any()
-    /** Compte les oublis : une traduction qui était en cours pendant que la page changeait n'ajoute rien à la mémoire du nouveau chapitre. */
-    private var ctxEpoch = 0
-    private val history = ArrayDeque<Pair<String, String>>()
-    private fun recentDialogue(): List<Pair<String, String>> = synchronized(ctxLock) { history.toList() }
-    private fun keptNames(): List<String> = synchronized(ctxLock) { memory.namesToKeep() }
-    /** Ce que le chapitre a établi (tutoiement, genre du narrateur) quand c'est net : rappelé au modèle, en français seulement. */
-    private fun styleNotes(target: String): List<String> = if (target == "fr" && promptVariant >= 4) synchronized(ctxLock) { memory.styleHints() } else emptyList()
+    var seriesPremise: String?
+        get() = core.seriesPremise
+        set(v) { core.seriesPremise = v }
+    val lastReport: List<LineReport> get() = core.lastReport
 
     /** Noms propres repérés dans le chapitre (minuscules) : le réparateur de texte lu ne doit pas les « corriger ». */
-    fun chapterNames(): Set<String> = keptNames().map { it.lowercase() }.toSet()
+    fun chapterNames(): Set<String> = core.chapterNames()
     private val main = Handler(Looper.getMainLooper())
     /** Dernier usage du moteur : le déchargement après inactivité ne part que si rien n'a servi depuis. */
     @Volatile private var lastUse = SystemClock.uptimeMillis()
@@ -146,15 +159,7 @@ class GemmaTranslator(
 
     override fun usesGlossaryPrompt(): Boolean = true
 
-    /**
-     * Mesure seulement, sans effet sur la traduction : appels au modèle faits par ce fil pour sa dernière traduction, un par entrée « type:durée ms/c création de la conversation ms/i caractères envoyés/o caractères reçus »
-     * (types : ask = le groupe, miss = une ligne refaite seule, fix = une ligne corrigée après contrôle, refine = relecture ; load = chargement du moteur s'il a dépassé 0,3 s).
-     */
-    private val callLog = ThreadLocal<ArrayList<String>>()
-    private fun note(kind: String, startMs: Long, createMs: Long, inChars: Int, outChars: Int) {
-        try { callLog.get()?.add(kind + ":" + (SystemClock.uptimeMillis() - startMs) + "/c" + createMs + "/i" + inChars + "/o" + outChars) } catch (_: Throwable) {}
-    }
-    override fun lastCallDetail(): String? = try { callLog.get()?.joinToString(";") } catch (_: Throwable) { null }
+    override fun lastCallDetail(): String? = core.lastCallDetail()
 
     override fun translate(texts: List<String>, source: String, target: String): List<String> =
         translateWithGlossary(texts, source, target, emptyList())
@@ -165,54 +170,16 @@ class GemmaTranslator(
         val spec = LlmModels.specFor(s.engine) ?: throw IllegalStateException("Aucun modèle Gemma sélectionné")
         if (!models.isReady(spec)) throw IllegalStateException("Modèle Gemma absent : téléchargez-le dans l'onglet Modèles")
         main.removeCallbacks(releaseTask)
-        callLog.set(ArrayList())
-        val epoch = synchronized(ctxLock) { ctxEpoch }
+        core.beginCallLog()
         try {
             val tLoad = SystemClock.uptimeMillis()
-            val eng = ensureEngine(spec, s.useGpu, vision = visionReady && s.autoReread)
+            ensureEngine(spec, s.useGpu, vision = visionReady && s.autoReread)
             val loadMs = SystemClock.uptimeMillis() - tLoad
-            if (loadMs > 300L) try { callLog.get()?.add("load:$loadMs") } catch (_: Throwable) {}
-            var out = ask(eng, texts, source, target, glossary)
-            out = realign(eng, texts, out, source, target, glossary)
-            var final = out.mapIndexed { i, t -> t ?: throw IllegalStateException("Réponse du modèle incomplète (ligne ${i + 1})") }
-            if ((refine || s.refinePass) && target == "fr") final = refineDraft(eng, texts, final, glossary)
-            final = checkAndFix(eng, texts, final, target, source, glossary)
-            if (target == "fr" && promptVariant >= 4) final = final.mapIndexed { i, t -> TranslationPost.rescueStutter(texts[i], TranslationPost.stutter(texts[i], t)) }   // « B-BUT » → « M-MAIS » (lettre répétée fausse ou perdue) ; « Y-YOU… » recopié → « T-TOI… »
-            // la page a changé pendant la traduction (le contexte a été oublié) : ce dialogue n'appartient plus au chapitre en cours
-            synchronized(ctxLock) { if (epoch == ctxEpoch) texts.indices.forEach { remember(texts[it], final[it]); memory.observe(texts[it], final[it]) } }
-            return final
+            if (loadMs > 300L) core.addCallNote("load:$loadMs")
+            return core.translate(texts, source, target, glossary, s.refinePass)
         } finally {
             scheduleRelease() // libère la mémoire (plusieurs Go) quand on ne traduit plus
         }
-    }
-
-    /**
-     * Lignes absentes de la réponse ou mal placées (le modèle a sauté une ligne et décalé les suivantes, ou mis la traduction d'une ligne sous le numéro d'une autre : voir
-     * [TranslationAlign]) : elles sont refaites ensemble, avec les autres lignes du lot comme contexte ; ce qui reste absent ou suspect est refait seul. La réponse brute fautive va au journal.
-     */
-    private fun realign(eng: Engine, texts: List<String>, first: MutableList<String?>, source: String, target: String, glossary: List<GlossaryEntry>): MutableList<String?> {
-        val out = first
-        val lex = try { Lexicon.get(ctx) } catch (_: Throwable) { null }
-        val names = chapterNames()
-        fun bad(within: Set<Int>? = null): java.util.SortedSet<Int> {
-            val s = (out.indices.filter { out[it] == null } + try { TranslationAlign.suspects(texts, out, lex, names) } catch (_: Throwable) { emptySet() }).toSortedSet()
-            return if (within == null) s else s.filter { it in within }.toSortedSet()
-        }
-        val redo = bad()
-        if (redo.isEmpty()) return out
-        try {
-            callLog.get()?.add("realign:${redo.size}/${texts.size}")
-            callLog.get()?.add("raw:" + lastReply.take(600).replace('\n', '⏎').replace(';', ','))
-        } catch (_: Throwable) {}
-        val context = texts.indices.filter { it !in redo && out[it] != null }.map { texts[it] to out[it]!! }
-        val again = try { ask(eng, redo.map { texts[it] }, source, target, glossary, kind = "realign", page = context) } catch (e: Throwable) { null }
-        redo.forEachIndexed { k, i -> out[i] = again?.getOrNull(k) }
-        for (i in bad(redo)) out[i] = try { ask(eng, listOf(texts[i]), source, target, glossary, kind = "miss").firstOrNull() } catch (e: Throwable) { null }
-        // contrôle final de toute la page : une ligne laissée telle quelle peut maintenant se révéler mal placée (même traduction qu'une ligne refaite) ; refaite seule (quatre au plus)
-        val late = bad().filter { it !in redo }.take(4)
-        if (late.isNotEmpty()) try { callLog.get()?.add("late:${late.size}") } catch (_: Throwable) {}
-        for (i in late) out[i] = (try { ask(eng, listOf(texts[i]), source, target, glossary, kind = "miss").firstOrNull() } catch (e: Throwable) { null }) ?: out[i]
-        return out
     }
 
     /** Charge le moteur à l'avance (tâche de fond) : la première traduction ne paie plus les 10 à 30 s de chargement du modèle. */
@@ -223,111 +190,6 @@ class GemmaTranslator(
         main.removeCallbacks(releaseTask)
         try { ensureEngine(spec, s.useGpu, vision = visionReady && s.autoReread) } catch (_: Throwable) {}
         finally { scheduleRelease() }
-    }
-
-    /** Seconde passe : un « éditeur » corrige les contresens et le style littéral du brouillon. En cas de réponse invalide, le brouillon est conservé. */
-    private fun refineDraft(eng: Engine, texts: List<String>, draft: List<String>, glossary: List<GlossaryEntry>): List<String> {
-        val t0 = SystemClock.uptimeMillis(); var createMs = 0L; var inLen = 0; var outLen = -1
-        return try {
-            val system = LlmPrompt.refineSystem()
-            inLen = system.length
-            val config = ConversationConfig(
-                systemInstruction = Contents.of(system),
-                samplerConfig = SamplerConfig(topK = 20, topP = 0.9, temperature = 0.15),
-                maxOutputToken = LlmPrompt.maxOutputTokens(texts),
-            )
-            val reply = eng.createConversation(config).use { conv ->
-                createMs = SystemClock.uptimeMillis() - t0
-                withWatchdog(conv) { val u = LlmPrompt.refineUser(texts, draft, recentDialogue(), glossary, seriesTitle, seriesPremise, keptNames(), styleNotes("fr")); inLen += u.length; textOf(conv.sendMessage(u)) }
-            }
-            outLen = reply.length
-            // une ligne relue vide, ou qui ne correspond plus à son texte (relecture décalée), garde le brouillon
-            val edited = LlmPrompt.parse(reply, texts.size, texts).mapIndexed { i, t -> t?.let { LlmPrompt.stripRefineLabel(it) }?.takeIf { it.isNotBlank() } ?: draft[i] }
-            val lex = try { Lexicon.get(ctx) } catch (_: Throwable) { null }
-            val shifted = try { TranslationAlign.suspects(texts, edited, lex, chapterNames()) } catch (_: Throwable) { emptySet() }
-            edited.mapIndexed { i, t -> if (i in shifted) draft[i] else t }
-        } catch (e: Throwable) {
-            draft
-        } finally { note("refine", t0, createMs, inLen, outLen) }
-    }
-
-    /**
-     * Contrôle chaque ligne (mots anglais restants, contenu perdu, nom modifié, chiffres, répétition…) et refait seule toute ligne qui échoue,
-     * une fois, avec le détail des problèmes. La nouvelle version n'est retenue que si elle a moins de problèmes.
-     */
-    private fun checkAndFix(eng: Engine, texts: List<String>, draft: List<String>, target: String, source: String, glossary: List<GlossaryEntry>): List<String> {
-        val names = keptNames()
-        // tutoiement et genre du narrateur établis par le chapitre ; chaque ligne de la page y est ajoutée une fois finie, pour que la suivante s'y accorde
-        val style = synchronized(ctxLock) { memory.styleCopy() }
-        val out = draft.toMutableList(); val reports = ArrayList<LineReport>()
-        for (i in out.indices) {
-            var probs = TranslationChecks.problems(texts[i], out[i], target, names, style)
-            var retried = false; var fixed = false
-            if (probs.isNotEmpty()) {
-                retried = true
-                val again = try { askFix(eng, texts[i], out[i], probs.map { "${it.code}: ${it.detail}" }, source, target, glossary, names, if (target == "fr" && promptVariant >= 4) style.hints() else emptyList()) } catch (e: Throwable) { null }
-                if (again != null) {
-                    val p2 = TranslationChecks.problems(texts[i], again, target, names, style)
-                    if (p2.size < probs.size) { out[i] = again; fixed = p2.isEmpty(); probs = p2 }
-                }
-            }
-            reports.add(LineReport(texts[i], out[i], probs.map { it.code }, retried, fixed))
-            if (target == "fr") style.observe(texts[i], out[i], names)
-        }
-        lastReport = reports
-        return out
-    }
-
-    private fun askFix(eng: Engine, text: String, previous: String, problems: List<String>, source: String, target: String, glossary: List<GlossaryEntry>, names: List<String>, styleHints: List<String> = emptyList()): String? {
-        val t0 = SystemClock.uptimeMillis(); var createMs = 0L; var outLen = -1
-        val system = LlmPrompt.system(source, target, promptVariant)
-        var inLen = system.length
-        try {
-            val config = ConversationConfig(
-                systemInstruction = Contents.of(system),
-                samplerConfig = SamplerConfig(topK = 20, topP = 0.9, temperature = 0.1),
-                maxOutputToken = LlmPrompt.maxOutputTokens(listOf(text)),
-            )
-            val reply = eng.createConversation(config).use { conv ->
-                createMs = SystemClock.uptimeMillis() - t0
-                val hints = if (promptVariant >= 4 && target == "fr") IdiomHints.find(listOf(text)) else emptyList()
-                withWatchdog(conv) { val u = LlmPrompt.fixUser(text, previous, problems, recentDialogue(), glossary, names, hints, styleHints); inLen += u.length; textOf(conv.sendMessage(u)) }
-            }
-            outLen = reply.length
-            return LlmPrompt.parse(reply, 1, listOf(text)).firstOrNull()
-        } finally { note("fix", t0, createMs, inLen, outLen) }
-    }
-
-    /** Dernière réponse brute du modèle (journal des réponses fautives). */
-    private var lastReply = ""
-
-    private fun ask(eng: Engine, texts: List<String>, source: String, target: String, glossary: List<GlossaryEntry>, series: String? = seriesTitle, kind: String = "ask", page: List<Pair<String, String>> = emptyList()): MutableList<String?> {
-        val t0 = SystemClock.uptimeMillis(); var createMs = 0L; var outLen = -1
-        val system = LlmPrompt.system(source, target, promptVariant)
-        var inLen = system.length
-        try {
-            val config = ConversationConfig(
-                systemInstruction = Contents.of(system),
-                samplerConfig = SamplerConfig(topK = 20, topP = 0.9, temperature = 0.15),
-                maxOutputToken = LlmPrompt.maxOutputTokens(texts),
-            )
-            val reply = eng.createConversation(config).use { conv ->
-                createMs = SystemClock.uptimeMillis() - t0
-                val hints = if (promptVariant >= 4 && target == "fr") IdiomHints.find(texts) else emptyList()
-                withWatchdog(conv) { val u = LlmPrompt.user(texts, recentDialogue(), glossary, series, keptNames(), hints, styleNotes(target), page, if (target == "fr") seriesPremise else null); inLen += u.length; textOf(conv.sendMessage(u)) }
-            }
-            outLen = reply.length
-            lastReply = reply
-            // le modèle recopie parfois la ligne d'origine devant sa traduction (« SOURCE| TRADUCTION ») : la recopie est retirée, et comptée au journal (détail des appels : « echo:2/3 »)
-            val raw = LlmPrompt.parse(reply, texts.size)
-            val parsed = LlmPrompt.parse(reply, texts.size, texts)
-            val echoes = raw.indices.count { raw[it] != parsed[it] }
-            if (echoes > 0) try { callLog.get()?.add("echo:$echoes/${texts.size}") } catch (_: Throwable) {}
-            // ligne sautée (fragment incompris) et suivantes renumérotées : replacées, la ligne sautée sera traduite à part (voir TranslationAlign.repairSkip)
-            val repaired = try { TranslationAlign.repairSkip(texts, parsed, Lexicon.get(ctx), chapterNames()) } catch (_: Throwable) { null }
-            if (repaired != null) try { callLog.get()?.add("skip:" + (repaired.indexOfFirst { it == null } + 1) + "/" + texts.size) } catch (_: Throwable) {}
-            return (repaired ?: parsed).toMutableList()
-        } finally { note(kind, t0, createMs, inLen, outLen) }
     }
 
     /** Interrompt une génération qui dure trop longtemps (sécurité) : la réponse partielle reste exploitable ligne par ligne. */
@@ -606,16 +468,11 @@ class GemmaTranslator(
         } finally { try { eng.close() } catch (_: Throwable) {} }
     }
 
-    private fun remember(src: String, tgt: String) {
-        history.addLast(src to tgt)
-        while (history.size > HISTORY_SIZE) history.removeFirst()
-    }
-
     /** Tests automatiques : occupe le moteur comme une traduction en cours (le verrou de la traduction reste pris pendant [ms]). */
     fun testBusy(ms: Long) { thread(name = "mt-test-busy", isDaemon = true) { synchronized(this) { try { Thread.sleep(ms) } catch (_: InterruptedException) {} } } }
 
     /** Nouveau chapitre ou nouvelle page web : on oublie le dialogue précédent. N'attend jamais la fin d'une traduction (appelé depuis le fil principal). */
-    fun resetContext() { synchronized(ctxLock) { ctxEpoch++; history.clear(); memory.reset() } }
+    fun resetContext() = core.resetContext()
 
     @Synchronized fun release() {
         try { engine?.close() } catch (_: Throwable) {}
@@ -623,7 +480,6 @@ class GemmaTranslator(
     }
 
     companion object {
-        const val HISTORY_SIZE = 10
         /** Délai d'inactivité avant de décharger le modèle (plusieurs Go) : assez long pour qu'une pause de lecture ne force pas un rechargement de 10 à 30 s. */
         const val IDLE_RELEASE_MS = 10 * 60 * 1000L
         /** Une génération normale dure moins de 20 s : au-delà d'une minute, elle est interrompue (la réponse partielle reste exploitable ligne par ligne). */
