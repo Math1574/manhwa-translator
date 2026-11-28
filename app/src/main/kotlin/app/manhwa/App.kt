@@ -156,6 +156,10 @@ class AppGraph(ctx: Context) {
             gpuTest.notice("Le GPU a fait planter l'application juste après la mise à jour : il est désactivé. Vous pouvez le réactiver dans Performance ; « Tester CPU / GPU » le réactive seulement s'il est plus rapide.")
             try { journal.add(org.json.JSONObject().put("t", System.currentTimeMillis()).put("type", "gpuguard").put("why", why).put("build", BuildConfig.BUILD_NUMBER)) } catch (_: Throwable) {}
         }
+        // GPU en 32 bits coupé à ce lancement (plantage au premier essai, ou deux arrêts faute de mémoire) : retour au 16 bits, noté au journal
+        gemma.gpu32Note?.let { why ->
+            try { journal.add(org.json.JSONObject().put("t", System.currentTimeMillis()).put("type", "gpu32").put("why", why).put("build", BuildConfig.BUILD_NUMBER)) } catch (_: Throwable) {}
+        }
     }
     val blockReader = GemmaBlockReader(gemma) { settingsStore.settings }
     val visionTest = VisionTester(ctx, gemma)

@@ -100,7 +100,7 @@ class LlmTranslator(private val backend: LlmBackend, private val lexicon: () -> 
         out = realign(texts, out, source, target, glossary)
         var final = out.mapIndexed { i, t -> t ?: throw IllegalStateException("Réponse du modèle incomplète (ligne ${i + 1})") }
         // défauts de génération (chiffre doublé, mot-outil doublé) : corrigés avant les contrôles, qui n'ont plus à refaire ces lignes
-        if (promptVariant >= 5) final = final.mapIndexed { i, t -> TranslationPost.doubledWords(texts[i], TranslationPost.numbers(texts[i], t)).let { if (target == "fr") TranslationPost.grammar(texts[i], it) else it } }
+        if (promptVariant >= 5) final = final.mapIndexed { i, t -> TranslationPost.doubledWords(texts[i], TranslationPost.numbers(texts[i], TranslationPost.digitRuns(texts[i], t))).let { if (target == "fr") TranslationPost.grammar(texts[i], it) else it } }
         // page anglaise : une longue suite coréenne, japonaise ou chinoise sans lettre latine (crédits, titre d'origine) reste telle quelle ; le modèle y inventait une phrase
         if (promptVariant >= 5 && source == "en") final = final.mapIndexed { i, t -> if (foreignBlock(texts[i])) texts[i] else t }
         if ((refine || refinePass) && target == "fr") final = refineDraft(texts, final, glossary)

@@ -23,6 +23,7 @@ import app.manhwa.core.Synopsis
 import app.manhwa.core.SynopsisPrompt
 import app.manhwa.core.TranslationEngine
 import app.manhwa.core.VisionPrompt
+import com.google.ai.edge.litertlm.ActivationDataType
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Content
 import com.google.ai.edge.litertlm.ConversationConfig
@@ -196,13 +197,18 @@ class GemmaTranslator(
     private fun <T> withWatchdog(conv: com.google.ai.edge.litertlm.Conversation, block: () -> T): T {
         val timer = java.util.Timer("mt-llm-watchdog", true)
         timer.schedule(object : java.util.TimerTask() { override fun run() { try { conv.cancelProcess() } catch (_: Throwable) {} } }, generationTimeoutMs)
-        val guarded = engineIsGpu && gpuUnproven() // première génération sur le GPU avec cette version : sous garde (voir plus haut)
+        // première génération en 32 bits avec cette version : sous sa propre garde (un plantage coupe les 32 bits, pas le GPU) ; sinon première génération sur le GPU : garde du GPU
+        val guarded32 = engineIsGpu32 && gpu32Unproven()
+        val guarded = !guarded32 && engineIsGpu && gpuUnproven()
         try {
+            if (guarded32) gpu32Mark(GpuGuard.running(BuildConfig.BUILD_NUMBER))
             if (guarded) gpuMark(GpuGuard.running(BuildConfig.BUILD_NUMBER))
             val r = block()
+            if (guarded32) { gpu32Mark(GpuGuard.proven(BuildConfig.BUILD_NUMBER)); gpuMark(GpuGuard.proven(BuildConfig.BUILD_NUMBER)) }
             if (guarded) gpuMark(GpuGuard.proven(BuildConfig.BUILD_NUMBER))
             return r
         } catch (t: Throwable) {
+            if (guarded32) gpu32Mark(null)
             if (guarded) gpuMark(null) // une exception n'est pas un plantage : rien n'est prouvé, la garde reprendra
             throw t
         } finally { timer.cancel() }
@@ -222,11 +228,13 @@ class GemmaTranslator(
      * et ne l'utilise que tant que c'est le cas. La qualité ne change pas : chaque jeton prédit n'est gardé que s'il est identique à celui que le modèle complet vient de choisir lui-même.
      */
     @OptIn(ExperimentalApi::class)
-    private fun createEngine(path: String, backend: Backend, speculative: Boolean, vision: Boolean = false): Engine {
+    private fun createEngine(path: String, backend: Backend, speculative: Boolean, vision: Boolean = false, f32: Boolean = false): Engine {
         val spec = SpeculativeDecodingConfig(mode = if (speculative) SpeculativeDecodingMode.ADAPTIVE else SpeculativeDecodingMode.OFF)
+        // calculs en 32 bits sur le GPU (voir [gpu32File]) ; sinon le réglage du moteur (16 bits sur GPU, 32 sur processeur)
+        val act = if (f32) ActivationDataType.FLOAT32 else null
         // lecture d'image : encodeur de vision sur GPU (la voie CPU plante au deuxième tour d'image sur certains Snapdragon), une image à la fois
-        val cfg = if (vision) EngineConfig(modelPath = path, backend = backend, visionBackend = Backend.GPU(), maxNumTokens = 4096, maxNumImages = 1, cacheDir = ctx.cacheDir.path, speculativeDecodingConfig = spec)
-        else EngineConfig(modelPath = path, backend = backend, maxNumTokens = 4096, cacheDir = ctx.cacheDir.path, speculativeDecodingConfig = spec)
+        val cfg = if (vision) EngineConfig(modelPath = path, backend = backend, visionBackend = Backend.GPU(), maxNumTokens = 4096, maxNumImages = 1, cacheDir = ctx.cacheDir.path, activationDataType = act, speculativeDecodingConfig = spec)
+        else EngineConfig(modelPath = path, backend = backend, maxNumTokens = 4096, cacheDir = ctx.cacheDir.path, activationDataType = act, speculativeDecodingConfig = spec)
         return Engine(cfg).also { it.initialize() }
     }
 
@@ -267,28 +275,91 @@ class GemmaTranslator(
         } catch (_: Throwable) {}
     }
 
+    // ---------- GPU en 32 bits ----------
+
+    /**
+     * Calculs du GPU en 32 bits au lieu de 16. Sur l'Adreno 840 (Snapdragon 8 Elite Gen 5), Gemma 4 E4B en 16 bits abîme sa réponse dès que le texte lu dépasse environ 2 048 jetons
+     * (ticket LiteRT-LM #4001, même fichier de modèle ; #3012 et #3913 sur d'autres GPU) : chiffres doublés ou mélangés, mots déformés. Nos demandes en font 2 000 à 2 400 depuis le
+     * 23/11 : numéros de ligne « 111| », « 1| » pour 12 ou « 1111… » (lignes refaites, jusqu'à un tiers des pages de Mount Hua le 28/11), « 101 GRANDES SECTES » pour 10,
+     * « 3 1499 ÉPISODES » pour 3 149 (26 lignes le 27/11) ; le banc (processeur, 32 bits) n'en montre aucun sur les mêmes 1 600 lignes. Coût mesuré par le ticket sur ce GPU :
+     * écriture aussi rapide, premier mot 0,2 s plus tard, 1,5 Go de mémoire en plus : seulement si le téléphone a au moins 13 Go.
+     * Garde comme celle du GPU, mais à part : un plantage natif pendant le premier essai de cette version coupe les 32 bits (retour au 16 bits), pas le GPU. Deux arrêts de l'application
+     * au premier plan faute de mémoire pendant que le moteur 32 bits est chargé le coupent aussi pour cette version.
+     */
+    private val gpu32File = File(ctx.filesDir, "gpu32_guard.state")
+    private val gpu32Active = File(ctx.filesDir, "gpu32_active.state")
+    private val gpu32Low = File(ctx.filesDir, "gpu32_low.state")
+    @Volatile private var gpu32Off = false
+    @Volatile private var engineIsGpu32 = false
+    private fun gpu32Unproven(): Boolean = try { !GpuGuard.isProven(gpu32File.readText(), BuildConfig.BUILD_NUMBER) } catch (_: Throwable) { true }
+    private fun gpu32Mark(mark: String?) { try { if (mark == null) gpu32File.delete() else gpu32File.writeText(mark) } catch (_: Throwable) {} }
+    private fun gpu32Allowed(): Boolean = !gpu32Off && try {
+        val mi = android.app.ActivityManager.MemoryInfo()
+        ctx.getSystemService(android.app.ActivityManager::class.java)?.getMemoryInfo(mi)
+        mi.totalMem >= 13L * 1024 * 1024 * 1024
+    } catch (_: Throwable) { false }
+    /** Moteur 32 bits chargé ou non (fichier présent pendant qu'il l'est) : un arrêt faute de mémoire pendant ce temps lui est imputé. */
+    private fun gpu32Loaded(on: Boolean) { try { if (on) gpu32Active.writeText(BuildConfig.BUILD_NUMBER.toString()) else gpu32Active.delete() } catch (_: Throwable) {} }
+    /** Description pour le journal quand les 32 bits ont été coupés à ce lancement (null sinon). */
+    @Volatile var gpu32Note: String? = null
+        private set
+
+    init {
+        try {
+            val build = BuildConfig.BUILD_NUMBER
+            val mark = if (gpu32File.exists()) gpu32File.readText().trim() else ""
+            if (mark == "off|$build") gpu32Off = true
+            else {
+                if (android.os.Build.VERSION.SDK_INT >= 30) {
+                    val last = ctx.getSystemService(android.app.ActivityManager::class.java)?.getHistoricalProcessExitReasons(ctx.packageName, 0, 1)?.firstOrNull()
+                    val nativeCrash = last != null && last.reason == android.app.ApplicationExitInfo.REASON_CRASH_NATIVE
+                    // arrêt faute de mémoire de l'application au premier plan pendant que le moteur 32 bits était chargé : un avertissement, au second les 32 bits sont coupés
+                    val lowFg = last != null && last.reason == android.app.ApplicationExitInfo.REASON_LOW_MEMORY && last.importance <= android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE
+                    val wasLoaded = gpu32Active.exists() && gpu32Active.readText().trim() == build.toString()
+                    val strikes = try { gpu32Low.readText().trim().split('|').let { if (it.getOrNull(1) == build.toString()) it[0].toInt() else 0 } } catch (_: Throwable) { 0 }
+                    if (GpuGuard.tripped(mark, build, nativeCrash)) { gpu32Off = true; gpu32Note = "plantage natif au premier essai : " + (last?.description ?: "") }
+                    else if (lowFg && wasLoaded) {
+                        if (strikes >= 1) { gpu32Off = true; gpu32Note = "deux arrêts faute de mémoire avec le moteur 32 bits chargé" }
+                        else try { gpu32Low.writeText("1|$build") } catch (_: Throwable) {}
+                    }
+                }
+                if (gpu32Off) gpu32Mark("off|$build")
+                else if (!GpuGuard.isProven(mark, build)) gpu32Mark(null)   // une marque « running » ne survit pas au lancement ; la preuve de ce build reste
+            }
+            gpu32Loaded(false)
+        } catch (_: Throwable) {}
+    }
+
     private fun ensureEngine(spec: ModelSpec, gpu: Boolean, vision: Boolean = false): Engine {
         val key = spec.id + (if (gpu) ":gpu" else ":cpu") + (if (vision) ":v" else "")
         engine?.let { if (engineKey == key) return it }
         release()
         val path = models.fileOf(spec).absolutePath
-        // ordre d'essai : GPU + spéculatif, GPU, CPU + spéculatif, CPU (repli automatique si une option n'est pas disponible)
-        val attempts = (if (gpu) listOf(true to true, true to false) else emptyList()) + listOf(false to true, false to false)
+        // ordre d'essai : GPU 32 bits (+ spéculatif, puis sans), GPU 16 bits (idem), CPU + spéculatif, CPU (repli automatique si une option n'est pas disponible)
+        val f32 = gpu && gpu32Allowed()
+        val attempts = (if (f32) listOf(Triple(true, true, true), Triple(true, false, true)) else emptyList()) +
+            (if (gpu) listOf(Triple(true, true, false), Triple(true, false, false)) else emptyList()) + listOf(Triple(false, true, false), Triple(false, false, false))
         var last: Throwable? = null
         for (withVision in if (vision) listOf(true, false) else listOf(false)) {
-            for ((useGpu, spec2) in attempts) {
-                val guarded = useGpu && gpuUnproven()
+            for ((useGpu, spec2, use32) in attempts) {
+                val guarded32 = use32 && gpu32Unproven()
+                val guarded = useGpu && !use32 && gpuUnproven()
                 try {
+                    if (guarded32) gpu32Mark(GpuGuard.running(BuildConfig.BUILD_NUMBER))
                     if (guarded) gpuMark(GpuGuard.running(BuildConfig.BUILD_NUMBER))
-                    val e = createEngine(path, if (useGpu) Backend.GPU() else Backend.CPU(), spec2, withVision)
-                    if (guarded) gpuMark(null) // le processus a survécu à la création ; la preuve vient de la première génération réussie
+                    val e = createEngine(path, if (useGpu) Backend.GPU() else Backend.CPU(), spec2, withVision, use32)
+                    // le processus a survécu à la création ; la preuve vient de la première génération réussie
+                    if (guarded32) gpu32Mark(null)
+                    if (guarded) gpuMark(null)
                     engine = e; engineKey = spec.id + (if (gpu) ":gpu" else ":cpu") + (if (withVision) ":v" else "")
                     engineIsGpu = useGpu
+                    engineIsGpu32 = use32
+                    gpu32Loaded(use32)
                     engineHasVision = withVision
-                    backendLabel = (if (useGpu) "GPU" else "CPU") + (if (spec2) " + décodage spéculatif adaptatif" else "") + (if (withVision) " + lecture d'image" else "")
+                    backendLabel = (if (useGpu) "GPU" else "CPU") + (if (use32) " 32 bits" else "") + (if (spec2) " + décodage spéculatif adaptatif" else "") + (if (withVision) " + lecture d'image" else "")
                     if (vision && !withVision) markVision(false, "le moteur n'a pas pu être créé avec la lecture d'image : ${last?.message ?: last?.javaClass?.simpleName}")
                     return e
-                } catch (t: Throwable) { if (guarded) gpuMark(null); last = t }
+                } catch (t: Throwable) { if (guarded32) gpu32Mark(null); if (guarded) gpuMark(null); last = t }
             }
         }
         throw last ?: IllegalStateException("moteur indisponible")
@@ -423,6 +494,7 @@ class GemmaTranslator(
     @Synchronized fun benchmark(spec: ModelSpec, gpu: Boolean): BenchResult {
         val r = benchmarkRaw(spec, gpu)
         if (gpu && r.ok && r.label.startsWith("GPU")) gpuMark(GpuGuard.proven(BuildConfig.BUILD_NUMBER))
+        if (gpu && r.ok && r.label.startsWith("GPU 32 bits")) gpu32Mark(GpuGuard.proven(BuildConfig.BUILD_NUMBER))
         return r
     }
 
@@ -431,10 +503,16 @@ class GemmaTranslator(
         val label = if (gpu) "GPU" else "CPU"
         val path = models.fileOf(spec).absolutePath
         val t0 = System.currentTimeMillis()
-        val eng = try { createEngine(path, if (gpu) Backend.GPU() else Backend.CPU(), true) } catch (t: Throwable) {
-            return try { createEngine(path, if (gpu) Backend.GPU() else Backend.CPU(), false).let { e2 -> benchWith(e2, label, t0) } } catch (t2: Throwable) { BenchResult(label, false, 0, 0, t2.message ?: t2.javaClass.simpleName) }
+        // même moteur que pour la lecture : 32 bits sur le GPU quand c'est possible (voir [gpu32File]), sinon 16 bits
+        val f32 = gpu && gpu32Allowed()
+        val tag = if (f32) "$label 32 bits" else label
+        val eng = try { createEngine(path, if (gpu) Backend.GPU() else Backend.CPU(), true, f32 = f32) } catch (t: Throwable) {
+            return try { createEngine(path, if (gpu) Backend.GPU() else Backend.CPU(), false, f32 = f32).let { e2 -> benchWith(e2, tag, t0) } } catch (t2: Throwable) {
+                if (!f32) BenchResult(label, false, 0, 0, t2.message ?: t2.javaClass.simpleName)
+                else try { createEngine(path, Backend.GPU(), true).let { e3 -> benchWith(e3, "$label + décodage spéculatif adaptatif", t0) } } catch (t3: Throwable) { BenchResult(label, false, 0, 0, t3.message ?: t3.javaClass.simpleName) }
+            }
         }
-        return benchWith(eng, "$label + décodage spéculatif adaptatif", t0)
+        return benchWith(eng, "$tag + décodage spéculatif adaptatif", t0)
     }
 
     private fun benchWith(eng: Engine, label: String, t0: Long): BenchResult {
@@ -476,7 +554,8 @@ class GemmaTranslator(
 
     @Synchronized fun release() {
         try { engine?.close() } catch (_: Throwable) {}
-        engine = null; engineKey = ""; engineHasVision = false; engineIsGpu = false
+        engine = null; engineKey = ""; engineHasVision = false; engineIsGpu = false; engineIsGpu32 = false
+        gpu32Loaded(false)
     }
 
     companion object {

@@ -231,6 +231,14 @@ object TranslationPost {
 
     private val clockRe = Regex("(?i)\\d\\s*(?:a\\.?m\\b|p\\.?m\\b)|o['’]clock")
 
+    /** Suite d'au moins cinq chiffres identiques (« 1111111… ») absente de l'original : bégaiement du modèle sur un numéro de ligne, collé à la traduction ; retirée. */
+    private val digitRunRe = Regex("\\s*(\\d)\\1{4,}")
+    fun digitRuns(src: String, tr: String): String {
+        if (!digitRunRe.containsMatchIn(tr)) return tr
+        val out = digitRunRe.replace(tr) { m -> if (src.contains(m.value.trim())) m.value else "" }.trim()
+        return out.ifEmpty { tr }
+    }
+
     private fun oneDigitApart(a: String, b: String): Boolean {
         if (a.length == b.length + 1) return a.indices.any { a.removeRange(it, it + 1) == b }
         if (b.length == a.length + 1) return b.indices.any { b.removeRange(it, it + 1) == a }
