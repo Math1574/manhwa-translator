@@ -30,12 +30,8 @@ import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
 import com.google.ai.edge.litertlm.ExperimentalApi
-import com.google.ai.edge.litertlm.InputData
 import com.google.ai.edge.litertlm.Message
-import com.google.ai.edge.litertlm.ResponseCallback
 import com.google.ai.edge.litertlm.SamplerConfig
-import com.google.ai.edge.litertlm.Session
-import com.google.ai.edge.litertlm.SessionConfig
 import com.google.ai.edge.litertlm.SpeculativeDecodingConfig
 import com.google.ai.edge.litertlm.SpeculativeDecodingMode
 import java.io.File
@@ -108,24 +104,12 @@ class GemmaTranslator(
     private var engineKey = ""
 
     /**
-     * Génération par le moteur chargé, appelée seulement depuis [translateWithGlossary], qui tient le verrou du moteur.
-     * D'abord avec la consigne déjà lue (voir [generatePrefixed]) ; si le moteur ne sait pas le faire, une conversation neuve par appel, sous la garde du GPU et du délai maximal
-     * (voir [withWatchdog]), comme jusqu'au build 264.
+     * Génération par le moteur chargé : une conversation neuve par appel, sous la garde du GPU et du délai maximal (voir [withWatchdog]).
+     * Appelée seulement depuis [translateWithGlossary], qui tient le verrou du moteur.
      */
-    // types explicites : le dorsal se sert de [core] (note d'appel) et [core] du dorsal, l'inférence de Kotlin tournerait en rond
-    private val backend: LlmBackend = LlmBackend { system, user, sampling, maxTokens ->
+    private val backend = LlmBackend { system, user, sampling, maxTokens ->
         val eng = engine ?: throw IllegalStateException("moteur non chargé")
         val t0 = SystemClock.uptimeMillis()
-        if (prefixUsable()) {
-            try {
-                val text = generatePrefixed(eng, system, user, maxTokens)
-                return@LlmBackend LlmReply(text, 0L)
-            } catch (t: Throwable) {
-                // refusé par le moteur (clone non pris en charge sur ce GPU…) : on n'insiste pas, retour aux conversations jusqu'au prochain chargement du modèle
-                closePrefix(); prefixFailed = t.message ?: t.javaClass.simpleName
-                core.addCallNote("prefix-off:" + prefixFailed.take(60).replace(';', ','))
-            }
-        }
         val config = ConversationConfig(
             systemInstruction = Contents.of(system),
             samplerConfig = SamplerConfig(topK = sampling.topK, topP = sampling.topP, temperature = sampling.temperature),
@@ -140,7 +124,7 @@ class GemmaTranslator(
     }
 
     /** Orchestration de la traduction (demande groupée, lignes refaites, contrôles, mémoire du chapitre et de l'œuvre) : dans le cœur, partagée avec le banc d'essai. */
-    val core: LlmTranslator = LlmTranslator(backend) { Lexicon.peek() ?: try { Lexicon.get(ctx) } catch (_: Throwable) { null } }
+    val core = LlmTranslator(backend) { Lexicon.peek() ?: try { Lexicon.get(ctx) } catch (_: Throwable) { null } }
 
     /** Version du prompt et relecture : réglables par le banc d'essai de traduction. */
     var promptVariant: Int
@@ -222,94 +206,6 @@ class GemmaTranslator(
             if (guarded) gpuMark(null) // une exception n'est pas un plantage : rien n'est prouvé, la garde reprendra
             throw t
         } finally { timer.cancel() }
-    }
-
-    // ---------- consigne lue une fois (préfixe gardé) ----------
-
-    /**
-     * La consigne (système, environ 1 300 jetons) est la même pour toutes les demandes. Le journal du 28/11 montre que la lecture du texte d'entrée prend la moitié du temps de
-     * traduction sur le téléphone (1 400 caractères par seconde, contre 76 écrits), et que la consigne en est la plus grosse part, relue à chaque page et à chaque ligne refaite.
-     * Elle est maintenant lue une seule fois dans une session de base, recopiée (clone de session, cache du modèle compris) pour chaque demande, qui ne lit plus que son message.
-     */
-    private var prefixBase: Session? = null
-    private var prefixKey = ""
-    /** Non vide quand le moteur a refusé la consigne gardée : conversations jusqu'au prochain chargement du modèle. */
-    @Volatile private var prefixFailed = ""
-    /** Un plantage natif pendant le premier essai de cette version coupe la consigne gardée pour toute la version (même principe que la garde du GPU). */
-    private val prefixGuardFile = File(ctx.filesDir, "prefix_guard.state")
-    @Volatile private var prefixTripped = false
-
-    private fun prefixUsable(): Boolean = prefixFailed.isEmpty() && !prefixTripped
-    private fun prefixUnproven(): Boolean = try { !GpuGuard.isProven(prefixGuardFile.readText(), BuildConfig.BUILD_NUMBER) } catch (_: Throwable) { true }
-    private fun prefixMark(mark: String?) { try { if (mark == null) prefixGuardFile.delete() else prefixGuardFile.writeText(mark) } catch (_: Throwable) {} }
-    private fun closePrefix() { try { prefixBase?.close() } catch (_: Throwable) {}; prefixBase = null; prefixKey = "" }
-
-    init {
-        try {
-            if (prefixGuardFile.exists()) {
-                val mark = prefixGuardFile.readText().trim()
-                if (mark == "off|${BuildConfig.BUILD_NUMBER}") prefixTripped = true
-                else if (GpuGuard.interrupted(mark, BuildConfig.BUILD_NUMBER) && android.os.Build.VERSION.SDK_INT >= 30) {
-                    val last = ctx.getSystemService(android.app.ActivityManager::class.java)?.getHistoricalProcessExitReasons(ctx.packageName, 0, 1)?.firstOrNull()
-                    val nativeCrash = last != null && last.reason == android.app.ApplicationExitInfo.REASON_CRASH_NATIVE
-                    if (GpuGuard.tripped(mark, BuildConfig.BUILD_NUMBER, nativeCrash)) { prefixTripped = true; prefixMark("off|${BuildConfig.BUILD_NUMBER}") } else prefixMark(null)
-                } else if (!GpuGuard.isProven(mark, BuildConfig.BUILD_NUMBER)) prefixMark(null)
-            }
-        } catch (_: Throwable) {}
-    }
-
-    /**
-     * Une demande avec la consigne déjà lue : session de base (consigne lue au premier appel, refaite si la consigne change), recopiée, puis seul le message est lu et la réponse
-     * écrite au fil de l'eau. Bornée comme une conversation : longueur ([maxTokens], en caractères larges) et délai ([generationTimeoutMs]) ; la réponse partielle reste exploitable.
-     * Mise en forme : Gemma 4 n'a pas de gabarit simple de tour de parole dans ses métadonnées (seulement le gabarit Jinja qu'appliquent les conversations) ; la session reçoit donc
-     * le texte déjà mis en forme comme le ferait ce gabarit (tour « system », puis tour « user », puis début du tour « model »). La sonde du 28/11 (même modèle, sur processeur) donne
-     * alors exactement la même réponse qu'une conversation.
-     */
-    private fun generatePrefixed(eng: Engine, system: String, user: String, maxTokens: Int): String {
-        val guarded = prefixUnproven()
-        if (guarded) prefixMark(GpuGuard.running(BuildConfig.BUILD_NUMBER))
-        try {
-            if (prefixBase == null || prefixKey != system) {
-                closePrefix()
-                val base = eng.createSession(SessionConfig(samplerConfig = SamplerConfig(topK = 20, topP = 0.9, temperature = 0.15)))
-                try { base.runPrefill(listOf(InputData.Text(TURN_SYSTEM + system.trim() + TURN_END + TURN_USER))) } catch (t: Throwable) { try { base.close() } catch (_: Throwable) {}; throw t }
-                prefixBase = base; prefixKey = system
-            }
-            val s = prefixBase!!.clone()
-            try {
-                val out = StringBuilder()
-                val done = java.util.concurrent.CountDownLatch(1)
-                val error = java.util.concurrent.atomic.AtomicReference<Throwable?>(null)
-                val stopped = AtomicBoolean(false)
-                val offFormat = AtomicBoolean(false)
-                val cap = maxTokens * 5
-                s.generateContentStream(listOf(InputData.Text(user.trim() + TURN_END + TURN_MODEL)), object : ResponseCallback {
-                    override fun onNext(response: String) {
-                        val (n, head) = synchronized(out) { out.append(response); out.length to (if (out.length in 24..400) out.toString() else null) }
-                        // toute demande attend des lignes numérotées (« 1| … ») : un début de réponse sans numéro veut dire que le moteur n'a pas compris la mise en forme
-                        if (head != null && !offFormat.get() && !leadingNumber.containsMatchIn(head) && stopped.compareAndSet(false, true)) { offFormat.set(true); try { s.cancelProcess() } catch (_: Throwable) {} }
-                        if (n > cap && stopped.compareAndSet(false, true)) try { s.cancelProcess() } catch (_: Throwable) {}
-                    }
-                    override fun onDone() { done.countDown() }
-                    override fun onError(throwable: Throwable) {
-                        if (throwable !is java.util.concurrent.CancellationException) error.set(throwable)
-                        done.countDown()
-                    }
-                })
-                if (!done.await(generationTimeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)) {
-                    try { s.cancelProcess() } catch (_: Throwable) {}
-                    done.await(10_000L, java.util.concurrent.TimeUnit.MILLISECONDS)
-                }
-                error.get()?.let { throw it }
-                if (offFormat.get()) throw IllegalStateException("réponse hors format : " + synchronized(out) { out.toString() }.take(40))
-                val text = synchronized(out) { out.toString() }
-                if (guarded) prefixMark(GpuGuard.proven(BuildConfig.BUILD_NUMBER))
-                return text
-            } finally { try { s.close() } catch (_: Throwable) {} }
-        } catch (t: Throwable) {
-            if (guarded) prefixMark(null)   // une exception n'est pas un plantage : rien n'est prouvé
-            throw t
-        }
     }
 
     private fun textOf(m: Message): String =
@@ -579,7 +475,6 @@ class GemmaTranslator(
     fun resetContext() = core.resetContext()
 
     @Synchronized fun release() {
-        closePrefix(); prefixFailed = ""
         try { engine?.close() } catch (_: Throwable) {}
         engine = null; engineKey = ""; engineHasVision = false; engineIsGpu = false
     }
@@ -589,13 +484,6 @@ class GemmaTranslator(
         const val IDLE_RELEASE_MS = 10 * 60 * 1000L
         /** Une génération normale dure moins de 20 s : au-delà d'une minute, elle est interrompue (la réponse partielle reste exploitable ligne par ligne). */
         const val GENERATION_TIMEOUT_MS = 60 * 1000L
-        /** Marques de tour de parole de Gemma 4 (jetons spéciaux du modèle), telles que son gabarit de conversation les écrit. */
-        private const val TURN_SYSTEM = "<|turn>system\n"
-        private const val TURN_USER = "<|turn>user\n"
-        private const val TURN_MODEL = "<|turn>model\n"
-        private const val TURN_END = "<turn|>\n"
-        /** Début de réponse attendu : un numéro de ligne (« 1| », « [1] »…). */
-        private val leadingNumber = Regex("^\\s*[\\[(]?\\d")
         /** La version du prompt (4 et suivantes) fait partie de l'identifiant : un prompt nouveau retraduit les pages déjà en cache. */
         fun engineId(spec: ModelSpec) = "${spec.id}-ctx1" + (if (LlmPrompt.CURRENT >= 4) "-p${LlmPrompt.CURRENT}" else "")
     }
