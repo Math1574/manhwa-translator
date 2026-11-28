@@ -260,7 +260,9 @@ class GemmaTranslator(
     /**
      * Une demande avec la consigne déjà lue : session de base (consigne lue au premier appel, refaite si la consigne change), recopiée, puis seul le message est lu et la réponse
      * écrite au fil de l'eau. Bornée comme une conversation : longueur ([maxTokens], en caractères larges) et délai ([generationTimeoutMs]) ; la réponse partielle reste exploitable.
-     * Rendu du modèle : le message suit la consigne dans le même tour de parole, comme le modèle les reçoit en conversation.
+     * Mise en forme : Gemma 4 n'a pas de gabarit simple de tour de parole dans ses métadonnées (seulement le gabarit Jinja qu'appliquent les conversations) ; la session reçoit donc
+     * le texte déjà mis en forme comme le ferait ce gabarit (tour « system », puis tour « user », puis début du tour « model »). La sonde du 28/11 (même modèle, sur processeur) donne
+     * alors exactement la même réponse qu'une conversation.
      */
     private fun generatePrefixed(eng: Engine, system: String, user: String, maxTokens: Int): String {
         val guarded = prefixUnproven()
@@ -269,7 +271,7 @@ class GemmaTranslator(
             if (prefixBase == null || prefixKey != system) {
                 closePrefix()
                 val base = eng.createSession(SessionConfig(samplerConfig = SamplerConfig(topK = 20, topP = 0.9, temperature = 0.15)))
-                try { base.runPrefill(listOf(InputData.Text(system + "\n\n"))) } catch (t: Throwable) { try { base.close() } catch (_: Throwable) {}; throw t }
+                try { base.runPrefill(listOf(InputData.Text(TURN_SYSTEM + system.trim() + TURN_END + TURN_USER))) } catch (t: Throwable) { try { base.close() } catch (_: Throwable) {}; throw t }
                 prefixBase = base; prefixKey = system
             }
             val s = prefixBase!!.clone()
@@ -279,7 +281,7 @@ class GemmaTranslator(
                 val error = java.util.concurrent.atomic.AtomicReference<Throwable?>(null)
                 val stopped = AtomicBoolean(false)
                 val cap = maxTokens * 5
-                s.generateContentStream(listOf(InputData.Text(user)), object : ResponseCallback {
+                s.generateContentStream(listOf(InputData.Text(user.trim() + TURN_END + TURN_MODEL)), object : ResponseCallback {
                     override fun onNext(response: String) {
                         val n = synchronized(out) { out.append(response); out.length }
                         if (n > cap && stopped.compareAndSet(false, true)) try { s.cancelProcess() } catch (_: Throwable) {}
@@ -582,6 +584,11 @@ class GemmaTranslator(
         const val IDLE_RELEASE_MS = 10 * 60 * 1000L
         /** Une génération normale dure moins de 20 s : au-delà d'une minute, elle est interrompue (la réponse partielle reste exploitable ligne par ligne). */
         const val GENERATION_TIMEOUT_MS = 60 * 1000L
+        /** Marques de tour de parole de Gemma 4 (jetons spéciaux du modèle), telles que son gabarit de conversation les écrit. */
+        private const val TURN_SYSTEM = "<|turn>system\n"
+        private const val TURN_USER = "<|turn>user\n"
+        private const val TURN_MODEL = "<|turn>model\n"
+        private const val TURN_END = "<turn|>\n"
         /** La version du prompt (4 et suivantes) fait partie de l'identifiant : un prompt nouveau retraduit les pages déjà en cache. */
         fun engineId(spec: ModelSpec) = "${spec.id}-ctx1" + (if (LlmPrompt.CURRENT >= 4) "-p${LlmPrompt.CURRENT}" else "")
     }

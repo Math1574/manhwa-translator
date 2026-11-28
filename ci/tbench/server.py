@@ -40,11 +40,12 @@ def gen_session(body, sampler):
         while len(bases) >= 2:
             bases.pop(next(iter(bases))).close()
         base = engine.create_session(apply_prompt_template=True, sampler_config=sampler)
-        base.run_prefill([body["system"] + "\n\n"])
+        # Gemma 4 : pas de gabarit simple dans les métadonnées, le gabarit Jinja des conversations est reproduit à la main (sonde du 28/11 : réponse identique)
+        base.run_prefill(["<|turn>system\n" + body["system"].strip() + "<turn|>\n<|turn>user\n"])
         bases[key] = base
     s = base.clone()
     try:
-        s.run_prefill([body["user"]])
+        s.run_prefill([body["user"].strip() + "<turn|>\n<|turn>model\n"])
         r = s.run_decode()
         return r.texts[0] if r.texts else ""
     finally:
