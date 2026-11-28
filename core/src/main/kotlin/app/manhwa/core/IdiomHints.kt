@@ -552,7 +552,7 @@ in other words | autrement dit, en d'autres termes | en d'autres mots
 what's gotten into | qu'est-ce qui lui prend ?, qu'est-ce qui t'arrive ?
 ~get the hang of | prendre le coup de main
 ~go missing | disparaître
-~keep an eye on | garder un œil sur, surveiller
+~keep an eye on | surveiller (« that's who we're here to keep an eye on » = c'est lui qu'on est venus surveiller)
 ~keep up with | suivre (le rythme de)
 ~catch up | rattraper, rejoindre
 ~come up | arriver, se présenter ; « come up with » = trouver, imaginer
