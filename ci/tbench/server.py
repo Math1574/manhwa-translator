@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """Serveur de génération du banc d'essai de traduction : le même modèle Gemma (fichier .litertlm) que l'application, sur le processeur de la machine de test.
 
-POST / avec un objet JSON {system, user, top_k, top_p, temperature, max_tokens, seed?} : une conversation neuve (comme dans l'application), réponse brute en texte.
+POST / avec un objet JSON {system, user, top_k, top_p, temperature, max_tokens, seed?} : réponse brute en texte.
 GET /health : « ok » quand le modèle est chargé.
 Usage : server.py <modèle.litertlm> <port> [threads]
+Mode (variable TBENCH_SERVER) :
+  conv    : une conversation neuve par demande (l'application jusqu'au build 264) ;
+  session : la consigne (système) lue une fois puis recopiée (clone de session, cache de préfixe), seul le message de la demande est lu à chaque fois ;
+  ab      : les deux sur chaque demande, réponse de « conv » renvoyée, comparaison (textes, durées) dans /tmp/ab.jsonl.
 """
 import http.server, json, os, sys, time, threading
 import litert_lm as lm
@@ -16,6 +20,35 @@ os.makedirs("/tmp/litert_cache", exist_ok=True)
 engine = lm.Engine(model, backend=backend, max_num_tokens=8192, cache_dir="/tmp/litert_cache")
 print(f"modèle chargé en {time.time() - t0:.1f} s", flush=True)
 lock = threading.Lock()
+mode = os.environ.get("TBENCH_SERVER", "conv")
+print("mode :", mode, flush=True)
+bases = {}   # (consigne, échantillonnage) -> session dont la consigne est déjà lue
+
+
+def gen_conv(body, sampler):
+    conv = engine.create_conversation(system_message=body["system"], sampler_config=sampler, max_output_tokens=int(body.get("max_tokens", 512)))
+    try:
+        return str(conv.send_message(body["user"]))
+    finally:
+        conv.close()
+
+
+def gen_session(body, sampler):
+    key = (body["system"], sampler.top_k, sampler.top_p, sampler.temperature)
+    base = bases.get(key)
+    if base is None:
+        while len(bases) >= 2:
+            bases.pop(next(iter(bases))).close()
+        base = engine.create_session(apply_prompt_template=True, sampler_config=sampler)
+        base.run_prefill([body["system"] + "\n\n"])
+        bases[key] = base
+    s = base.clone()
+    try:
+        s.run_prefill([body["user"]])
+        r = s.run_decode()
+        return r.texts[0] if r.texts else ""
+    finally:
+        s.close()
 
 
 class H(http.server.BaseHTTPRequestHandler):
@@ -40,12 +73,21 @@ class H(http.server.BaseHTTPRequestHandler):
                                        temperature=float(body.get("temperature", 0.15)), seed=int(body.get("seed", 7)))
             with lock:
                 t = time.time()
-                conv = engine.create_conversation(system_message=body["system"], sampler_config=sampler, max_output_tokens=int(body.get("max_tokens", 512)))
-                try:
-                    reply = str(conv.send_message(body["user"]))
-                finally:
-                    conv.close()
+                if mode == "session":
+                    reply = gen_session(body, sampler)
+                else:
+                    reply = gen_conv(body, sampler)
                 dt = time.time() - t
+                if mode == "ab":
+                    t2 = time.time()
+                    try:
+                        other = gen_session(body, sampler); err = None
+                    except Exception as e:
+                        other = ""; err = repr(e)
+                    dt2 = time.time() - t2
+                    with open("/tmp/ab.jsonl", "a", encoding="utf-8") as f:
+                        f.write(json.dumps({"conv": reply, "session": other, "conv_s": round(dt, 2), "session_s": round(dt2, 2), "in_sys": len(body["system"]),
+                                            "in_user": len(body["user"]), "same": reply == other, "err": err, "user": body["user"][-300:]}, ensure_ascii=False) + "\n")
             print(f"génération : {dt:.1f} s, {len(body['system']) + len(body['user'])} car. -> {len(reply)} car.", flush=True)
             self._send(200, reply)
         except Exception as e:  # le banc note l'échec de la page et continue

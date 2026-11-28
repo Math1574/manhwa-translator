@@ -271,6 +271,8 @@ Answer with exactly one line per input line, in the format `N| edited translatio
 
     private val thinkRe = Regex("(?s)<think>.*?</think>")
     private val lineRe = Regex("^\\s*[\\[(]?(\\d+)[\\])]?\\s*[|:.)\\-–]\\s?(.*)$")
+    /** « 2 Pa ! » : numéro sans séparateur (journal du 28/11, Mount Hua 1 : la réponse a perdu ses « | » après la première ligne, 21 lignes refaites une à une, 110 s). Accepté pour le numéro attendu seulement. */
+    private val bareLineRe = Regex("^\\s*(\\d{1,4})\\s+(\\D.*)$")
 
     /**
      * Renvoie une traduction par ligne d'entrée (null si absente). Tolère le Markdown, les guillemets et les lignes multiples.
@@ -299,7 +301,10 @@ Answer with exactly one line per input line, in the format `N| edited translatio
         for (raw in cleaned.lines()) {
             val line = raw.trimEnd()
             if (line.isBlank()) continue
-            val m = lineRe.matchEntire(line)
+            val m = lineRe.matchEntire(line) ?: bareLineRe.matchEntire(line)?.takeIf { b ->
+                val n = b.groupValues[1].toInt()
+                n == last + 1 && n <= count || (count >= 10 && n >= last + 10 && (last + 1..minOf(count, last + 3)).any { it % 10 == n % 10 && found[it] == null })
+            }
             if (m != null) {
                 var n = m.groupValues[1].toIntOrNull() ?: -1
                 // dizaine perdue ou fausse : en arrière (« 3| » pour 13), ou d'un bond de dix en avant (« 21| » pour 11 ; jamais dix lignes sautées d'un coup)

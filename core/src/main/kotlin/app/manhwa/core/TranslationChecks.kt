@@ -2,12 +2,17 @@ package app.manhwa.core
 
 /** Contrôles automatiques d'une traduction ligne par ligne : mots non traduits, contenu perdu, noms modifiés, chiffres perdus, répétitions. */
 object TranslationChecks {
-    private val srcNumber = Regex("(?<![A-Za-z0-9])\\d{1,3}(?:[,.\u00A0\u202F ]\\d{3})+(?![A-Za-z0-9])|(?<![A-Za-z0-9])\\d+(?![A-Za-z0-9])")
+    /**
+     * Nombres de l'original. Pas un chiffre collé à des lettres (« INJURIE3 »), ni accroché par un trait d'union (« 0-OUCHY » : le O lu 0), ni collé derrière des points en fin
+     * de bulle (« ME..2 », « WHAT...2! » : le « ? » lu 2) — erreurs de lecture que la traduction corrige à raison.
+     */
+    private val srcNumber = Regex("(?<![A-Za-z0-9]|[A-Za-z]-)\\d{1,3}(?:[,.\u00A0\u202F ]\\d{3})+(?![A-Za-z0-9]|-[A-Za-z])|(?<![A-Za-z0-9.?!]|[A-Za-z]-)\\d+(?![A-Za-z0-9]|-[A-Za-z])")
     private val trNumber = Regex("(?<!\\d)\\d{1,3}(?:[,.\u00A0\u202F ]\\d{3})+(?!\\d)|\\d+")
 
     /** Une syllabe répétée de part et d'autre d'un trait d'union (« EST-EST », « A-A », « B-BUT » côté anglais). */
     /** Bégaiement de l'original, trait d'union suivi ou non d'une espace (« B-BUT », « WH- WHAT ») : la traduction peut alors bégayer aussi. */
-    private val srcStutter = Regex("(?i)(?<![\\p{L}])(\\p{L}{1,4})-\\s?\\1")
+    /** Bégaiement de l'original, quelle que soit sa ponctuation : « Y-YOU », « Y, YOU », « Y.. YOU », « Y... YOU ». */
+    private val srcStutter = Regex("(?i)(?<![\\p{L}])(\\p{L}{1,4})(?:-|,|\\.{1,3}|…)\\s?\\1")
     private val stutteredSyllable = Regex("(?i)(?<![\\p{L}])(\\p{L}{1,4})-\\1(?![\\p{L}])|(?i)(?<![\\p{L}])(\\p{L}{1,4})-\\2\\p{L}")
 
     data class Problem(val code: String, val detail: String)
@@ -27,6 +32,9 @@ object TranslationChecks {
 
     private val tokenRe = Regex("[\\p{L}][\\p{L}'’-]*")
 
+    /** Onomatopée ou cri : interjection connue, ou trois lettres différentes au plus (« AAAACK », « KEKEKE », « PFFT », « KUAA »). */
+    private fun soundLike(w: String): Boolean = JunkFilter.isInterjectionToken(w) || w.filter { it.isLetter() }.toSet().size <= 3
+
     /** Mot anglais courant qui n'existe pas en français (voir [englishOnly]). */
     internal fun isEnglishOnly(word: String): Boolean = word.lowercase().replace('’', '\'') in englishOnly
 
@@ -44,7 +52,9 @@ object TranslationChecks {
             // « Y-YOU… » recopié tel quel : un bégaiement est un seul « mot » (trait d'union) ; son second morceau est ce qui dit s'il est resté anglais
             val englishStutter = toks.any { stutterEnglish(it, nameSet) }
             if (englishStutter && eng.isEmpty()) out.add(Problem("non-traduit", "bégaiement resté en anglais : " + toks.first { stutterEnglish(it, nameSet) }))
-            if (sLetters >= 3 && normalize(src) == normalize(t) && ((toks.size >= 2 && toks.any { it.lowercase() in englishOnly || it.length > 3 }) || englishStutter)) out.add(Problem("non-traduit", "identique à l'original"))
+            // recopié tel quel : un problème seulement s'il reste un vrai mot anglais (« KUAA AAK ! », « KEKEKE », « PFFT ! HAHAHA », « JIN MOOWON » se gardent)
+            if (sLetters >= 3 && normalize(src) == normalize(t) && ((toks.size >= 2 && toks.any { w -> val l = w.lowercase(); l in englishOnly || (w.length > 3 && l !in nameSet && !soundLike(l)) }) || englishStutter))
+                out.add(Problem("non-traduit", "identique à l'original"))
         }
         // rendu mot à mot d'une expression toute faite (« tuer deux oiseaux », « faire du sens », « écume » pour « scum ») : la ligne est refaite avec l'équivalent
         if (target == "fr") for (h in IdiomHints.calques(src, t).take(2)) out.add(Problem("calque", "« ${h.matched} » est traduit mot à mot ; dire : ${h.french}"))

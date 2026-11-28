@@ -154,6 +154,22 @@ fun seriesTests() {
         T.eq("Je je ne sais pas", TranslationPost.doubledWords("I, I DON'T KNOW", "Je je ne sais pas"))
     }
     fun g(tr: String, src: String = "") = TranslationPost.grammar(src, tr)
+    T.test("lenteur (journal du 28/11) : réponse sans « | » lue quand même, faux problèmes qui faisaient refaire des lignes pour rien") {
+        // Mount Hua 1, page 12 : « 1| … » puis « 2 Pa ! », « 1111 … » : la page entière était refaite, puis ses 21 lignes une à une
+        val reply = "1| Aaaack !\n2 Pa !\n3 Aaaack !\n4 Uaaaak !\n5 Kuaa aak !\n6 P-Pitié !\n7 Je reviendrai plus tard\n8 Kuheung.\n9 Aïe, aïe...\n10 Ce maudit sale gosse...\n1111 Je n'ai jamais été battu si fort.\n1212 Même pour ce morveux."
+        val p = LlmPrompt.parse(reply, 12)
+        T.eq("Pa !", p[1]); T.eq("Ce maudit sale gosse...", p[9]); T.eq("Je n'ai jamais été battu si fort.", p[10]); T.eq("Même pour ce morveux.", p[11])
+        T.eq(listOf("Il a 10 ans et 3 amis.", null), LlmPrompt.parse("1| Il a 10 ans et\n3 amis.", 2).let { listOf(it[0]?.let { _ -> "Il a 10 ans et 3 amis." }, it[1]) }, "un nombre qui n'est pas le numéro attendu continue la ligne")
+        fun probs(src: String, tr: String) = TranslationChecks.problems(src, tr, "fr", listOf("Moowon")).map { it.code }
+        T.eq(emptyList<String>(), probs("Y, YOU...", "T-TOI..."), "bégaiement à virgule"); T.eq(emptyList<String>(), probs("A.. ARE YOU LAUGHING?!", "T-TU TE MOQUES DE MOI ?!"), "bégaiement à points")
+        T.ok("répétition" in probs("WHAT IS IT?", "QU'EST-EST-CE QUE C'EST ?"), "syllabe doublée sans bégaiement dans l'original : toujours signalée")
+        T.eq(emptyList<String>(), probs("0-OUCHY OUCHY...", "AÏE, AÏE..."), "0 mis pour O"); T.eq(emptyList<String>(), probs("IS SHE CALLING FOR ME..2", "EST-CE QU'ELLE M'APPELLE... ?"), "? lu 2")
+        T.eq(emptyList<String>(), probs("*LI: ONE LI IS EQUAL TO 0.393 KILOMETERS.", "*LI : UN LI ÉQUIVAUT À 0,393 KILOMÈTRE."), "décimale")
+        T.ok("chiffres" in probs("I WAITED 4 DAYS.", "J'AI ATTENDU DES JOURS."), "vrai chiffre perdu : toujours signalé")
+        T.eq(emptyList<String>(), probs("KUAA AAK!", "KUAA AAK !"), "cri recopié"); T.eq(emptyList<String>(), probs("KEKEKE KEK!!", "KEKEKE KEK!!"), "rire recopié")
+        T.eq(emptyList<String>(), probs("JIN MOOWON", "JIN MOOWON"), "nom recopié")
+        T.ok("non-traduit" in probs("THE NORTHERN HEAVENLY SECT", "THE NORTHERN HEAVENLY SECT"), "vraie phrase anglaise recopiée : toujours signalée")
+    }
     T.test("grammaire : élisions oubliées, subjonctif après « bien que », « pour que »…, infinitif après « faire » — le français juste n'est jamais touché") {
         T.eq("AUJOURD'HUI, L'ÉPILOGUE SERA EN LIGNE.", g("AUJOURD'HUI, LE ÉPILOGUE SERA EN LIGNE."))
         T.eq("Le fruit de l'ancien vagabond.", g("Le fruit du ancien vagabond."))

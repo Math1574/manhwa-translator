@@ -146,6 +146,12 @@ class LlmTranslator(private val backend: LlmBackend, private val lexicon: () -> 
         val context = texts.indices.filter { it !in redo && out[it] != null }.map { texts[it] to out[it]!! }
         val again = try { ask(redo.map { texts[it] }, source, target, glossary, kind = "realign", page = context) } catch (e: Throwable) { null }
         redo.forEachIndexed { k, i -> out[i] = again?.getOrNull(k) }
+        // beaucoup de lignes encore absentes (réponse mal formée deux fois) : une demande groupée de plus plutôt qu'une par ligne (3 à 4 s chacune sur le téléphone)
+        val still = bad(redo)
+        if (still.size > 4) {
+            val batch = try { ask(still.map { texts[it] }, source, target, glossary, kind = "miss", page = context) } catch (e: Throwable) { null }
+            still.forEachIndexed { k, i -> batch?.getOrNull(k)?.let { out[i] = it } }
+        }
         for (i in bad(redo)) out[i] = try { ask(listOf(texts[i]), source, target, glossary, kind = "miss").firstOrNull() } catch (e: Throwable) { null }
         // contrôle final de toute la page : une ligne laissée telle quelle peut maintenant se révéler mal placée (même traduction qu'une ligne refaite) ; refaite seule (quatre au plus)
         val late = bad().filter { it !in redo }.take(4)
