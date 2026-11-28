@@ -33,6 +33,10 @@ class LlmTranslator(private val backend: LlmBackend, private val lexicon: () -> 
     /** Synopsis de l'œuvre (en français s'il a été traduit) : donné au modèle comme contexte (qui sont les personnages). */
     @Volatile var seriesPremise: String? = null
     @Volatile var lastReport: List<LineReport> = emptyList()
+    /** Mémoire de l'œuvre (personnages, genre du narrateur, lettres mal lues, genre de l'œuvre) : rappelée au modèle et nourrie par chaque page (prompt 5 et suivants). */
+    @Volatile var series: SeriesMemory? = null
+    /** Taille de la fenêtre du moteur (consigne + message + réponse), en jetons : le message est raccourci (dialogue précédent d'abord) pour y tenir. */
+    @Volatile var contextTokens: Int = 4096
 
     /**
      * Mémoire du chapitre (dialogue récent, noms propres) : son propre verrou, tenu un instant seulement. Elle ne partage jamais celui de la traduction, qui reste pris pendant toute une génération
@@ -79,18 +83,28 @@ class LlmTranslator(private val backend: LlmBackend, private val lexicon: () -> 
         var out = ask(texts, source, target, glossary)
         out = realign(texts, out, source, target, glossary)
         var final = out.mapIndexed { i, t -> t ?: throw IllegalStateException("Réponse du modèle incomplète (ligne ${i + 1})") }
+        // défauts de génération (chiffre doublé, mot-outil doublé) : corrigés avant les contrôles, qui n'ont plus à refaire ces lignes
+        if (promptVariant >= 5) final = final.mapIndexed { i, t -> TranslationPost.doubledWords(texts[i], TranslationPost.numbers(texts[i], t)) }
         if ((refine || refinePass) && target == "fr") final = refineDraft(texts, final, glossary)
         final = checkAndFix(texts, final, target, source, glossary)
         if (target == "fr" && promptVariant >= 4) final = final.mapIndexed { i, t -> TranslationPost.rescueStutter(texts[i], TranslationPost.stutter(texts[i], t)) }   // « B-BUT » → « M-MAIS » ; « Y-YOU… » recopié → « T-TOI… »
         // la page a changé pendant la traduction (le contexte a été oublié) : ce dialogue n'appartient plus au chapitre en cours
-        synchronized(ctxLock) { if (epoch == ctxEpoch) texts.indices.forEach { remember(texts[it], final[it]); memory.observe(texts[it], final[it]) } }
+        synchronized(ctxLock) {
+            if (epoch == ctxEpoch) {
+                texts.indices.forEach { remember(texts[it], final[it]); memory.observe(texts[it], final[it]) }
+                if (target == "fr") try { series?.observePage(texts, final, memory.namesToKeep(), lexicon()) } catch (_: Throwable) {}
+            }
+        }
         return final
     }
 
     private fun remember(src: String, tgt: String) {
         history.addLast(src to tgt)
-        while (history.size > HISTORY_SIZE) history.removeFirst()
+        while (history.size > HISTORY_MAX) history.removeFirst()
     }
+
+    /** Dialogue précédent donné au modèle : 10 dernières répliques (prompt 4), 16 à partir du prompt 5 (la relecture des consignes coûte peu, le contexte aide les fragments). */
+    private fun historyFor(): List<Pair<String, String>> = recentDialogue().takeLast(if (promptVariant >= 5) 16 else HISTORY_SIZE)
 
     /**
      * Lignes absentes de la réponse ou mal placées (le modèle a sauté une ligne et décalé les suivantes, ou mis la traduction d'une ligne sous le numéro d'une autre : voir
@@ -170,7 +184,8 @@ class LlmTranslator(private val backend: LlmBackend, private val lexicon: () -> 
         var inLen = system.length
         try {
             val hints = if (promptVariant >= 4 && target == "fr") IdiomHints.find(listOf(text)) else emptyList()
-            val u = LlmPrompt.fixUser(text, previous, problems, recentDialogue(), glossary, names, hints, styleHints)
+            val gloss = if (promptVariant >= 5 && target == "fr") glossary + genreTerms(listOf(text), glossary).map { GlossaryEntry(it.source, it.french) } else glossary
+            val u = LlmPrompt.fixUser(text, previous, problems, historyFor(), gloss, names, hints, styleHints)
             inLen += u.length
             val r = backend.generate(system, u, LlmSampling(20, 0.9, 0.1), LlmPrompt.maxOutputTokens(listOf(text)))
             setup = r.setupMs; outLen = r.text.length
@@ -184,7 +199,12 @@ class LlmTranslator(private val backend: LlmBackend, private val lexicon: () -> 
         var inLen = system.length
         try {
             val hints = if (promptVariant >= 4 && target == "fr") IdiomHints.find(texts) else emptyList()
-            val u = LlmPrompt.user(texts, recentDialogue(), glossary, series, keptNames(), hints, styleNotes(target), page, if (target == "fr") seriesPremise else null)
+            val u = if (promptVariant >= 5 && target == "fr") {
+                val mem = this.series
+                val notes = try { mem?.promptNotes(texts, lexicon(), seriesPremise) ?: emptyList() } catch (_: Throwable) { emptyList() }
+                val terms = genreTerms(texts, glossary)
+                fit(system, texts) { hist, withNotes -> LlmPrompt.user(texts, hist, glossary, series, keptNames(), hints, styleNotes(target), page, seriesPremise, if (withNotes) notes else emptyList(), terms) }
+            } else LlmPrompt.user(texts, historyFor(), glossary, series, keptNames(), hints, styleNotes(target), page, if (target == "fr") seriesPremise else null)
             inLen += u.length
             val r = backend.generate(system, u, LlmSampling(20, 0.9, 0.15), LlmPrompt.maxOutputTokens(texts))
             setup = r.setupMs; outLen = r.text.length
@@ -202,7 +222,34 @@ class LlmTranslator(private val backend: LlmBackend, private val lexicon: () -> 
         } finally { note(kind, t0, setup, inLen, outLen) }
     }
 
+    /** Termes d'usage du genre de l'œuvre présents dans [texts] ; un terme que le glossaire de l'utilisateur fixe déjà n'est pas répété. */
+    private fun genreTerms(texts: List<String>, glossary: List<GlossaryEntry>): List<GenrePacks.Hit> {
+        val ids = try { series?.genres(seriesTitle, seriesPremise) ?: GenrePacks.detect(emptyMap(), seriesTitle, seriesPremise) } catch (_: Throwable) { emptySet() }
+        val user = glossary.map { it.source.lowercase() }.toSet()
+        return GenrePacks.find(ids, texts).filter { it.source !in user }
+    }
+
+    /**
+     * Message qui tient dans la fenêtre du moteur avec la réponse attendue : tout le dialogue précédent si possible, sinon de moins en moins (les répliques les plus anciennes partent
+     * d'abord), puis sans les notes de l'œuvre. Estimation prudente des jetons (voir [CHARS_PER_TOKEN]).
+     */
+    private fun fit(system: String, texts: List<String>, build: (List<Pair<String, String>>, Boolean) -> String): String {
+        val budget = contextTokens - LlmPrompt.maxOutputTokens(texts) - 64
+        val hist = historyFor()
+        fun tokens(u: String) = ((system.length + u.length) / CHARS_PER_TOKEN).toInt()
+        val sizes = ((hist.size downTo 0 step 2) + 0).distinct()
+        for (withNotes in listOf(true, false)) for (n in sizes) {
+            val u = build(hist.takeLast(n), withNotes)
+            if (tokens(u) <= budget) { if (n < hist.size || !withNotes) addCallNote("ctx:${n}/${hist.size}" + (if (withNotes) "" else ",-notes")); return u }
+        }
+        addCallNote("ctx:over")
+        return build(emptyList(), false)
+    }
+
     companion object {
         const val HISTORY_SIZE = 10
+        private const val HISTORY_MAX = 16
+        /** Jetons estimés par caractère (anglais et français mêlés, consignes comprises) : estimation prudente. */
+        private const val CHARS_PER_TOKEN = 3.0
     }
 }

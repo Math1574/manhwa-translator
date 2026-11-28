@@ -67,4 +67,61 @@ object TranslationPost {
         }
         return out
     }
+
+    // ---------- défauts de génération : chiffres et mots doublés ----------
+
+    /** Un nombre, séparateurs de milliers compris (« 3,149 », « 3 149 », « 1.200 ») : ses chiffres seuls servent à comparer. */
+    private val numberRe = Regex("(?<![\\d])\\d+(?:[ ,.\\u00A0\\u202F]\\d{3}(?!\\d))*")
+
+    /**
+     * Nombres abîmés à la génération (journal du 27/11 : « 26 YEARS » → « 266 ANS », « $50 » → « 500 DOLLARS », « 06:50 » → « 06:500 », « 24/7 » → « 2/7 ») : un nombre de la traduction
+     * absent de l'original, qui ne diffère que d'un chiffre (en trop ou en moins) d'un nombre de l'original absent de la traduction, est remis tel qu'à l'original.
+     * Un nombre écrit en lettres (« dix », « cent ») n'est pas concerné ; un nombre que l'original n'explique pas d'une seule façon est laissé.
+     */
+    fun numbers(src: String, tr: String): String {
+        val srcNums = numberRe.findAll(src).map { it.value.filter(Char::isDigit) }.toList()
+        if (srcNums.isEmpty()) return tr
+        if (clockRe.containsMatchIn(src)) return tr   // « 1 PM » → « 13 h » : l'heure change légitimement de chiffres
+        val trMatches = numberRe.findAll(tr).toList()
+        if (trMatches.isEmpty()) return tr
+        val trNums = trMatches.map { it.value.filter(Char::isDigit) }
+        val missing = srcNums.filter { it !in trNums }.distinct()
+        if (missing.isEmpty()) return tr
+        val sb = StringBuilder(tr)
+        val used = HashSet<String>()
+        for (m in trMatches.reversed()) {
+            val t = m.value.filter(Char::isDigit)
+            if (t in srcNums) continue
+            val cands = missing.filter { it !in used && oneDigitApart(t, it) }
+            if (cands.size != 1) continue
+            val s = cands[0]; used.add(s)
+            val grouped = m.value.any { !it.isDigit() } && s.length > 3
+            sb.replace(m.range.first, m.range.last + 1, if (grouped) groupFrench(s) else s)
+        }
+        return sb.toString()
+    }
+
+    private val clockRe = Regex("(?i)\\d\\s*(?:a\\.?m\\b|p\\.?m\\b)|o['’]clock")
+
+    private fun oneDigitApart(a: String, b: String): Boolean {
+        if (a.length == b.length + 1) return a.indices.any { a.removeRange(it, it + 1) == b }
+        if (b.length == a.length + 1) return b.indices.any { b.removeRange(it, it + 1) == a }
+        return false
+    }
+
+    private fun groupFrench(d: String): String = d.reversed().chunked(3).joinToString(" ").reversed()
+
+    /** Mots-outils qui ne se répètent jamais d'affilée en français écrit (« à à », « que que », « de de ») ; « vous vous », « nous nous » sont réfléchis, donc permis (trois de suite ne l'est pas). */
+    private val doubledWord = Regex("(?iu)(?<![\\p{L}'’])(à|a|de|du|des|que|qui|le|la|les|un|une|et|en|ne|pour|par|sur|dans|avec|je|tu|il|elle|on|ils|elles|ce|se|me|te|mon|ma|mes|ton|ta|tes|son|sa|ses|au|aux|y)\\s+\\1(?![\\p{L}'’])")
+    private val tripledReflexive = Regex("(?iu)(?<![\\p{L}'’])((vous|nous)\\s+\\2)\\s+\\2(?![\\p{L}'’])")
+    private val srcRepeat = Regex("(?iu)(?<![\\p{L}'’])(\\p{L}+)[\\s,.…-]+\\1(?![\\p{L}'’])")
+
+    /** Mot-outil doublé par la génération (« QUELLE QUE QUE RAISON », « À À QUEL POINT ») : le doublon est retiré, sauf si l'original répète lui-même un mot (bégaiement, insistance). */
+    fun doubledWords(src: String, tr: String): String {
+        if (srcRepeat.containsMatchIn(src)) return tr
+        var out = doubledWord.replace(tr) { m -> m.value.substring(0, m.groupValues[1].length) }
+        out = tripledReflexive.replace(out) { m -> m.groupValues[1] }
+        return out
+    }
 }
+

@@ -130,6 +130,8 @@ class AppGraph(ctx: Context) {
     val updater = UpdateManager(ctx)
     val paddleModels = PaddleModels(ctx, jaPack)
     val gemma = GemmaTranslator(ctx, llm) { settingsStore.settings }
+    /** Mémoire de chaque œuvre (personnages, narrateur, lettres mal lues, genre) : rappelée au modèle de traduction d'un chapitre à l'autre. */
+    val seriesMemory = SeriesMemoryStore(File(ctx.filesDir, "series_memory"))
     /** Lecture PaddleOCR ; le dictionnaire et les noms du chapitre départagent les deux lecteurs anglais. */
     val paddle = PaddleOcr(paddleModels, { Lexicon.get(ctx) }, { gemma.chapterNames() })
     /** Traductions de plusieurs pages regroupées en un seul appel au moteur (le surcoût fixe de chaque appel est partagé). */

@@ -2,8 +2,10 @@
 """Prépare les entrées du banc d'essai de traduction à partir d'un journal de traduction exporté (une ligne JSON par page).
 
 Usage : prep.py <journal.jsonl> <sélection.json> <dossier de sortie>
-Sélection : {"<œuvre (segment d'adresse, sans l'identifiant)>": [[<chapitre>, <pages au plus>], …], …}
-Sortie : un fichier <œuvre>.tsv par œuvre (chapitre \t œuvre \t page \t texte lu réparé \t texte brut), pages dans l'ordre de lecture.
+Sélection : {"<œuvre (segment d'adresse, sans l'identifiant)>": {"run": [[<chapitre>, <pages au plus>], …], "warm": [<chapitre déjà lu>, …]}, …}
+  (forme courte : [[<chapitre>, <pages au plus>], …] sans préchauffage)
+Sortie : un fichier <œuvre>.tsv par œuvre (chapitre \t œuvre \t page \t texte lu réparé \t texte brut), pages dans l'ordre de lecture ;
+  <œuvre>.warm.tsv : chapitres « déjà lus » (mêmes colonnes + traduction du journal), pour préchauffer la mémoire de l'œuvre sans appeler le modèle.
 """
 import json, re, sys, os, collections
 
@@ -25,14 +27,23 @@ for line in open(journal, encoding="utf-8"):
 def num(img):
     m = re.search(r"\d+", img); return int(m.group()) if m else 0
 
-for slug, chapters in sel.items():
-    rows = []
-    for ch, maxp in chapters:
-        imgs = sorted(pages[slug].get(str(ch), {}).keys(), key=num)[:maxp]
-        for img in imgs:
-            for b in pages[slug][str(ch)][img]:
-                clean = (b.get("rep") or b["src"]).replace("\t", " ").replace("\n", " ")
-                src = b["src"].replace("\t", " ").replace("\n", " ")
-                rows.append("\t".join([f"{slug}/{ch}", titles[slug], img, clean, src]))
+def one(s):
+    return (s or "").replace("\t", " ").replace("\n", " ")
+
+def rows_of(slug, ch, maxp, with_tr):
+    out = []
+    imgs = sorted(pages[slug].get(str(ch), {}).keys(), key=num)[:maxp]
+    for img in imgs:
+        for b in pages[slug][str(ch)][img]:
+            r = [f"{slug}/{ch}", titles[slug], img, one(b.get("rep") or b["src"]), one(b["src"])]
+            if with_tr: r.append(one(b.get("tr")))
+            out.append("\t".join(r))
+    return out
+
+for slug, spec in sel.items():
+    if isinstance(spec, list): spec = {"run": spec, "warm": []}
+    rows = [r for ch, maxp in spec["run"] for r in rows_of(slug, ch, maxp, False)]
     open(os.path.join(out_dir, f"{slug}.tsv"), "w", encoding="utf-8").write("\n".join(rows) + "\n")
-    print(slug, len(rows), "bulles")
+    warm = [r for ch in spec.get("warm", []) for r in rows_of(slug, ch, 10_000, True)]
+    if warm: open(os.path.join(out_dir, f"{slug}.warm.tsv"), "w", encoding="utf-8").write("\n".join(warm) + "\n")
+    print(slug, len(rows), "bulles à traduire,", len(warm), "de préchauffage")

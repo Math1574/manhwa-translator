@@ -48,8 +48,9 @@ jobs:
       - name: Serveur du modèle
         run: |
           nohup python3 ci/tbench/server.py ~/model/m.litertlm 7070 > /tmp/server.log 2>&1 &
-          for i in $(seq 1 180); do if curl -s http://127.0.0.1:7070/health >/dev/null; then break; fi; sleep 5; done
-          cat /tmp/server.log
+          ok=0; for i in $(seq 1 180); do if curl -sf http://127.0.0.1:7070/health >/dev/null; then ok=1; break; fi; sleep 5; done
+          cat /tmp/server.log; nproc; free -g
+          [ "$ok" = 1 ] || { echo "le serveur du modèle n'a pas démarré"; exit 1; }
       - name: Banc
         run: |
           mkdir -p /tmp/out
@@ -70,11 +71,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with: { path: /tmp/res, merge-multiple: true }
-      - name: Publication des résultats (branche tbench-res-N)
+      - name: Publication des résultats (branche tbench-res-N, emballés comme les entrées)
         run: |
+          cp ci/tbench/pack.py /tmp/pack.py
           git config user.name ci; git config user.email ci@example.invalid
           git checkout --orphan tbench-res-${{ github.run_number }}
           git rm -rf . >/dev/null 2>&1 || true
-          cp /tmp/res/* . 2>/dev/null || echo "aucun résultat" > vide.txt
+          python3 /tmp/pack.py /tmp/res res.bin || echo "aucun résultat" > vide.txt
           git add -A; git commit -q -m "banc de traduction ${{ github.ref_name }} (run ${{ github.run_number }})"
           git push origin tbench-res-${{ github.run_number }} --force

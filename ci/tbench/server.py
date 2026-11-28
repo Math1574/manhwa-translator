@@ -5,13 +5,14 @@ POST / avec un objet JSON {system, user, top_k, top_p, temperature, max_tokens, 
 GET /health : « ok » quand le modèle est chargé.
 Usage : server.py <modèle.litertlm> <port> [threads]
 """
-import http.server, json, sys, time, threading
+import http.server, json, os, sys, time, threading
 import litert_lm as lm
 
 model, port = sys.argv[1], int(sys.argv[2])
 threads = int(sys.argv[3]) if len(sys.argv) > 3 else None
 t0 = time.time()
 backend = lm.Backend.CPU(thread_count=threads) if threads else lm.Backend.CPU()
+os.makedirs("/tmp/litert_cache", exist_ok=True)
 engine = lm.Engine(model, backend=backend, max_num_tokens=8192, cache_dir="/tmp/litert_cache")
 print(f"modèle chargé en {time.time() - t0:.1f} s", flush=True)
 lock = threading.Lock()

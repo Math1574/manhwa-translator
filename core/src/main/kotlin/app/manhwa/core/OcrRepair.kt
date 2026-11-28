@@ -61,6 +61,19 @@ object OcrRepair {
     /** Jeton fait de chiffres et de lettres qui est écrit ainsi pour de bon : ordinal (« 2ND », « 10TH »), « 3D », « 50K », « 5X », « 1080P ». Jamais une faute de lecture. */
     internal fun isLegitMixed(token: String): Boolean = legitMixedRe.matches(token)
 
+    private val confusionWord = Regex("[A-Za-z]+(?:['’][A-Za-z]+)?")
+
+    /**
+     * Confusions de lettres établies pour l'œuvre (« P » lu pour « D » dans tout un lettrage : voir [LetterConfusions]) : appliquées aux mots inconnus avant toute autre réparation,
+     * qui sans elles « corrigeait » au plus proche (« LONGEP » → « LONGER » au lieu de « LONGED »). [protect] : noms (minuscules). Texte non anglais : renvoyé tel quel.
+     */
+    fun applyConfusions(text: String, lex: EnglishLexicon, protect: Set<String>, conf: LetterConfusions?): String {
+        if (conf == null) return text
+        val pairs = conf.active()
+        if (pairs.isEmpty() || ScriptDetector.dominant(text) != "en") return text
+        return confusionWord.replace(text) { m -> conf.fix(m.value, lex, protect, pairs) ?: m.value }
+    }
+
     /** Répare un texte lu par l'OCR. [protect] : mots à ne jamais modifier (noms du chapitre). Texte non anglais : renvoyé tel quel. */
     fun repair(text0: String, lex: EnglishLexicon, protect: Set<String> = emptySet()): String {
         // « IしEA » / « ルEA » pour « ILEA » : des signes japonais lus à la place de lettres, dans un texte anglais ; remis en lettres avant de juger l'écriture du texte

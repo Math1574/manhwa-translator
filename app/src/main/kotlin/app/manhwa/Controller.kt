@@ -731,6 +731,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                 if (!guardAtDocumentStart) view.evaluateJavascript(AdGuardScript.JS, null)
                 graph.gemma.seriesTitle = if (url.startsWith("http")) app.manhwa.core.SeriesHint.fromUrl(url) else null
                 graph.gemma.seriesPremise = try { BrowsingLibrary.seriesKey(url)?.let { k -> graph.covers.synopsisFrench(k) ?: graph.covers.synopsisOf(k) } } catch (_: Throwable) { null }
+                // mémoire de l'œuvre (personnages, narrateur, lettres mal lues, genre) : elle suit le chapitre, d'une page à l'autre et d'un chapitre au suivant
+                graph.gemma.core.series = try { if (url.startsWith("http")) BrowsingLibrary.seriesKey(url)?.let { graph.seriesMemory.get(it) } else null } catch (_: Throwable) { null }
                 loading = true
                 nearBottom = false
                 barsHidden = false; pageProgress = 0; showReaderBar(false); resumeOffer = 0; peekTarget = null; undoBanner = null
@@ -1748,6 +1750,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         fun staleFix() = fix && fixRuns[c.id] != fixRun
         val pageUrl = currentUrl
         val pageSeries = BrowsingLibrary.seriesKey(pageUrl)
+        val seriesMem = try { pageSeries?.let { graph.seriesMemory.get(it) } } catch (_: Throwable) { null }
         BatchContext.cancelled.set(cancelled); BatchContext.order.set(c.top); BatchContext.priority.set { c.priorityAt(viewportY, viewportH) }; BatchContext.lastBatch.remove(); BatchContext.lastDetail.remove()
         // retraitement après une correction : l'image et sa fenêtre de jonction sont déjà en mémoire, on ne retélécharge rien (un site qui refuse un second téléchargement, ou une
         // connexion coupée, faisait perdre la correction sans rien afficher)
@@ -1837,7 +1840,15 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             // un texte libre sans zone du détecteur est écarté s'il ne contient aucun mot reconnu, même en gros lettrage (décor lu comme du texte : « IC », « RIC », « PY »)
             junk = junkRule(c, s, lexicon),
             isSfx = { t, kind, rel -> skipSfx && Onomatopoeia.isSfx(t, kind, rel, lexicon) },
-            repair = { t -> try { OcrRepair.dropJunkTail(OcrRepair.repair(t, lexicon, graph.gemma.chapterNames()), lexicon) } catch (e: Throwable) { t } },
+            // lettres que le lettrage de l'œuvre fait lire de travers (« P » pour « D » dans tout un chapitre) : apprises au fil des pages, corrigées avant le reste de la réparation
+            repair = { t ->
+                try {
+                    val names = graph.gemma.chapterNames()
+                    seriesMem?.let { m -> synchronized(m) { m.observeReading(t, lexicon) } }
+                    val pre = seriesMem?.let { m -> synchronized(m) { OcrRepair.applyConfusions(t, lexicon, names + m.knownNames(), m.confusions) } } ?: t
+                    OcrRepair.dropJunkTail(OcrRepair.repair(pre, lexicon, names), lexicon)
+                } catch (e: Throwable) { t }
+            },
             junkTail = { t -> try { OcrRepair.junkTail(t, lexicon) } catch (e: Throwable) { "" } },
             reader = if (rereadOn) graph.blockReader else null,
             // part de vrais mots anglais (noms propres du chapitre compris) : repère les lectures absurdes et vérifie les relectures
@@ -1848,6 +1859,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         )
         val out = pipeline.process(workBytes, s.source.code, s.target.code)
         if (out is PageOutcome.Done && out.refreshed > 0) testRefreshed.addAndGet(out.refreshed)
+        seriesMem?.let { graph.seriesMemory.saveSoon(it) }
         // noms qui reviennent d'une page à l'autre : proposés dans le glossaire de l'œuvre (anglais seulement, le lexique est anglais)
         if (out is PageOutcome.Done && s.source.code != "ja" && s.source.code != "ko" && s.source.code != "zh") {
             if (!ninja) try { synchronized(graph.names) { graph.names.observe(pageSeries, c.id, out.result.blocks.map { it.source }, lexicon) } } catch (_: Throwable) {}
@@ -1977,7 +1989,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             )
         }
         graph.journal.add(
-            JSONObject().put("t", System.currentTimeMillis()).put("type", "page").put("url", pageUrl).put("series", graph.gemma.seriesTitle ?: "")
+            JSONObject().put("t", System.currentTimeMillis()).put("type", "page").put("url", pageUrl).put("series", app.manhwa.core.SeriesHint.fromUrl(pageUrl) ?: "")
+                .put("memory", try { graph.gemma.core.series?.let { m -> synchronized(m) { m.summary() } } ?: "" } catch (_: Throwable) { "" })
                 .put("engine", engineId).put("img", c.id).put("w", out.result.imageWidth).put("h", out.result.imageHeight).put("ms", ms)
                 .put("fetch", fetchInfo[c.id]?.first ?: "").put("fetchMs", fetchInfo[c.id]?.second ?: 0L).put("fetchWhy", fetchInfo[c.id]?.third ?: "")
                 .put("ocrMs", stageInfo[c.id]?.get(0) ?: 0L).put("trMs", stageInfo[c.id]?.get(1) ?: 0L).put("ocrT", pageTiming[c.id] ?: "").put("batch", batchInfo[c.id]?.first ?: 0).put("trEngineMs", batchInfo[c.id]?.second ?: 0L).put("engineDetail", batchDetail[c.id] ?: "").put("sys", diag())
