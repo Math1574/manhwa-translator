@@ -280,10 +280,13 @@ class GemmaTranslator(
                 val done = java.util.concurrent.CountDownLatch(1)
                 val error = java.util.concurrent.atomic.AtomicReference<Throwable?>(null)
                 val stopped = AtomicBoolean(false)
+                val offFormat = AtomicBoolean(false)
                 val cap = maxTokens * 5
                 s.generateContentStream(listOf(InputData.Text(user.trim() + TURN_END + TURN_MODEL)), object : ResponseCallback {
                     override fun onNext(response: String) {
-                        val n = synchronized(out) { out.append(response); out.length }
+                        val (n, head) = synchronized(out) { out.append(response); out.length to (if (out.length in 24..400) out.toString() else null) }
+                        // toute demande attend des lignes numérotées (« 1| … ») : un début de réponse sans numéro veut dire que le moteur n'a pas compris la mise en forme
+                        if (head != null && !offFormat.get() && !leadingNumber.containsMatchIn(head) && stopped.compareAndSet(false, true)) { offFormat.set(true); try { s.cancelProcess() } catch (_: Throwable) {} }
                         if (n > cap && stopped.compareAndSet(false, true)) try { s.cancelProcess() } catch (_: Throwable) {}
                     }
                     override fun onDone() { done.countDown() }
@@ -297,6 +300,7 @@ class GemmaTranslator(
                     done.await(10_000L, java.util.concurrent.TimeUnit.MILLISECONDS)
                 }
                 error.get()?.let { throw it }
+                if (offFormat.get()) throw IllegalStateException("réponse hors format : " + synchronized(out) { out.toString() }.take(40))
                 val text = synchronized(out) { out.toString() }
                 if (guarded) prefixMark(GpuGuard.proven(BuildConfig.BUILD_NUMBER))
                 return text
@@ -589,6 +593,8 @@ class GemmaTranslator(
         private const val TURN_USER = "<|turn>user\n"
         private const val TURN_MODEL = "<|turn>model\n"
         private const val TURN_END = "<turn|>\n"
+        /** Début de réponse attendu : un numéro de ligne (« 1| », « [1] »…). */
+        private val leadingNumber = Regex("^\\s*[\\[(]?\\d")
         /** La version du prompt (4 et suivantes) fait partie de l'identifiant : un prompt nouveau retraduit les pages déjà en cache. */
         fun engineId(spec: ModelSpec) = "${spec.id}-ctx1" + (if (LlmPrompt.CURRENT >= 4) "-p${LlmPrompt.CURRENT}" else "")
     }
