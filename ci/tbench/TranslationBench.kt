@@ -84,14 +84,7 @@ fun main(args: Array<String>) {
         // comme l'application : chaque bulle lue nourrit les lettres mal lues de l'œuvre, puis le texte est réparé avec les confusions établies
         val m = if (useMemory) memoryOf(blocks[0].series) else null
         tr.series = m
-        val cleans = blocks.map { b ->
-            if (m == null) b.clean else {
-                val names = tr.chapterNames()
-                m.observeReading(b.src, lex)
-                val pre = OcrRepair.applyConfusions(b.src, lex, names + m.knownNames(), m.confusions)
-                if (pre != b.src) OcrRepair.dropJunkTail(OcrRepair.repair(pre, lex, names), lex) else b.clean
-            }
-        }
+        val cleans = blocks.map { b -> if (m == null) b.clean else OcrRepair.repairWithSeries(b.src, lex, tr.chapterNames(), m, tr.seriesPremise) }
         val texts = cleans.map { TextNormalizer.fixCase(it) }
         tr.beginCallLog()
         val t0 = System.currentTimeMillis()

@@ -84,7 +84,7 @@ class LlmTranslator(private val backend: LlmBackend, private val lexicon: () -> 
         out = realign(texts, out, source, target, glossary)
         var final = out.mapIndexed { i, t -> t ?: throw IllegalStateException("Réponse du modèle incomplète (ligne ${i + 1})") }
         // défauts de génération (chiffre doublé, mot-outil doublé) : corrigés avant les contrôles, qui n'ont plus à refaire ces lignes
-        if (promptVariant >= 5) final = final.mapIndexed { i, t -> TranslationPost.doubledWords(texts[i], TranslationPost.numbers(texts[i], t)) }
+        if (promptVariant >= 5) final = final.mapIndexed { i, t -> TranslationPost.doubledWords(texts[i], TranslationPost.numbers(texts[i], t)).let { if (target == "fr") TranslationPost.grammar(texts[i], it) else it } }
         if ((refine || refinePass) && target == "fr") final = refineDraft(texts, final, glossary)
         final = checkAndFix(texts, final, target, source, glossary)
         if (target == "fr" && promptVariant >= 4) final = final.mapIndexed { i, t -> TranslationPost.rescueStutter(texts[i], TranslationPost.stutter(texts[i], t)) }   // « B-BUT » → « M-MAIS » ; « Y-YOU… » recopié → « T-TOI… »

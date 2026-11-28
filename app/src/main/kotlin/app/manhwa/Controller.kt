@@ -1840,14 +1840,10 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
             // un texte libre sans zone du détecteur est écarté s'il ne contient aucun mot reconnu, même en gros lettrage (décor lu comme du texte : « IC », « RIC », « PY »)
             junk = junkRule(c, s, lexicon),
             isSfx = { t, kind, rel -> skipSfx && Onomatopoeia.isSfx(t, kind, rel, lexicon) },
-            // lettres que le lettrage de l'œuvre fait lire de travers (« P » pour « D » dans tout un chapitre) : apprises au fil des pages, corrigées avant le reste de la réparation
+            // lettres que le lettrage de l'œuvre fait lire de travers (« P » pour « D » dans tout un chapitre) : apprises au fil des pages, corrigées avant le reste de la réparation ;
+            // noms coupés par la lecture (« PEN ELOPE ») recollés d'après les noms de l'œuvre et de son synopsis
             repair = { t ->
-                try {
-                    val names = graph.gemma.chapterNames()
-                    seriesMem?.let { m -> synchronized(m) { m.observeReading(t, lexicon) } }
-                    val pre = seriesMem?.let { m -> synchronized(m) { OcrRepair.applyConfusions(t, lexicon, names + m.knownNames(), m.confusions) } } ?: t
-                    OcrRepair.dropJunkTail(OcrRepair.repair(pre, lexicon, names), lexicon)
-                } catch (e: Throwable) { t }
+                try { OcrRepair.repairWithSeries(t, lexicon, graph.gemma.chapterNames(), seriesMem, graph.gemma.seriesPremise) } catch (e: Throwable) { t }
             },
             junkTail = { t -> try { OcrRepair.junkTail(t, lexicon) } catch (e: Throwable) { "" } },
             reader = if (rereadOn) graph.blockReader else null,

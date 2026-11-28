@@ -68,6 +68,99 @@ object TranslationPost {
         return out
     }
 
+    // ---------- grammaire sûre : élision, subjonctif, « faire » + infinitif ----------
+
+    /** Mot qui commence par une voyelle et devant lequel on élide (« l'ancien », « d'un »), ou le pronom « y » (« j'y vais ») ; jamais « onze », « oui », « ouate », un nom en Y (« de Yoo ») ni un mot en h (h muet ou aspiré : on ne sait pas). */
+    private const val ELIDABLE = "(?=[aeiouéèêëàâîïôûùæœAEIOUÉÈÊËÀÂÎÏÔÛÙÆŒ]\\p{L}|[yY](?![\\p{L}]))(?!(?i:onz|oui(?![\\p{L}])|ouat|ouf(?![\\p{L}])|ululer))"
+    /** « le ancien », « de un », « que il », « je ai », « ne est », « ce est » : l'article, la préposition ou le pronom s'élide devant une voyelle. « fais-le encore » (impératif) n'est pas touché. */
+    private val missingElision = Regex("(?<![\\p{L}'’-])(le|la|de|je|me|te|se|ne|que|jusque|lorsque|puisque|quoique)\\s+$ELIDABLE(?=\\p{L})", RegexOption.IGNORE_CASE)
+    private val nextWord = Regex("^[\\p{L}'’]+")
+    /** Pronoms et articles : devant un mot recopié de l'original (titre anglais « PICK ME UP », nom, charabia), on ne touche à rien. */
+    private val pronounLike = setOf("le", "la", "je", "me", "te", "se", "ne")
+    private val ceEst = Regex("(?<![\\p{L}'’-])(ce)\\s+(?=(?:est|était|étaient|eût)(?![\\p{L}]))", RegexOption.IGNORE_CASE)
+    private val siIl = Regex("(?<![\\p{L}'’-])(si)\\s+(?=ils?(?![\\p{L}'’]))", RegexOption.IGNORE_CASE)
+    /** « du ancien » → « de l'ancien », « au enfant » → « à l'enfant » ; jamais après « avoir » (« j'aurais du aller » : c'est « dû »). */
+    private val duVowel = Regex("(?<![\\p{L}'’-])(du|au)\\s+$ELIDABLE(?=\\p{L})", RegexOption.IGNORE_CASE)
+    private val avoirBefore = Regex("(?i)(?:ai|as|a|avons|avez|ont|avais|avait|avions|aviez|avaient|aurai|auras|aura|aurais|aurait|aurions|auriez|auraient|eu|aie|ait)\\s*$")
+
+    private fun caseLike(model: String, out: String): String = when {
+        model.length >= 2 && model.all { !it.isLetter() || it.isUpperCase() } -> out.uppercase()
+        model.isNotEmpty() && model[0].isUpperCase() -> out.replaceFirstChar { it.uppercase() }
+        else -> out
+    }
+
+    /**
+     * Élisions oubliées par la génération (« LE ÉPILOGUE », « DU ANCIEN VAGABOND », « SI IL ») ; le reste de la ligne est intact. [src] : la ligne d'origine — un mot qui en vient
+     * (nom, titre anglais, charabia recopié) n'est élidé qu'après « de », « que » (« d'Eugene ») ; « du » devant un nom devient « d' » (« la fille d'Uihyeok »), « la une » reste.
+     */
+    fun elision(src: String, tr: String): String {
+        val srcWords = Regex("[\\p{L}'’]+").findAll(src.lowercase()).map { it.value }.toSet()
+        val srcLow = " " + src.lowercase().replace(Regex("[^\\p{L}'’]+"), " ") + " "
+        fun next(text: String, from: Int) = nextWord.find(text.substring(from))?.value?.lowercase() ?: ""
+        var out = missingElision.replace(tr) { m ->
+            val w = m.groupValues[1]; val wl = w.lowercase()
+            val n = next(tr, m.range.last + 1)
+            if (srcLow.contains(" $wl $n ")) return@replace m.value              // recopié de l'original (« PICK ME UP »)
+            if (n in srcWords && wl in pronounLike) return@replace m.value          // pronom devant un mot anglais ou un nom : on ne sait pas
+            if (wl == "la" && n == "une") return@replace m.value                    // « à la une »
+            val el = when (wl) { "que" -> "qu'"; "jusque" -> "jusqu'"; "lorsque" -> "lorsqu'"; "puisque" -> "puisqu'"; "quoique" -> "quoiqu'"; else -> wl.take(1) + "'" }
+            caseLike(w, el)
+        }
+        out = ceEst.replace(out) { m -> caseLike(m.groupValues[1], "c'") }
+        out = siIl.replace(out) { m -> caseLike(m.groupValues[1], "s'") }
+        val cur = out
+        out = duVowel.replace(cur) { m ->
+            val w = m.groupValues[1]; val n = next(cur, m.range.last + 1)
+            if (avoirBefore.containsMatchIn(cur.substring(0, m.range.first)) || srcLow.contains(" ${w.lowercase()} $n ")) m.value
+            else if (n in srcWords) caseLike(w, if (w.equals("du", ignoreCase = true)) "d'" else "à ")   // devant un nom : « d'Uihyeok », « à Ilay »
+            else caseLike(w, if (w.equals("du", ignoreCase = true)) "de l'" else "à l'")
+        }
+        return out
+    }
+
+    /** Présent de l'indicatif → subjonctif, pour les verbes que le modèle laisse à l'indicatif après « bien que », « pour que »… */
+    private val subjunctive: Map<String, String> = mapOf(
+        "suis" to "sois", "es" to "sois", "est" to "soit", "sommes" to "soyons", "êtes" to "soyez", "sont" to "soient",
+        "ai" to "aie", "as" to "aies", "a" to "ait", "avons" to "ayons", "avez" to "ayez", "ont" to "aient",
+        "peux" to "puisse", "peut" to "puisse", "pouvons" to "puissions", "pouvez" to "puissiez", "peuvent" to "puissent",
+        "fais" to "fasse", "fait" to "fasse", "faisons" to "fassions", "faites" to "fassiez", "font" to "fassent",
+        "vais" to "aille", "vas" to "ailles", "va" to "aille", "allons" to "allions", "allez" to "alliez", "vont" to "aillent",
+        "sais" to "sache", "sait" to "sache", "savons" to "sachions", "savez" to "sachiez", "savent" to "sachent",
+        "veux" to "veuille", "veut" to "veuille", "veulent" to "veuillent",
+        "viens" to "vienne", "vient" to "vienne", "venons" to "venions", "venez" to "veniez",
+        "dois" to "doive", "doit" to "doive", "devons" to "devions", "devez" to "deviez",
+        "prends" to "prenne", "prend" to "prenne", "prenons" to "prenions", "prenez" to "preniez",
+    )
+    /** Conjonction qui exige le subjonctif, sujet, pronoms compléments éventuels, verbe au présent de l'indicatif. */
+    private val subjunctiveSlot = Regex(
+        "(?iu)(?<![\\p{L}])((?:bien|pour|avant|sans|afin|pourvu|jusqu['’]à ce|à moins|il faut|faut|il faudrait|faudrait|il fallait|veux|voulais|voudrais|veut|voulait|voudrait)\\s+qu(?:e\\s+|['’]))" +
+            "(je\\s+|j['’]|tu\\s+|il\\s+|elle\\s+|on\\s+|ils\\s+|elles\\s+|nous\\s+|vous\\s+|ça\\s+|cela\\s+|ce\\s+)" +
+            "((?:(?:ne|n['’])\\s*)?(?:(?:le|la|les|lui|leur|me|te|se|nous|vous|y|en)\\s+|[lmtsn]['’]){0,2})" +
+            "(\\p{L}+)(?![\\p{L}'’-])"
+    )
+
+    /** « bien qu'il est » → « bien qu'il soit », « pour que tu peux » → « pour que tu puisses » : le subjonctif est obligatoire après ces conjonctions. */
+    fun subjunctive(tr: String): String = subjunctiveSlot.replace(tr) { m ->
+        val verb = m.groupValues[4]
+        var sub = subjunctive[verb.lowercase()] ?: return@replace m.value
+        val subject = m.groupValues[2].trim().lowercase().removeSuffix("'").removeSuffix("’")
+        // personne : « que tu puisses », « que j'aie », « qu'ils sachent » (le pluriel des tableaux ci-dessus est déjà juste)
+        if (subject == "tu" && !sub.endsWith("s") && !sub.endsWith("z")) sub += "s"
+        if (subject == "j" && verb.lowercase() == "ai") sub = "aie"
+        if ((subject == "ils" || subject == "elles") && verb.lowercase() in setOf("viennent", "doivent", "prennent")) return@replace m.value
+        m.groupValues[1] + m.groupValues[2] + m.groupValues[3] + caseLike(verb, sub)
+    }
+
+    /** « m'a fait stationné » → « m'a fait stationner » : après « faire » causatif (précédé d'un pronom complément), le verbe est à l'infinitif. */
+    private val causativeParticiple = Regex("(?iu)((?:[mtls]['’]|nous\\s+|vous\\s+|les\\s+|me\\s+|te\\s+|se\\s+)(?:(?:a|as|ai|avez|avons|ont|avait|avais|avaient|aura|aurait|est|suis|es|sont|était|étais)\\s+)?fait\\s+)(\\p{L}{2,}é)(?![\\p{L}'’-])")
+    fun causative(tr: String): String = causativeParticiple.replace(tr) { m ->
+        val p = m.groupValues[2]
+        m.groupValues[1] + p.dropLast(1) + (if (p.last().isUpperCase()) "ER" else "er")
+    }
+
+    /** Les retouches de grammaire sûres, dans l'ordre. */
+    fun grammar(src: String, tr: String): String = causative(subjunctive(elision(src, tr)))
+
     // ---------- défauts de génération : chiffres et mots doublés ----------
 
     /** Un nombre, séparateurs de milliers compris (« 3,149 », « 3 149 », « 1.200 ») : ses chiffres seuls servent à comparer. */

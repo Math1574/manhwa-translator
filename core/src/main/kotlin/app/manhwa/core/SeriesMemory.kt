@@ -301,6 +301,12 @@ class SeriesMemory(val key: String) {
             return when { m >= 3 && m >= 3 * f -> FrenchAgreement.Gender.M; f >= 3 && f >= 3 * m -> FrenchAgreement.Gender.F; else -> null }
         }
 
+        /** Noms propres du synopsis (« Penelope », « Eckhart », « Dokja ») : mots à majuscule de quatre lettres au moins qui ne sont pas des mots anglais. Minuscules. */
+        fun premiseNames(premise: String?, lex: EnglishLexicon?): Set<String> {
+            if (premise.isNullOrBlank()) return emptySet()
+            return Regex("(?<![\\p{L}'’])\\p{Lu}\\p{Ll}{3,}(?![\\p{L}])").findAll(premise).map { it.value.lowercase() }.filter { w -> lex == null || !lex.known(w) }.toSet()
+        }
+
         fun parse(key: String, data: String): SeriesMemory {
             val m = SeriesMemory(key)
             for (line in data.lines()) {

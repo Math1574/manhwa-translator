@@ -534,6 +534,29 @@ it's all over now | c'est fini, tout est fini
 ~zone out | être dans la lune
 ~black out | perdre connaissance
 ~doze off | s'assoupir
+~marry | épouser (« marry me » = m'épouser ; « get married » = se marier ; jamais « m'a marié ») | (?:m|t)['’](?:a|as|avait|aurait|ont)(?:-t-(?:il|elle))? mariée?\b
+what a headache | quelle galère, quel casse-tête | mal à la tête
+wronged me/you/him/her/them/us | faire du tort à, se montrer injuste envers | tortur
+~make eye contact | croiser le regard | contact des yeux|faire contact
+some random | un … quelconque, un inconnu (« some random kid » = un gamin sorti de nulle part, un gamin quelconque)
+in other words | autrement dit, en d'autres termes | en d'autres mots
+~see myself out | je connais le chemin, je vous laisse
+~take cover | se mettre à l'abri, se réfugier
+what's gotten into | qu'est-ce qui lui prend ?, qu'est-ce qui t'arrive ?
+~get the hang of | prendre le coup de main
+~go missing | disparaître
+~keep an eye on | garder un œil sur, surveiller
+~keep up with | suivre (le rythme de)
+~catch up | rattraper, rejoindre
+~come up | arriver, se présenter ; « come up with » = trouver, imaginer
+~let me guess | laisse-moi deviner
+for real | sérieux ?, pour de vrai
+no longer | ne plus
+used to | avant, autrefois (imparfait) ; « be used to » = avoir l'habitude de | utilisé à
+~make sense of | comprendre, s'y retrouver dans
+to be honest | pour être honnête, à vrai dire
+what's more | en plus, qui plus est
+in the first place | en fin de question : au juste, de toute façon (« why did you come in the first place? » = pourquoi es-tu venu, au juste ?) ; en tête de phrase : en premier lieu
 # ===== titres, rangs et termes d'arts martiaux =====
 eldest young master | jeune maître aîné (le fils aîné) | plus jeune maître|plus âgé des jeunes
 young lady | jeune demoiselle, mademoiselle

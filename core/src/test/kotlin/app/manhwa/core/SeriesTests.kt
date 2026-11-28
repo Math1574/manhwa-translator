@@ -40,6 +40,15 @@ fun seriesTests() {
         T.eq("I DON'T KNOW AND I DON'T CARE.", OcrRepair.applyConfusions("I DON'T KNOW ANP I DON'T CARE.", lex, emptySet(), c))
         T.eq("I DON'T KNOW ANP I DON'T CARE.", OcrRepair.applyConfusions("I DON'T KNOW ANP I DON'T CARE.", lex, emptySet(), LetterConfusions()), "aucune confusion établie : texte intact")
     }
+    T.test("noms coupés par la lecture : recollés s'ils épellent exactement un nom de l'œuvre ou du synopsis, jamais deux vrais mots par hasard") {
+        val names = SeriesMemory.premiseNames("Une étudiante devient Penelope Eckhart, la méchante d'un jeu. Callisto, le prince héritier, la déteste.", lex)
+        T.ok("penelope" in names && "eckhart" in names && "callisto" in names && "prince" !in names, "noms du synopsis : $names")
+        T.eq("I'M PENELOPE NOW.", OcrRepair.joinSplitNames("I'M PEN ELOPE NOW.", names))
+        T.eq("Penelope died helplessly", OcrRepair.joinSplitNames("Pen elope died helplessly", names))
+        T.eq("Interact more with Callisto!", OcrRepair.joinSplitNames("Interact more with Call is to!", names))
+        T.eq("A PEN AND A ROPE.", OcrRepair.joinSplitNames("A PEN AND A ROPE.", names), "vrais mots")
+        T.eq("I'M PENELOPE NOW.", OcrRepair.repairWithSeries("I'M PEN ELOPE NOW.", lex, emptySet(), null, "Penelope Eckhart wakes up as the villainess."))
+    }
     T.test("mémoire de l'œuvre : enregistrée puis relue à l'identique (confusions, personnages, genre de l'œuvre)") {
         val m = SeriesMemory("demo")
         for (w in dAsP) m.observeReading("$w?", lex)
@@ -113,6 +122,31 @@ fun seriesTests() {
         T.eq("Vous vous trompez", TranslationPost.doubledWords("YOU ARE WRONG", "Vous vous trompez"))
         T.eq("Vous vous trompez", TranslationPost.doubledWords("YOU ARE WRONG", "Vous vous vous trompez"))
         T.eq("Je je ne sais pas", TranslationPost.doubledWords("I, I DON'T KNOW", "Je je ne sais pas"))
+    }
+    fun g(tr: String, src: String = "") = TranslationPost.grammar(src, tr)
+    T.test("grammaire : élisions oubliées, subjonctif après « bien que », « pour que »…, infinitif après « faire » — le français juste n'est jamais touché") {
+        T.eq("AUJOURD'HUI, L'ÉPILOGUE SERA EN LIGNE.", g("AUJOURD'HUI, LE ÉPILOGUE SERA EN LIGNE."))
+        T.eq("Le fruit de l'ancien vagabond.", g("Le fruit du ancien vagabond."))
+        T.eq("Je ne sais pas s'il viendra, mais j'ai un plan et qu'il le sache.", g("Je ne sais pas si il viendra, mais je ai un plan et que il le sache."))
+        T.eq("C'est fini. D'un coup, il n'y a plus rien.", g("Ce est fini. De un coup, il ne y a plus rien."))
+        T.eq("J'y vais. Elle s'est levée.", g("Je y vais. Elle se est levée."))
+        for (ok in listOf("Fais-le encore !", "Le onze de l'équipe.", "Je crois que oui.", "Le héros de la haine.", "J'aurais du aller le voir.", "Parle de Yoo Joonghyuk.", "La une du journal ? Non : le yaourt."))
+            T.eq(ok, g(ok), "intact : $ok")
+        T.eq("Bien qu'il soit actuellement esclave, il était noble.", g("Bien qu'il est actuellement esclave, il était noble."))
+        T.eq("POUR QUE TU PUISSES PARTIR.", g("POUR QUE TU PEUX PARTIR."))
+        T.eq("Il faut que je fasse vite, avant qu'ils ne le sachent.", g("Il faut que je fais vite, avant qu'ils ne le savent."))
+        T.eq("Bien que j'aie peur.", g("Bien que j'ai peur."))
+        T.eq("Je veux que vous soyez là.", g("Je veux que vous êtes là."))
+        T.eq("C'est pour ça que tu es là.", g("C'est pour ça que tu es là."), "« pour ça que » : indicatif")
+        T.eq("QUAND LA MALCHANCE M'A FAIT STATIONNER AU FRONT.", g("QUAND LA MALCHANCE M'A FAIT STATIONNÉ AU FRONT."))
+        T.eq("Il s'est fait tuer.", g("Il s'est fait tué."))
+        T.eq("C'est un fait avéré.", g("C'est un fait avéré."))
+        // journal du 27/11 : titre anglais recopié, nom, « à la une », « de ouf »
+        T.eq("BIENVENUE DANS PICK ME UP !", g("BIENVENUE DANS PICK ME UP !", "WELCOME TO PICK ME UP!"))
+        T.eq("C'EST LA FILLE D'UIHYEOK JEONG.", g("C'EST LA FILLE DU UIHYEOK JEONG.", "SHE'S UIHYEOK JEONG'S DAUGHTER."))
+        T.eq("AUSSI FIER DE TOI QUE D'EUGENE.", g("AUSSI FIER DE TOI QUE DE EUGENE.", "AS PROUD OF YOU AS OF EUGENE."))
+        T.eq("CONTENU À LA UNE", g("CONTENU À LA UNE", "FEATURED")); T.eq("TAIS-TOI DE OUF !", g("TAIS-TOI DE OUF !", "SHUT UP!"))
+        T.eq("CONTRAIREMENT À MOI, LA A STAR SHAY", g("CONTRAIREMENT À MOI, LA A STAR SHAY", "UNLIKE ME, A STAR SHAY"), "lettre seule")
     }
     T.test("contrôle des chiffres : un nombre écrit en lettres ou regroupé à la française n'est pas perdu ; un chiffre doublé l'est") {
         fun lost(src: String, tr: String) = TranslationChecks.problems(src, tr, "fr", emptyList()).any { it.code == "chiffres" }
