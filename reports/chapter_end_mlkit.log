@@ -1,0 +1,124 @@
+11-28 14:57:21.814  7792  7792 I MT      : page : début http://10.0.2.2:8000/comics/test-series-1a2b3c/chapter/4.html (translateOn=true active=false total=0)
+11-28 14:57:23.173  7792  7844 I MTTEST  : compteurs total/traitées/échecs/chargement 0/0/0/true à 2 s
+11-28 14:57:24.106  7792  7792 I MT      : page : fin http://10.0.2.2:8000/comics/test-series-1a2b3c/chapter/4.html (affichée : idem) (translateOn=true active=false total=0)
+11-28 14:57:24.114  7792  7792 I MT      : départ : force=false all=false url=http://10.0.2.2:8000/comics/test-series-1a2b3c/chapter/4.html total=0
+11-28 14:57:24.314  7792  7792 I MT      : ordre : repérage i1(n=0,haut=75) i2(n=1,haut=796) ; vue 0/700 ; ajoutées 2
+11-28 14:57:24.325  7792  7834 I MT      : ordre : i1 démarre
+11-28 14:57:24.325  7792  7837 I MT      : ordre : i2 démarre
+11-28 14:57:24.656  7792  7792 I MT      : départ : force=false all=false url=http://10.0.2.2:8000/comics/test-series-1a2b3c/chapter/4.html total=2
+11-28 14:57:25.174  7792  7844 I MTTEST  : compteurs total/traitées/échecs/chargement 2/0/0/false à 4 s
+11-28 14:57:25.506  7792  7834 I MT      : ordre : i1 arrive à la lecture du texte (priorité 50000)
+11-28 14:57:25.506  7792  7837 I MT      : ordre : i2 arrive à la lecture du texte (priorité 200001)
+11-28 14:57:25.506  7792  7837 I MT      : ordre : lecture (priorité 200001) attend i1 ; en route : i1=attente de la lecture du texte/50000 i2=attente de la lecture du texte/200001
+11-28 14:57:25.506  7792  7834 I MT      : ordre : lecture (priorité 50000) passe ; en route : i1=attente de la lecture du texte/50000 i2=attente de la lecture du texte/200001
+11-28 14:57:25.506  7792  7834 I MT      : ordre : i1 lit le texte (attente 1 ms)
+11-28 14:57:39.814  7792  7837 I MT      : ordre : lecture (priorité 200001) passe ; en route : i1=lecture du texte/50000 i2=attente de la lecture du texte/200001
+11-28 14:57:39.814  7792  7837 I MT      : ordre : i2 lit le texte (attente 14308 ms)
+11-28 14:57:39.860  7792  7834 I MT      : écarté « Boom! » (onomatopée laissée telle quelle)
+11-28 14:57:42.003  7792  7834 I MT      : ordre : i1 arrive à l'affichage (priorité 50000)
+11-28 14:57:42.015  7792  7834 I MT      : ordre : i1 s'affiche (attente 12 ms)
+11-28 14:57:52.661  7792  7837 I MT      : écarté « anyone today. » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-28 14:57:52.661  7792  7837 I MT      : écarté « Do I have no choice but to kill him? » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-28 14:57:52.661  7792  7837 I MT      : écarté « You will regret this. » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-28 14:57:52.662  7792  7837 I MT      : écarté « Boom! » (onomatopée laissée telle quelle)
+11-28 14:57:53.254  7792  7837 I MT      : ordre : i2 arrive à l'affichage (priorité 200001)
+11-28 14:57:55.071  7792  7837 I MT      : ordre : i2 s'affiche (attente 1818 ms)
+11-28 14:57:55.936  7792  7792 I MT      : départ : force=false all=false url=http://10.0.2.2:8000/comics/test-series-1a2b3c/chapter/4.html total=2
+11-28 14:57:57.188  7792  7844 I MTTEST  : compteurs total/traitées/échecs/chargement 2/1/0/false à 36 s
+11-28 14:58:00.813  7792  7792 I MT      : départ : force=false all=false url=http://10.0.2.2:8000/comics/test-series-1a2b3c/chapter/4.html total=2
+11-28 14:58:01.189  7792  7844 I MTTEST  : compteurs total/traitées/échecs/chargement 2/2/0/false à 40 s
+11-28 14:58:02.820  7792  7792 I MT      : chapitre terminé : plus de reprise automatique (total=2)
+11-28 14:58:10.482  7792  7792 I MT      : fin de chapitre : page du chapitre arrivée en retard, traduite
+11-28 14:58:10.485  7792  7792 I MT      : ordre : repérage i8(n=2,haut=1518) ; vue 3150/842 ; ajoutées 1
+11-28 14:58:10.485  7792  7837 I MT      : ordre : i8 démarre
+11-28 14:58:10.791  7792  7837 I MT      : ordre : i8 arrive à la lecture du texte (priorité 2099997)
+11-28 14:58:10.792  7792  7837 I MT      : ordre : lecture (priorité 2099997) passe ; en route : i8=attente de la lecture du texte/2099997
+11-28 14:58:10.792  7792  7837 I MT      : ordre : i8 lit le texte (attente 0 ms)
+11-28 14:58:20.072  7792  7837 I MT      : écarté « anyone today. » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-28 14:58:20.072  7792  7837 I MT      : écarté « Do I have no choice but to kill him? » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-28 14:58:20.072  7792  7837 I MT      : écarté « You will regret this. » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-28 14:58:20.072  7792  7837 I MT      : écarté « Boom! » (onomatopée laissée telle quelle)
+11-28 14:58:20.552  7792  7837 I MT      : ordre : i8 arrive à l'affichage (priorité 2099997)
+11-28 14:58:20.552  7792  7837 I MT      : ordre : i8 s'affiche (attente 1 ms)
+11-28 14:58:34.212  7792  7792 I MT      : départ : force=false all=true url=http://10.0.2.2:8000/comics/test-series-1a2b3c/chapter/4.html total=3
+11-28 14:58:34.218  7792  7792 I MT      : ordre : repérage i3(n=3,haut=2415) i4(n=4,haut=2415) i5(n=5,haut=2720) i6(n=6,haut=2720) i7(n=7,haut=3403) i9(n=8,haut=3992) ; vue 3288/842 ; ajoutées 6
+11-28 14:58:34.218  7792  7837 I MT      : ordre : i7 démarre
+11-28 14:58:34.219  7792  7836 I MT      : ordre : i6 démarre
+11-28 14:58:34.219  7792  7835 I MT      : ordre : i9 démarre
+11-28 14:58:34.220  7792  7834 I MT      : ordre : i5 démarre
+11-28 14:58:34.345  7792  7835 I MT      : ordre : i9 arrive à la lecture du texte (priorité 50008)
+11-28 14:58:34.345  7792  7835 I MT      : ordre : lecture (priorité 50008) attend i7 ; en route : i9=attente de la lecture du texte/50008 i5=téléchargement/2099994 i6=téléchargement/2099993 i7=téléchargement/50007
+11-28 14:58:34.348  7792  7836 I MT      : ordre : i6 arrive à la lecture du texte (priorité 2099993)
+11-28 14:58:34.349  7792  7834 I MT      : ordre : i5 arrive à la lecture du texte (priorité 2099994)
+11-28 14:58:34.354  7792  7837 I MT      : ordre : i7 arrive à la lecture du texte (priorité 50007)
+11-28 14:58:34.354  7792  7837 I MT      : ordre : lecture (priorité 50007) passe ; en route : i9=attente de la lecture du texte/50008 i5=attente de la lecture du texte/2099994 i6=attente de la lecture du texte/2099993 i7=attente de la lecture du texte/50007
+11-28 14:58:34.354  7792  7837 I MT      : ordre : i7 lit le texte (attente 0 ms)
+11-28 14:58:43.215  7792  7835 I MT      : ordre : lecture (priorité 50008) passe ; en route : i9=attente de la lecture du texte/50008 i5=attente de la lecture du texte/2099994 i6=attente de la lecture du texte/2099993 i7=lecture du texte/50007
+11-28 14:58:43.215  7792  7835 I MT      : ordre : i9 lit le texte (attente 8870 ms)
+11-28 14:58:43.236  7792  7837 I MT      : écarté « THUD! » (onomatopée laissée telle quelle)
+11-28 14:58:44.717  7792  7837 I MT      : ordre : i7 arrive à l'affichage (priorité 50007)
+11-28 14:58:44.718  7792  7837 I MT      : ordre : i7 s'affiche (attente 0 ms)
+11-28 14:58:48.265  7792  7837 I MT      : ordre : i4 démarre
+11-28 14:58:48.490  7792  7837 I MT      : ordre : i4 arrive à la lecture du texte (priorité 2099995)
+11-28 14:58:48.836  7792  7792 I MT      : départ : force=false all=false url=http://10.0.2.2:8000/comics/test-series-1a2b3c/chapter/4.html total=9
+11-28 14:58:51.722  7792  7836 I MT      : ordre : lecture (priorité 2099993) passe ; en route : i9=lecture du texte/50008 i4=attente de la lecture du texte/2099995 i5=attente de la lecture du texte/2099994 i6=attente de la lecture du texte/2099993
+11-28 14:58:51.722  7792  7836 I MT      : ordre : i6 lit le texte (attente 17373 ms)
+11-28 14:58:51.747  7792  7835 I MT      : écarté « Boom! » (onomatopée laissée telle quelle)
+11-28 14:58:52.803  7792  7835 I MT      : ordre : i9 arrive à l'affichage (priorité 50008)
+11-28 14:58:52.815  7792  7835 I MT      : ordre : i9 s'affiche (attente 11 ms)
+11-28 14:58:57.928  7792  7835 I MT      : ordre : i3 démarre
+11-28 14:58:58.058  7792  7835 I MT      : ordre : i3 arrive à la lecture du texte (priorité 2099996)
+11-28 14:58:58.457  7792  7792 I MT      : départ : force=false all=false url=http://10.0.2.2:8000/comics/test-series-1a2b3c/chapter/4.html total=9
+11-28 14:59:02.031  7792  7834 I MT      : ordre : lecture (priorité 2099994) passe ; en route : i3=attente de la lecture du texte/2099996 i4=attente de la lecture du texte/2099995 i5=attente de la lecture du texte/2099994 i6=lecture du texte/2099993
+11-28 14:59:02.032  7792  7834 I MT      : ordre : i5 lit le texte (attente 27683 ms)
+11-28 14:59:02.054  7792  7836 I MT      : écarté « THUD! » (onomatopée laissée telle quelle)
+11-28 14:59:03.409  7792  7836 I MT      : ordre : i6 arrive à l'affichage (priorité 2099993)
+11-28 14:59:03.419  7792  7836 I MT      : ordre : i6 s'affiche (attente 10 ms)
+11-28 14:59:08.002  7792  7792 I MT      : départ : force=false all=false url=http://10.0.2.2:8000/comics/test-series-1a2b3c/chapter/4.html total=9
+11-28 14:59:11.732  7792  7837 I MT      : ordre : lecture (priorité 2099995) passe ; en route : i3=attente de la lecture du texte/2099996 i4=attente de la lecture du texte/2099995 i5=lecture du texte/2099994
+11-28 14:59:11.732  7792  7837 I MT      : ordre : i4 lit le texte (attente 23242 ms)
+11-28 14:59:11.750  7792  7834 I MT      : écarté « THUD! » (onomatopée laissée telle quelle)
+11-28 14:59:13.054  7792  7834 I MT      : ordre : i5 arrive à l'affichage (priorité 2099994)
+11-28 14:59:13.054  7792  7834 I MT      : ordre : i5 s'affiche (attente 0 ms)
+11-28 14:59:18.457  7792  7792 I MT      : départ : force=false all=false url=http://10.0.2.2:8000/comics/test-series-1a2b3c/chapter/4.html total=9
+11-28 14:59:22.189  7792  7835 I MT      : ordre : lecture (priorité 2099996) passe ; en route : i3=attente de la lecture du texte/2099996 i4=lecture du texte/2099995
+11-28 14:59:22.190  7792  7835 I MT      : ordre : i3 lit le texte (attente 24132 ms)
+11-28 14:59:22.212  7792  7837 I MT      : écarté « THUD! » (onomatopée laissée telle quelle)
+11-28 14:59:23.775  7792  7837 I MT      : ordre : i4 arrive à l'affichage (priorité 2099995)
+11-28 14:59:23.775  7792  7837 I MT      : ordre : i4 s'affiche (attente 1 ms)
+11-28 14:59:27.807  7792  7792 I MT      : départ : force=false all=false url=http://10.0.2.2:8000/comics/test-series-1a2b3c/chapter/4.html total=9
+11-28 14:59:31.633  7792  7835 I MT      : écarté « THUD! » (onomatopée laissée telle quelle)
+11-28 14:59:32.096  7792  7835 I MT      : ordre : i3 arrive à l'affichage (priorité 2099996)
+11-28 14:59:32.096  7792  7835 I MT      : ordre : i3 s'affiche (attente 1 ms)
+11-28 14:59:34.248  7792  7792 I MT      : départ : force=false all=false url=http://10.0.2.2:8000/comics/test-series-1a2b3c/chapter/4.html total=9
+11-28 14:59:34.460  7792  7844 I MTTEST  : REPORT_READY report.json
+11-28 14:57:20.205  8034  8034 D nativeloader:   com_android_adservices: libhpke_jni.so:libtflite_support_classifiers_native.so
+11-28 14:57:20.205  8034  8034 D nativeloader:   com_android_extservices: libtflite_support_classifiers_native.so
+11-28 14:57:20.222  8037  8037 D nativeloader:   com_android_adservices: libhpke_jni.so:libtflite_support_classifiers_native.so
+11-28 14:57:20.222  8037  8037 D nativeloader:   com_android_extservices: libtflite_support_classifiers_native.so
+11-28 14:57:20.259  5697  7965 I ChimeraConfigurator: Detected pending changes for urgent request: [vision.ocr]. Pending module sets: container:2318189190800+mlkit.ocr.common,tflite_dynamite:2640104055100800+tflite_dynamite,vision_ocr:2316024025100000+vision.ocr
+11-28 14:57:20.478  8166  8166 D nativeloader:   com_android_adservices: libhpke_jni.so:libtflite_support_classifiers_native.so
+11-28 14:57:20.478  8166  8166 D nativeloader:   com_android_extservices: libtflite_support_classifiers_native.so
+11-28 14:57:22.220  7792  8329 I tflite  : Initialized TensorFlow Lite runtime.
+11-28 14:57:22.230  7792  8328 I native  : I0000 00:00:1795877842.229995    8328 tflite_lstm_client_base.cc:371] Resizing interpreter pool to 4
+11-28 14:57:22.284  7792  8329 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+11-28 14:57:22.284  7792  8329 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 14:57:22.285  7792  8329 I native  : I0000 00:00:1795877842.285804    8329 tflite_detector_client_with_shape_cache.cc:105] Caching size: 10
+11-28 14:57:22.287  7792  8329 I native  : I0000 00:00:1795877842.287642    8329 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_splitting_custom_ops/model.tflite
+11-28 14:57:22.288  7792  8329 I native  : I0000 00:00:1795877842.288074    8329 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-28 14:57:22.288  7792  8329 I native  : I0000 00:00:1795877842.288350    8329 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_clustering_custom_ops/model.tflite
+11-28 14:57:22.288  7792  8329 I native  : I0000 00:00:1795877842.288620    8329 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-28 14:57:22.289  7792  8340 I native  : I0000 00:00:1795877842.289071    8340 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/conv_model.fb
+11-28 14:57:22.289  7792  8340 I native  : I0000 00:00:1795877842.289563    8340 tflite_model_pooled_runner.cc:636] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/lstm_model.fb
+11-28 14:57:22.296  7792  8340 I native  : I0000 00:00:1795877842.296480    8340 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 4
+11-28 14:57:22.366  7792  8329 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 14:57:23.044  7792  8329 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 14:57:23.091  7792  8329 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 14:57:23.134  7792  8329 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 14:57:25.571  7792  8328 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 14:57:25.720  7792  8328 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 14:57:25.763  7792  8328 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 14:57:26.407  7792  8328 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 14:57:26.943  7792  8328 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 14:57:30.324  5697  7983 I ChimeraConfigurator: Detected pending changes for urgent request: [vision.ocr]. Pending module sets: container:2318189190800+mlkit.ocr.common,tflite_dynamite:2640104055100800+tflite_dynamite,vision_ocr:2316024025100000+vision.ocr
+11-28 14:57:39.885  7792  8328 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.

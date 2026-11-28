@@ -1,0 +1,64 @@
+11-28 15:09:06.016 11480 11480 I MT      : page : début http://10.0.2.2:8000/seam_cut.html (translateOn=true active=false total=0)
+11-28 15:09:07.290 11480 11515 I MTTEST  : compteurs total/traitées/échecs/chargement 0/0/0/true à 2 s
+11-28 15:09:08.061 11480 11480 I MT      : page : fin http://10.0.2.2:8000/seam_cut.html (affichée : idem) (translateOn=true active=false total=0)
+11-28 15:09:08.066 11480 11480 I MT      : départ : force=false all=false url=http://10.0.2.2:8000/seam_cut.html total=0
+11-28 15:09:08.338 11480 11480 I MT      : ordre : repérage i1(n=0,haut=75) i2(n=1,haut=762) i3(n=2,haut=1529) i4(n=3,haut=2216) ; vue 0/700 ; ajoutées 4
+11-28 15:09:08.352 11480 11505 I MT      : ordre : i1 démarre
+11-28 15:09:08.404 11480 11506 I MT      : ordre : i2 démarre
+11-28 15:09:08.417 11480 11504 I MT      : ordre : i3 démarre
+11-28 15:09:08.428 11480 11507 I MT      : ordre : i4 démarre
+11-28 15:09:08.564 11480 11480 I MT      : départ : force=false all=false url=http://10.0.2.2:8000/seam_cut.html total=4
+11-28 15:09:09.291 11480 11515 I MTTEST  : compteurs total/traitées/échecs/chargement 4/0/0/false à 4 s
+11-28 15:09:09.390 11480 11505 I MT      : ordre : i1 arrive à la lecture du texte (priorité 50000)
+11-28 15:09:09.390 11480 11504 I MT      : ordre : i3 arrive à la lecture du texte (priorité 200002)
+11-28 15:09:09.391 11480 11506 I MT      : ordre : i2 arrive à la lecture du texte (priorité 200001)
+11-28 15:09:09.391 11480 11505 I MT      : ordre : lecture (priorité 50000) passe ; en route : i1=attente de la lecture du texte/50000 i2=attente de la lecture du texte/200001 i3=attente de la lecture du texte/200002 i4=attente de la lecture du texte/200003
+11-28 15:09:09.391 11480 11507 I MT      : ordre : i4 arrive à la lecture du texte (priorité 200003)
+11-28 15:09:09.391 11480 11505 I MT      : ordre : i1 lit le texte (attente 1 ms)
+11-28 15:09:19.319 11480 11506 I MT      : ordre : lecture (priorité 200001) passe ; en route : i1=lecture du texte/50000 i2=attente de la lecture du texte/200001 i3=attente de la lecture du texte/200002 i4=attente de la lecture du texte/200003
+11-28 15:09:19.320 11480 11506 I MT      : ordre : i2 lit le texte (attente 9929 ms)
+11-28 15:09:20.446 11480 11505 I MT      : ordre : i1 arrive à l'affichage (priorité 50000)
+11-28 15:09:20.452 11480 11505 I MT      : ordre : i1 s'affiche (attente 5 ms)
+11-28 15:09:24.666 11480 11480 I MT      : départ : force=false all=false url=http://10.0.2.2:8000/seam_cut.html total=4
+11-28 15:09:25.295 11480 11515 I MTTEST  : compteurs total/traitées/échecs/chargement 4/1/0/false à 20 s
+11-28 15:09:30.846 11480 11504 I MT      : ordre : lecture (priorité 200002) passe ; en route : i2=lecture du texte/200001 i3=attente de la lecture du texte/200002 i4=attente de la lecture du texte/200003
+11-28 15:09:30.846 11480 11504 I MT      : ordre : i3 lit le texte (attente 21456 ms)
+11-28 15:09:31.529 11480 11506 I MT      : ordre : i2 arrive à l'affichage (priorité 200001)
+11-28 15:09:31.529 11480 11506 I MT      : ordre : i2 s'affiche (attente 1 ms)
+11-28 15:09:38.875 11480 11480 I MT      : départ : force=false all=false url=http://10.0.2.2:8000/seam_cut.html total=4
+11-28 15:09:39.298 11480 11515 I MTTEST  : compteurs total/traitées/échecs/chargement 4/2/0/false à 34 s
+11-28 15:09:40.713 11480 11507 I MT      : ordre : lecture (priorité 200003) passe ; en route : i3=lecture du texte/200002 i4=attente de la lecture du texte/200003
+11-28 15:09:40.713 11480 11507 I MT      : ordre : i4 lit le texte (attente 31322 ms)
+11-28 15:09:41.312 11480 11504 I MT      : ordre : i3 arrive à l'affichage (priorité 200002)
+11-28 15:09:41.323 11480 11504 I MT      : ordre : i3 s'affiche (attente 11 ms)
+11-28 15:09:43.887 11480 11480 I MT      : départ : force=false all=false url=http://10.0.2.2:8000/seam_cut.html total=4
+11-28 15:09:45.327 11480 11515 I MTTEST  : compteurs total/traitées/échecs/chargement 4/3/0/false à 40 s
+11-28 15:09:45.368 11480 11507 I MT      : ordre : i4 arrive à l'affichage (priorité 200003)
+11-28 15:09:45.368 11480 11507 I MT      : ordre : i4 s'affiche (attente 0 ms)
+11-28 15:09:46.406 11480 11480 I MT      : départ : force=false all=false url=http://10.0.2.2:8000/seam_cut.html total=4
+11-28 15:09:47.328 11480 11515 I MTTEST  : compteurs total/traitées/échecs/chargement 4/4/0/false à 42 s
+11-28 15:09:48.411 11480 11480 I MT      : chapitre terminé : plus de reprise automatique (total=4)
+11-28 15:09:55.427 11480 11515 I MTTEST  : REPORT_READY report.json
+11-28 15:09:06.597 11480 11594 I native  : I0000 00:00:1795878546.597706   11594 tflite_lstm_client_base.cc:371] Resizing interpreter pool to 4
+11-28 15:09:06.598 11480 11594 I tflite  : Initialized TensorFlow Lite runtime.
+11-28 15:09:06.623 11480 11602 I native  : I0000 00:00:1795878546.623925   11602 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/conv_model.fb
+11-28 15:09:06.638 11480 11595 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+11-28 15:09:06.638 11480 11595 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:09:06.640 11480 11595 I native  : I0000 00:00:1795878546.640064   11595 tflite_detector_client_with_shape_cache.cc:105] Caching size: 10
+11-28 15:09:06.645 11480 11595 I native  : I0000 00:00:1795878546.645853   11595 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_splitting_custom_ops/model.tflite
+11-28 15:09:06.646 11480 11595 I native  : I0000 00:00:1795878546.646381   11595 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-28 15:09:06.646 11480 11595 I native  : I0000 00:00:1795878546.646739   11595 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_clustering_custom_ops/model.tflite
+11-28 15:09:06.647 11480 11595 I native  : I0000 00:00:1795878546.647095   11595 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-28 15:09:06.650 11480 11602 I native  : I0000 00:00:1795878546.650043   11602 tflite_model_pooled_runner.cc:636] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/lstm_model.fb
+11-28 15:09:06.653 11480 11602 I native  : I0000 00:00:1795878546.653500   11602 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 4
+11-28 15:09:06.708 11480 11595 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:09:07.053 11480 11595 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:09:07.181 11480 11595 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:09:07.285 11480 11595 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:09:09.467 11480 11594 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:09:10.099 11480 11594 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:09:10.715 11480 11594 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:09:10.941 11480 11594 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:09:11.109 11480 11594 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:09:19.938 11480 11591 I tflite  : Initialized TensorFlow Lite runtime.
+11-28 15:09:19.939 11480 11591 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.

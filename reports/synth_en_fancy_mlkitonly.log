@@ -1,0 +1,48 @@
+11-28 15:04:55.122 10063 10063 I MT      : page : début http://10.0.2.2:8000/synth_en_fancy.html (translateOn=true active=false total=0)
+11-28 15:04:56.494 10063 10135 I MTTEST  : compteurs total/traitées/échecs/chargement 0/0/0/true à 2 s
+11-28 15:04:57.060 10063 10063 I MT      : page : fin http://10.0.2.2:8000/synth_en_fancy.html (affichée : idem) (translateOn=true active=false total=0)
+11-28 15:04:57.066 10063 10063 I MT      : départ : force=false all=false url=http://10.0.2.2:8000/synth_en_fancy.html total=0
+11-28 15:04:57.360 10063 10063 I MT      : ordre : repérage i1(n=0,haut=75) ; vue 0/700 ; ajoutées 1
+11-28 15:04:57.367 10063 10125 I MT      : ordre : i1 démarre
+11-28 15:04:57.588 10063 10063 I MT      : départ : force=false all=false url=http://10.0.2.2:8000/synth_en_fancy.html total=1
+11-28 15:04:58.361 10063 10125 I MT      : ordre : i1 arrive à la lecture du texte (priorité 50000)
+11-28 15:04:58.361 10063 10125 I MT      : ordre : lecture (priorité 50000) passe ; en route : i1=attente de la lecture du texte/50000
+11-28 15:04:58.361 10063 10125 I MT      : ordre : i1 lit le texte (attente 0 ms)
+11-28 15:04:58.495 10063 10135 I MTTEST  : compteurs total/traitées/échecs/chargement 1/0/0/false à 4 s
+11-28 15:04:59.209 10063 10125 I MT      : écarté « CRAC » (onomatopée laissée telle quelle, hors zone)
+11-28 15:04:59.889 10063 10125 I MT      : ordre : i1 arrive à l'affichage (priorité 50000)
+11-28 15:04:59.889 10063 10125 I MT      : ordre : i1 s'affiche (attente 1 ms)
+11-28 15:05:14.248 10063 10063 I MT      : départ : force=false all=false url=http://10.0.2.2:8000/synth_en_fancy.html total=1
+11-28 15:05:14.499 10063 10135 I MTTEST  : compteurs total/traitées/échecs/chargement 1/1/0/false à 20 s
+11-28 15:05:16.255 10063 10063 I MT      : chapitre terminé : plus de reprise automatique (total=1)
+11-28 15:05:22.538 10063 10135 I MTTEST  : REPORT_READY report.json
+11-28 15:04:55.502 10063 10212 I tflite  : Initialized TensorFlow Lite runtime.
+11-28 15:04:55.526 10063 10211 I native  : I0000 00:00:1795878295.526902   10211 tflite_lstm_client_base.cc:371] Resizing interpreter pool to 4
+11-28 15:04:55.539 10063 10222 I native  : I0000 00:00:1795878295.539891   10222 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/conv_model.fb
+11-28 15:04:55.543 10063 10222 I native  : I0000 00:00:1795878295.543008   10222 tflite_model_pooled_runner.cc:636] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/lstm_model.fb
+11-28 15:04:55.546 10063 10212 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+11-28 15:04:55.546 10063 10212 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:04:55.548 10063 10222 I native  : I0000 00:00:1795878295.548022   10222 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 4
+11-28 15:04:55.563 10063 10211 I native  : I0000 00:00:1795878295.563274   10211 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_splitting_custom_ops/model.tflite
+11-28 15:04:55.563 10063 10212 I native  : I0000 00:00:1795878295.563619   10212 tflite_detector_client_with_shape_cache.cc:105] Caching size: 10
+11-28 15:04:55.566 10063 10211 I native  : I0000 00:00:1795878295.566915   10211 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-28 15:04:55.567 10063 10211 I native  : I0000 00:00:1795878295.567977   10211 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_clustering_custom_ops/model.tflite
+11-28 15:04:55.569 10063 10211 I native  : I0000 00:00:1795878295.569040   10211 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-28 15:04:55.631 10063 10211 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:04:55.875 10063 10211 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:04:55.923 10063 10211 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:04:55.947 10063 10211 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:04:58.386 10063 10212 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:04:58.397 10063 10212 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:04:58.408 10063 10212 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:04:58.441 10063 10212 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:04:58.445 10063 10212 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:04:59.384 10063 10264 I tflite  : Initialized TensorFlow Lite runtime.
+11-28 15:04:59.384 10063 10264 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+11-28 15:05:14.491 10037 10100 D cevx    : Starting download: https://www.gstatic.com/messages/smarts/smart_actions_emotive_models/emotion_reply_model_replicate_extended.tflite
+11-28 15:05:14.491 10037 10100 V cevx    : Is http uri, downloading (uri: https://www.gstatic.com/messages/smarts/smart_actions_emotive_models/emotion_reply_model_replicate_extended.tflite)
+11-28 15:05:14.850 10037 10098 D cevx    : Starting download: https://www.gstatic.com/messages/smarts/smart_actions_emotive_models/emotion_complete_model_replicate.tflite_1589263783992
+11-28 15:05:14.850 10037 10098 V cevx    : Is http uri, downloading (uri: https://www.gstatic.com/messages/smarts/smart_actions_emotive_models/emotion_complete_model_replicate.tflite_1589263783992)
+11-28 15:05:14.980 10037 10273 D cevx    : Starting download: https://www.gstatic.com/messages/smarts/smart_actions_emotive_models/emotion_complete_model_replicate_extended.tflite
+11-28 15:05:14.981 10037 10273 V cevx    : Is http uri, downloading (uri: https://www.gstatic.com/messages/smarts/smart_actions_emotive_models/emotion_complete_model_replicate_extended.tflite)
+11-28 15:05:14.995 10037 10098 D cevx    : Starting download: https://www.gstatic.com/messages/smarts/smart_actions_emotive_models/emotion_complete_model_replicate_winter.tflite

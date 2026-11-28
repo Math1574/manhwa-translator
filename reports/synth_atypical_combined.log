@@ -1,0 +1,94 @@
+11-28 15:03:35.096  9669  9669 I MT      : page : début http://10.0.2.2:8000/synth_atypical.html (translateOn=true active=false total=0)
+11-28 15:03:36.447  9669  9740 I MTTEST  : compteurs total/traitées/échecs/chargement 0/0/0/true à 2 s
+11-28 15:03:37.327  9669  9669 I MT      : page : fin http://10.0.2.2:8000/synth_atypical.html (affichée : idem) (translateOn=true active=false total=0)
+11-28 15:03:37.332  9669  9669 I MT      : départ : force=false all=false url=http://10.0.2.2:8000/synth_atypical.html total=0
+11-28 15:03:37.615  9669  9669 I MT      : ordre : repérage i1(n=0,haut=75) i2(n=1,haut=343) i3(n=2,haut=631) i4(n=3,haut=920) i5(n=4,haut=1209) i6(n=5,haut=1538) ; vue 0/700 ; ajoutées 6
+11-28 15:03:37.631  9669  9730 I MT      : ordre : i1 démarre
+11-28 15:03:37.658  9669  9732 I MT      : ordre : i3 démarre
+11-28 15:03:37.658  9669  9731 I MT      : ordre : i2 démarre
+11-28 15:03:37.667  9669  9733 I MT      : ordre : i4 démarre
+11-28 15:03:37.799  9669  9669 I MT      : départ : force=false all=false url=http://10.0.2.2:8000/synth_atypical.html total=6
+11-28 15:03:38.448  9669  9740 I MTTEST  : compteurs total/traitées/échecs/chargement 6/0/0/false à 4 s
+11-28 15:03:38.709  9669  9730 I MT      : ordre : i1 arrive à la lecture du texte (priorité 50000)
+11-28 15:03:38.710  9669  9733 I MT      : ordre : i4 arrive à la lecture du texte (priorité 200003)
+11-28 15:03:38.710  9669  9732 I MT      : ordre : i3 arrive à la lecture du texte (priorité 50002)
+11-28 15:03:38.710  9669  9730 I MT      : ordre : lecture (priorité 50000) passe ; en route : i1=attente de la lecture du texte/50000 i2=assemblage avec l'image du dessus/50001 i3=attente de la lecture du texte/50002 i4=attente de la lecture du texte/200003
+11-28 15:03:38.710  9669  9730 I MT      : ordre : i1 lit le texte (attente 1 ms)
+11-28 15:03:38.710  9669  9731 I MT      : ordre : i2 arrive à la lecture du texte (priorité 50001)
+11-28 15:03:44.702  9669  9731 I MT      : ordre : lecture (priorité 50001) passe ; en route : i1=lecture du texte/50000 i2=attente de la lecture du texte/50001 i3=attente de la lecture du texte/50002 i4=attente de la lecture du texte/200003
+11-28 15:03:44.702  9669  9731 I MT      : ordre : i2 lit le texte (attente 5992 ms)
+11-28 15:03:46.545  9669  9730 I MT      : ordre : i1 arrive à l'affichage (priorité 50000)
+11-28 15:03:46.546  9669  9730 I MT      : ordre : i1 s'affiche (attente 0 ms)
+11-28 15:03:53.699  9669  9730 I MT      : ordre : i5 démarre
+11-28 15:03:54.247  9669  9730 I MT      : ordre : i5 arrive à la lecture du texte (priorité 200004)
+11-28 15:03:54.451  9669  9740 I MTTEST  : compteurs total/traitées/échecs/chargement 6/1/0/false à 20 s
+11-28 15:03:54.472  9669  9669 I MT      : départ : force=false all=false url=http://10.0.2.2:8000/synth_atypical.html total=6
+11-28 15:03:57.761  9669  9732 I MT      : ordre : lecture (priorité 50002) passe ; en route : i2=lecture du texte/50001 i3=attente de la lecture du texte/50002 i4=attente de la lecture du texte/200003 i5=attente de la lecture du texte/200004
+11-28 15:03:57.761  9669  9732 I MT      : ordre : i3 lit le texte (attente 19052 ms)
+11-28 15:03:57.791  9669  9731 I MT      : écarté « WHATEVER THE CASE IS, I MUST GATHER MORE » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-28 15:03:57.791  9669  9731 I MT      : écarté « IF I KEEP DOING THAT, THEN ONE b DAY... » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-28 15:03:58.856  9669  9731 I MT      : ordre : i2 arrive à l'affichage (priorité 50001)
+11-28 15:03:58.859  9669  9731 I MT      : ordre : i2 s'affiche (attente 2 ms)
+11-28 15:04:06.678  9669  9733 I MT      : ordre : lecture (priorité 200003) passe ; en route : i2=affichage/50001 i3=lecture du texte/50002 i4=attente de la lecture du texte/200003 i5=attente de la lecture du texte/200004
+11-28 15:04:06.679  9669  9733 I MT      : ordre : i4 lit le texte (attente 27969 ms)
+11-28 15:04:06.694  9669  9732 I MT      : écarté « IILVVHNLUIII DECEITFUL TEMPTATIONS. » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-28 15:04:06.698  9669  9732 I MT      : écarté « THE WORLD'S BALANCE WAS TEETERING PRECAR » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-28 15:04:08.343  9669  9732 I MT      : ordre : i3 arrive à l'affichage (priorité 50002)
+11-28 15:04:13.672  9669  9730 I MT      : ordre : lecture (priorité 200004) passe ; en route : i2=affichage/50001 i3=affichage/50002 i4=lecture du texte/200003 i5=attente de la lecture du texte/200004
+11-28 15:04:13.672  9669  9730 I MT      : ordre : i5 lit le texte (attente 19425 ms)
+11-28 15:04:13.682  9669  9733 I MT      : écarté « SHUT MY MOUTH BY PUTTING A BOULDER » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-28 15:04:13.682  9669  9733 I MT      : écarté « PLEASE JUST SHUT UP ALREADY, YOU CRAZY B » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-28 15:04:14.551  9669  9733 I MT      : ordre : i4 arrive à l'affichage (priorité 200003)
+11-28 15:04:16.741  9669  9732 I MT      : ordre : i3 s'affiche (attente 8398 ms)
+11-28 15:04:17.322  9669  9731 I MT      : ordre : i6 démarre
+11-28 15:04:17.739  9669  9731 I MT      : ordre : i6 arrive à la lecture du texte (priorité 200005)
+11-28 15:04:17.811  9669  9669 I MT      : départ : force=false all=false url=http://10.0.2.2:8000/synth_atypical.html total=6
+11-28 15:04:18.463  9669  9740 I MTTEST  : compteurs total/traitées/échecs/chargement 6/2/0/false à 44 s
+11-28 15:04:20.305  9669  9731 I MT      : ordre : lecture (priorité 200005) passe ; en route : i3=affichage/50002 i4=affichage/200003 i5=lecture du texte/200004 i6=attente de la lecture du texte/200005
+11-28 15:04:20.305  9669  9731 I MT      : ordre : i6 lit le texte (attente 2566 ms)
+11-28 15:04:20.317  9669  9730 I MT      : écarté « SHUT UP, THAT SOUNDS GROSS. » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-28 15:04:20.317  9669  9730 I MT      : écarté « WANT ME TO PUT A RESTRICTION ON YOUR MOU » (traduit par l'image voisine, de l'autre côté de la jonction)
+11-28 15:04:21.164  9669  9730 I MT      : ordre : i5 arrive à l'affichage (priorité 200004)
+11-28 15:04:23.729  9669  9733 I MT      : ordre : i4 s'affiche (attente 9179 ms)
+11-28 15:04:24.269  9669  9669 I MT      : départ : force=false all=false url=http://10.0.2.2:8000/synth_atypical.html total=6
+11-28 15:04:24.475  9669  9740 I MTTEST  : compteurs total/traitées/échecs/chargement 6/3/0/false à 50 s
+11-28 15:04:25.633  9669  9730 I MT      : ordre : i5 s'affiche (attente 4469 ms)
+11-28 15:04:26.166  9669  9669 I MT      : départ : force=false all=false url=http://10.0.2.2:8000/synth_atypical.html total=6
+11-28 15:04:26.476  9669  9740 I MTTEST  : compteurs total/traitées/échecs/chargement 6/4/0/false à 52 s
+11-28 15:04:27.126  9669  9669 I MT      : départ : force=false all=false url=http://10.0.2.2:8000/synth_atypical.html total=6
+11-28 15:04:27.131  9669  9731 I MT      : ordre : i6 arrive à l'affichage (priorité 200005)
+11-28 15:04:27.131  9669  9731 I MT      : ordre : i6 s'affiche (attente 0 ms)
+11-28 15:04:28.477  9669  9740 I MTTEST  : compteurs total/traitées/échecs/chargement 6/6/0/false à 54 s
+11-28 15:04:28.539  9669  9669 I MT      : départ : force=false all=false url=http://10.0.2.2:8000/synth_atypical.html total=6
+11-28 15:04:30.545  9669  9669 I MT      : chapitre terminé : plus de reprise automatique (total=6)
+11-28 15:04:36.531  9669  9740 I MTTEST  : REPORT_READY report.json
+11-28 15:03:35.532  9669  9823 I tflite  : Initialized TensorFlow Lite runtime.
+11-28 15:03:35.545  9669  9823 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+11-28 15:03:35.549  9669  9823 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:03:35.554  9669  9824 I native  : I0000 00:00:1795878215.554127    9824 tflite_lstm_client_base.cc:371] Resizing interpreter pool to 4
+11-28 15:03:35.573  9669  9823 I native  : I0000 00:00:1795878215.573370    9823 tflite_detector_client_with_shape_cache.cc:105] Caching size: 10
+11-28 15:03:35.594  9669  9823 I native  : I0000 00:00:1795878215.594353    9823 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_splitting_custom_ops/model.tflite
+11-28 15:03:35.594  9669  9823 I native  : I0000 00:00:1795878215.594842    9823 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-28 15:03:35.595  9669  9823 I native  : I0000 00:00:1795878215.595277    9823 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/layout/line_clustering_custom_ops/model.tflite
+11-28 15:03:35.595  9669  9823 I native  : I0000 00:00:1795878215.595924    9823 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 1
+11-28 15:03:35.617  9669  9834 I native  : I0000 00:00:1795878215.617316    9834 tflite_model_pooled_runner.cc:625] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/conv_model.fb
+11-28 15:03:35.618  9669  9834 I native  : I0000 00:00:1795878215.618152    9834 tflite_model_pooled_runner.cc:636] Loading mlkit-google-ocr-models/gocr/gocr_models/line_recognition_legacy_mobile/Latn_ctc/optical/lstm_model.fb
+11-28 15:03:35.623  9669  9834 I native  : I0000 00:00:1795878215.623735    9834 tflite_model_pooled_runner.cc:836] Resizing interpreter pool to 4
+11-28 15:03:35.805  9669  9824 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:03:36.015  9669  9824 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:03:36.160  9669  9824 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:03:36.254  9669  9824 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:03:38.754  9669  9823 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:03:39.817  9669  9823 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:03:39.859  9669  9823 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:03:40.834  9669  9823 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:03:44.766  9669  9824 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:03:44.818  9669  9824 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:03:45.052  9669  9824 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:03:45.680  9669  9901 I tflite  : Initialized TensorFlow Lite runtime.
+11-28 15:03:45.680  9669  9901 I tflite  : Created TensorFlow Lite XNNPACK delegate for CPU.
+11-28 15:03:45.749  9669  9824 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:03:46.399  9669  9824 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:04:13.740  9669  9823 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:04:13.832  9669  9823 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
+11-28 15:04:13.887  9669  9823 I tflite  : Replacing 44 out of 46 node(s) with delegate (TfLiteXNNPackDelegate) node, yielding 3 partitions for the whole graph.
