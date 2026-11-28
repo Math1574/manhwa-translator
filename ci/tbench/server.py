@@ -5,8 +5,10 @@ POST / avec un objet JSON {system, user, top_k, top_p, temperature, max_tokens, 
 GET /health : « ok » quand le modèle est chargé.
 Usage : server.py <modèle.litertlm> <port> [threads]
 Mode (variable TBENCH_SERVER) :
-  conv    : une conversation neuve par demande (l'application jusqu'au build 264) ;
-  session : la consigne (système) lue une fois puis recopiée (clone de session, cache de préfixe), seul le message de la demande est lu à chaque fois ;
+  conv    : une conversation neuve par demande (comme l'application) ;
+  session : la consigne (système) lue une fois puis recopiée (clone de session, cache de préfixe), seul le message de la demande est lu à chaque fois.
+            −37 % sur ce processeur, mais sur le GPU du téléphone (build 266, journal du 28/11 13:37) chaque recopie coûtait 6 à 10 s de plus et gardait
+            environ 60 Mo jamais rendus (mémoire native de 1,3 à 4,7 Go en 30 pages, appli tuée par Android) : retiré de l'application au build 267 ;
   ab      : les deux sur chaque demande, réponse de « conv » renvoyée, comparaison (textes, durées) dans /tmp/ab.jsonl.
 """
 import http.server, json, os, sys, time, threading
