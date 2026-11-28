@@ -99,7 +99,7 @@ object OcrRepair {
      */
     fun repairWithSeries(text: String, lex: EnglishLexicon, chapterNames: Set<String>, mem: SeriesMemory?, premise: String?): String {
         val premiseNames = SeriesMemory.premiseNames(premise, lex)
-        val known = if (mem != null) synchronized(mem) { mem.observeReading(text, lex); mem.knownNames() } else emptySet()
+        val known = if (mem != null) synchronized(mem) { mem.observeReading(text, lex); mem.knownNames(3, lex) } else emptySet()
         val names = chapterNames + known + premiseNames
         var pre = if (mem != null) synchronized(mem) { applyConfusions(text, lex, names, mem.confusions) } else text
         pre = joinSplitNames(pre, names)

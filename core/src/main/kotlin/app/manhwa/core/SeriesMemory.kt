@@ -157,13 +157,25 @@ class SeriesMemory(val key: String) {
     private var narratorF = 0
     /** Mots qui disent le genre de l'œuvre : nombre de bulles où chacun apparaît (voir [GenrePacks]). */
     private val genreWords = HashMap<String, Int>()
+    /**
+     * Termes propres à l'œuvre (« Northern Heavenly Sect », « boarding house », « great sasuk ») : suites de deux à quatre mots qui reviennent d'un chapitre à l'autre, avec le nombre
+     * de bulles où chacune est apparue et la plus courte réplique déjà traduite qui la contient. Quand un terme revient, cette réplique est montrée au modèle, qui garde la même traduction.
+     */
+    private val termCounts = LinkedHashMap<String, Int>()
+    private val termExamples = HashMap<String, Pair<String, String>>()
+    /** Faux pendant un préchauffage avec les traductions d'une ancienne version (banc d'essai) : les termes sont comptés, leurs exemples ne sont pas retenus. */
+    @Volatile var learnExamples = true
     /** Changé depuis le dernier enregistrement. */
     @Volatile var dirty = false
 
     @Synchronized fun nameCount(): Int = names.size
 
     /** Noms de l'œuvre vus au moins [min] fois, les plus fréquents d'abord (minuscules). */
-    @Synchronized fun knownNames(min: Int = 3): Set<String> = names.filter { it.value.seen >= min }.keys.toSet()
+    @Synchronized fun knownNames(min: Int = 3, lex: EnglishLexicon? = null): Set<String> {
+        val pairs = if (lex != null) confusions.active() else emptyList()
+        // un « nom » que les confusions de l'œuvre expliquent (« PUKE » pour « DUKE ») n'en est pas un : il n'est plus protégé de la correction
+        return names.filter { it.value.seen >= min && (pairs.isEmpty() || confusions.fix(it.key, lex!!, emptySet(), pairs) == null) }.keys.toSet()
+    }
 
     @Synchronized fun name(lower: String): Name? = names[lower.lowercase()]
 
@@ -171,7 +183,7 @@ class SeriesMemory(val key: String) {
 
     /** Le texte lu d'une bulle (avant réparation) : confusions de lettres du lettrage. */
     @Synchronized fun observeReading(text: String, lex: EnglishLexicon) {
-        confusions.observe(text, lex, knownNames(2))
+        confusions.observe(text, lex, knownNames(2, lex))
         dirty = true
     }
 
@@ -190,7 +202,12 @@ class SeriesMemory(val key: String) {
             val low = src.lowercase()
             // à qui la bulle parle : ses « he », « she » visent alors quelqu'un d'autre (« GAF, DID YOU SEE HIM? »)
             val who = if (FrenchAgreement.pluralCue(src) == null) FrenchAgreement.addressee(src, chapter) else null
-            val present = chapter.filter { n -> Regex("(?<![\\p{L}])" + Regex.escape(n) + "(?![\\p{L}])").containsMatchIn(low) }
+            val titled = (titleMale.findAll(low) + titleFemale.findAll(low)).map { it.groupValues[1] }.toSet()
+            // un mot anglais (« NORMAL », « MODE », « SCORE ») que la mémoire du chapitre garde tel quel n'est un nom que si on l'interpelle ou qu'un titre le précède (« PARK, … », « MRS. PARK »)
+            val present = chapter.filter { n ->
+                Regex("(?<![\\p{L}])" + Regex.escape(n) + "(?![\\p{L}])").containsMatchIn(low) &&
+                    (lex == null || !lex.known(n) || n == who || n in titled || names.containsKey(n))
+            }
             for (n in present) {
                 val e = names.getOrPut(n) { Name(display(n, chapterNames)) }
                 e.seen++
@@ -204,15 +221,51 @@ class SeriesMemory(val key: String) {
                 for (m in titleFemale.findAll(low)) if (m.groupValues[1] == n) e.female++
             }
             // registre : la bulle s'adresse à un nom connu et la traduction tutoie ou vouvoie (une foule ou un titre de respect n'apprennent rien sur la personne)
-            if (who != null) {
+            if (who != null && (lex == null || !lex.known(who) || names.containsKey(who) || who in present)) {
                 val reg = FrenchAgreement.forms(tr).register
                 if (reg != null) names.getOrPut(who) { Name(display(who, chapterNames)) }.let { if (reg == FrenchAgreement.Register.TU) it.tu++ else it.vous++ }
             }
             for ((g, _) in FrenchAgreement.narratorGenders(tr)) if (g == FrenchAgreement.Gender.M) narratorM++ else narratorF++
             for (w in GenrePacks.cueWords(src)) genreWords[w] = (genreWords[w] ?: 0) + 1
+            if (lex != null) for (t in termsOf(src, lex, chapter)) {
+                termCounts[t] = (termCounts[t] ?: 0) + 1
+                val s = src.trim(); val f = tr.trim()
+                if (learnExamples && s.length in 6..MAX_EXAMPLE && f.isNotEmpty() && f != s) {
+                    val old = termExamples[t]
+                    if (old == null || s.length < old.first.length) termExamples[t] = s to f
+                }
+            }
         }
+        if (termCounts.size > MAX_TERMS) {
+            // les termes vus une seule fois partent d'abord (les plus anciens), puis les moins fréquents
+            val drop = termCounts.entries.sortedBy { it.value }.take(termCounts.size - MAX_TERMS * 3 / 4).map { it.key }
+            drop.forEach { termCounts.remove(it); termExamples.remove(it) }
+        }
+        if (termExamples.size > MAX_EXAMPLES) termExamples.keys.sortedBy { termCounts[it] ?: 0 }.take(termExamples.size - MAX_EXAMPLES).forEach { termExamples.remove(it) }
         if (names.size > MAX_NAMES) names.entries.sortedBy { it.value.seen }.take(names.size - MAX_NAMES).forEach { names.remove(it.key) }
         dirty = true
+    }
+
+    /**
+     * Répliques déjà traduites de l'œuvre qui contiennent un terme de la page (vu au moins trois fois) : au plus [max], les termes les plus longs puis les plus fréquents d'abord ;
+     * jamais une ligne de la page elle-même.
+     */
+    @Synchronized fun termExamples(texts: List<String>, lex: EnglishLexicon?, max: Int = 3): List<Pair<String, String>> {
+        if (lex == null || termExamples.isEmpty()) return emptyList()
+        val page = texts.map { it.trim() }.toSet()
+        val found = texts.flatMap { termsOf(it, lex, emptyList()) }.distinct()
+            .filter { (termCounts[it] ?: 0) >= 3 && termExamples.containsKey(it) }
+            .sortedWith(compareByDescending<String> { it.count { c -> c == ' ' } }.thenByDescending { termCounts[it] ?: 0 })
+        val out = ArrayList<Pair<String, String>>()
+        val covered = HashSet<String>()
+        for (t in found) {
+            if (out.size >= max) break
+            if (covered.any { it.contains(t) }) continue                       // « heavenly sect » est déjà montré avec « northern heavenly sect »
+            val ex = termExamples[t] ?: continue
+            if (ex.first in page || out.any { it.first == ex.first }) continue
+            out.add(ex); covered.add(t)
+        }
+        return out
     }
 
     private fun display(n: String, chapterNames: Collection<String>): String =
@@ -271,11 +324,48 @@ class SeriesMemory(val key: String) {
         append("N\t").append(narratorM).append('\t').append(narratorF).append('\n')
         for ((k, n) in names) append("P\t").append(esc(k)).append('\t').append(esc(n.display)).append('\t').append(n.seen).append('\t').append(n.male).append('\t').append(n.female).append('\t').append(n.tu).append('\t').append(n.vous).append('\n')
         for ((w, c) in genreWords.toSortedMap()) append("G\t").append(esc(w)).append('\t').append(c).append('\n')
+        for ((t, c) in termCounts.toSortedMap()) if (c >= 2) append("T\t").append(esc(t)).append('\t').append(c).append('\n')
+        for ((t, e) in termExamples.toSortedMap()) append("E\t").append(esc(t)).append('\t').append(esc(e.first)).append('\t').append(esc(e.second)).append('\n')
         val sb = StringBuilder(); confusions.serialize(sb); append(sb)
     }
 
     companion object {
         private const val MAX_NAMES = 80
+        private const val MAX_TERMS = 4000
+        private const val MAX_EXAMPLES = 300
+        private const val MAX_EXAMPLE = 120
+        private val termWord = Regex("[a-z]+(?:'[a-z]+)?")
+        /** Mots qui ne commencent ni ne finissent un terme. */
+        private val termStop = (
+            "the a an of to in on at and or but nor is are was were be been being am i you he she it we they me him her us them my your his its our their mine yours this that these those " +
+                "what who whom why how when where which with from for by as not no yes do did does done so if then than just all some any there here i'm you're he's she's it's we're they're " +
+                "that's there's what's don't can't won't didn't isn't aren't wasn't weren't i'll you'll i've you've i'd you'd let's also too very really even still only into onto out up down over about " +
+                "again ever never now more most much many such own same other another each every both either neither have has had will would can could shall should may might must get got"
+            ).split(' ').toSet()
+        private val slang = setOf("wanna", "gonna", "gotta", "kinda", "sorta", "lemme", "gimme", "dunno", "ain't", "y'all", "ya", "yeah", "nope", "yep", "okay", "ok")
+        private val credits = Regex("(?i)(?<![\\p{L}])(?:story|art|original|studio|translat\\w*|proofread\\w*|typeset\\w*|letter(?:ing|er)|colou?r(?:ing|ist|s)?|storyboard|editor|editing|qc|clean(?:er|ing)|redraw\\w*|author|illustrat\\w*|adapt\\w*|webtoon|scans?|staff|shading|grading)(?![\\p{L}])")
+        /** Termes des tables de vocabulaire par genre : leur traduction y est déjà fixée. */
+        private val packForms: Set<String> by lazy { GenrePacks.packs.flatMap { p -> p.terms.flatMap { it.first } }.toSet() }
+
+        /**
+         * Termes candidats d'une réplique : suites de 2 à 4 mots sans mot-outil aux bords, avec au moins un mot anglais peu courant (ou inconnu) et au moins un mot anglais connu
+         * (une suite de noms propres, comme « Chung Myung », est gardée telle quelle par ailleurs) ; ni nom du chapitre seul, ni terme des tables par genre, ni interjection.
+         */
+        internal fun termsOf(src: String, lex: EnglishLexicon, chapterNames: Collection<String>): Set<String> {
+            if (credits.findAll(src).count() >= 2) return emptySet()          // page de crédits (« Story Art Studio … Original Story … ») : pas des termes de l'histoire
+            val w = termWord.findAll(src.lowercase().replace('’', '\'')).map { it.value }.toList()
+            val out = LinkedHashSet<String>()
+            for (n in 2..4) for (i in 0..w.size - n) {
+                val g = w.subList(i, i + n)
+                if (g.first() in termStop || g.last() in termStop || g.any { JunkFilter.isInterjectionToken(it) || it in slang } || g.toSet().size == 1) continue
+                if (g.none { lex.rank(it) >= 4000 }) continue
+                if (g.none { lex.known(it) && it !in chapterNames }) continue
+                val t = g.joinToString(" ")
+                if (packForms.any { f -> t == f || t.contains(f) && f.contains(' ') }) continue
+                out.add(t)
+            }
+            return out
+        }
         private val maleRe = Regex("(?<![\\p{L}'’])(?:he|him|his|himself)(?![\\p{L}'’])")
         private val femaleRe = Regex("(?<![\\p{L}'’])(?:she|her|hers|herself)(?![\\p{L}'’])")
         private val titleMale = Regex("(?<![\\p{L}])(?:mr\\.?|sir|lord|brother|uncle|grandpa|young master|prince|king|duke|count|father)\\s+([\\p{L}]+)")
@@ -316,6 +406,8 @@ class SeriesMemory(val key: String) {
                         "N" -> { m.narratorM = p[1].toInt(); m.narratorF = p[2].toInt() }
                         "P" -> if (p.size >= 8) m.names[unesc(p[1])] = Name(unesc(p[2])).apply { seen = p[3].toInt(); male = p[4].toInt(); female = p[5].toInt(); tu = p[6].toInt(); vous = p[7].toInt() }
                         "G" -> if (p.size >= 3) m.genreWords[unesc(p[1])] = p[2].toInt()
+                        "T" -> if (p.size >= 3) m.termCounts[unesc(p[1])] = p[2].toInt()
+                        "E" -> if (p.size >= 4) m.termExamples[unesc(p[1])] = unesc(p[2]) to unesc(p[3])
                         "C" -> if (p.size >= 3) m.confusions.load(p[1], p[2])
                     }
                 } catch (_: Exception) {}

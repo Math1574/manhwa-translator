@@ -202,8 +202,11 @@ class LlmTranslator(private val backend: LlmBackend, private val lexicon: () -> 
             val u = if (promptVariant >= 5 && target == "fr") {
                 val mem = this.series
                 val notes = try { mem?.promptNotes(texts, lexicon(), seriesPremise) ?: emptyList() } catch (_: Throwable) { emptyList() }
+                val examples = try { mem?.termExamples(texts, lexicon()) ?: emptyList() } catch (_: Throwable) { emptyList() }
                 val terms = genreTerms(texts, glossary)
-                fit(system, texts) { hist, withNotes -> LlmPrompt.user(texts, hist, glossary, series, keptNames(), hints, styleNotes(target), page, seriesPremise, if (withNotes) notes else emptyList(), terms) }
+                fit(system, texts) { hist, withNotes ->
+                    LlmPrompt.user(texts, hist, glossary, series, keptNames(), hints, styleNotes(target), page, seriesPremise, if (withNotes) notes else emptyList(), terms, if (withNotes) examples else emptyList())
+                }
             } else LlmPrompt.user(texts, historyFor(), glossary, series, keptNames(), hints, styleNotes(target), page, if (target == "fr") seriesPremise else null)
             inLen += u.length
             val r = backend.generate(system, u, LlmSampling(20, 0.9, 0.15), LlmPrompt.maxOutputTokens(texts))

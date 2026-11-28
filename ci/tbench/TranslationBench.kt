@@ -62,12 +62,13 @@ fun main(args: Array<String>) {
         for ((key, blocks) in pagesOf(read(warm))) {
             if (key.first != chapter) { chapter = key.first; chapterMemory.reset() }
             val m = memoryOf(blocks[0].series)
+            m.learnExamples = false   // traductions du journal (ancienne version) : termes comptés, exemples non retenus
             for (b in blocks) m.observeReading(b.src, lex)
             val texts = blocks.map { TextNormalizer.fixCase(it.clean) }
             texts.indices.forEach { chapterMemory.observe(texts[it], blocks[it].tr) }
             m.observePage(texts, blocks.map { it.tr }, chapterMemory.namesToKeep(), lex)
         }
-        memories.forEach { (s, m) -> println("préchauffage de « $s » : ${m.summary()}") }
+        memories.forEach { (s, m) -> m.learnExamples = true; println("préchauffage de « $s » : ${m.summary()}") }
     }
 
     val out = output.bufferedWriter()

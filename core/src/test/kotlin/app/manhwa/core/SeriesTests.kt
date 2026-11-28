@@ -72,6 +72,12 @@ fun seriesTests() {
         val n = SeriesMemory("t")
         for (l in listOf("YOUNG LADY ELIA, PLEASE WAIT.", "THANK YOU, LADY ELIA.", "LADY ELIA IS HERE.")) n.observePage(listOf(l), listOf("Dame Elia."), listOf("Elia"))
         T.eq(FrenchAgreement.Gender.F, n.name("elia")?.gender, "titres féminins")
+        // mots anglais gardés tels quels par la mémoire du chapitre (traduction en majuscules) : pas des personnages, sauf interpellés ou titrés
+        val w = SeriesMemory("w")
+        repeat(4) { w.observePage(listOf("SHE SEEMED SO EVIL IN NORMAL MODE."), listOf("ELLE SEMBLAIT SI MÉCHANTE EN MODE NORMAL."), listOf("Normal", "Mode"), lex) }
+        T.eq(null, w.name("normal")); T.eq(null, w.name("mode"))
+        repeat(3) { w.observePage(listOf("PARK, ARE YOU COMING?"), listOf("PARK, TU VIENS ?"), listOf("Park"), lex) }
+        T.eq(FrenchAgreement.Register.TU, w.name("park")?.register, "interpellé : c'est un nom")
         // interjections et mots mal lus gardés par la mémoire du chapitre : pas des personnages
         val j = SeriesMemory("j")
         for (w in listOf("SHLT", "YOL", "BECALSE", "STLDY", "THOLGHT", "TLRN", "HLNGRY", "ENOLGH", "POLRING", "FOLND", "SOLND")) j.observeReading(w, lex)
@@ -96,6 +102,24 @@ fun seriesTests() {
         T.eq(null, SeriesMemory.protagonistGender("He meets her. She hates him. He loves her."), "synopsis partagé")
         T.eq(FrenchAgreement.Gender.F, SeriesMemory.protagonistGender("Une étudiante se retrouve dans la peau de Penelope, la méchante d'un jeu dont toutes les fins mènent à sa mort. Pour survivre, elle doit séduire."), "héroïne nommée par des noms")
     }
+    T.test("termes de l'œuvre : une suite de mots qui revient est montrée au modèle avec sa traduction précédente (la plus courte réplique), jamais une ligne de la page ni un nom seul") {
+        val m = SeriesMemory("terms")
+        m.observePage(listOf("THE NORTHERN HEAVENLY SECT WAS CREATED BY THE ALLIANCE TO PROTECT THE MAINLAND."), listOf("La Secte Céleste du Nord a été créée par l'Alliance pour protéger le continent."), emptyList(), lex)
+        m.observePage(listOf("WELCOME TO THE NORTHERN HEAVENLY SECT."), listOf("Bienvenue à la Secte Céleste du Nord."), emptyList(), lex)
+        m.observePage(listOf("CHUNG MYUNG LEFT THE NORTHERN HEAVENLY SECT!"), listOf("Chung Myung a quitté la Secte Céleste du Nord !"), listOf("Chung", "Myung"), lex)
+        val ex = m.termExamples(listOf("THE NORTHERN HEAVENLY SECT HAS FALLEN."), lex)
+        T.eq(listOf("WELCOME TO THE NORTHERN HEAVENLY SECT." to "Bienvenue à la Secte Céleste du Nord."), ex, "la plus courte réplique, une seule fois pour le terme le plus long")
+        T.eq(emptyList<Pair<String, String>>(), m.termExamples(listOf("WELCOME TO THE NORTHERN HEAVENLY SECT."), lex), "jamais la ligne de la page elle-même")
+        T.ok(SeriesMemory.termsOf("CHUNG MYUNG!", lex, listOf("chung", "myung")).isEmpty(), "noms seuls : pas un terme")
+        T.ok(SeriesMemory.termsOf("THE MOUNT HUA SECT IS HERE.", lex, emptyList()).none { it.contains("mount hua sect") }, "terme des tables par genre : déjà fixé")
+        val back = SeriesMemory.parse("terms", m.serialize())
+        T.eq(ex, back.termExamples(listOf("THE NORTHERN HEAVENLY SECT HAS FALLEN."), lex), "relu à l'identique")
+        val warm = SeriesMemory("w"); warm.learnExamples = false
+        repeat(3) { warm.observePage(listOf("THE NORTHERN HEAVENLY SECT."), listOf("La secte."), emptyList(), lex) }
+        T.eq(emptyList<Pair<String, String>>(), warm.termExamples(listOf("NORTHERN HEAVENLY SECT!"), lex), "préchauffage : exemples non retenus")
+        val u = LlmPrompt.user(listOf("Hi."), emptyList(), emptyList(), examples = listOf("WELCOME TO THE NORTHERN HEAVENLY SECT." to "Bienvenue à la Secte Céleste du Nord."))
+        T.ok(u.contains("Earlier lines of this series") && u.contains("- WELCOME TO THE NORTHERN HEAVENLY SECT. => Bienvenue à la Secte Céleste du Nord."), u)
+    }
     T.test("genre de l'œuvre : reconnu au titre, au synopsis et aux bulles ; termes d'usage trouvés dans la page, le plus long d'abord, pluriels compris") {
         T.ok("murim" in GenrePacks.detect(emptyMap(), "Return Of The Mount Hua Sect", "The Plum Blossom Sword Saint, a disciple of the sect, mastered martial arts…"), "murim")
         T.eq(emptySet<String>(), GenrePacks.detect(emptyMap(), "Waiting In The Wheat Field", "A quiet story."), "aucun genre")
@@ -114,6 +138,12 @@ fun seriesTests() {
         T.eq("Rendez-vous à 13 h", TranslationPost.numbers("MEET ME AT 1 PM", "Rendez-vous à 13 h"))
         T.eq("Il a 26 ans", TranslationPost.numbers("HE IS 26", "Il a 266 ans"))
         T.eq("Entre 2 et 3", TranslationPost.numbers("BETWEEN 2 AND 3", "Entre 2 et 3"))
+    }
+    T.test("bégaiement à points : la lettre bégayée est celle du mot français") {
+        T.eq("D... DÉSOLÉ LOGAN...", TranslationPost.stutter("S.. SORRY LOGAN..", "S... DÉSOLÉ LOGAN..."))
+        T.eq("M... MAMAN", TranslationPost.stutter("M.. MOM", "M... MAMAN"))
+        T.eq("FAIS... DOCTEUR", TranslationPost.stutter("DO... DOC, TER...?", "FAIS... DOCTEUR"), "un mot entier n'est pas un bégaiement")
+        T.eq("Bon... d'accord.", TranslationPost.stutter("Well... okay.", "Bon... d'accord."), "pas de bégaiement dans l'original")
     }
     T.test("mots doublés : un mot-outil répété par la génération est retiré, jamais un bégaiement de l'original ni « vous vous »") {
         T.eq("Quelle que soit la raison", TranslationPost.doubledWords("WHATEVER THE REASON", "Quelle que que soit la raison"))
@@ -141,6 +171,9 @@ fun seriesTests() {
         T.eq("QUAND LA MALCHANCE M'A FAIT STATIONNER AU FRONT.", g("QUAND LA MALCHANCE M'A FAIT STATIONNÉ AU FRONT."))
         T.eq("Il s'est fait tuer.", g("Il s'est fait tué."))
         T.eq("C'est un fait avéré.", g("C'est un fait avéré."))
+        T.eq("TU VAS LUI DEMANDER DE TE PRÊTER DE L'ARGENT ?", g("TU VAS LUI DEMANDER DE T'PRÊTER DE L'ARGENT ?")); T.eq("Je ne sais pas.", g("Je n'sais pas."))
+        T.eq("L'homme d'honneur qu'il aime : j'hésite, je l'ai.", g("L'homme d'honneur qu'il aime : j'hésite, je l'ai."), "élisions justes intactes")
+        T.eq("COMMENT EST-CE POSSIBLE ?!!!", g("COMMENT EST-CE POSSIBLE ? !!!")); T.eq("Quoi ?!", g("Quoi ? !"))
         // journal du 27/11 : titre anglais recopié, nom, « à la une », « de ouf »
         T.eq("BIENVENUE DANS PICK ME UP !", g("BIENVENUE DANS PICK ME UP !", "WELCOME TO PICK ME UP!"))
         T.eq("C'EST LA FILLE D'UIHYEOK JEONG.", g("C'EST LA FILLE DU UIHYEOK JEONG.", "SHE'S UIHYEOK JEONG'S DAUGHTER."))

@@ -44,7 +44,31 @@ object TranslationPost {
      * Bégaiement : l'original « B-BUT » doit donner « M-MAIS », pas « P-MAIS » (le modèle recopie ou invente la lettre) ni « MAIS » (le bégaiement est perdu).
      * La lettre répétée est toujours la première du mot français qui suit. Sans bégaiement dans l'original, rien n'est changé.
      */
-    fun stutter(src: String, tr: String): String {
+    fun stutter(src: String, tr: String): String = dottedStutter(src, hyphenStutter(src, tr))
+
+    /** Bégaiement à points de l'original (« S.. SORRY », « M... MOM ») : dans la traduction, la lettre bégayée est celle du mot français (« D... DÉSOLÉ », pas « S... DÉSOLÉ »). */
+    private val sourceDotStutter = Regex("(?i)(?<![\\p{L}'’])(\\p{L}{1,2})(?:\\.{2,3}|…)\\s?\\1\\p{L}*")
+    private val dotStutter = Regex("(?<![\\p{L}'’])(\\p{L}{1,2})(\\.{2,3}|…)(\\s?)(\\p{L}[\\p{L}'’]*)")
+    private fun bare(s: String) = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "").lowercase()
+
+    private fun dottedStutter(src: String, tr: String): String {
+        val n = sourceDotStutter.findAll(src).count()
+        if (n == 0) return tr
+        var seen = 0
+        return dotStutter.replace(tr) { m ->
+            if (seen >= n) return@replace m.value
+            val letters = m.groupValues[1]; val word = m.groupValues[4]
+            if (word.length <= letters.length) return@replace m.value
+            seen++
+            if (bare(word).startsWith(bare(letters))) m.value
+            else {
+                val head = word.take(letters.length)
+                (if (letters.all { it.isUpperCase() }) head.uppercase() else head) + m.groupValues[2] + m.groupValues[3] + word
+            }
+        }
+    }
+
+    private fun hyphenStutter(src: String, tr: String): String {
         val n = sourceStutter.findAll(src).count()
         if (n == 0) return tr
         var seen = 0
@@ -158,8 +182,19 @@ object TranslationPost {
         m.groupValues[1] + p.dropLast(1) + (if (p.last().isUpperCase()) "ER" else "er")
     }
 
+    /** « T'PRÊTER », « N'SAIS » : une élision devant une consonne (français parlé) s'écrit en entier. « L' », « D' », « QU' » ne sont pas concernés. */
+    private val badElision = Regex("(?<![\\p{L}'’])([jmtsnJMTSN])['’](?=[bcdfgjklmnpqrstvwxzçBCDFGJKLMNPQRSTVWXZÇ])")
+    fun consonantElision(tr: String): String = badElision.replace(tr) { m ->
+        val c = m.groupValues[1]
+        (if (c[0].isUpperCase()) c + "E" else c + "e") + " "
+    }
+
+    /** « POSSIBLE ? !!! » → « POSSIBLE ?!!! » : pas d'espace à l'intérieur d'un groupe de « ? » et de « ! ». */
+    private val splitMarks = Regex("([?!])\\s+(?=[?!])")
+    fun punctuation(tr: String): String = splitMarks.replace(tr, "$1")
+
     /** Les retouches de grammaire sûres, dans l'ordre. */
-    fun grammar(src: String, tr: String): String = causative(subjunctive(elision(src, tr)))
+    fun grammar(src: String, tr: String): String = punctuation(consonantElision(causative(subjunctive(elision(src, tr)))))
 
     // ---------- défauts de génération : chiffres et mots doublés ----------
 

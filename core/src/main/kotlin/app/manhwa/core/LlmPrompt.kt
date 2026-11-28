@@ -194,13 +194,18 @@ Answer with exactly one line per input line, in the format `N| edited translatio
      * [page] : les autres lignes du lot déjà traduites, données pour le contexte quand seules quelques lignes sont refaites (lignes absentes de la réponse ou mal placées, voir [TranslationAlign]).
      */
     fun user(texts: List<String>, history: List<Pair<String, String>>, glossary: List<GlossaryEntry>, series: String? = null, names: List<String> = emptyList(), hints: List<IdiomHints.Hit> = emptyList(), style: List<String> = emptyList(), page: List<Pair<String, String>> = emptyList(), premise: String? = null,
-             notes: List<String> = emptyList(), terms: List<GenrePacks.Hit> = emptyList()): String = buildString {
+             notes: List<String> = emptyList(), terms: List<GenrePacks.Hit> = emptyList(), examples: List<Pair<String, String>> = emptyList()): String = buildString {
         if (names.isNotEmpty()) { appendLine("Names and terms of this chapter to keep exactly as written (never translate them): ${names.joinToString(", ")}"); appendLine() }
         if (style.isNotEmpty()) { appendLine("Established in this chapter (keep it consistent):"); style.forEach { appendLine("- $it") }; appendLine() }
         if (!series.isNullOrBlank()) { appendLine("Series: $series (background only: never put the series title or its words in a translation unless the source line itself contains them)"); appendLine() }
         premiseOf(premise)?.let { appendLine("Story premise (background only, to know who the characters are, their gender and relationships; never add its content to a translation): $it"); appendLine() }
         if (notes.isNotEmpty()) { appendLine("Series notes (keep them consistent):"); notes.forEach { appendLine("- $it") }; appendLine() }
-        if (terms.isNotEmpty()) { appendLine("Usual French terms in this genre (use them, adapting gender and number):"); terms.forEach { appendLine("${it.source} = ${it.french}") }; appendLine() }
+        if (terms.isNotEmpty()) { appendLine("Usual French terms of this genre, for these exact English words where a line contains them (adapt gender and number; never use them in place of other words):"); terms.forEach { appendLine("${it.source} = ${it.french}") }; appendLine() }
+        if (examples.isNotEmpty()) {
+            appendLine("Earlier lines of this series that use the same terms (translate these terms the same way):")
+            examples.forEach { (src, tgt) -> appendLine("- ${oneLine(src)} => ${oneLine(tgt)}") }
+            appendLine()
+        }
         if (history.isNotEmpty()) {
             appendLine("Previous dialogue of this chapter (context only, do not translate again):")
             history.forEach { (src, tgt) -> appendLine("- ${oneLine(src)} => ${oneLine(tgt)}") }

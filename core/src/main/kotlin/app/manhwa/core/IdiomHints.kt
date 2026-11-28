@@ -534,6 +534,12 @@ it's all over now | c'est fini, tout est fini
 ~zone out | être dans la lune
 ~black out | perdre connaissance
 ~doze off | s'assoupir
+punk | insulte : petit voyou, petite frappe, sale gosse (« you little punk » = espèce de petit voyou)
+i don't mind | ça ne me dérange pas, ça m'est égal (« I don't mind an old shack » = une vieille cabane, ça ne me dérange pas) | pas d'objection
+don't mind me | faites comme si je n'étais pas là, ne faites pas attention à moi
+twofold | au double, deux fois plus
+tenfold | au décuple, dix fois plus (jamais « au centuple », qui veut dire cent) | centuple
+hundredfold | au centuple
 ~marry | épouser (« marry me » = m'épouser ; « get married » = se marier ; jamais « m'a marié ») | (?:m|t)['’](?:a|as|avait|aurait|ont)(?:-t-(?:il|elle))? mariée?\b
 what a headache | quelle galère, quel casse-tête | mal à la tête
 wronged me/you/him/her/them/us | faire du tort à, se montrer injuste envers | tortur
