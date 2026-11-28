@@ -29,6 +29,24 @@ class SeriesMemoryStore(private val dir: File) {
     fun saveSoon(m: SeriesMemory) {
         if (Ninja.on || !m.dirty) return
         synchronized(this) { if (cache[m.key] !== m) return }
+        write(m)
+    }
+
+    /** La mémoire gardée de l'œuvre [key] (celle qui sert hors du mode Ninja), pour l'afficher dans la bibliothèque. */
+    @Synchronized fun stored(key: String): SeriesMemory = cache.getOrPut(key) { read(key) }
+
+    /**
+     * Change la mémoire gardée de l'œuvre [key] (élément effacé ou rétabli depuis la bibliothèque) et l'enregistre aussitôt, même en mode Ninja : c'est un choix de l'utilisateur,
+     * pas une trace de lecture. La copie du mode Ninja, s'il y en a une, suit le même changement.
+     */
+    fun edit(key: String, change: (SeriesMemory) -> Unit) {
+        val m = stored(key)
+        synchronized(m) { change(m) }
+        synchronized(this) { ninjaCache[key] }?.let { n -> synchronized(n) { change(n) } }
+        write(m)
+    }
+
+    private fun write(m: SeriesMemory) {
         writer.execute {
             try {
                 val text = synchronized(m) { m.dirty = false; m.serialize() }

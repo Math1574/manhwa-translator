@@ -15,6 +15,11 @@ object BatchContext {
     val lastBatch = ThreadLocal<Pair<Int, Long>>()
     /** Détail des appels au modèle du dernier groupe de ce fil (voir [TranslationEngine.lastCallDetail]) : sert au journal, rien d'autre. */
     val lastDetail = ThreadLocal<String?>()
+    /**
+     * Nature des textes de la prochaine traduction demandée par ce fil (« IN_BUBBLE », « FREE », vide si inconnue), un par texte : posée par le traitement de la page juste avant
+     * l'appel et retirée après ; le regroupeur la transmet au moteur pour tout le groupe. Le modèle de langage s'en sert pour distinguer dialogues et narration.
+     */
+    val kinds = ThreadLocal<List<String>?>()
 }
 
 /**
@@ -40,7 +45,8 @@ class TranslationBatcher(
     /** Rend l'identifiant d'une page, en route vers le moteur, plus proche du lecteur que la priorité donnée (et qui n'est pas dans [ignore]), ou null. Renseigné par l'application. */
     @Volatile var holdBack: ((priority: Double, ignore: Set<String>) -> String?)? = null
 
-    private class Req(val texts: List<String>, val source: String, val target: String, val glossary: List<GlossaryEntry>, val prio: () -> Double, val seq: Long, val cancelled: () -> Boolean) {
+    private class Req(val texts: List<String>, val source: String, val target: String, val glossary: List<GlossaryEntry>, val prio: () -> Double, val seq: Long, val cancelled: () -> Boolean,
+                      val kinds: List<String>? = null) {
         val done = CountDownLatch(1)
         @Volatile var result: List<String>? = null
         @Volatile var error: Throwable? = null
@@ -74,7 +80,8 @@ class TranslationBatcher(
             else -> { { 0.0 } }
         }
         val r: Req
-        synchronized(lock) { r = Req(texts, source, target, glossary, prio, counter++, BatchContext.cancelled.get() ?: { false }); waiting.add(r); lock.notifyAll() }
+        val kinds = BatchContext.kinds.get()?.takeIf { it.size == texts.size }
+        synchronized(lock) { r = Req(texts, source, target, glossary, prio, counter++, BatchContext.cancelled.get() ?: { false }, kinds); waiting.add(r); lock.notifyAll() }
         if (!r.done.await(waitLimitMs, TimeUnit.MILLISECONDS)) {
             synchronized(lock) { waiting.remove(r) }
             throw IllegalStateException("traduction : délai dépassé")
@@ -150,9 +157,10 @@ class TranslationBatcher(
             var combined: List<String>? = null
             var failure: Throwable? = null
             try {
+                BatchContext.kinds.set(if (batch.any { it.kinds != null }) batch.flatMap { r -> r.kinds ?: List(r.texts.size) { "" } } else null)
                 val out = engine.translateWithGlossary(all, first.source, first.target, first.glossary)
                 if (out.size == all.size) combined = out else failure = IllegalStateException("réponse de ${out.size} lignes pour ${all.size}")
-            } catch (e: Throwable) { failure = e }
+            } catch (e: Throwable) { failure = e } finally { BatchContext.kinds.remove() }
             engineCalls++
             val groupDetail = detailOf()
             if (combined != null) {
@@ -167,7 +175,9 @@ class TranslationBatcher(
                 for (r in batch) {
                     val t1 = System.currentTimeMillis()
                     try {
-                        r.result = engine.translateWithGlossary(r.texts, r.source, r.target, r.glossary); r.pages = 1; r.engineMs = System.currentTimeMillis() - t1
+                        BatchContext.kinds.set(r.kinds)
+                        r.result = try { engine.translateWithGlossary(r.texts, r.source, r.target, r.glossary) } finally { BatchContext.kinds.remove() }
+                        r.pages = 1; r.engineMs = System.currentTimeMillis() - t1
                         // mesure seulement : le journal garde aussi l'appel de groupe qui a échoué (sa durée est perdue pour la page, qui n'a compté que sa nouvelle tentative)
                         r.detail = "retente(" + (failure?.let { it.javaClass.simpleName + ": " + (it.message ?: "").take(60) } ?: "?") + ")[" + (groupDetail ?: "") + "] " + (detailOf() ?: "")
                     } catch (e: Throwable) { r.error = e }

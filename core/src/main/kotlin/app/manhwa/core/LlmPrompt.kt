@@ -9,8 +9,12 @@ object LlmPrompt {
         else -> "the source language (detect it)"
     }
 
-    /** Version courante du prompt (le banc d'essai de traduction compare plusieurs versions). */
-    const val CURRENT = 5
+    /**
+     * Version courante du prompt (le banc d'essai de traduction compare plusieurs versions). 6 (28/11) : même consigne que la 5 ; lignes hors bulle signalées (narration, pensées,
+     * cartouches), pensées entre parenthèses, ligne refaite seule avec ses voisines, les notes et le synopsis de l'œuvre ; mémoire de l'œuvre nourrie par les seules lignes réussies
+     * du premier coup et répliques d'exemple confirmées par deux chapitres.
+     */
+    const val CURRENT = 6
 
     fun system(source: String, target: String, variant: Int = CURRENT): String =
         if (variant == 1 || target != "fr") systemV1(source, target) else if (variant >= 5) systemV5(source) else if (variant >= 4) systemV4(source) else systemV2(source, extended = variant >= 3)
@@ -131,12 +135,28 @@ Rules:
 
     /** Seconde passe optionnelle : relecture du brouillon (variante « r »). */
     /** Demande de correction d'une seule ligne dont la première traduction a échoué aux contrôles automatiques. */
-    fun fixUser(text: String, previous: String, problems: List<String>, history: List<Pair<String, String>>, glossary: List<GlossaryEntry>, names: List<String>, hints: List<IdiomHints.Hit> = emptyList(), style: List<String> = emptyList()): String = buildString {
+    /**
+     * À partir du prompt 6 la ligne refaite reçoit aussi : [before] et [after], ses voisines sur la page avec leur traduction du moment (un fragment ne se comprend qu'avec elles),
+     * les [notes] de l'œuvre (personnages, narrateur, lettres mal lues), son synopsis ([premise]), les répliques d'exemple de ses termes ([examples]) et sa nature ([outside] : hors bulle).
+     */
+    fun fixUser(text: String, previous: String, problems: List<String>, history: List<Pair<String, String>>, glossary: List<GlossaryEntry>, names: List<String>, hints: List<IdiomHints.Hit> = emptyList(), style: List<String> = emptyList(),
+                before: List<Pair<String, String>> = emptyList(), after: List<Pair<String, String>> = emptyList(), notes: List<String> = emptyList(), premise: String? = null,
+                examples: List<Pair<String, String>> = emptyList(), outside: Boolean = false): String = buildString {
+        premiseOf(premise)?.let { appendLine("Story premise (background only, to know who the characters are, their gender and relationships; never add its content to a translation): $it"); appendLine() }
+        if (notes.isNotEmpty()) { appendLine("Series notes (keep them consistent):"); notes.forEach { appendLine("- $it") }; appendLine() }
+        if (examples.isNotEmpty()) {
+            appendLine("Earlier lines of this series that use the same terms (translate these terms the same way):")
+            examples.forEach { (src, tgt) -> appendLine("- ${oneLine(src)} => ${oneLine(tgt)}") }
+            appendLine()
+        }
         if (names.isNotEmpty()) { appendLine("Names and terms to keep exactly as written: ${names.joinToString(", ")}"); appendLine() }
         if (style.isNotEmpty()) { appendLine("Established in this chapter (keep it consistent):"); style.forEach { appendLine("- $it") }; appendLine() }
         if (hints.isNotEmpty()) { appendLine("Expressions in this line to render by meaning, never word for word (conjugate the French to fit the sentence and keep its negation, tense and person):"); hints.forEach { appendLine("- \"${it.matched}\": ${it.french}") }; appendLine() }
         if (history.isNotEmpty()) { appendLine("Previous dialogue (context only):"); history.takeLast(6).forEach { (a, b) -> appendLine("- ${oneLine(a)} => ${oneLine(b)}") }; appendLine() }
         if (glossary.isNotEmpty()) { appendLine("Glossary (use exactly):"); glossary.forEach { appendLine("${it.source} = ${it.target}") }; appendLine() }
+        if (before.isNotEmpty()) { appendLine("The lines just before it on this page (context only, already translated):"); before.forEach { (a, b) -> appendLine("- ${oneLine(a)} => ${oneLine(b)}") }; appendLine() }
+        if (after.isNotEmpty()) { appendLine("The lines just after it on this page (context only, already translated):"); after.forEach { (a, b) -> appendLine("- ${oneLine(a)} => ${oneLine(b)}") }; appendLine() }
+        if (outside) { appendLine("This line is outside the speech bubbles: narration, an inner thought, a caption, a sign or a sound effect rather than dialogue (unless it clearly speaks to someone)."); appendLine() }
         appendLine("Your previous translation of the line below was rejected by an automatic check.")
         appendLine("Problems: ${problems.joinToString("; ")}")
         appendLine("Previous attempt: ${oneLine(previous)}")
@@ -194,7 +214,7 @@ Answer with exactly one line per input line, in the format `N| edited translatio
      * [page] : les autres lignes du lot déjà traduites, données pour le contexte quand seules quelques lignes sont refaites (lignes absentes de la réponse ou mal placées, voir [TranslationAlign]).
      */
     fun user(texts: List<String>, history: List<Pair<String, String>>, glossary: List<GlossaryEntry>, series: String? = null, names: List<String> = emptyList(), hints: List<IdiomHints.Hit> = emptyList(), style: List<String> = emptyList(), page: List<Pair<String, String>> = emptyList(), premise: String? = null,
-             notes: List<String> = emptyList(), terms: List<GenrePacks.Hit> = emptyList(), examples: List<Pair<String, String>> = emptyList()): String = buildString {
+             notes: List<String> = emptyList(), terms: List<GenrePacks.Hit> = emptyList(), examples: List<Pair<String, String>> = emptyList(), outside: List<Int> = emptyList(), thoughts: Boolean = false): String = buildString {
         if (names.isNotEmpty()) { appendLine("Names and terms of this chapter to keep exactly as written (never translate them): ${names.joinToString(", ")}"); appendLine() }
         if (style.isNotEmpty()) { appendLine("Established in this chapter (keep it consistent):"); style.forEach { appendLine("- $it") }; appendLine() }
         if (!series.isNullOrBlank()) { appendLine("Series: $series (background only: never put the series title or its words in a translation unless the source line itself contains them)"); appendLine() }
@@ -233,9 +253,27 @@ Answer with exactly one line per input line, in the format `N| edited translatio
             splits.forEach { appendLine("- line ${it.first} \"${oneLine(texts[it.first - 1])}\" continues in line ${it.second} \"${oneLine(texts[it.second - 1])}\"") }
             appendLine()
         }
+        kindNotes(texts, outside, thoughts).forEach { appendLine(it); appendLine() }
         appendLine("Lines to translate:")
         texts.forEachIndexed { i, t -> appendLine("${i + 1}| ${oneLine(t)}") }
     }.trim()
+
+    /**
+     * Nature des lignes (prompt 6) : [outside] (numéros) sont hors bulle d'après le détecteur ; [thoughts] : les lignes entre parenthèses sont signalées comme des pensées.
+     * En français, la narration et les pensées n'ont pas de « tu » ni de « vous » (personne n'y est interpellé), « je » y est le narrateur ; un cartouche ou un panneau reste bref.
+     */
+    internal fun kindNotes(texts: List<String>, outside: List<Int>, thoughts: Boolean): List<String> {
+        val out = ArrayList<String>()
+        if (outside.isNotEmpty()) out.add(
+            "Lines outside speech bubbles: ${outside.joinToString(", ")}. They are narration, inner thoughts, captions, signs or sound effects rather than dialogue (unless a line clearly speaks to someone): " +
+                "in narration and thoughts \"je\" is the narrator and nobody is addressed (no \"tu\" or \"vous\" unless the line itself talks to someone); keep captions and signs as short as the original."
+        )
+        if (thoughts) {
+            val paren = texts.indices.filter { texts[it].trim().let { t -> t.length > 3 && t.startsWith("(") && t.endsWith(")") } }.map { it + 1 }
+            if (paren.isNotEmpty()) out.add("Lines in parentheses are inner thoughts or asides (keep the parentheses): ${paren.joinToString(", ")}.")
+        }
+        return out
+    }
 
     /**
      * Le synopsis de l'œuvre, raccourci pour le prompt : il dit qui sont les personnages (le héros réincarné en demi-démon est un homme : « je suis à moitié humain », pas « humaine »).

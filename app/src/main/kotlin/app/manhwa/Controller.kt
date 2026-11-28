@@ -734,6 +734,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
                 graph.gemma.seriesPremise = try { BrowsingLibrary.seriesKey(url)?.let { k -> graph.covers.synopsisFrench(k) ?: graph.covers.synopsisOf(k) } } catch (_: Throwable) { null }
                 // mémoire de l'œuvre (personnages, narrateur, lettres mal lues, genre) : elle suit le chapitre, d'une page à l'autre et d'un chapitre au suivant
                 graph.gemma.core.series = try { if (url.startsWith("http")) BrowsingLibrary.seriesKey(url)?.let { graph.seriesMemory.get(it) } else null } catch (_: Throwable) { null }
+                graph.gemma.core.chapterKey = if (url.startsWith("http")) url.substringBefore('#') else ""
                 loading = true
                 nearBottom = false
                 barsHidden = false; pageProgress = 0; showReaderBar(false); resumeOffer = 0; peekTarget = null; undoBanner = null
@@ -1981,7 +1982,7 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         val blocks = JSONArray()
         out.result.blocks.forEach { b ->
             blocks.put(
-                JSONObject().put("src", b.source).put("rep", b.repaired).put("tr", b.translated)
+                JSONObject().put("src", b.source).put("rep", b.repaired).put("tr", b.translated).put("k", b.kind)
                     .put("p", JSONArray(TranslationChecks.problems(b.source, b.translated, target).map { it.code })),
             )
         }

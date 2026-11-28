@@ -223,14 +223,17 @@ class PagePipeline(
             fun run(texts: List<String>): List<String> =
                 if (llm) translator.translateWithGlossary(texts, source, target, terms) else translator.translate(texts, source, target)
 
-            val batch = try { run(protectedTexts.map { it.text }) } catch (e: Exception) { lastError = e.message ?: e.javaClass.simpleName; null }
+            // nature de chaque texte (bulle, hors bulle) : transmise au modèle de langage, qui distingue ainsi dialogues et narration
+            BatchContext.kinds.set(pending.map { if (blocks[it].kind == BlockKind.UNKNOWN) "" else blocks[it].kind.name })
+            val batch = try { run(protectedTexts.map { it.text }) } catch (e: Exception) { lastError = e.message ?: e.javaClass.simpleName; null } finally { BatchContext.kinds.remove() }
             if (batch != null && batch.size == pending.size) {
                 pending.forEachIndexed { k, i -> translated[i] = TextNormalizer.matchCase(clean[i], finish(g, protectedTexts[k], batch[k], clean[i], source, target)) }
             } else {
                 // le lot a échoué : on retente bloc par bloc pour ne perdre que les blocs réellement en erreur
                 pending.forEachIndexed { k, i ->
                     try {
-                        val out = run(listOf(protectedTexts[k].text)).single()
+                        BatchContext.kinds.set(listOf(if (blocks[i].kind == BlockKind.UNKNOWN) "" else blocks[i].kind.name))
+                        val out = try { run(listOf(protectedTexts[k].text)).single() } finally { BatchContext.kinds.remove() }
                         translated[i] = TextNormalizer.matchCase(clean[i], finish(g, protectedTexts[k], out, clean[i], source, target))
                     } catch (e: Exception) { errors++; lastError = e.message ?: e.javaClass.simpleName }
                 }

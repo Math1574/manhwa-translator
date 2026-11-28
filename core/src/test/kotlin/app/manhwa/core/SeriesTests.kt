@@ -241,7 +241,7 @@ fun seriesTests() {
                 || it.french.contains("se venger") || it.french.contains("s'avérer") || it.french.contains("toi qui vois") || it.french.contains("draguer") }, "sens ordinaire : $s -> ${fr(s)}")
     }
     T.test("prompt 5 : version courante, notes de l'œuvre et termes d'usage dans le message, version 4 intacte") {
-        T.eq(5, LlmPrompt.CURRENT)
+        T.eq(6, LlmPrompt.CURRENT)
         val v5 = LlmPrompt.system("en", "fr", 5)
         T.ok(v5.contains("published French edition") && v5.contains("Ça le reprend") && v5.contains("Usual French terms") && v5.contains("N| translation"), "règles v5")
         T.ok(LlmPrompt.system("en", "fr", 4).contains("Pas question") && !LlmPrompt.system("en", "fr", 4).contains("published French edition"), "v4 intacte")
@@ -249,6 +249,101 @@ fun seriesTests() {
             listOf("Characters of this series: Chung Myung (male)."), listOf(GenrePacks.Hit("elder", "ancien")))
         T.ok(u.contains("Series notes") && u.contains("Chung Myung (male)") && u.contains("Usual French terms") && u.contains("elder = ancien"), u)
         T.ok(!LlmPrompt.user(listOf("Hi."), emptyList(), emptyList()).contains("Series notes"), "pas de note, pas de section")
+    }
+    T.test("mémoire fiable (prompt 6) : la traduction n'apprend que des lignes réussies du premier coup ; un exemple ne fait référence que confirmé par deux chapitres ; le glossaire gagne") {
+        // tutoiement et narrateur : seulement des lignes sûres
+        val m = SeriesMemory("fiable")
+        repeat(4) { m.observePage(listOf("DERRICK, YOU'RE SO RUDE."), listOf("Derrick, tu es si grossier."), listOf("Derrick"), lex, trusted = listOf(false)) }
+        T.eq(null, m.name("derrick")?.register, "registre appris d'une ligne refaite : non")
+        repeat(4) { m.observePage(listOf("DERRICK, YOU'RE SO RUDE."), listOf("Derrick, vous êtes si grossier."), listOf("Derrick"), lex, trusted = listOf(true)) }
+        T.eq(FrenchAgreement.Register.VOUS, m.name("derrick")?.register)
+        repeat(8) { m.observePage(listOf("I'M READY."), listOf("Je suis prête."), emptyList(), lex, trusted = listOf(true), outside = listOf(false)) }
+        T.eq(null, m.narratorGender(), "dans une bulle, « je » n'est pas forcément le narrateur")
+        repeat(8) { m.observePage(listOf("I WAS READY."), listOf("J'étais prêt."), emptyList(), lex, trusted = listOf(true), outside = listOf(true)) }
+        T.eq(FrenchAgreement.Gender.M, m.narratorGender(), "narration hors bulle")
+        // exemples : un seul chapitre ne suffit plus
+        val t = SeriesMemory("ref")
+        val sect = listOf(
+            Triple("THE NORTHERN HEAVENLY SECT WAS CREATED BY THE ALLIANCE.", "La Secte Céleste du Nord a été créée par l'Alliance.", "ch1"),
+            Triple("WELCOME TO THE NORTHERN HEAVENLY SECT.", "Bienvenue à la Secte Céleste du Nord.", "ch1"),
+            Triple("CHUNG MYUNG LEFT THE NORTHERN HEAVENLY SECT!", "Chung Myung a quitté la Secte Céleste du Nord !", "ch1"),
+        )
+        for ((s1, f1, c) in sect) t.observePage(listOf(s1), listOf(f1), emptyList(), lex, trusted = listOf(true), chapter = c)
+        val q = listOf("THE NORTHERN HEAVENLY SECT HAS FALLEN.")
+        T.eq(emptyList<Pair<String, String>>(), t.termExamples(q, lex, agreed = true), "un seul chapitre : pas encore une référence")
+        T.eq(1, t.termExamples(q, lex).size, "prompt 5 : comme avant")
+        t.observePage(listOf("THEY ATTACKED THE NORTHERN HEAVENLY SECT."), listOf("Ils ont attaqué la Secte du Paradis Boréal."), emptyList(), lex, trusted = listOf(true), chapter = "ch2")
+        T.eq(emptyList<Pair<String, String>>(), t.termExamples(q, lex, agreed = true), "deux chapitres en désaccord : aucune référence")
+        t.observePage(listOf("THE NORTHERN HEAVENLY SECT IS STRONG."), listOf("La Secte Céleste du Nord est forte."), emptyList(), lex, trusted = listOf(true), chapter = "ch3")
+        T.eq(listOf("THE NORTHERN HEAVENLY SECT IS STRONG." to "La Secte Céleste du Nord est forte."), t.termExamples(q, lex, agreed = true), "confirmée par un autre chapitre : la plus courte des deux")
+        t.observePage(listOf("THE NORTHERN HEAVENLY SECT, AGAIN."), listOf("La secte, encore."), emptyList(), lex, trusted = listOf(false), chapter = "ch4")
+        T.ok(t.serialize().lines().none { it.contains("La secte, encore.") }, "ligne refaite : jamais un exemple")
+        T.eq(emptyList<Pair<String, String>>(), t.termExamples(q, lex, agreed = true, glossary = listOf(GlossaryEntry("Northern Heavenly Sect", "Secte du Ciel du Nord"))), "le glossaire fixe le terme : pas d'exemple")
+        T.eq(emptyList<Pair<String, String>>(), t.termExamples(q, lex, agreed = true, glossary = listOf(GlossaryEntry("Strong", "puissante"))), "exemple contraire au glossaire : écarté")
+        val back = SeriesMemory.parse("ref", t.serialize())
+        T.eq(t.termExamples(q, lex, agreed = true), back.termExamples(q, lex, agreed = true), "relu à l'identique")
+        // exemple enregistré avant ce build : chapitre inconnu, il attend la confirmation d'un chapitre traduit depuis
+        val old = SeriesMemory.parse("old", "V\t1\nT\tnorthern heavenly sect\t5\nE\tnorthern heavenly sect\tWELCOME TO THE NORTHERN HEAVENLY SECT.\tBienvenue à la Secte Céleste du Nord.\n")
+        T.eq(emptyList<Pair<String, String>>(), old.termExamples(q, lex, agreed = true), "ancien exemple seul : pas une référence")
+        T.eq(1, old.termExamples(q, lex).size, "mais toujours lu")
+        T.ok(SeriesMemory.agree(SeriesMemory.Example("THE HEAVENLY DEMON!", "Le Démon Céleste !", "a"), SeriesMemory.Example("FEAR THE HEAVENLY DEMON.", "Craignez le Démon Céleste.", "b"), "heavenly demon"), "Démon Céleste deux fois")
+        T.ok(!SeriesMemory.agree(SeriesMemory.Example("MOUNT HUA SECT.", "La secte du Mont Hua.", "a"), SeriesMemory.Example("THE MOUNT HUA SECT FELL.", "Le Mont Hua est tombé.", "b"), "the mount hua sect"), "« Hua » recopié et un seul mot commun : pas assez pour trois mots")
+    }
+    T.test("mémoire de l'œuvre vue et effacée par l'utilisateur : un élément effacé n'est plus rappelé ni réappris, il se rétablit, « tout oublier » garde les effacements") {
+        val m = SeriesMemory("vue")
+        repeat(4) { m.observePage(listOf("PENELOPE SAID SHE WAS TIRED."), listOf("Penelope a dit qu'elle était fatiguée."), listOf("Penelope"), lex) }
+        repeat(4) { m.observePage(listOf("PUKE, YOU'RE LATE."), listOf("Puke, tu es en retard."), listOf("Puke"), lex) }
+        repeat(8) { m.observePage(listOf("I WAS READY."), listOf("J'étais prête."), emptyList(), lex) }
+        for ((s1, f1, c) in listOf(Triple("WELCOME TO THE NORTHERN HEAVENLY SECT.", "Bienvenue à la Secte Céleste du Nord.", "a"), Triple("THE NORTHERN HEAVENLY SECT IS STRONG.", "La Secte Céleste du Nord est forte.", "b"), Triple("LEAVE THE NORTHERN HEAVENLY SECT.", "Quitte la Secte Céleste du Nord.", "b")))
+            m.observePage(listOf(s1), listOf(f1), emptyList(), lex, chapter = c)
+        val v = m.view(null, lex)
+        T.ok(v.characters.any { it.display == "Penelope" && it.gender == FrenchAgreement.Gender.F } && v.characters.any { it.key == "puke" }, "personnages")
+        T.eq(FrenchAgreement.Gender.F, v.narrator)
+        T.ok(v.terms.any { it.term == "northern heavenly sect" && it.reference && it.chapters == 2 }, "terme confirmé : ${v.terms.map { it.term + "/" + it.reference }}")
+        m.forgetName("puke"); m.forgetTerm("northern heavenly sect"); m.forgetNarrator()
+        repeat(4) { m.observePage(listOf("PUKE, YOU'RE LATE."), listOf("Puke, tu es en retard."), listOf("Puke"), lex) }
+        repeat(8) { m.observePage(listOf("I WAS READY."), listOf("J'étais prête."), emptyList(), lex) }
+        m.observePage(listOf("THE NORTHERN HEAVENLY SECT IS STRONG."), listOf("La Secte Céleste du Nord est forte."), emptyList(), lex, chapter = "c")
+        val v2 = m.view("She wakes up as the villainess. She must survive. Her fate…", lex)
+        T.ok(v2.characters.none { it.key == "puke" } && v2.terms.none { it.term == "northern heavenly sect" } && v2.narrator == null, "effacés et pas réappris")
+        T.ok(m.promptNotes(listOf("HELLO."), lex, "She wakes up as the villainess. She must survive. Her fate…").none { it.contains("protagonist") }, "narrateur effacé : ni appris ni tiré du synopsis")
+        T.eq(setOf("nom:puke", "terme:northern heavenly sect", "narrateur:narrateur"), v2.rejected.map { it.kind + ":" + it.key }.toSet())
+        val back = SeriesMemory.parse("vue", m.serialize())
+        T.eq(3, back.view(null, lex).rejected.size, "effacements enregistrés")
+        back.restore("nom", "puke")
+        repeat(4) { back.observePage(listOf("PUKE, YOU'RE LATE."), listOf("Puke, tu es en retard."), listOf("Puke"), lex) }
+        T.ok(back.view(null, lex).characters.any { it.key == "puke" }, "rétabli : réappris")
+        back.clearLearned()
+        T.ok(back.view(null, lex).isEmpty && back.view(null, lex).rejected.size == 2, "tout oublié, effacements gardés")
+    }
+    T.test("contexte (prompt 6) : lignes hors bulle signalées, pensées entre parenthèses, ligne refaite avec ses voisines, ses notes et le synopsis") {
+        val prompts = ArrayList<String>()
+        val backend = LlmBackend { _, user, _, _ ->
+            prompts.add(user)
+            if (user.contains("was rejected by an automatic check")) return@LlmBackend LlmReply("1| Il fait froid aujourd'hui.")
+            val lines = user.lines().filter { Regex("^\\d+\\| ").containsMatchIn(it) }.map { it.substringAfter("| ") }
+            LlmReply(lines.mapIndexed { i, l -> "${i + 1}| " + when {
+                l.contains("COLD") -> "It's cold today."            // anglais recopié : contrôle raté, ligne refaite seule
+                l.startsWith("(") -> "(Quel idiot.)"
+                else -> "Réponse $i."
+            } }.joinToString("\n"))
+        }
+        val tr = LlmTranslator(backend) { lex }
+        tr.seriesPremise = "Chung Myung, the Plum Blossom Sword Saint, wakes up a hundred years later in the body of a beggar. He must restore his sect."
+        val mem = SeriesMemory("ctx"); tr.series = mem
+        repeat(4) { mem.observePage(listOf("CHUNG MYUNG SAID HE WOULD COME."), listOf("Chung Myung a dit qu'il viendrait."), listOf("Chung Myung"), lex) }
+        val texts = listOf("THE MOUNTAIN WAS SILENT.", "(WHAT AN IDIOT.)", "IT'S COLD TODAY.", "WHERE IS CHUNG MYUNG?")
+        tr.translate(texts, "en", "fr", emptyList(), kinds = listOf("FREE", "IN_BUBBLE", "IN_BUBBLE", ""))
+        T.ok(prompts[0].contains("Lines outside speech bubbles: 1.") && prompts[0].contains("Lines in parentheses are inner thoughts or asides (keep the parentheses): 2."), prompts[0])
+        val fix = prompts.firstOrNull { it.contains("was rejected by an automatic check") } ?: ""
+        T.ok(fix.contains("The lines just before it on this page") && fix.contains("(WHAT AN IDIOT.) => (Quel idiot.)") && fix.contains("The lines just after it on this page") && fix.contains("WHERE IS CHUNG MYUNG?"), "voisines : $fix")
+        T.ok(fix.contains("Story premise") && fix.contains("Series notes"), "synopsis et notes : $fix")
+        prompts.clear()
+        tr.translate(listOf("A.", "B.", "C."), "en", "fr", emptyList(), kinds = listOf("FREE", "FREE", "FREE"))
+        T.ok(!prompts[0].contains("outside speech bubbles"), "page entière hors bulle (détecteur sans bulle) : rien à distinguer")
+        prompts.clear(); tr.promptVariant = 5
+        tr.translate(texts, "en", "fr", emptyList(), kinds = listOf("FREE", "IN_BUBBLE", "IN_BUBBLE", ""))
+        T.ok(!prompts[0].contains("outside speech bubbles") && prompts.none { it.contains("just before it on this page") }, "prompt 5 intact")
     }
     T.test("traduction (prompt 5, faux modèle) : notes et termes envoyés, nombres retouchés sans nouvel appel, mémoire de l'œuvre nourrie, message tenu dans la fenêtre") {
         val prompts = ArrayList<String>()

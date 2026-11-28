@@ -35,6 +35,8 @@ class LlmTranslator(private val backend: LlmBackend, private val lexicon: () -> 
     @Volatile var lastReport: List<LineReport> = emptyList()
     /** Mémoire de l'œuvre (personnages, genre du narrateur, lettres mal lues, genre de l'œuvre) : rappelée au modèle et nourrie par chaque page (prompt 5 et suivants). */
     @Volatile var series: SeriesMemory? = null
+    /** Chapitre en cours (adresse de la page) : la mémoire de l'œuvre note de quel chapitre vient chaque réplique d'exemple (voir [SeriesMemory.Example]). */
+    @Volatile var chapterKey: String = ""
     /** Taille de la fenêtre du moteur (consigne + message + réponse), en jetons : le message est raccourci (dialogue précédent d'abord) pour y tenir. */
     @Volatile var contextTokens: Int = 4096
 
@@ -93,27 +95,48 @@ class LlmTranslator(private val backend: LlmBackend, private val lexicon: () -> 
 
     // ---------- traduction ----------
 
-    /** Traduit les lignes d'une page ; [refinePass] : seconde passe de relecture (réglage). */
-    fun translate(texts: List<String>, source: String, target: String, glossary: List<GlossaryEntry>, refinePass: Boolean = false): List<String> {
+    /**
+     * Traduit les lignes d'une page ; [refinePass] : seconde passe de relecture (réglage). [kinds] : nature de chaque ligne d'après le détecteur (« IN_BUBBLE », « FREE », vide si
+     * inconnue), une par ligne ; à partir du prompt 6, les lignes hors bulle sont signalées au modèle (narration, pensées, cartouches, panneaux).
+     */
+    fun translate(texts: List<String>, source: String, target: String, glossary: List<GlossaryEntry>, refinePass: Boolean = false, kinds: List<String>? = null): List<String> {
         val epoch = synchronized(ctxLock) { ctxEpoch }
-        var out = ask(texts, source, target, glossary)
-        out = realign(texts, out, source, target, glossary)
+        val outside = outsideOf(texts, kinds, target)
+        var out = ask(texts, source, target, glossary, outside = outside)
+        val redone = HashSet<Int>()
+        out = realign(texts, out, source, target, glossary, outside, redone)
         var final = out.mapIndexed { i, t -> t ?: throw IllegalStateException("Réponse du modèle incomplète (ligne ${i + 1})") }
         // défauts de génération (chiffre doublé, mot-outil doublé) : corrigés avant les contrôles, qui n'ont plus à refaire ces lignes
         if (promptVariant >= 5) final = final.mapIndexed { i, t -> TranslationPost.doubledWords(texts[i], TranslationPost.numbers(texts[i], TranslationPost.digitRuns(texts[i], t))).let { if (target == "fr") TranslationPost.grammar(texts[i], it) else it } }
         // page anglaise : une longue suite coréenne, japonaise ou chinoise sans lettre latine (crédits, titre d'origine) reste telle quelle ; le modèle y inventait une phrase
         if (promptVariant >= 5 && source == "en") final = final.mapIndexed { i, t -> if (foreignBlock(texts[i])) texts[i] else t }
         if ((refine || refinePass) && target == "fr") final = refineDraft(texts, final, glossary)
-        final = checkAndFix(texts, final, target, source, glossary)
+        final = checkAndFix(texts, final, target, source, glossary, outside)
         if (target == "fr" && promptVariant >= 4) final = final.mapIndexed { i, t -> TranslationPost.rescueStutter(texts[i], TranslationPost.stutter(texts[i], t)) }   // « B-BUT » → « M-MAIS » ; « Y-YOU… » recopié → « T-TOI… »
         // la page a changé pendant la traduction (le contexte a été oublié) : ce dialogue n'appartient plus au chapitre en cours
+        // prompt 6 : seules les lignes réussies du premier coup (ni refaites, ni corrigées après contrôle) apprennent à la mémoire du chapitre et à celle de l'œuvre ce qui se lit
+        // dans la traduction (tutoiement, genre du narrateur, répliques d'exemple) : une traduction ratée ne devient pas une référence
+        val v6 = promptVariant >= 6 && target == "fr"
+        val trusted = if (v6) texts.indices.map { i -> i !in redone && lastReport.getOrNull(i)?.initial?.isEmpty() == true } else null
         synchronized(ctxLock) {
             if (epoch == ctxEpoch) {
-                texts.indices.forEach { remember(texts[it], final[it]); memory.observe(texts[it], final[it]) }
-                if (target == "fr") try { series?.observePage(texts, final, memory.namesToKeep(), lexicon()) } catch (_: Throwable) {}
+                texts.indices.forEach { remember(texts[it], final[it]); memory.observe(texts[it], final[it], learnStyle = trusted?.get(it) ?: true) }
+                if (target == "fr") try {
+                    series?.observePage(texts, final, memory.namesToKeep(), lexicon(), trusted, chapterKey, if (v6 && kinds != null && kinds.size == texts.size) texts.indices.map { it in outside } else null)
+                } catch (_: Throwable) {}
             }
         }
         return final
+    }
+
+    /**
+     * Lignes hors bulle (indices) selon le détecteur, à partir du prompt 6 et vers le français : narration, pensées, cartouches, panneaux ou bruitages. Rien si la nature des lignes
+     * n'est pas connue (banc d'essai, retraduction d'un terme) ni si toute la page est hors bulle (détecteur sans bulle : l'information ne distingue rien).
+     */
+    private fun outsideOf(texts: List<String>, kinds: List<String>?, target: String): Set<Int> {
+        if (promptVariant < 6 || target != "fr" || kinds == null || kinds.size != texts.size) return emptySet()
+        val out = texts.indices.filter { kinds[it] == "FREE" }.toSet()
+        return if (out.size == texts.size && texts.size > 2) emptySet() else out
     }
 
     private fun foreignBlock(src: String): Boolean =
@@ -131,7 +154,7 @@ class LlmTranslator(private val backend: LlmBackend, private val lexicon: () -> 
      * Lignes absentes de la réponse ou mal placées (le modèle a sauté une ligne et décalé les suivantes, ou mis la traduction d'une ligne sous le numéro d'une autre : voir
      * [TranslationAlign]) : elles sont refaites ensemble, avec les autres lignes du lot comme contexte ; ce qui reste absent ou suspect est refait seul. La réponse brute fautive va au journal.
      */
-    private fun realign(texts: List<String>, first: MutableList<String?>, source: String, target: String, glossary: List<GlossaryEntry>): MutableList<String?> {
+    private fun realign(texts: List<String>, first: MutableList<String?>, source: String, target: String, glossary: List<GlossaryEntry>, outside: Set<Int> = emptySet(), redone: MutableSet<Int> = HashSet()): MutableList<String?> {
         val out = first
         val lex = try { lexicon() } catch (_: Throwable) { null }
         val names = chapterNames()
@@ -141,22 +164,28 @@ class LlmTranslator(private val backend: LlmBackend, private val lexicon: () -> 
         }
         val redo = bad()
         if (redo.isEmpty()) return out
+        redone.addAll(redo)
         addCallNote("realign:${redo.size}/${texts.size}")
         addCallNote("raw:" + lastReply.take(600).replace('\n', '⏎').replace(';', ','))
         val context = texts.indices.filter { it !in redo && out[it] != null }.map { texts[it] to out[it]!! }
-        val again = try { ask(redo.map { texts[it] }, source, target, glossary, kind = "realign", page = context) } catch (e: Throwable) { null }
+        // nature des lignes refaites (hors bulle ou non) : renumérotée pour le lot refait
+        fun outsideIn(idx: List<Int>): Set<Int> = idx.withIndex().filter { it.value in outside }.map { it.index }.toSet()
+        val again = try { ask(redo.map { texts[it] }, source, target, glossary, kind = "realign", page = context, outside = outsideIn(redo.toList())) } catch (e: Throwable) { null }
         redo.forEachIndexed { k, i -> out[i] = again?.getOrNull(k) }
         // beaucoup de lignes encore absentes (réponse mal formée deux fois) : une demande groupée de plus plutôt qu'une par ligne (3 à 4 s chacune sur le téléphone)
         val still = bad(redo)
         if (still.size > 4) {
-            val batch = try { ask(still.map { texts[it] }, source, target, glossary, kind = "miss", page = context) } catch (e: Throwable) { null }
+            val batch = try { ask(still.map { texts[it] }, source, target, glossary, kind = "miss", page = context, outside = outsideIn(still.toList())) } catch (e: Throwable) { null }
             still.forEachIndexed { k, i -> batch?.getOrNull(k)?.let { out[i] = it } }
         }
-        for (i in bad(redo)) out[i] = try { ask(listOf(texts[i]), source, target, glossary, kind = "miss").firstOrNull() } catch (e: Throwable) { null }
+        // prompt 6 : une ligne refaite seule voit aussi les autres lignes de la page déjà traduites (un fragment ne se comprend qu'avec ses voisines)
+        fun around(i: Int): List<Pair<String, String>> = if (promptVariant >= 6) texts.indices.filter { it != i && out[it] != null }.map { texts[it] to out[it]!! } else emptyList()
+        for (i in bad(redo)) out[i] = try { ask(listOf(texts[i]), source, target, glossary, kind = "miss", page = around(i), outside = outsideIn(listOf(i))).firstOrNull() } catch (e: Throwable) { null }
         // contrôle final de toute la page : une ligne laissée telle quelle peut maintenant se révéler mal placée (même traduction qu'une ligne refaite) ; refaite seule (quatre au plus)
         val late = bad().filter { it !in redo }.take(4)
         if (late.isNotEmpty()) addCallNote("late:${late.size}")
-        for (i in late) out[i] = (try { ask(listOf(texts[i]), source, target, glossary, kind = "miss").firstOrNull() } catch (e: Throwable) { null }) ?: out[i]
+        redone.addAll(late)
+        for (i in late) out[i] = (try { ask(listOf(texts[i]), source, target, glossary, kind = "miss", page = around(i), outside = outsideIn(listOf(i))).firstOrNull() } catch (e: Throwable) { null }) ?: out[i]
         return out
     }
 
@@ -182,7 +211,7 @@ class LlmTranslator(private val backend: LlmBackend, private val lexicon: () -> 
      * Contrôle chaque ligne (mots anglais restants, contenu perdu, nom modifié, chiffres, répétition…) et refait seule toute ligne qui échoue,
      * une fois, avec le détail des problèmes. La nouvelle version n'est retenue que si elle a moins de problèmes.
      */
-    private fun checkAndFix(texts: List<String>, draft: List<String>, target: String, source: String, glossary: List<GlossaryEntry>): List<String> {
+    private fun checkAndFix(texts: List<String>, draft: List<String>, target: String, source: String, glossary: List<GlossaryEntry>, outside: Set<Int> = emptySet()): List<String> {
         val names = namesFor(texts, target)
         // tutoiement et genre du narrateur établis par le chapitre ; chaque ligne de la page y est ajoutée une fois finie, pour que la suivante s'y accorde
         val style = synchronized(ctxLock) { memory.styleCopy() }
@@ -193,7 +222,12 @@ class LlmTranslator(private val backend: LlmBackend, private val lexicon: () -> 
             var retried = false; var fixed = false
             if (probs.isNotEmpty()) {
                 retried = true
-                val again = try { askFix(texts[i], out[i], probs.map { "${it.code}: ${it.detail}" }, source, target, glossary, names, if (target == "fr" && promptVariant >= 4) style.hints() else emptyList()) } catch (e: Throwable) { null }
+                // prompt 6 : la ligne refaite voit ses voisines de la page (quatre avant, trois après, avec leur traduction du moment), les notes de l'œuvre, son synopsis
+                // et les répliques d'exemple de ses termes, comme la demande de la page entière
+                val ctx = if (promptVariant >= 6 && target == "fr") FixContext(
+                    before = (maxOf(0, i - 4) until i).map { texts[it] to out[it] }, after = (i + 1..minOf(out.size - 1, i + 3)).map { texts[it] to out[it] }, outside = i in outside,
+                ) else null
+                val again = try { askFix(texts[i], out[i], probs.map { "${it.code}: ${it.detail}" }, source, target, glossary, names, if (target == "fr" && promptVariant >= 4) style.hints() else emptyList(), ctx) } catch (e: Throwable) { null }
                 if (again != null) {
                     val p2 = TranslationChecks.problems(texts[i], again, target, names, style)
                     if (p2.size < probs.size) { out[i] = again; fixed = p2.isEmpty(); probs = p2 }
@@ -206,7 +240,10 @@ class LlmTranslator(private val backend: LlmBackend, private val lexicon: () -> 
         return out
     }
 
-    private fun askFix(text: String, previous: String, problems: List<String>, source: String, target: String, glossary: List<GlossaryEntry>, names: List<String>, styleHints: List<String> = emptyList()): String? {
+    /** Contexte d'une ligne refaite seule après contrôle (prompt 6) : ses voisines sur la page, et si elle est hors bulle. */
+    private class FixContext(val before: List<Pair<String, String>>, val after: List<Pair<String, String>>, val outside: Boolean)
+
+    private fun askFix(text: String, previous: String, problems: List<String>, source: String, target: String, glossary: List<GlossaryEntry>, names: List<String>, styleHints: List<String> = emptyList(), ctx: FixContext? = null): String? {
         val t0 = System.nanoTime(); var setup = 0L; var outLen = -1
         val system = LlmPrompt.system(source, target, promptVariant)
         var inLen = system.length
@@ -214,7 +251,11 @@ class LlmTranslator(private val backend: LlmBackend, private val lexicon: () -> 
             val hints = if (promptVariant >= 4 && target == "fr") IdiomHints.find(listOf(text)) else emptyList()
             val gloss = if (promptVariant >= 5 && target == "fr") glossary + genreTerms(listOf(text), glossary).map { GlossaryEntry(it.source, it.french) } else glossary
             // une ligne à reprendre : six répliques de contexte suffisent (chaque caractère lu coûte, environ 0,7 ms sur le téléphone)
-            val u = LlmPrompt.fixUser(text, previous, problems, historyFor().takeLast(if (promptVariant >= 5) SHORT_HISTORY else HISTORY_MAX), gloss, names, hints, styleHints)
+            val mem = this.series
+            val notes = if (ctx != null) try { mem?.promptNotes(listOf(text), lexicon(), seriesPremise) ?: emptyList() } catch (_: Throwable) { emptyList() } else emptyList()
+            val examples = if (ctx != null) try { mem?.termExamples(listOf(text), lexicon(), 2, glossary, agreed = true) ?: emptyList() } catch (_: Throwable) { emptyList() } else emptyList()
+            val u = LlmPrompt.fixUser(text, previous, problems, historyFor().takeLast(if (promptVariant >= 5) SHORT_HISTORY else HISTORY_MAX), gloss, names, hints, styleHints,
+                before = ctx?.before ?: emptyList(), after = ctx?.after ?: emptyList(), notes = notes, premise = if (ctx != null) seriesPremise else null, examples = examples, outside = ctx?.outside == true)
             inLen += u.length
             val r = backend.generate(system, u, LlmSampling(20, 0.9, 0.1), LlmPrompt.maxOutputTokens(listOf(text)))
             setup = r.setupMs; outLen = r.text.length
@@ -222,7 +263,7 @@ class LlmTranslator(private val backend: LlmBackend, private val lexicon: () -> 
         } finally { note("fix", t0, setup, inLen, outLen) }
     }
 
-    private fun ask(texts: List<String>, source: String, target: String, glossary: List<GlossaryEntry>, series: String? = seriesTitle, kind: String = "ask", page: List<Pair<String, String>> = emptyList()): MutableList<String?> {
+    private fun ask(texts: List<String>, source: String, target: String, glossary: List<GlossaryEntry>, series: String? = seriesTitle, kind: String = "ask", page: List<Pair<String, String>> = emptyList(), outside: Set<Int> = emptySet()): MutableList<String?> {
         val t0 = System.nanoTime(); var setup = 0L; var outLen = -1
         val system = LlmPrompt.system(source, target, promptVariant)
         var inLen = system.length
@@ -231,10 +272,12 @@ class LlmTranslator(private val backend: LlmBackend, private val lexicon: () -> 
             val u = if (promptVariant >= 5 && target == "fr") {
                 val mem = this.series
                 val notes = try { mem?.promptNotes(texts, lexicon(), seriesPremise) ?: emptyList() } catch (_: Throwable) { emptyList() }
-                val examples = try { mem?.termExamples(texts, lexicon()) ?: emptyList() } catch (_: Throwable) { emptyList() }
+                // prompt 6 : seulement des répliques confirmées par deux chapitres, jamais contre le glossaire
+                val examples = try { mem?.termExamples(texts, lexicon(), 3, glossary, agreed = promptVariant >= 6) ?: emptyList() } catch (_: Throwable) { emptyList() }
                 val terms = genreTerms(texts, glossary)
                 fit(system, texts, if (kind == "miss" && texts.size == 1) SHORT_HISTORY else HISTORY_MAX) { hist, withNotes ->
-                    LlmPrompt.user(texts, hist, glossary, series, namesFor(texts, target), hints, styleNotes(target), page, seriesPremise, if (withNotes) notes else emptyList(), terms, if (withNotes) examples else emptyList())
+                    LlmPrompt.user(texts, hist, glossary, series, namesFor(texts, target), hints, styleNotes(target), page, seriesPremise, if (withNotes) notes else emptyList(), terms, if (withNotes) examples else emptyList(),
+                        outside = outside.map { it + 1 }.sorted(), thoughts = promptVariant >= 6)
                 }
             } else LlmPrompt.user(texts, historyFor(), glossary, series, keptNames(), hints, styleNotes(target), page, if (target == "fr") seriesPremise else null)
             inLen += u.length

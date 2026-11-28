@@ -59,16 +59,19 @@ fun main(args: Array<String>) {
     if (useMemory && warm.exists()) {
         val chapterMemory = ChapterMemory(isCommonWord = { w -> lex.isCommon(w) })
         var chapter = ""
+        val v6 = tr.promptVariant >= 6
         for ((key, blocks) in pagesOf(read(warm))) {
             if (key.first != chapter) { chapter = key.first; chapterMemory.reset() }
             val m = memoryOf(blocks[0].series)
-            m.learnExamples = false   // traductions du journal (ancienne version) : termes comptés, exemples non retenus
             for (b in blocks) m.observeReading(b.src, lex)
             val texts = blocks.map { TextNormalizer.fixCase(it.clean) }
-            texts.indices.forEach { chapterMemory.observe(texts[it], blocks[it].tr) }
-            m.observePage(texts, blocks.map { it.tr }, chapterMemory.namesToKeep(), lex)
+            // comme l'application : prompt 6, seules les lignes sans problème au contrôle apprennent de leur traduction (ici, celles du journal) ; avant, toutes
+            val names = chapterMemory.namesToKeep()
+            val trusted = if (v6) texts.indices.map { TranslationChecks.problems(texts[it], blocks[it].tr, "fr", names).isEmpty() } else null
+            texts.indices.forEach { chapterMemory.observe(texts[it], blocks[it].tr, learnStyle = trusted?.get(it) ?: true) }
+            m.observePage(texts, blocks.map { it.tr }, chapterMemory.namesToKeep(), lex, trusted, key.first)
         }
-        memories.forEach { (s, m) -> m.learnExamples = true; println("préchauffage de « $s » : ${m.summary()}") }
+        memories.forEach { (s, m) -> println("préchauffage de « $s » : ${m.summary()}") }
     }
 
     val out = output.bufferedWriter()
@@ -80,6 +83,7 @@ fun main(args: Array<String>) {
             tr.resetContext()
             tr.seriesTitle = blocks[0].series
             tr.seriesPremise = premises[blocks[0].series]
+            tr.chapterKey = chapter
             println("== chapitre $chapter" + (if (useMemory) " (mémoire : ${memoryOf(blocks[0].series).summary()})" else ""))
         }
         // comme l'application : chaque bulle lue nourrit les lettres mal lues de l'œuvre, puis le texte est réparé avec les confusions établies

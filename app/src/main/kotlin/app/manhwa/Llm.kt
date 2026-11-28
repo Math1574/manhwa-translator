@@ -177,7 +177,7 @@ class GemmaTranslator(
             ensureEngine(spec, s.useGpu, vision = visionReady && s.autoReread)
             val loadMs = SystemClock.uptimeMillis() - tLoad
             if (loadMs > 300L) core.addCallNote("load:$loadMs")
-            return core.translate(texts, source, target, glossary, s.refinePass)
+            return core.translate(texts, source, target, glossary, s.refinePass, kinds = app.manhwa.core.BatchContext.kinds.get()?.takeIf { it.size == texts.size })
         } finally {
             scheduleRelease() // libère la mémoire (plusieurs Go) quand on ne traduit plus
         }

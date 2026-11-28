@@ -132,7 +132,8 @@ class ChapterMemory(private val maxNames: Int = 14, private val isCommonWord: (S
     fun styleCopy(): StyleMemory = style.copy()
     fun styleHints(): List<String> = style.hints()
 
-    fun observe(src: String, tr: String) {
+    /** [learnStyle] : faux pour une ligne refaite ou corrigée (prompt 6) : ses noms comptent, mais le tutoiement et les accords qu'elle porte ne font pas la règle du chapitre. */
+    fun observe(src: String, tr: String, learnStyle: Boolean = true) {
         for (m in tok.findAll(src)) {
             if (stutterPrefix.containsMatchIn(m.value)) continue          // « G-GAF » : le nom est compté seul (mots de trois lettres), pas avec son bégaiement
             val w = m.value.replace(possessive, ""); val l = w.lowercase()   // « KANDEYA'S » compte pour « KANDEYA »
@@ -144,7 +145,7 @@ class ChapterMemory(private val maxNames: Int = 14, private val isCommonWord: (S
             if (isShortCommon(l) || !keptAsName(tr, l)) continue
             shortCounts[l] = (shortCounts[l] ?: 0) + 1; display.putIfAbsent(l, w)
         }
-        style.observe(src, tr, namesToKeep())
+        if (learnStyle) style.observe(src, tr, namesToKeep())
     }
 
     /**
