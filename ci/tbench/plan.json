@@ -1,13 +1,21 @@
 {
  "variants": {
-  "ab": "variant=5 memory=1"
+  "v5": "variant=5 memory=1"
  },
  "shards": [
   "return-of-the-mount-hua-sect",
-  "death-is-the-only-ending-for-the-villainess",
-  "the-legend-of-the-northern-blade",
   "lookism",
+  "survivalism",
+  "omniscient-readers-viewpoint",
+  "archmage-curriculum",
+  "the-forgotten-field",
+  "waiting-in-the-wheat-field",
+  "death-is-the-only-ending-for-the-villainess",
+  "bad-born-blood",
+  "doctors-rebirth",
+  "the-legend-of-the-northern-blade",
+  "illusion-hunter-from-another-world",
   "pick-me-up-infinite-gacha"
  ],
- "server": "ab"
+ "server": "session"
 }
