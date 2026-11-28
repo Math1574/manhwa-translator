@@ -25,8 +25,8 @@ Solution: Please update the Gradle version to at least Gradle 8.14.4.
 > Task :app:packageDebugResources
 > Task :app:createDebugCompatibleScreenManifests
 > Task :app:extractDeepLinksDebug
-> Task :app:mergeDebugResources
 > Task :app:parseDebugLocalResources
+> Task :app:mergeDebugResources
 > Task :app:processDebugMainManifest
 > Task :app:processDebugManifest
 > Task :app:javaPreCompileDebug
@@ -35,14 +35,14 @@ Solution: Please update the Gradle version to at least Gradle 8.14.4.
 > Task :app:generateDebugAssets UP-TO-DATE
 > Task :app:mergeDebugAssets
 > Task :app:desugarDebugFileDependencies
-> Task :app:checkDebugDuplicateClasses
 > Task :app:processDebugManifestForPackage
-> Task :app:compressDebugAssets
+> Task :app:checkDebugDuplicateClasses
+> Task :app:processDebugResources
 > Task :app:mergeDebugJniLibFolders
 > Task :app:validateSigningDebug
 > Task :app:writeDebugAppMetadata
 > Task :app:writeDebugSigningConfigVersions
-> Task :app:processDebugResources
+> Task :app:compressDebugAssets
 > Task :app:mergeExtDexDebug
 > Task :core:compileKotlin
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/BlockLayout.kt:68:39 Unnecessary safe call on a non-null receiver of type 'Erasure.Plan'.
@@ -53,7 +53,7 @@ w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/ko
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/StyleMatcher.kt:174:47 Unnecessary non-null assertion (!!) on a non-null receiver of type 'LineInk'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/StyleMatcher.kt:216:55 Unnecessary non-null assertion (!!) on a non-null receiver of type 'StyleMatcher.Memory.Exemplar'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/StyleMatcher.kt:265:56 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Group'.
-w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/TranslationBatcher.kt:52:24 This class is not recommended for use in Kotlin. Use 'kotlin.Any' instead.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/kotlin/app/manhwa/core/TranslationBatcher.kt:58:24 This class is not recommended for use in Kotlin. Use 'kotlin.Any' instead.
 
 > Task :core:compileJava NO-SOURCE
 > Task :core:classes UP-TO-DATE
@@ -64,18 +64,18 @@ w: file:///home/runner/work/manhwa-translator/manhwa-translator/core/src/main/ko
 Unable to strip the following libraries, packaging them as they are: libandroidx.graphics.path.so, liblitertlm_jni.so, libmlkit_google_ocr_pipeline.so, libonnxruntime.so, libonnxruntime4j_jni.so, libtranslate_jni.so.
 
 > Task :app:mergeLibDexDebug
-
 > Task :app:compileDebugKotlin
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/BlockReading.kt:51:94 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/ComicDetector.kt:43:94 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
-w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:1785:92 Unnecessary safe call on a non-null receiver of type 'String'.
-w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:1911:88 Unnecessary non-null assertion (!!) on a non-null receiver of type 'DebugInfo'.
-w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:2229:109 Unnecessary non-null assertion (!!) on a non-null receiver of type 'TranslationController.EditSession'.
-w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:2396:60 'static fun newInstance(p0: ByteArray, p1: Int, p2: Int, p3: Boolean): BitmapRegionDecoder' is deprecated. Deprecated in Java.
-w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:2396:101 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:1786:92 Unnecessary safe call on a non-null receiver of type 'String'.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:1912:88 Unnecessary non-null assertion (!!) on a non-null receiver of type 'DebugInfo'.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:2230:109 Unnecessary non-null assertion (!!) on a non-null receiver of type 'TranslationController.EditSession'.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:2397:60 'static fun newInstance(p0: ByteArray, p1: Int, p2: Int, p3: Boolean): BitmapRegionDecoder' is deprecated. Deprecated in Java.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Controller.kt:2397:101 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/CorrectionsScreen.kt:102:87 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/Engines.kt:59:13 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
-w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/LibraryScreens.kt:377:39 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/LibraryScreens.kt:379:39 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
+w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/LibraryScreens.kt:394:39 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/MainActivity.kt:108:48 'var statusBarColor: Int' is deprecated. Deprecated in Java.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/MainActivity.kt:108:86 'var navigationBarColor: Int' is deprecated. Deprecated in Java.
 w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kotlin/app/manhwa/PaddleOcr.kt:138:94 Elvis operator (?:) always returns the left operand of non-nullable type 'BitmapRegionDecoder'.
@@ -95,9 +95,9 @@ w: file:///home/runner/work/manhwa-translator/manhwa-translator/app/src/main/kot
 > Task :app:packageDebug
 > Task :app:createDebugApkListingFileRedirect
 > Task :app:assembleDebug
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_5-1795877204603.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_5-1795887499960.json
 
-BUILD SUCCESSFUL in 1m 33s
+BUILD SUCCESSFUL in 2m 5s
 39 actionable tasks: 39 executed
 To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.10.2/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
 Daemon will be stopped at the end of the build 
@@ -162,7 +162,7 @@ Solution: Please update the Gradle version to at least Gradle 8.14.4.
 > Task :app:packageDebug
 > Task :app:createDebugApkListingFileRedirect UP-TO-DATE
 > Task :app:assembleDebug
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_6-1795877297531.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_6-1795887625009.json
 
-BUILD SUCCESSFUL in 10s
+BUILD SUCCESSFUL in 15s
 39 actionable tasks: 3 executed, 36 up-to-date
