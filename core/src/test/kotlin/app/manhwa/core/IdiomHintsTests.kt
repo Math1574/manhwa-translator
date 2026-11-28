@@ -101,7 +101,7 @@ fun idiomHintsTests() {
         T.eq("S-RANK, M-MAIS...", s("S-RANK? B-BUT...", "S-RANK, P-MAIS..."))            // seul le bégaiement de l'original est compté : « S-RANK » est écarté
     }
     T.test("prompt 4 : règles contre le mot à mot, conseils d'expressions seulement s'il y en a, version précédente intacte") {
-        T.eq(4, LlmPrompt.CURRENT)
+        T.ok(LlmPrompt.CURRENT >= 4, "version courante")
         val v4 = LlmPrompt.system("en", "fr", 4)
         T.ok(v4.contains("Pas question") && v4.contains("OCR") && v4.contains("stutter") && v4.contains("jeune maître aîné"), "règles v4")
         T.ok(!LlmPrompt.system("en", "fr", 3).contains("Expressions") && !LlmPrompt.system("en", "fr", 3).contains("stutter"), "v3 inchangée")

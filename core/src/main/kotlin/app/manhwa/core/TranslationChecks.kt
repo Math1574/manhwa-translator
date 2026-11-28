@@ -2,6 +2,9 @@ package app.manhwa.core
 
 /** Contrôles automatiques d'une traduction ligne par ligne : mots non traduits, contenu perdu, noms modifiés, chiffres perdus, répétitions. */
 object TranslationChecks {
+    private val srcNumber = Regex("(?<![A-Za-z0-9])\\d{1,3}(?:[,.\u00A0\u202F ]\\d{3})+(?![A-Za-z0-9])|(?<![A-Za-z0-9])\\d+(?![A-Za-z0-9])")
+    private val trNumber = Regex("(?<!\\d)\\d{1,3}(?:[,.\u00A0\u202F ]\\d{3})+(?!\\d)|\\d+")
+
     /** Une syllabe répétée de part et d'autre d'un trait d'union (« EST-EST », « A-A », « B-BUT » côté anglais). */
     /** Bégaiement de l'original, trait d'union suivi ou non d'une espace (« B-BUT », « WH- WHAT ») : la traduction peut alors bégayer aussi. */
     private val srcStutter = Regex("(?i)(?<![\\p{L}])(\\p{L}{1,4})-\\s?\\1")
@@ -48,8 +51,13 @@ object TranslationChecks {
         // tu / vous et genre du narrateur : plusieurs personnes tutoyées, formes mêlées, interlocuteur ou chapitre qui change de registre
         if (target == "fr") out.addAll(FrenchAgreement.problems(src, t, names, style))
         // chiffres : ceux de l'original doivent se retrouver
-        val digits = Regex("(?<![A-Za-z0-9])\\d+(?![A-Za-z0-9])").findAll(src).map { it.value }.toList()   // nombres isolés ; « INJURIE3 » est une erreur de lecture
-        if (digits.any { it !in t }) out.add(Problem("chiffres", "chiffre(s) perdu(s) : " + digits.filter { it !in t }.joinToString(", ")))
+        // nombres isolés (« INJURIE3 » est une erreur de lecture), milliers groupés compris (« 1,000 » = « 1 000 » = « 1000 »)
+        val digits = srcNumber.findAll(src).map { it.value.filter(Char::isDigit) }.toList()
+        // chaque nombre doit s'y retrouver entier : « 26 » n'est pas dans « 266 » (chiffre doublé à la génération) ; ou écrit en lettres (« trois », « deux cent cinquante »)
+        val tLow = t.lowercase()
+        val trNums = trNumber.findAll(t).map { it.value.filter(Char::isDigit) }.toSet()
+        fun present(d: String) = d in trNums || (d.length <= 5 && FrenchNumbers.pattern(d.toInt())?.containsMatchIn(tLow) == true)
+        if (digits.any { !present(it) }) out.add(Problem("chiffres", "chiffre(s) perdu(s) : " + digits.filter { !present(it) }.joinToString(", ")))
         // noms à conserver
         val lower = src.lowercase(); val tl = t.lowercase()
         for (n in names) if (n.length >= 3 && mentions(lower, n.lowercase()) && !mentions(tl, n.lowercase())) out.add(Problem("nom", "nom modifié : $n"))
@@ -170,4 +178,30 @@ internal object TranslationChecksWords {
         "something", "nothing", "anything", "everything", "someone", "anyone", "please", "thank", "okay", "yeah", "right", "just", "like", "know",
         "think", "want", "need", "come", "back", "here", "then", "than", "them", "they", "your", "mine", "more", "most", "much", "many", "some",
     )
+}
+
+/** Nombres écrits en lettres, à la française (« 10 » → « dix », « 34 » → « trente-quatre », « 100 » → « cent ») : un nombre écrit ainsi n'est pas un chiffre perdu. */
+object FrenchNumbers {
+    /** Le nombre [n] écrit en lettres dans un texte en minuscules : traits d'union ou espaces (orthographe de 1990 ou non), « une » pour « un », « vingts » / « cents » sans s. */
+    fun pattern(n: Int): Regex? {
+        val w = words(n) ?: return null
+        val parts = w.split(Regex("[ -]+")).map { p -> when (p) { "un" -> "une?"; "vingts" -> "vingts?"; "cents" -> "cents?"; else -> Regex.escape(p) } }
+        return Regex("(?<![\\p{L}-])" + parts.joinToString("[\\s-]+") + "(?![\\p{L}-])")
+    }
+
+    private val units = listOf("zéro", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf", "dix", "onze", "douze", "treize", "quatorze", "quinze", "seize", "dix-sept", "dix-huit", "dix-neuf")
+    private val tens = mapOf(2 to "vingt", 3 to "trente", 4 to "quarante", 5 to "cinquante", 6 to "soixante")
+
+    fun words(n: Int): String? = when {
+        n < 0 -> null
+        n < 20 -> units[n]
+        n < 70 -> { val t = tens[n / 10]!!; val u = n % 10; when (u) { 0 -> t; 1 -> "$t et un"; else -> "$t-${units[u]}" } }
+        n < 80 -> if (n == 71) "soixante et onze" else "soixante-" + units[n - 60]
+        n < 100 -> if (n == 80) "quatre-vingts" else "quatre-vingt-" + units[n - 80]
+        n == 100 -> "cent"
+        n < 1000 -> { val c = n / 100; val r = n % 100; (if (c == 1) "cent" else units[c] + "-cent" + (if (r == 0) "s" else "")) + (if (r == 0) "" else "-" + words(r)) }
+        n == 1000 -> "mille"
+        n % 1000 == 0 && n < 20000 -> words(n / 1000) + " mille"
+        else -> null
+    }
 }

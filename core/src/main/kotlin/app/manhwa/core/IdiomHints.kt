@@ -79,7 +79,7 @@ object IdiomHints {
         "swing swung swinging", "teach taught teaching", "tear tore torn tearing", "understand understood", "win won winning", "draw drew drawn drawing", "drive drove driven driving",
         "eat ate eaten eating", "fly flew flown flying", "forget forgot forgotten forgetting", "hide hid hidden hiding", "lay laid laying", "lend lent lending", "read reading",
         "ride rode ridden riding", "rise rose risen rising", "seek sought seeking", "sell sold selling", "spend spent spending", "strike struck striking", "stick stuck sticking",
-        "wear wore worn wearing", "bleed bled", "burn burnt burned", "dig dug digging", "hang hung hanging", "shake shook shaken shaking", "slip slipped slipping", "sneak snuck sneaked",
+        "wear wore worn wearing", "have has had having", "do does did done doing", "bleed bled", "burn burnt burned", "dig dug digging", "hang hung hanging", "shake shook shaken shaking", "slip slipped slipping", "sneak snuck sneaked",
     ).associate { l -> val p = l.split(" "); p[0] to (p + (p[0] + "s")).distinct() }
 
     private fun forms(v: String): List<String> {
@@ -137,7 +137,8 @@ object IdiomHints {
 ~get * on * side | rallier à sa cause, mettre de son côté
 ~get * out of * sight | hors de ma vue ! (disparais de ma vue) ; si c'est « get him out of my sight » : ôtez-le de ma vue
 ~get a grip | ressaisis-toi, reprends-toi
-~get * together | se retrouver, se réunir ; « get it together » = se ressaisir
+~get your/my/his/her/our/their/yourself/yourselves/myself/himself/herself/it * together | se ressaisir, se reprendre (« get your act together », « get your s*** together » = ressaisis-toi, reprends-toi) | réunis|rassembl
+~get together | se retrouver, se réunir
 ~get even with | se venger de, rendre la pareille à
 ~get through | traverser, venir à bout de, survivre à
 ~get ? wrong | se tromper ; « don't get me wrong » = ne te méprends pas, ne le prends pas mal
@@ -363,6 +364,206 @@ at your place | chez toi (jamais « à ton endroit ») | (à|a) (ton|votre) endr
 at my place | chez moi (jamais « à mon endroit ») | (à|a) mon endroit
 just by looking | rien qu'en regardant, d'un simple coup d'œil
 with smithing | par la forge, grâce à la forge (jamais « avec le forgeron ») | avec le forgeron
+# ===== journal du 27/11 (13 œuvres, 12 000 bulles) : calques relevés =====
+i'll/we'll/will/gonna/i'm/must ~make sure to | ne pas manquer de, veiller à ; souvent à ne pas traduire (« I'll make sure to teach him a lesson » = je vais lui donner une bonne leçon ; jamais « m'assurer de ») | m'assurer de|m'assurerai de|t'assurer de|s'assurer de
+i'll/we'll/will/gonna ~make sure that/you/he/she/they/we/it/i/the | veiller à ce que, faire en sorte que (« I'll make sure you understand » = je vais te le faire comprendre ; jamais « m'assurer que ») 
+@be at it again | ça le reprend, il remet ça, ça recommence | (est|sont) à nouveau
+dead to me today | menace : « you're dead to me today » = aujourd'hui, t'es un homme mort | mort pour moi
+what's the point | à quoi bon | quel est le point
+in a nutshell | en résumé, en deux mots | coquille|noix
+for short | en abrégé, pour faire court | pour court
+~give it * all | se donner à fond, faire tout son possible | ton tout|votre tout
+~put * all into | tout donner pour, s'investir à fond dans | ton tout|votre tout
+~mess with the wrong | s'en prendre à la mauvaise personne (« you messed with the wrong person » = tu t'es attaqué à la mauvaise personne) | mêlé de
+~mess with | embêter, chercher des noises à, s'en prendre à ; perturber (« messed with her development » = a perturbé son développement)
+~mess around | faire l'imbécile, faire n'importe quoi (« stop messing around » = arrête tes bêtises)
+messed up | tordu, n'importe quoi, grave (« this is messed up » = c'est tordu)
+~make ends meet | joindre les deux bouts | fins de mois
+a different breed | d'une autre trempe, d'un autre calibre | autre espèce
+~let it go | laisse tomber, passe à autre chose | laisse juste ça
+~hold it in | se retenir, tout garder pour soi
+be my guest | je t'en prie, fais comme bon te semble
+~screw you/him/her/them/this/that/it | va te faire voir, au diable (« screw this » = j'en ai marre de tout ça) | \bviss
+my bad | désolé, c'est ma faute
+^ big deal | (ironique) la belle affaire, et alors ?
+no big deal | ce n'est rien, pas de quoi en faire une histoire
+a big deal | une affaire importante, quelque chose d'important (« it's not a big deal » = ce n'est pas grave)
+what's the big deal | où est le problème ?, qu'est-ce que ça peut faire ?
+on the off chance | au cas où
+funny business | entourloupe, coup fourré (« don't pull any funny business » = pas d'entourloupe, ne tente rien) | drôles? d'affaires?
+i dare you | essaie un peu, chiche
+~watch your mouth/tongue/language | surveille ton langage, fais attention à ce que tu dis | surveille (ta|votre) (langue|bouche)
+cut it out | arrête ça, ça suffit
+out of nowhere | de nulle part, sans crier gare
+so be it | soit, qu'il en soit ainsi
+i'm all ears | je suis tout ouïe, je t'écoute
+can't be helped | on n'y peut rien, tant pis | être aidé
+in charge of | chargé de, responsable de | donner la charge
+what a waste | quel gâchis
+~serve * right | bien fait pour lui, bien fait pour toi | sert (bien|juste)
+i'm on it | je m'en occupe, j'y vais
+~go easy on | y aller doucement avec, ménager
+no hard feelings | sans rancune
+~get some nerve | avoir du culot, ne pas manquer d'air
+once and for all | une bonne fois pour toutes | une fois et pour tout
+@be up to you | c'est toi qui vois, à toi de voir | jusqu'à toi
+~leave it up to you | s'en remettre à toi, te laisser décider | jusqu'à toi
+bring it on | amène-toi, vas-y, je t'attends
+get lost | dégage, fiche le camp (« so we don't get lost » = pour ne pas nous perdre)
+^ beat it | dégage, file | bats-le
+hell of a | un sacré, une sacrée (« a hell of a sleep talk » = sacré rêve que tu fais là) | enfer d'un
+by any chance | par hasard, des fois (en fin de question)
+in no time | en un rien de temps
+grow up | ordre = grandis un peu, sois adulte ; « when I grow up » = quand je serai grand ; « grow up to be » = devenir
+~have a point | avoir raison, ne pas avoir tort
+what's up | ça va ?, quoi de neuf ? ; « what's up with X » = qu'est-ce qu'il a, X ? | qui se passe avec
+^ beats me | aucune idée, j'en sais rien
+~come to my/your/his/her/their senses | reprendre ses esprits, revenir à la raison
+~step aside | écarte-toi, pousse-toi
+~back off | recule, lâche-moi
+knock it off | arrête, ça suffit
+~look down on | mépriser, regarder de haut
+~look up to | admirer, prendre pour modèle
+~show up | se pointer, venir, se montrer
+~run out of | ne plus avoir de, être à court de
+fair enough | d'accord, c'est juste, de bonne guerre
+cheesy | ringard, cucul
+cringe | gênant, la honte
+~sleep in so/late/till/until/today/tomorrow | faire la grasse matinée
+~sleep in $ | faire la grasse matinée
+who cares | on s'en fiche, qu'importe (« who cares about friends » = les amis, on s'en fiche) | qui s'en fout|qui se soucie de
+got to be kidding | tu plaisantes ?, c'est une blague ?
+gotta be kidding | tu plaisantes ?, c'est une blague ?
+here we go | c'est parti ; « here we go again » = et c'est reparti
+there you go | et voilà, tiens
+piss off | dégage, fous le camp | te fâcher
+pissed off | en rogne, furax ; « I'm getting pissed off » = ça commence à m'énerver
+keep it down | moins fort, baisse d'un ton, chut | baissez tomber
+long time no see | ça fait longtemps
+get real | redescends sur terre, sois réaliste
+spare me | pitié, épargne-moi ; « spare me the details » = épargne-moi les détails
+give me a break | lâche-moi, fiche-moi la paix
+time's up | c'est l'heure, le temps est écoulé
+nice try | bien essayé
+no offense | sans vouloir te vexer
+suit yourself | comme tu veux, à ta guise
+thank god/goodness/heavens | Dieu merci, heureusement
+rest in peace | repose en paix
+go to hell | va au diable, va en enfer
+what the heck | mais qu'est-ce que, bon sang
+what the heck is wrong with | qu'est-ce qui te prend, qu'est-ce que tu as | ne va pas avec
+holy crap/shit/cow/moly | la vache, bon sang, putain (selon le ton)
+^ holy $ | « HOLY... » seul = la vache..., ça alors... (jamais « saint ») | ^\W*saint\b
+geez/jeez | « oh, geez » = oh là là, purée ; agacement = franchement, enfin
+damn it | merde, bon sang, zut
+dammit | merde, bon sang, zut
+loser | insulte = minable, pauvre type, loser ; compétition = perdant | perded
+~go ahead and | vas-y, ne te gêne pas (« go ahead and reject me » = vas-y, rejette-moi) | allez-vous
+~figure * out | comprendre, trouver, deviner
+~turn out to/that | s'avérer, se révéler (« what his flesh and blood turned out to be » = ce qu'est devenu son propre fils)
+it ~turn out | il s'avère que, en fait
+~catch up on | rattraper (son retard dans)
+~get along | s'entendre
+~freak out | paniquer, péter un câble
+whatever the reason | quelle que soit la raison | quelle que que
+lower your eyes | baisse les yeux | abaisse
+~have a seat | assieds-toi, installe-toi
+you're home | tu es rentré ? (de retour à la maison)
+~drag and drop | glisser-déposer | corvée
+burden | fardeau, poids (jamais « fard ») | \bfard\b
+annihilation | anéantissement | annulation
+great eyes | de beaux yeux | grands yeux
+~acknowledge | reconnaître, admettre ; « acknowledged » (réponse) = compris, bien reçu | accus\w* réception
+stage clear | niveau terminé, étape réussie
+advent | avènement (« Advent Dungeon » = donjon de l'Avènement ; jamais « aventure ») | aventure
+go transfer | change d'école, va dans une autre école | va te transférer
+~get on * nerves | taper sur les nerfs, agacer
+^ i am $ | « I am. » en réponse à « Are you…? » = oui (jamais « je suis ») | ^\W*je suis\W*$
+^ i'm not $ | « I'm not. » en réponse = non, pas du tout (jamais « je ne suis pas » seul) | ^\W*je ne suis pas\W*$
+~lose my/your/his/her/their cool | perdre son sang-froid
+it's all over $ | c'est fini, tout est fini
+it's all over now | c'est fini, tout est fini
+~have it out with | s'expliquer avec, régler ses comptes avec
+~get even $ | se venger, rendre la monnaie de sa pièce
+~call * names | insulter, traiter de tous les noms
+~walk all over me/you/him/her/us/them | marcher sur les pieds de, traiter comme un paillasson
+~make fun of | se moquer de
+~pick on | s'en prendre à, harceler
+~hang out | traîner, passer du temps
+~look out for | veiller sur ; faire attention à
+~get * hopes up | se faire des illusions, trop espérer
+~stand a chance | avoir une chance (« you don't stand a chance » = tu n'as aucune chance)
+~stand up to | tenir tête à
+~cover for | couvrir (quelqu'un), remplacer
+~back up | soutenir ; reculer ; « backup » = renforts
+~take * word for it | croire sur parole
+~mind * own business | se mêler de ses affaires
+~butt out | ne pas s'en mêler
+~sell out | trahir, se vendre
+~pass out | s'évanouir
+~throw up | vomir
+~work out | marcher, s'arranger ; s'entraîner
+~put up a fight | se défendre, résister
+~beat * up | tabasser, passer à tabac
+~knock * out | assommer, mettre K.-O.
+~bump into | tomber sur, croiser
+~run into you/him/her/them/me/us/each | tomber sur, croiser
+~fill in for | remplacer
+~catch * off guard | prendre au dépourvu
+~let * off the hook | laisser filer, ne pas punir
+~cut * slack | être indulgent avec, lâcher la bride à
+~keep my/your/his/her/our/their word | tenir parole
+~break my/your/his/her/our/their promise | manquer à sa promesse
+~owe * an apology | devoir des excuses à
+~save my/your/his/her/their breath | ne pas se fatiguer, garder sa salive
+~bite * head off | envoyer balader, rembarrer
+~rub it in | retourner le couteau dans la plaie, en rajouter
+~play along | entrer dans le jeu, jouer le jeu
+~play dirty | jouer sale, tricher
+~hit on me/her/him/you/girls/women/guys | draguer
+~ask me/you/him/her out $ | inviter à sortir
+~ask me/you/him/her out on/to/for | inviter à sortir
+~break up with | rompre avec, quitter
+~cheat on me/you/him/her | tromper
+~stand me/him/her/you/them/us up | poser un lapin à
+~fall apart | s'effondrer, tomber en morceaux
+~blow * up | faire exploser ; s'emporter
+~burst into tears | fondre en larmes
+~calm down | calme-toi, du calme
+~cheer up | courage, remonte-toi le moral
+~shut * up | taire, faire taire ; « shut up » = tais-toi, la ferme
+~zone out | être dans la lune
+~black out | perdre connaissance
+~doze off | s'assoupir
+punk | insulte : petit voyou, petite frappe, sale gosse (« you little punk » = espèce de petit voyou)
+i don't mind | ça ne me dérange pas, ça m'est égal (« I don't mind an old shack » = une vieille cabane, ça ne me dérange pas) | pas d'objection
+don't mind me | faites comme si je n'étais pas là, ne faites pas attention à moi
+twofold | au double, deux fois plus
+tenfold | au décuple, dix fois plus (jamais « au centuple », qui veut dire cent) | centuple
+hundredfold | au centuple
+~marry | épouser (« marry me » = m'épouser ; « get married » = se marier ; jamais « m'a marié ») | (?:m|t)['’](?:a|as|avait|aurait|ont)(?:-t-(?:il|elle))? mariée?\b
+what a headache | quelle galère, quel casse-tête | mal à la tête
+wronged me/you/him/her/them/us | faire du tort à, se montrer injuste envers | tortur
+~make eye contact | croiser le regard | contact des yeux|faire contact
+some random | un … quelconque, un inconnu (« some random kid » = un gamin sorti de nulle part, un gamin quelconque)
+in other words | autrement dit, en d'autres termes | en d'autres mots
+~see myself out | je connais le chemin, je vous laisse
+~take cover | se mettre à l'abri, se réfugier
+what's gotten into | qu'est-ce qui lui prend ?, qu'est-ce qui t'arrive ?
+~get the hang of | prendre le coup de main
+~go missing | disparaître
+~keep an eye on | surveiller (« that's who we're here to keep an eye on » = c'est lui qu'on est venus surveiller)
+~keep up with | suivre (le rythme de)
+~catch up | rattraper, rejoindre
+~come up | arriver, se présenter ; « come up with » = trouver, imaginer
+~let me guess | laisse-moi deviner
+for real | sérieux ?, pour de vrai
+no longer | ne plus
+used to | avant, autrefois (imparfait) ; « be used to » = avoir l'habitude de | utilisé à
+~make sense of | comprendre, s'y retrouver dans
+to be honest | pour être honnête, à vrai dire
+what's more | en plus, qui plus est
+in the first place | en fin de question : au juste, de toute façon (« why did you come in the first place? » = pourquoi es-tu venu, au juste ?) ; en tête de phrase : en premier lieu
 # ===== titres, rangs et termes d'arts martiaux =====
 eldest young master | jeune maître aîné (le fils aîné) | plus jeune maître|plus âgé des jeunes
 young lady | jeune demoiselle, mademoiselle

@@ -10,10 +10,10 @@ object LlmPrompt {
     }
 
     /** Version courante du prompt (le banc d'essai de traduction compare plusieurs versions). */
-    const val CURRENT = 4
+    const val CURRENT = 5
 
     fun system(source: String, target: String, variant: Int = CURRENT): String =
-        if (variant == 1 || target != "fr") systemV1(source, target) else if (variant >= 4) systemV4(source) else systemV2(source, extended = variant >= 3)
+        if (variant == 1 || target != "fr") systemV1(source, target) else if (variant >= 5) systemV5(source) else if (variant >= 4) systemV4(source) else systemV2(source, extended = variant >= 3)
 
     private fun systemV1(source: String, target: String): String {
         val src = if (source == "auto") "the source language (Korean, Japanese, Chinese or English; detect it)" else languageName(source)
@@ -93,6 +93,42 @@ Rules:
 """.trim()
     }
 
+    /**
+     * Version 5 (journal du 27/11, 13 œuvres) : comprendre d'abord, écrire ensuite ; français correct exigé (verbes conjugués, accords, « ne … pas ») ; pièges relevés dans le journal
+     * (« make sure », « at it again », « before » = « avant d'être », « I am. » = « Oui. ») ; noms jamais traduits, même un pseudonyme ; notes de l'œuvre (personnages, genre du narrateur,
+     * lettres mal lues) et vocabulaire d'usage du genre donnés dans le message. Le vocabulaire des arts martiaux passe dans les termes du genre (voir [GenrePacks]).
+     */
+    private fun systemV5(source: String): String {
+        val src = if (source == "auto") "Korean, Japanese, Chinese or English (detect it)" else languageName(source)
+        return """
+You are a professional French translator and adapter of manhwa, manga, manhua and webtoons. You translate the dialogue of one page (given in reading order) from $src into French, for a published French edition.
+
+Rules:
+1. Understand first, then write French. For each line, work out what the character really means in this scene (use the previous dialogue, the other lines of the page and the series notes), then write what a French comic writer would put in the bubble. Never copy the English word order, "verb + particle" or idiom: rebuild the sentence the French way, with French constructions ("on", pronouns, contractions in casual speech).
+2. The French must be correct: every verb conjugated (never "je manger", "vous ne pas enlever"), correct gender and number agreement ("sa plus grande arme", "tous mes sentiments", "seule" for a woman), "ne ... pas" in negations, the right sense of each word in context ("burden" = fardeau, "annihilation" = anéantissement, "great eyes" = de beaux yeux).
+3. Literal (wrong) -> natural (right):
+   "I'll make sure to teach him a lesson." -> "Je vais lui donner une bonne leçon."
+   "He's at it again..." -> "Ça le reprend..."
+   "You are an ascetic before a martial artist!" -> "Tu es un ascète avant d'être un artiste martial !"
+   "Am I a beggar?" / "I am." -> "Je suis un mendiant ?" / "Oui."
+   "What's the point? Anyway." -> "À quoi bon ? Bref."
+   "You messed with the wrong person." -> "Tu t'es attaqué à la mauvaise personne."
+   "Not a chance!" -> "Pas question !"
+   "I won't let you get away with this!" -> "Tu ne t'en tireras pas comme ça !"
+4. Idioms, phrasal verbs, insults and exclamations always take their natural French equivalent. When the message lists "Expressions" with their French meaning, use them.
+5. The lines come from OCR: they may contain recognition mistakes (a wrong letter, two words glued together, a missing word), be in capital letters, or be cut in the middle of a sentence. Work out what was really written and translate that. A misread English word is never a name and a strange short word is never an acronym to expand. Apply the reading notes of the series when they are given.
+6. Names: keep the names of characters, places, organizations and game nicknames exactly as written (see the series notes, the glossary and the previous dialogue); never translate a name. Translate titles and ranks ("elder" -> ancien, "young master" -> jeune maître, "Your Highness" -> Votre Altesse) and use the "Usual French terms" given in the message.
+7. Register: "tu" between family, friends, equals, children, rivals and enemies who insult each other; "vous" to strangers, superiors, nobles, elders, customers and polite colleagues. The same two characters always keep the same form; "you" said to several people is "vous". The series notes say how some characters are addressed.
+8. Gender: agree adjectives and participles with the speaker and the people spoken about; the series notes give the gender of characters and of the narrator "I".
+9. A stutter ("B-But", "W-wait") keeps its stutter in French, repeating the first letter of the French word: "M-Mais", "A-Attends".
+10. Sound effects and interjections: give the French onomatopoeia ("Ugh" -> "Argh", "Tsk" -> "Tss", "creak" -> "criii", "gulp" -> "glups", "sniff" -> "snif") or keep them as written.
+11. Keep the speaker's tone (anger, irony, fear, politeness, slang) and a length close to the original so it fits the bubble. Never add or remove information.
+12. French typography: sentence case with accents, a space before ? ! : ; and « » for quotations. Never write in capital letters, even if the source is in capitals.
+13. Never add notes, explanations or quotation marks around lines.
+14. Answer with exactly one line per input line, in the format `N| translation`, using the same numbers, and nothing else. Every number gets its own answer, even a single word, a fragment or a recognition mistake (copy it unchanged if it means nothing): never skip a line or merge two lines.
+""".trim()
+    }
+
     /** Seconde passe optionnelle : relecture du brouillon (variante « r »). */
     /** Demande de correction d'une seule ligne dont la première traduction a échoué aux contrôles automatiques. */
     fun fixUser(text: String, previous: String, problems: List<String>, history: List<Pair<String, String>>, glossary: List<GlossaryEntry>, names: List<String>, hints: List<IdiomHints.Hit> = emptyList(), style: List<String> = emptyList()): String = buildString {
@@ -157,11 +193,19 @@ Answer with exactly one line per input line, in the format `N| edited translatio
     /**
      * [page] : les autres lignes du lot déjà traduites, données pour le contexte quand seules quelques lignes sont refaites (lignes absentes de la réponse ou mal placées, voir [TranslationAlign]).
      */
-    fun user(texts: List<String>, history: List<Pair<String, String>>, glossary: List<GlossaryEntry>, series: String? = null, names: List<String> = emptyList(), hints: List<IdiomHints.Hit> = emptyList(), style: List<String> = emptyList(), page: List<Pair<String, String>> = emptyList(), premise: String? = null): String = buildString {
+    fun user(texts: List<String>, history: List<Pair<String, String>>, glossary: List<GlossaryEntry>, series: String? = null, names: List<String> = emptyList(), hints: List<IdiomHints.Hit> = emptyList(), style: List<String> = emptyList(), page: List<Pair<String, String>> = emptyList(), premise: String? = null,
+             notes: List<String> = emptyList(), terms: List<GenrePacks.Hit> = emptyList(), examples: List<Pair<String, String>> = emptyList()): String = buildString {
         if (names.isNotEmpty()) { appendLine("Names and terms of this chapter to keep exactly as written (never translate them): ${names.joinToString(", ")}"); appendLine() }
         if (style.isNotEmpty()) { appendLine("Established in this chapter (keep it consistent):"); style.forEach { appendLine("- $it") }; appendLine() }
         if (!series.isNullOrBlank()) { appendLine("Series: $series (background only: never put the series title or its words in a translation unless the source line itself contains them)"); appendLine() }
         premiseOf(premise)?.let { appendLine("Story premise (background only, to know who the characters are, their gender and relationships; never add its content to a translation): $it"); appendLine() }
+        if (notes.isNotEmpty()) { appendLine("Series notes (keep them consistent):"); notes.forEach { appendLine("- $it") }; appendLine() }
+        if (terms.isNotEmpty()) { appendLine("Usual French terms of this genre, for these exact English words where a line contains them (adapt gender and number; never use them in place of other words):"); terms.forEach { appendLine("${it.source} = ${it.french}") }; appendLine() }
+        if (examples.isNotEmpty()) {
+            appendLine("Earlier lines of this series that use the same terms (translate these terms the same way):")
+            examples.forEach { (src, tgt) -> appendLine("- ${oneLine(src)} => ${oneLine(tgt)}") }
+            appendLine()
+        }
         if (history.isNotEmpty()) {
             appendLine("Previous dialogue of this chapter (context only, do not translate again):")
             history.forEach { (src, tgt) -> appendLine("- ${oneLine(src)} => ${oneLine(tgt)}") }
