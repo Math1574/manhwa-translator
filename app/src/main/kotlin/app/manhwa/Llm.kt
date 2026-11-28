@@ -112,7 +112,8 @@ class GemmaTranslator(
      * D'abord avec la consigne déjà lue (voir [generatePrefixed]) ; si le moteur ne sait pas le faire, une conversation neuve par appel, sous la garde du GPU et du délai maximal
      * (voir [withWatchdog]), comme jusqu'au build 264.
      */
-    private val backend = LlmBackend { system, user, sampling, maxTokens ->
+    // types explicites : le dorsal se sert de [core] (note d'appel) et [core] du dorsal, l'inférence de Kotlin tournerait en rond
+    private val backend: LlmBackend = LlmBackend { system, user, sampling, maxTokens ->
         val eng = engine ?: throw IllegalStateException("moteur non chargé")
         val t0 = SystemClock.uptimeMillis()
         if (prefixUsable()) {
@@ -139,7 +140,7 @@ class GemmaTranslator(
     }
 
     /** Orchestration de la traduction (demande groupée, lignes refaites, contrôles, mémoire du chapitre et de l'œuvre) : dans le cœur, partagée avec le banc d'essai. */
-    val core = LlmTranslator(backend) { Lexicon.peek() ?: try { Lexicon.get(ctx) } catch (_: Throwable) { null } }
+    val core: LlmTranslator = LlmTranslator(backend) { Lexicon.peek() ?: try { Lexicon.get(ctx) } catch (_: Throwable) { null } }
 
     /** Version du prompt et relecture : réglables par le banc d'essai de traduction. */
     var promptVariant: Int
