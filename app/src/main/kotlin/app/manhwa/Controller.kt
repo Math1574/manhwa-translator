@@ -595,7 +595,8 @@ class TranslationController(private val ctx: Context, private val graph: AppGrap
         ninjaProfile = null
         Ninja.on = false; ninja = false
         graph.cache.endIsolation()
-        graph.edits.endPrivate(); graph.glossary.endPrivate(); graph.ignored.endPrivate(); graph.settingsStore.endPrivate()
+        graph.edits.endPrivate(); graph.glossary.endPrivate(); graph.ignored.endPrivate(); graph.settingsStore.endPrivate(); graph.seriesMemory.endPrivate()
+        graph.gemma.core.series = null
         graph.adFilters.log.silent = false
         exitFullscreen()
         currentUrl = ""; pageError = null; canGoBack = false; canGoForward = false; loading = false; pageProgress = 0

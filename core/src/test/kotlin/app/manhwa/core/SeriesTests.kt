@@ -206,6 +206,7 @@ fun seriesTests() {
         T.ok(fr("I AM.").contains("oui") && fr("I AM THE STRONGEST.").isEmpty(), "« I am. » seul")
         T.ok(fr("HOLY...").contains("la vache") && fr("THE HOLY KNIGHT ARRIVED.").isEmpty(), "« holy » seul")
         T.ok(fr("YOU'VE GOT SOME NERVE.").contains("culot") && fr("HE HAS A POINT.").contains("raison"), "verbes irréguliers have, get")
+        T.ok(fr("GET YOUR S*** TOGETHER!").contains("ressaisir") && fr("LET'S GET TOGETHER TOMORROW.").contains("se retrouver") && IdiomHints.calques("GET YOUR S*** TOGETHER!", "RÉUNIS-TOI !").isNotEmpty(), "get your s*** together")
         T.ok(fr("GO AHEAD AND REJECT ME.").contains("vas-y") && IdiomHints.calques("GO AHEAD AND REJECT ME.", "ALLEZ-VOUS REJETER MOI.").isNotEmpty(), "go ahead and")
         for (s in listOf("WE CAN BEAT IT!", "THIS IS A BIG DEAL TO ME.", "HE BEATS ME EVERY DAY.", "SHE SLEPT IN THE BED.", "IT'S ALL OVER THE NEWS.", "HE RAN INTO THE BUILDING.", "IT'S MADE OUT OF WOOD.",
             "I'M GETTING EVEN STRONGER!", "TURN OUT THE LIGHTS.", "HE CAME UP TO YOU.", "I GOT HIT ON THE HEAD."))
@@ -243,6 +244,14 @@ fun seriesTests() {
         T.eq(1, prompts.size, "aucun appel de correction : ${tr.lastCallDetail()}")
         T.ok(prompts[0].contains("Usual French terms") && prompts[0].contains("elder = ancien"), "terme d'usage : ${prompts[0]}")
         T.ok(mem.serialize().contains("G\telder"), "mots du genre comptés")
+        // crédits coréens dans une page anglaise : gardés tels quels (le modèle y inventait une phrase) ; un bruit coréen court passe au modèle
+        val credits = tr.translate(listOf("글태선그림도빈어시흑밀민섭", "사박"), "en", "fr", emptyList())
+        T.eq("글태선그림도빈어시흑밀민섭", credits[0]); T.ok(credits[1] != "사박", "bruit court traduit : ${credits[1]}")
+        // un nom de l'œuvre connu des chapitres précédents est gardé dès la première page d'un nouveau chapitre (« AIN » n'est pas « hein »)
+        val known = SeriesMemory("ain"); repeat(3) { known.observePage(listOf("AIN, LOOK."), listOf("Ain, regarde."), listOf("Ain"), lex) }
+        val tr2 = LlmTranslator(backend) { lex }; tr2.promptVariant = 5; tr2.series = known; prompts.clear()
+        tr2.translate(listOf("BUT REMEMBER THIS, AIN."), "en", "fr", emptyList())
+        T.ok(prompts[0].contains("Names and terms of this chapter to keep exactly as written") && prompts[0].contains("Ain"), "nom de l'œuvre gardé : ${prompts[0]}")
         // fenêtre étroite : le dialogue précédent est raccourci, le message tient
         repeat(5) { tr.translate(listOf("THIS IS A LONG LINE OF DIALOGUE NUMBER $it THAT FILLS THE CONTEXT WINDOW QUICKLY AND KEEPS GOING."), "en", "fr", emptyList()) }
         val window = (LlmPrompt.system("en", "fr", 5).length / 3.0).toInt() + LlmPrompt.maxOutputTokens(listOf("ELDER, PLEASE.")) + 64 + 300

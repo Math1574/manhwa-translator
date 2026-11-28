@@ -11,11 +11,13 @@ import java.util.concurrent.Executors
  */
 class SeriesMemoryStore(private val dir: File) {
     private val cache = HashMap<String, SeriesMemory>()
+    /** Copies du mode Ninja : partagées entre les pages de la session privée, jamais écrites, oubliées à la sortie ([endPrivate]). */
+    private val ninjaCache = HashMap<String, SeriesMemory>()
     private val writer = Executors.newSingleThreadExecutor { r -> Thread(r, "mt-series-memory").apply { isDaemon = true } }
 
     /** La mémoire de l'œuvre [key] (vide si elle n'a jamais été lue). */
     @Synchronized fun get(key: String): SeriesMemory {
-        if (Ninja.on) return read(key)          // copie à part : rien de ce qui est appris en mode Ninja ne rejoint la mémoire gardée
+        if (Ninja.on) return ninjaCache.getOrPut(key) { read(key) }   // copie à part : rien de ce qui est appris en mode Ninja ne rejoint la mémoire gardée
         return cache.getOrPut(key) { read(key) }
     }
 
@@ -37,6 +39,9 @@ class SeriesMemoryStore(private val dir: File) {
             } catch (_: Throwable) {}
         }
     }
+
+    /** Fin du mode Ninja : les copies de la session privée sont oubliées. */
+    @Synchronized fun endPrivate() { ninjaCache.clear() }
 
     /** Oublie tout ce qui a été appris sur les œuvres (réglages). */
     @Synchronized fun clearAll() {

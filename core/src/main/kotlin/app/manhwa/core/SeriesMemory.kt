@@ -179,6 +179,16 @@ class SeriesMemory(val key: String) {
 
     @Synchronized fun name(lower: String): Name? = names[lower.lowercase()]
 
+    /**
+     * Noms de l'œuvre (vus au moins trois fois, d'un chapitre à l'autre) que les lignes [texts] contiennent, tels qu'ils s'écrivent : ils rejoignent les noms à garder tels quels
+     * dès la première page d'un nouveau chapitre (la mémoire du chapitre, elle, repart de zéro).
+     */
+    @Synchronized fun namesOnPage(texts: List<String>, lex: EnglishLexicon?): List<String> {
+        val page = texts.joinToString(" ").lowercase()
+        return knownNames(3, lex).filter { Regex("(?<![\\p{L}])" + Regex.escape(it) + "(?![\\p{L}])").containsMatchIn(page) }
+            .sortedByDescending { names[it]?.seen ?: 0 }.mapNotNull { names[it]?.display?.let { d -> if (d.any { c -> c.isUpperCase() }) d else d.replaceFirstChar { c -> c.uppercase() } } }
+    }
+
     // ---------- apprentissage ----------
 
     /** Le texte lu d'une bulle (avant réparation) : confusions de lettres du lettrage. */
@@ -331,7 +341,7 @@ class SeriesMemory(val key: String) {
 
     companion object {
         private const val MAX_NAMES = 80
-        private const val MAX_TERMS = 4000
+        private const val MAX_TERMS = 8000
         private const val MAX_EXAMPLES = 300
         private const val MAX_EXAMPLE = 120
         private val termWord = Regex("[a-z]+(?:'[a-z]+)?")

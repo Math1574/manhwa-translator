@@ -50,6 +50,22 @@ class LlmTranslator(private val backend: LlmBackend, private val lexicon: () -> 
 
     private fun recentDialogue(): List<Pair<String, String>> = synchronized(ctxLock) { history.toList() }
     private fun keptNames(): List<String> = synchronized(ctxLock) { memory.namesToKeep() }
+
+    /**
+     * Noms à garder tels quels pour les lignes [texts] : ceux du chapitre, plus (prompt 5, vers le français) ceux de l'œuvre et de son synopsis que la page contient — un nom connu
+     * depuis les chapitres précédents (« Ain », « Eugene ») n'est plus traduit ni « corrigé » au début d'un nouveau chapitre.
+     */
+    private fun namesFor(texts: List<String>, target: String): List<String> {
+        val kept = keptNames()
+        if (promptVariant < 5 || target != "fr") return kept
+        val lex = try { lexicon() } catch (_: Throwable) { null }
+        val fromSeries = try { series?.namesOnPage(texts, lex) ?: emptyList() } catch (_: Throwable) { emptyList() }
+        val page = texts.joinToString(" ").lowercase()
+        val fromPremise = SeriesMemory.premiseNames(seriesPremise, lex).filter { it.length >= 3 && Regex("(?<![\\p{L}])" + Regex.escape(it) + "(?![\\p{L}])").containsMatchIn(page) }
+            .map { it.replaceFirstChar { c -> c.uppercase() } }
+        val seen = HashSet<String>()
+        return (kept + fromSeries + fromPremise).filter { seen.add(it.lowercase()) }.take(18)
+    }
     /** Ce que le chapitre a établi (tutoiement, genre du narrateur) quand c'est net : rappelé au modèle, en français seulement. */
     private fun styleNotes(target: String): List<String> = if (target == "fr" && promptVariant >= 4) synchronized(ctxLock) { memory.styleHints() } else emptyList()
 
@@ -85,6 +101,8 @@ class LlmTranslator(private val backend: LlmBackend, private val lexicon: () -> 
         var final = out.mapIndexed { i, t -> t ?: throw IllegalStateException("Réponse du modèle incomplète (ligne ${i + 1})") }
         // défauts de génération (chiffre doublé, mot-outil doublé) : corrigés avant les contrôles, qui n'ont plus à refaire ces lignes
         if (promptVariant >= 5) final = final.mapIndexed { i, t -> TranslationPost.doubledWords(texts[i], TranslationPost.numbers(texts[i], t)).let { if (target == "fr") TranslationPost.grammar(texts[i], it) else it } }
+        // page anglaise : une longue suite coréenne, japonaise ou chinoise sans lettre latine (crédits, titre d'origine) reste telle quelle ; le modèle y inventait une phrase
+        if (promptVariant >= 5 && source == "en") final = final.mapIndexed { i, t -> if (foreignBlock(texts[i])) texts[i] else t }
         if ((refine || refinePass) && target == "fr") final = refineDraft(texts, final, glossary)
         final = checkAndFix(texts, final, target, source, glossary)
         if (target == "fr" && promptVariant >= 4) final = final.mapIndexed { i, t -> TranslationPost.rescueStutter(texts[i], TranslationPost.stutter(texts[i], t)) }   // « B-BUT » → « M-MAIS » ; « Y-YOU… » recopié → « T-TOI… »
@@ -97,6 +115,9 @@ class LlmTranslator(private val backend: LlmBackend, private val lexicon: () -> 
         }
         return final
     }
+
+    private fun foreignBlock(src: String): Boolean =
+        src.none { it in 'A'..'Z' || it in 'a'..'z' } && src.count { Character.UnicodeScript.of(it.code).let { sc -> sc == Character.UnicodeScript.HANGUL || sc == Character.UnicodeScript.HAN || sc == Character.UnicodeScript.HIRAGANA || sc == Character.UnicodeScript.KATAKANA } } >= 8
 
     private fun remember(src: String, tgt: String) {
         history.addLast(src to tgt)
@@ -156,7 +177,7 @@ class LlmTranslator(private val backend: LlmBackend, private val lexicon: () -> 
      * une fois, avec le détail des problèmes. La nouvelle version n'est retenue que si elle a moins de problèmes.
      */
     private fun checkAndFix(texts: List<String>, draft: List<String>, target: String, source: String, glossary: List<GlossaryEntry>): List<String> {
-        val names = keptNames()
+        val names = namesFor(texts, target)
         // tutoiement et genre du narrateur établis par le chapitre ; chaque ligne de la page y est ajoutée une fois finie, pour que la suivante s'y accorde
         val style = synchronized(ctxLock) { memory.styleCopy() }
         val out = draft.toMutableList(); val reports = ArrayList<LineReport>()
@@ -205,7 +226,7 @@ class LlmTranslator(private val backend: LlmBackend, private val lexicon: () -> 
                 val examples = try { mem?.termExamples(texts, lexicon()) ?: emptyList() } catch (_: Throwable) { emptyList() }
                 val terms = genreTerms(texts, glossary)
                 fit(system, texts) { hist, withNotes ->
-                    LlmPrompt.user(texts, hist, glossary, series, keptNames(), hints, styleNotes(target), page, seriesPremise, if (withNotes) notes else emptyList(), terms, if (withNotes) examples else emptyList())
+                    LlmPrompt.user(texts, hist, glossary, series, namesFor(texts, target), hints, styleNotes(target), page, seriesPremise, if (withNotes) notes else emptyList(), terms, if (withNotes) examples else emptyList())
                 }
             } else LlmPrompt.user(texts, historyFor(), glossary, series, keptNames(), hints, styleNotes(target), page, if (target == "fr") seriesPremise else null)
             inLen += u.length

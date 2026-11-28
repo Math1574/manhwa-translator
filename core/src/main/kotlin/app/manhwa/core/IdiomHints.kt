@@ -137,7 +137,8 @@ object IdiomHints {
 ~get * on * side | rallier à sa cause, mettre de son côté
 ~get * out of * sight | hors de ma vue ! (disparais de ma vue) ; si c'est « get him out of my sight » : ôtez-le de ma vue
 ~get a grip | ressaisis-toi, reprends-toi
-~get * together | se retrouver, se réunir ; « get it together », « get your act together », « get yourself together » = se ressaisir
+~get your/my/his/her/our/their/yourself/yourselves/myself/himself/herself/it * together | se ressaisir, se reprendre (« get your act together », « get your s*** together » = ressaisis-toi, reprends-toi) | réunis|rassembl
+~get together | se retrouver, se réunir
 ~get even with | se venger de, rendre la pareille à
 ~get through | traverser, venir à bout de, survivre à
 ~get ? wrong | se tromper ; « don't get me wrong » = ne te méprends pas, ne le prends pas mal
