@@ -15,7 +15,7 @@ import java.time.Duration
  * Entrée (une ligne par bulle) : chapitre \t œuvre \t page \t texte lu (réparé) \t texte brut ; synopsis optionnels dans <entrée>.premises (œuvre \t synopsis) ;
  * chapitres déjà lus optionnels dans <entrée sans .tsv>.warm.tsv (mêmes colonnes + traduction du journal) : ils nourrissent la mémoire de l'œuvre sans appeler le modèle,
  * comme si le lecteur les avait lus avant.
- * Sortie : chapitre \t page \t n° \t texte lu \t traduction \t durée de la page (ms) \t détail des appels ; <sortie>.memory : la mémoire de chaque œuvre à la fin.
+ * Sortie : chapitre \t page \t n° \t texte lu \t traduction \t durée de la page (ms) \t détail des appels \t problèmes du premier jet ; <sortie>.memory : la mémoire de chaque œuvre à la fin.
  * Options : variant=<n> (version du prompt) ; memory=1 (mémoire de l'œuvre et lettres mal lues, comme l'application à partir du prompt 5).
  */
 fun main(args: Array<String>) {
@@ -92,10 +92,13 @@ fun main(args: Array<String>) {
         val res = try { tr.translate(texts, "en", "fr", emptyList()) } catch (e: Throwable) { println("échec de la page ${key.second} : $e"); null }
         val ms = System.currentTimeMillis() - t0
         val calls = (tr.lastCallDetail() ?: "").replace('\t', ' ').replace('\n', ' ')
+        val report = if (res != null) tr.lastReport else emptyList()
         blocks.forEachIndexed { i, b ->
             val clean = cleans[i]
             val t = res?.getOrNull(i)?.let { TranslationEcho.strip(clean, TextNormalizer.matchCase(clean, it), b.src) } ?: "<ÉCHEC>"
-            out.write(listOf(key.first, key.second, i.toString(), clean, t, ms.toString(), calls).joinToString("\t") { it.replace('\t', ' ').replace('\n', ' ') })
+            // problèmes du premier jet (ce qui a déclenché une correction) : « code+code|corrigé|refait »
+            val rep = report.getOrNull(i)?.let { r -> r.initial.joinToString("+") + "|" + (if (r.fixed) "corrigé" else "") + "|" + (if (r.retried) "refait" else "") } ?: ""
+            out.write(listOf(key.first, key.second, i.toString(), clean, t, ms.toString(), calls, rep).joinToString("\t") { it.replace('\t', ' ').replace('\n', ' ') })
             out.newLine()
         }
         out.flush()

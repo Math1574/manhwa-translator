@@ -1,6 +1,6 @@
 {
  "variants": {
-  "v5b": "variant=5 memory=1"
+  "v5": "variant=5 memory=1"
  },
  "shards": [
   "return-of-the-mount-hua-sect",
@@ -16,5 +16,6 @@
   "the-legend-of-the-northern-blade",
   "illusion-hunter-from-another-world",
   "pick-me-up-infinite-gacha"
- ]
+ ],
+ "server": "session"
 }

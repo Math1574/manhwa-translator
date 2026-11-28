@@ -1,0 +1,25 @@
+name: Sonde du moteur
+on:
+  push:
+    branches: ['tprobe/**']
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Modèle Gemma 4 E4B (cache)
+        uses: actions/cache@v4
+        with: { path: ~/model, key: gemma4-e4b-litertlm-1 }
+      - name: Téléchargement du modèle (si absent du cache)
+        run: |
+          mkdir -p ~/model
+          if [ ! -s ~/model/m.litertlm ]; then curl -sSfL --retry 3 -o ~/model/m.litertlm https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/main/gemma-4-E4B-it.litertlm; fi
+      - name: LiteRT-LM (Python)
+        run: pip install --quiet litert-lm-api==0.20.0
+      - name: Sonde
+        run: python3 ci/tbench/prefix_probe.py ~/model/m.litertlm 2>&1 | tee /tmp/probe.txt

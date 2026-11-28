@@ -15,7 +15,7 @@ fun interface LlmBackend {
 }
 
 /** Résultat des contrôles d'une ligne traduite (pour le journal). */
-class LineReport(val src: String, val tr: String, val problems: List<String>, val retried: Boolean, val fixed: Boolean)
+class LineReport(val src: String, val tr: String, val problems: List<String>, val retried: Boolean, val fixed: Boolean, val initial: List<String> = problems)
 
 /**
  * Traduction d'une page par un modèle de langage : demande groupée de toute la page, lignes absentes ou mal placées refaites, relecture facultative, contrôle de chaque ligne
@@ -146,6 +146,12 @@ class LlmTranslator(private val backend: LlmBackend, private val lexicon: () -> 
         val context = texts.indices.filter { it !in redo && out[it] != null }.map { texts[it] to out[it]!! }
         val again = try { ask(redo.map { texts[it] }, source, target, glossary, kind = "realign", page = context) } catch (e: Throwable) { null }
         redo.forEachIndexed { k, i -> out[i] = again?.getOrNull(k) }
+        // beaucoup de lignes encore absentes (réponse mal formée deux fois) : une demande groupée de plus plutôt qu'une par ligne (3 à 4 s chacune sur le téléphone)
+        val still = bad(redo)
+        if (still.size > 4) {
+            val batch = try { ask(still.map { texts[it] }, source, target, glossary, kind = "miss", page = context) } catch (e: Throwable) { null }
+            still.forEachIndexed { k, i -> batch?.getOrNull(k)?.let { out[i] = it } }
+        }
         for (i in bad(redo)) out[i] = try { ask(listOf(texts[i]), source, target, glossary, kind = "miss").firstOrNull() } catch (e: Throwable) { null }
         // contrôle final de toute la page : une ligne laissée telle quelle peut maintenant se révéler mal placée (même traduction qu'une ligne refaite) ; refaite seule (quatre au plus)
         val late = bad().filter { it !in redo }.take(4)
@@ -183,6 +189,7 @@ class LlmTranslator(private val backend: LlmBackend, private val lexicon: () -> 
         val out = draft.toMutableList(); val reports = ArrayList<LineReport>()
         for (i in out.indices) {
             var probs = TranslationChecks.problems(texts[i], out[i], target, names, style)
+            val initial = probs.map { it.code }
             var retried = false; var fixed = false
             if (probs.isNotEmpty()) {
                 retried = true
@@ -192,7 +199,7 @@ class LlmTranslator(private val backend: LlmBackend, private val lexicon: () -> 
                     if (p2.size < probs.size) { out[i] = again; fixed = p2.isEmpty(); probs = p2 }
                 }
             }
-            reports.add(LineReport(texts[i], out[i], probs.map { it.code }, retried, fixed))
+            reports.add(LineReport(texts[i], out[i], probs.map { it.code }, retried, fixed, initial))
             if (target == "fr") style.observe(texts[i], out[i], names)
         }
         lastReport = reports
@@ -206,7 +213,8 @@ class LlmTranslator(private val backend: LlmBackend, private val lexicon: () -> 
         try {
             val hints = if (promptVariant >= 4 && target == "fr") IdiomHints.find(listOf(text)) else emptyList()
             val gloss = if (promptVariant >= 5 && target == "fr") glossary + genreTerms(listOf(text), glossary).map { GlossaryEntry(it.source, it.french) } else glossary
-            val u = LlmPrompt.fixUser(text, previous, problems, historyFor(), gloss, names, hints, styleHints)
+            // une ligne à reprendre : six répliques de contexte suffisent (chaque caractère lu coûte, environ 0,7 ms sur le téléphone)
+            val u = LlmPrompt.fixUser(text, previous, problems, historyFor().takeLast(if (promptVariant >= 5) SHORT_HISTORY else HISTORY_MAX), gloss, names, hints, styleHints)
             inLen += u.length
             val r = backend.generate(system, u, LlmSampling(20, 0.9, 0.1), LlmPrompt.maxOutputTokens(listOf(text)))
             setup = r.setupMs; outLen = r.text.length
@@ -225,7 +233,7 @@ class LlmTranslator(private val backend: LlmBackend, private val lexicon: () -> 
                 val notes = try { mem?.promptNotes(texts, lexicon(), seriesPremise) ?: emptyList() } catch (_: Throwable) { emptyList() }
                 val examples = try { mem?.termExamples(texts, lexicon()) ?: emptyList() } catch (_: Throwable) { emptyList() }
                 val terms = genreTerms(texts, glossary)
-                fit(system, texts) { hist, withNotes ->
+                fit(system, texts, if (kind == "miss" && texts.size == 1) SHORT_HISTORY else HISTORY_MAX) { hist, withNotes ->
                     LlmPrompt.user(texts, hist, glossary, series, namesFor(texts, target), hints, styleNotes(target), page, seriesPremise, if (withNotes) notes else emptyList(), terms, if (withNotes) examples else emptyList())
                 }
             } else LlmPrompt.user(texts, historyFor(), glossary, series, keptNames(), hints, styleNotes(target), page, if (target == "fr") seriesPremise else null)
@@ -257,9 +265,9 @@ class LlmTranslator(private val backend: LlmBackend, private val lexicon: () -> 
      * Message qui tient dans la fenêtre du moteur avec la réponse attendue : tout le dialogue précédent si possible, sinon de moins en moins (les répliques les plus anciennes partent
      * d'abord), puis sans les notes de l'œuvre. Estimation prudente des jetons (voir [CHARS_PER_TOKEN]).
      */
-    private fun fit(system: String, texts: List<String>, build: (List<Pair<String, String>>, Boolean) -> String): String {
+    private fun fit(system: String, texts: List<String>, maxHistory: Int = HISTORY_MAX, build: (List<Pair<String, String>>, Boolean) -> String): String {
         val budget = contextTokens - LlmPrompt.maxOutputTokens(texts) - 64
-        val hist = historyFor()
+        val hist = historyFor().takeLast(maxHistory)
         fun tokens(u: String) = ((system.length + u.length) / CHARS_PER_TOKEN).toInt()
         val sizes = ((hist.size downTo 0 step 2) + 0).distinct()
         for (withNotes in listOf(true, false)) for (n in sizes) {
@@ -273,6 +281,8 @@ class LlmTranslator(private val backend: LlmBackend, private val lexicon: () -> 
     companion object {
         const val HISTORY_SIZE = 10
         private const val HISTORY_MAX = 16
+        /** Dialogue précédent d'une ligne refaite seule (ligne manquante, correction). */
+        private const val SHORT_HISTORY = 6
         /** Jetons estimés par caractère (anglais et français mêlés, consignes comprises) : estimation prudente. */
         private const val CHARS_PER_TOKEN = 3.0
     }

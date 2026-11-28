@@ -47,7 +47,9 @@ jobs:
         run: python3 ci/tbench/unpack.py ci/tbench/data.bin /tmp/data
       - name: Serveur du modèle
         run: |
-          nohup python3 ci/tbench/server.py ~/model/m.litertlm 7070 > /tmp/server.log 2>&1 &
+          MODE=$(python3 -c "import json;print(json.load(open('ci/tbench/plan.json')).get('server','conv'))")
+          if [ "$MODE" = "ab" ]; then grep -a -o -m 4 '.\{0,160\}start_of_turn.\{0,160\}\|.\{0,160\}<|turn>.\{0,160\}' ~/model/m.litertlm | head -4 || true; fi
+          TBENCH_SERVER=$MODE nohup python3 ci/tbench/server.py ~/model/m.litertlm 7070 > /tmp/server.log 2>&1 &
           ok=0; for i in $(seq 1 180); do if curl -sf http://127.0.0.1:7070/health >/dev/null; then ok=1; break; fi; sleep 5; done
           cat /tmp/server.log; nproc; free -g
           [ "$ok" = 1 ] || { echo "le serveur du modèle n'a pas démarré"; exit 1; }
@@ -57,7 +59,9 @@ jobs:
           java -cp /tmp/bench.jar:/tmp/kc/kotlinc/lib/kotlin-stdlib.jar app.manhwa.core.TranslationBenchKt /tmp/data/${{ matrix.shard }}.tsv /tmp/out/${{ matrix.variant }}__${{ matrix.shard }}.tsv http://127.0.0.1:7070/ app/src/main/assets/lexicon ${{ matrix.opts }}
       - name: Journal du serveur
         if: always()
-        run: cp /tmp/server.log /tmp/out/${{ matrix.variant }}__${{ matrix.shard }}.server.log || true
+        run: |
+          cp /tmp/server.log /tmp/out/${{ matrix.variant }}__${{ matrix.shard }}.server.log || true
+          cp /tmp/ab.jsonl /tmp/out/${{ matrix.variant }}__${{ matrix.shard }}.ab.jsonl 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
