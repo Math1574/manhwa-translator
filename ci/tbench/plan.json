@@ -1,6 +1,7 @@
 {
  "variants": {
-  "v5": "variant=5 memory=1"
+  "v5": "variant=5 memory=1",
+  "v6": "variant=6 memory=1"
  },
  "shards": [
   "return-of-the-mount-hua-sect",
