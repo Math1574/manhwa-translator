@@ -170,6 +170,17 @@ fun seriesTests() {
         T.eq(emptyList<String>(), probs("JIN MOOWON", "JIN MOOWON"), "nom recopié")
         T.ok("non-traduit" in probs("THE NORTHERN HEAVENLY SECT", "THE NORTHERN HEAVENLY SECT"), "vraie phrase anglaise recopiée : toujours signalée")
     }
+    T.test("numéros bégayés par le modèle (journal du 28/11 14:05) : une suite de chiffres n'est ni une ligne ni la suite de la précédente") {
+        // Mount Hua 2, page 17 : « 10| … » puis « 1111111… » jusqu'à la limite ; la suite était collée à la ligne 10
+        val reply = "9| Sssshh\n10| Le saint de l'épée de la Fleur de Prunier !!!\n" + "1".repeat(300)
+        val p = LlmPrompt.parse(reply, 12)
+        T.eq("Le saint de l'épée de la Fleur de Prunier !!!", p[9]); T.eq(null, p[10]); T.eq(null, p[11])
+        T.eq("GAH !!!", LlmPrompt.parse("1| Bon.\n2| GAH !!!\n11111111111111\n", 2)[1], "Legend of the Northern Blade, 27/11")
+        T.eq("Une ligne\u00a0: 1111 pièces", LlmPrompt.parse("1| Une ligne\u00a0: 1111 pièces", 1)[0], "chiffres d'une vraie traduction : gardés")
+        T.eq("GAH !!!", TranslationPost.digitRuns("GAH!!!", "GAH !!! 11111111111111111"))
+        T.eq("IL A 11111 PIÈCES", TranslationPost.digitRuns("HE HAS 11111 COINS", "IL A 11111 PIÈCES"), "présent dans l'original : gardé")
+        T.eq("ÇA COÛTE 100 €", TranslationPost.digitRuns("IT COSTS 100 €", "ÇA COÛTE 100 €"))
+    }
     T.test("grammaire : élisions oubliées, subjonctif après « bien que », « pour que »…, infinitif après « faire » — le français juste n'est jamais touché") {
         T.eq("AUJOURD'HUI, L'ÉPILOGUE SERA EN LIGNE.", g("AUJOURD'HUI, LE ÉPILOGUE SERA EN LIGNE."))
         T.eq("Le fruit de l'ancien vagabond.", g("Le fruit du ancien vagabond."))

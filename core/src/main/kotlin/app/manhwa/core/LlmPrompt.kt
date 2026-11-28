@@ -273,6 +273,12 @@ Answer with exactly one line per input line, in the format `N| edited translatio
     private val lineRe = Regex("^\\s*[\\[(]?(\\d+)[\\])]?\\s*[|:.)\\-–]\\s?(.*)$")
     /** « 2 Pa ! » : numéro sans séparateur (journal du 28/11, Mount Hua 1 : la réponse a perdu ses « | » après la première ligne, 21 lignes refaites une à une, 110 s). Accepté pour le numéro attendu seulement. */
     private val bareLineRe = Regex("^\\s*(\\d{1,4})\\s+(\\D.*)$")
+    /**
+     * Ligne faite seulement de chiffres, dont quatre identiques à la suite (« 1111111… ») : le modèle a bégayé sur un numéro (GPU en 16 bits au-delà de 2 048 jetons, voir l'appli).
+     * Ce n'est ni une ligne ni la suite de la précédente : elle était collée à la traduction d'avant (« GAH !!! 1111111… », journal du 27/11).
+     */
+    private val junkDigitsRe = Regex("^[\\d\\s|.,:;\\-–]*$")
+    private val digitStutterRe = Regex("(\\d)\\1{3,}")
 
     /**
      * Renvoie une traduction par ligne d'entrée (null si absente). Tolère le Markdown, les guillemets et les lignes multiples.
@@ -301,6 +307,7 @@ Answer with exactly one line per input line, in the format `N| edited translatio
         for (raw in cleaned.lines()) {
             val line = raw.trimEnd()
             if (line.isBlank()) continue
+            if (junkDigitsRe.matches(line) && digitStutterRe.containsMatchIn(line)) { current = null; continue }
             val m = lineRe.matchEntire(line) ?: bareLineRe.matchEntire(line)?.takeIf { b ->
                 val n = b.groupValues[1].toInt()
                 n == last + 1 && n <= count || (count >= 10 && n >= last + 10 && (last + 1..minOf(count, last + 3)).any { it % 10 == n % 10 && found[it] == null })
